@@ -127,7 +127,6 @@ export function StoryboardEditor({
                 {/* Image / placeholder */}
                 <div className="group relative overflow-hidden rounded-xl border border-border bg-subtle shadow-sm" style={{ height: 208 }}>
                   {imgSrc ? (
-                    // eslint-disable-next-line @next/next/no-img-element
                     <img src={imgSrc} alt={`Scene ${scene.idx}`} className="h-full w-full object-cover" />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center text-xs text-faint">

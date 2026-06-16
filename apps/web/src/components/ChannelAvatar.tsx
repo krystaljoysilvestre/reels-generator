@@ -38,7 +38,6 @@ export function ChannelAvatar({
   textClass?: string
 }) {
   if (avatarKey) {
-    // eslint-disable-next-line @next/next/no-img-element
     return (
       <img
         src={`/api/asset?key=${encodeURIComponent(avatarKey)}`}

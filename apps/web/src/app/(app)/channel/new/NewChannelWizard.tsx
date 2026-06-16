@@ -536,7 +536,6 @@ export function NewChannelWizard() {
             {/* Recap */}
             <div className="card flex items-center gap-4 p-5">
               {avatarPreview ? (
-                // eslint-disable-next-line @next/next/no-img-element
                 <img src={avatarPreview} alt="" className="h-12 w-12 flex-shrink-0 rounded-xl object-cover" />
               ) : (
                 <div
@@ -776,7 +775,6 @@ function AvatarPicker({ committedName, preview, uploading, onPick, onRemove }: {
         style={hasGradient ? { background: avatarGradient(committedName) } : undefined}
       >
         {preview ? (
-          // eslint-disable-next-line @next/next/no-img-element
           <img src={preview} alt="" className="h-full w-full object-cover" />
         ) : (
           <span>{avatarInitials(committedName)}</span>

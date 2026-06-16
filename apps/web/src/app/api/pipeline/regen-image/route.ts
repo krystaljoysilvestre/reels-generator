@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
+import type { NextRequest} from 'next/server';
+import { NextResponse } from 'next/server'
 import { getDb, scenes, assets, channels, reels } from '@reels/db'
 import { eq, and } from 'drizzle-orm'
 import { generateImage, FalEngineSchema } from '@reels/providers'

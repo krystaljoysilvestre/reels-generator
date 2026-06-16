@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
+import type { NextRequest} from 'next/server';
+import { NextResponse } from 'next/server'
 import { getDb, compilations, channels } from '@reels/db'
 import { getSession } from '@/lib/auth'
 

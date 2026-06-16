@@ -1,6 +1,7 @@
 // POST package export — video + caption.txt + AI-disclosure note, zipped.
 // Downloaded from the dashboard for manual posting (Phase 1).
-import { NextRequest, NextResponse } from 'next/server'
+import type { NextRequest} from 'next/server';
+import { NextResponse } from 'next/server'
 import { getDb, reels, assets, stories, channels } from '@reels/db'
 import { eq } from 'drizzle-orm'
 import { downloadBuffer } from '@reels/providers'

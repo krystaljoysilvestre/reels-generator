@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { z } from 'zod'
+import type { z } from 'zod'
 import { ProviderError } from '../shared/types.js'
 import { buildInputHash } from './input-hash.js'
 

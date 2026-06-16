@@ -1,6 +1,7 @@
 // Proxies R2 assets to the browser (avoids needing a public R2 bucket).
 // In production with a public CDN, swap this for a direct URL.
-import { NextRequest, NextResponse } from 'next/server'
+import type { NextRequest} from 'next/server';
+import { NextResponse } from 'next/server'
 import { downloadBuffer } from '@reels/providers'
 import { getSession } from '@/lib/auth'
 

@@ -103,7 +103,7 @@ export function evalGainAt(expr: string, tSec: number): number {
     .replace(/\bif\(/g, '_if(')
     .replace(/\bt\b/g, String(tSec))
 
-  // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
+   
   const fn = new Function('_if', `return ${body}`)
   return fn((_cond: boolean, a: number, b: number) => (_cond ? a : b)) as number
 }
