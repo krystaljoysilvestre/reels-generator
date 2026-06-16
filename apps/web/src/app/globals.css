@@ -1,0 +1,141 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply box-border;
+  }
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    @apply bg-bg text-ink font-sans text-sm antialiased;
+  }
+  ::selection {
+    @apply bg-accent-soft text-accent;
+  }
+  /* Refined custom scrollbars (WebKit) */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full;
+    background: rgba(22, 22, 26, 0.14);
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(22, 22, 26, 0.24);
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+}
+
+@layer components {
+  /* ── Buttons ───────────────────────────────────────────── */
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-2
+           text-sm font-medium leading-none whitespace-nowrap
+           transition-all duration-150 select-none
+           focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40
+           disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-primary {
+    @apply btn bg-ink text-white shadow-xs
+           hover:bg-ink/90 active:bg-ink/80;
+  }
+  .btn-accent {
+    @apply btn bg-accent text-white shadow-xs
+           hover:bg-accent-hover active:bg-accent-hover;
+  }
+  .btn-secondary {
+    @apply btn bg-surface text-ink border border-border-strong shadow-xs
+           hover:bg-subtle hover:border-border-strong active:bg-subtle;
+  }
+  .btn-ghost {
+    @apply btn text-muted hover:bg-subtle hover:text-ink;
+  }
+  .btn-danger {
+    @apply btn bg-surface text-danger border border-danger/30
+           hover:bg-danger-soft active:bg-danger-soft;
+  }
+  .btn-sm {
+    @apply px-2.5 py-1.5 text-xs rounded-md;
+  }
+
+  /* ── Surfaces ──────────────────────────────────────────── */
+  .card {
+    @apply bg-surface border border-border rounded-xl shadow-sm;
+  }
+
+  /* ── Inputs ────────────────────────────────────────────── */
+  .input {
+    @apply w-full bg-surface text-ink placeholder:text-faint
+           border border-border-strong rounded-lg px-3 py-2 text-sm
+           transition-shadow duration-150
+           focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20;
+  }
+
+  /* ── Badges ────────────────────────────────────────────── */
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5
+           text-xs font-medium leading-none;
+  }
+
+  /* ── Animations ────────────────────────────────────────── */
+  .animate-dropdown {
+    animation: dropdown-in 0.13s ease-out;
+  }
+  .animate-fade-in {
+    animation: fade-in 0.18s ease-out;
+  }
+  .animate-pop-in {
+    animation: pop-in 0.15s ease-out;
+  }
+  .animate-slide-in-left {
+    animation: slide-in-left 0.2s ease-out;
+  }
+
+  /* ── Misc ──────────────────────────────────────────────── */
+  .nav-link {
+    @apply flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm font-medium text-muted
+           transition-colors duration-100 hover:bg-subtle hover:text-ink;
+  }
+  .nav-link-active {
+    @apply bg-subtle text-ink;
+  }
+}
+
+/* Keyframes + global motion preferences */
+@keyframes dropdown-in {
+  from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes pop-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes slide-in-left {
+  from { transform: translateX(-100%); }
+  to { transform: none; }
+}
+
+/* Respect users who prefer reduced motion — kill animations + transitions. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,0 +1,1 @@
+ALTER TABLE "channels" ADD COLUMN "voice_mode" text DEFAULT 'single' NOT NULL;

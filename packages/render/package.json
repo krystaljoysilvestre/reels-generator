@@ -1,0 +1,37 @@
+{
+  "name": "@reels/render",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./ffmpeg/mix-audio": "./src/ffmpeg/mix-audio.ts",
+    "./ffmpeg/render-video": "./src/ffmpeg/render-video.ts",
+    "./qa/render-qa": "./src/qa/render-qa.ts",
+    "./music/music-sync": "./src/music/music-sync.ts",
+    "./music/music-selection": "./src/music/music-selection.ts",
+    "./remotion/render-remotion": "./src/remotion/render-remotion.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run",
+    "test:unit": "vitest run"
+  },
+  "dependencies": {
+    "@reels/core": "workspace:*",
+    "@remotion/bundler": "4.0.477",
+    "@remotion/renderer": "4.0.477",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "remotion": "4.0.477",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "name": "@reels/core",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./timings": "./src/timings/index.ts",
+    "./state-machine": "./src/state-machine/index.ts",
+    "./types": "./src/types/index.ts",
+    "./prompts/story.v1": "./src/prompts/story.v1.ts",
+    "./prompts/audioscript.v1": "./src/prompts/audioscript.v1.ts",
+    "./prompts/scenes.v1": "./src/prompts/scenes.v1.ts",
+    "./prompts/rephrase.v1": "./src/prompts/rephrase.v1.ts",
+    "./assembly/fewshot": "./src/assembly/fewshot.ts",
+    "./assembly/avoidlist": "./src/assembly/avoidlist.ts",
+    "./assembly/imageprompt": "./src/assembly/imageprompt.ts",
+    "./prompts/compilation.v1": "./src/prompts/compilation.v1.ts",
+    "./prompts/channel.v1": "./src/prompts/channel.v1.ts",
+    "./prompts/channel-sample.v1": "./src/prompts/channel-sample.v1.ts",
+    "./prompts/voice-recommend.v1": "./src/prompts/voice-recommend.v1.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
+  }
+}

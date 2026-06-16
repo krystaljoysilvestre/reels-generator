@@ -1,0 +1,35 @@
+{
+  "name": "web",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "lint": "next lint",
+    "test:unit": "vitest run"
+  },
+  "dependencies": {
+    "@reels/core": "workspace:*",
+    "@reels/db": "workspace:*",
+    "@reels/providers": "workspace:*",
+    "@sentry/nextjs": "^8.37.1",
+    "dotenv": "^16.4.5",
+    "drizzle-orm": "^0.33.0",
+    "next": "^15.0.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "tailwindcss": "^3.4.10",
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.4.41",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
+  }
+}

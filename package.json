@@ -1,0 +1,23 @@
+{
+  "name": "reels-generator",
+  "private": true,
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "concurrently -n web,worker -c cyan,yellow \"pnpm --filter web dev\" \"pnpm --filter worker dev\"",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "test:unit": "pnpm -r test:unit",
+    "db:generate": "pnpm --filter @reels/db generate",
+    "db:migrate": "pnpm --filter @reels/db migrate",
+    "db:studio": "pnpm --filter @reels/db studio",
+    "db:seed": "pnpm --filter @reels/db seed",
+    "format": "prettier --write \"**/*.{ts,tsx,json,md}\" --ignore-path .gitignore"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "prettier": "^3.3.3",
+    "typescript": "^5.5.4"
+  }
+}
