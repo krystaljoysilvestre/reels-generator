@@ -17,6 +17,7 @@ import {
   selectFewShot,
   formatFewShot,
   buildAvoidList,
+  REJECTION_REASON_LABELS,
 } from '../../assembly-bridge.js'
 import { runStep, setReelStatus } from '../harness.js'
 
@@ -60,6 +61,22 @@ export async function generateStory(reelId: string, channelId: string, language:
     Object.entries(rejectionCounts).map(([reasonCode, count]) => ({ reasonCode, count })),
   )
 
+  // ── THIS reel's own rejections → per-reel regeneration feedback ───────────
+  // The operator rejecting a draft for THIS reel records a reason+note; feed the latest one (and the
+  // attempt count) into the prompt so the next draft is shaped by it AND the inputHash changes (forcing a
+  // real re-run — repeating the same reason still yields a new story because the attempt # advances).
+  const reelRejections = await db.query.rejections.findMany({
+    where: eq(rejections.reelId, reelId),
+    orderBy: [desc(rejections.createdAt)],
+  })
+  const regenerationNonce = reelRejections.length
+  const latestRejection = reelRejections[0]
+  const operatorFeedback = latestRejection
+    ? [REJECTION_REASON_LABELS[latestRejection.reasonCode] ?? latestRejection.reasonCode, latestRejection.note?.trim()]
+        .filter(Boolean)
+        .join(' — ')
+    : undefined
+
   const worldBible = WorldBibleSchema.parse(channel.worldBible)
   const toneConfig = ToneConfigSchema.parse(channel.toneConfig)
   const targetSeconds = channel.targetSeconds ?? 75 // per-channel reel length (derived per niche)
@@ -76,6 +93,8 @@ export async function generateStory(reelId: string, channelId: string, language:
     targetSeconds,
     targetWords,
     rejectionAvoidList: avoidList,
+    operatorFeedback,
+    regenerationNonce,
   })
 
   const inputHash = buildInputHash(STORY_V1_VERSION, { system, userMessage })

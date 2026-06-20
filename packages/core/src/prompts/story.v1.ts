@@ -13,7 +13,10 @@ export interface StoryPromptVars {
   fewshotStories: string      // formatted reference stories
   targetSeconds: number
   targetWords: number
-  rejectionAvoidList: string  // derived from recent rejections
+  rejectionAvoidList: string  // derived from recent CHANNEL-WIDE rejections (≥3 in 14 days)
+  operatorFeedback?: string | undefined   // THIS reel's own latest rejection (reason + note), for regeneration
+  regenerationNonce?: number | undefined   // 0 = first draft; increments per regenerate. MUST land in the prompt text
+                              // so the inputHash changes and the LLM actually re-runs (else it caches).
 }
 
 export function buildStoryPrompt(v: StoryPromptVars): { system: string; userMessage: string } {
@@ -54,7 +57,11 @@ Craft:
 - Grounded and specific; stay consistent with the world and its canonical names.
 
 Avoid (anti-patterns from rejected reels): ${v.rejectionAvoidList || 'none yet'}
-
+${
+    v.operatorFeedback
+      ? `\nThis is regeneration attempt #${(v.regenerationNonce ?? 1)}. The operator rejected the previous draft for this reason: "${v.operatorFeedback}". Write a DISTINCTLY DIFFERENT story that directly fixes this — change the premise/approach, not just the wording. Do not repeat the prior draft's plot or hook.\n`
+      : ''
+  }
 OUTPUT (JSON only):
 {
   "title": "",

@@ -119,6 +119,22 @@
     opacity: 1;
   }
 
+  /* ── Story-studio / progress loaders (characterful) ──────── */
+  /* Flowing accent "thinking" bar (indeterminate). Recolor per channel mood via --think-tint. */
+  .animate-think {
+    background-image: linear-gradient(90deg, transparent, var(--think-tint, #5E6AD2), transparent);
+    background-size: 200% 100%;
+    animation: think-flow 1.5s ease-in-out infinite;
+  }
+  /* Soft breathing glow for the loader centerpiece. */
+  .animate-breathe {
+    animation: breathe 2.4s ease-in-out infinite;
+  }
+  /* Blinking caret for the typewriter story reveal. */
+  .caret-blink {
+    animation: caret-blink 1s step-end infinite;
+  }
+
   /* ── Misc ──────────────────────────────────────────────── */
   .nav-link {
     @apply flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm font-medium text-muted
@@ -149,6 +165,18 @@
 @keyframes shimmer {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
+}
+@keyframes think-flow {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@keyframes breathe {
+  0%, 100% { transform: scale(1); opacity: 0.85; }
+  50% { transform: scale(1.06); opacity: 1; }
+}
+@keyframes caret-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
 }
 
 /* Respect users who prefer reduced motion — kill animations + transitions. */

@@ -6,6 +6,29 @@ export interface RejectionCount {
   count: number
 }
 
+// Operator-facing labels for rejection reason codes — shared by the review UI and the worker, so the
+// feedback injected into the regeneration prompt reads in the same words the operator picked.
+export const REJECTION_REASON_LABELS: Record<string, string> = {
+  weak_hook: 'Weak hook',
+  twist_predictable: 'Twist too predictable',
+  pacing: 'Pacing drags',
+  off_culture: 'Not believable / off-culture',
+  voice_mismatch: 'Voice mismatch',
+  visual_off: 'Visuals off',
+  other: 'Other',
+}
+
+// The story-relevant reason codes shown when rejecting/regenerating a STORY (visual_off is a visual
+// reason, not a story one). The review surfaces render these in order.
+export const STORY_REJECTION_REASONS = [
+  { code: 'weak_hook', label: 'Weak hook' },
+  { code: 'twist_predictable', label: 'Twist too predictable' },
+  { code: 'pacing', label: 'Pacing drags' },
+  { code: 'off_culture', label: 'Not believable / off-culture' },
+  { code: 'voice_mismatch', label: 'Voice mismatch' },
+  { code: 'other', label: 'Other' },
+] as const
+
 const AVOID_LINES: Record<string, string> = {
   twist_predictable:
     'Avoid: twist where the narrator was the creature all along; avoid dream reveals; avoid "it was just the wind" fake-outs.',

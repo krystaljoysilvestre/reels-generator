@@ -266,6 +266,13 @@ budget-exceeded fails fast (no wasted retries). Remaining items below are delibe
   return later as an "economy" toggle (cheaper, consistent) for cost-sensitive SaaS tiers.
 - **[future] Scored music** — arc-synced to `peakMoment` (rises/drops timed to the story beats), built
   on the per-reel `generate_music` foundation. The premium tier above today's flat per-reel bed.
+- **[✅ DONE] Guided story creation + full-pipeline transparency.** Review-mode reels now land on a
+  per-reel **Story Studio** (`/reel/[id]/story`): ask BYO-or-generate; a characterful, channel-themed
+  loader (crimson for horror) while the story is written; review it; **regenerate-with-reason** (the
+  rejection reason+note is injected into the prompt + an attempt # busts the `generate_story` inputHash, so
+  even the same reason yields a new story). New routes: `provide-story`, `regenerate-story`, `status`
+  (poll). A `usePipelineStatus` hook + `pipeline-phases.ts` (14→5 phases) also drive a live build/render
+  stepper + "scenes develop in" on the storyboard. No schema change (reuses `rejections`/`pipeline_steps`).
 
 ### Channel creation
 - **[P2] Derived genome goes stale on edit**: changing niche in Settings doesn't re-derive tone/style/

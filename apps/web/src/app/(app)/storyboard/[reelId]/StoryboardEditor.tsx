@@ -4,6 +4,8 @@ import { useRouter } from 'next/navigation'
 import type { InferSelectModel } from 'drizzle-orm'
 import type { scenes, stories } from '@reels/db'
 import type { ChannelVoice } from '@reels/core'
+import { usePipelineStatus } from '@/hooks/usePipelineStatus'
+import { PipelinePhaseStepper } from '@/components/PipelinePhaseStepper'
 
 type Scene = InferSelectModel<typeof scenes>
 type Story = InferSelectModel<typeof stories>
@@ -203,6 +205,17 @@ export function StoryboardEditor({
   // Post-render gates (spot-check → approved → published) get their own action bar, not the voice/render one.
   const isPostRender = ['spot_check', 'approved', 'scheduled', 'published'].includes(reel.status)
 
+  // Live build/render progress: scenes/images still generating (status='storyboard' before they land), or
+  // the render chain running. Poll while active — the hook refreshes the server so images + status update.
+  const imagesReady = scenes.length > 0 && scenes.every((s) => sceneImages[s.idx])
+  const showProgress = (reel.status === 'storyboard' && !imagesReady) || reel.status === 'rendering' || reel.status === 'render_qa'
+  const live = usePipelineStatus(reel.id, { enabled: showProgress, scenes: true })
+  const sceneProgress = live?.scenes?.length
+    ? { done: live.scenes.filter((s) => s.hasImage).length, total: live.scenes.length }
+    : scenes.length > 0
+      ? { done: scenes.filter((s) => sceneImages[s.idx]).length, total: scenes.length }
+      : undefined
+
   return (
     <div className="flex min-h-screen flex-col bg-bg">
       {/* Header */}
@@ -241,6 +254,11 @@ export function StoryboardEditor({
             {loading === 'retry' ? 'Retrying…' : 'Retry'}
           </button>
         </div>
+      )}
+
+      {/* Live build / render progress — phases + scene readiness while the pipeline runs */}
+      {showProgress && (
+        <PipelinePhaseStepper reelStatus={live?.reelStatus ?? reel.status} steps={live?.steps ?? []} sceneProgress={sceneProgress} />
       )}
 
       {/* Scene strip — horizontal scroll */}
