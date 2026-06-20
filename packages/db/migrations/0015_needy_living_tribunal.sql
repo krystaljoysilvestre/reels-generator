@@ -1,0 +1,1 @@
+ALTER TABLE "reels" ADD COLUMN "voice_settings" jsonb;

@@ -2,17 +2,17 @@ import type { NextRequest} from 'next/server';
 import { NextResponse } from 'next/server'
 import { getDb, reels } from '@reels/db'
 import { eq } from 'drizzle-orm'
-import { transition } from '@reels/core'
+import { transition, type VoiceSettings } from '@reels/core'
 import { enqueueStep } from '@reels/queue'
 import { getSession } from '@/lib/auth'
 
-// Transitions the reel to 'rendering' and sets the voiceId.
+// Transitions the reel to 'rendering' and sets the voiceId (+ optional delivery override).
 // The worker picks up the pipeline from here via BullMQ.
 
 export async function POST(req: NextRequest) {
   if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { reelId, voiceId } = (await req.json()) as { reelId: string; voiceId: string }
+  const { reelId, voiceId, voiceSettings } = (await req.json()) as { reelId: string; voiceId: string; voiceSettings?: VoiceSettings }
   const db = getDb()
 
   // TTS (generate_tts) hard-requires a voice; reject empty up front so the worker
@@ -26,9 +26,12 @@ export async function POST(req: NextRequest) {
 
   transition(reel.status, 'rendering')
 
+  // voiceSettings present = operator tweaked delivery for this reel → store the override; absent = leave
+  // null so generate_tts auto-derives from the story's mood.
   await db.update(reels).set({
     status: 'rendering',
     voiceId,
+    ...(voiceSettings ? { voiceSettings } : {}),
     updatedAt: new Date(),
   }).where(eq(reels.id, reelId))
 

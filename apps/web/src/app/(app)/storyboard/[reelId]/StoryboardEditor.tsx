@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import type { InferSelectModel } from 'drizzle-orm'
 import type { scenes, stories } from '@reels/db'
-import type { ChannelVoice } from '@reels/core'
+import type { ChannelVoice, VoiceSettings } from '@reels/core'
 import { usePipelineStatus } from '@/hooks/usePipelineStatus'
 import { PipelinePhaseStepper } from '@/components/PipelinePhaseStepper'
 
@@ -28,6 +28,8 @@ interface StoryboardEditorProps {
   sceneVideoVariations: Record<number, string[]>
   renderUrl: string | null
   musicUrl: string | null // this reel's AI-composed bed (musicMode='ai'), for hearing/vetting on review
+  initialVoiceSettings: VoiceSettings // starting point for the delivery sliders
+  voiceSettingsOverridden: boolean // reel already has a saved manual override
   channelName: string
   failure: { step: string; error: string } | null
 }
@@ -35,12 +37,19 @@ interface StoryboardEditorProps {
 export function StoryboardEditor({
   reel, story, scenes: initialScenes, voicePool, voiceRecommend,
   sceneImages, sceneVideoVariations, renderUrl: initialRenderUrl, musicUrl,
+  initialVoiceSettings, voiceSettingsOverridden,
   channelName, failure,
 }: StoryboardEditorProps) {
   const router = useRouter()
   const [scenes, setScenes] = useState(initialScenes)
+  const [sceneSaving, setSceneSaving] = useState<Record<number, 'saving' | 'saved'>>({}) // per-scene script-edit status
+  const [editingScenes, setEditingScenes] = useState<Set<number>>(new Set()) // scenes whose script is unlocked for editing
   const [selectedVoice, setSelectedVoice] = useState(reel.voiceId ?? voicePool[0]?.providerId ?? '')
   const [showVoicePicker, setShowVoicePicker] = useState(false)
+  // Narrator delivery: the picker's sliders edit this; `voiceTouched` = the operator overrode the
+  // per-story auto-tuning, so we send it to the render (else generate_tts auto-derives from mood).
+  const [voiceSettings, setVoiceSettings] = useState<VoiceSettings>(initialVoiceSettings)
+  const [voiceTouched, setVoiceTouched] = useState(voiceSettingsOverridden)
   const [renderUrl, setRenderUrl] = useState(initialRenderUrl)
   const [loading, setLoading] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -126,13 +135,36 @@ export function StoryboardEditor({
     })
   }
 
+  // Persist an edited scene's narration (on blur). The route rebuilds story.body from all scenes so the
+  // render's audio + timings match the edited script. Re-render to apply.
+  async function saveSceneText(sceneIdx: number, narrationText: string) {
+    if (!narrationText.trim()) return
+    setSceneSaving((s) => ({ ...s, [sceneIdx]: 'saving' }))
+    const res = await fetch('/api/pipeline/edit-scene-text', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reelId: reel.id, sceneIdx, narrationText: narrationText.trim() }),
+    })
+    setSceneSaving((s) => ({ ...s, [sceneIdx]: res.ok ? 'saved' : 'saving' }))
+  }
+
+  // Edit button: unlock a scene's script; clicking again (Done) saves + locks it back to read-only.
+  function toggleSceneEdit(sceneIdx: number, text: string) {
+    setEditingScenes((prev) => {
+      const next = new Set(prev)
+      if (next.has(sceneIdx)) { next.delete(sceneIdx); void saveSceneText(sceneIdx, text) }
+      else next.add(sceneIdx)
+      return next
+    })
+  }
+
   async function handleRender() {
     // Guard: TTS hard-fails with no voice, so never queue a render without one.
     if (!selectedVoice) { setShowVoicePicker(true); return }
     setLoading('render')
     const res = await fetch('/api/pipeline/trigger-render', {
       method: 'POST',
-      body: JSON.stringify({ reelId: reel.id, voiceId: selectedVoice }),
+      body: JSON.stringify({ reelId: reel.id, voiceId: selectedVoice, ...(voiceTouched ? { voiceSettings } : {}) }),
       headers: { 'Content-Type': 'application/json' },
     })
     if (!res.ok) {
@@ -309,11 +341,45 @@ export function StoryboardEditor({
                   </span>
                 </div>
 
-                {/* Narration snippet */}
-                <p className="line-clamp-3 text-xs leading-relaxed text-muted">{scene.narrationText}</p>
+                {/* Narration — full text, never truncated. Read-only until unlocked via the Edit button. */}
+                <div>
+                  {editingScenes.has(scene.idx) ? (
+                    <textarea
+                      value={scene.narrationText}
+                      onChange={(e) => {
+                        const val = e.target.value
+                        setScenes((prev) => prev.map((s) => (s.idx === scene.idx ? { ...s, narrationText: val } : s)))
+                        setSceneSaving((s) => { const n = { ...s }; delete n[scene.idx]; return n })
+                      }}
+                      onBlur={(e) => void saveSceneText(scene.idx, e.target.value)}
+                      rows={5}
+                      autoFocus
+                      className="input resize-y text-xs leading-relaxed"
+                      placeholder="Scene narration…"
+                      aria-label={`Scene ${scene.idx} narration`}
+                    />
+                  ) : (
+                    <p className="whitespace-pre-wrap text-xs leading-relaxed text-muted">{scene.narrationText}</p>
+                  )}
+                  {sceneSaving[scene.idx] && (
+                    <p className="mt-0.5 text-[10px] text-faint">{sceneSaving[scene.idx] === 'saving' ? 'Saving…' : 'Saved ✓ · re-render to apply'}</p>
+                  )}
+                </div>
 
                 {/* Actions */}
                 <div className="flex gap-2">
+                  <button
+                    onClick={() => toggleSceneEdit(scene.idx, scene.narrationText)}
+                    className={editingScenes.has(scene.idx) ? 'btn btn-sm bg-accent-soft text-accent' : 'btn-secondary btn-sm'}
+                    title={editingScenes.has(scene.idx) ? 'Done editing the script' : 'Edit the script'}
+                    aria-label={editingScenes.has(scene.idx) ? 'Done editing the script' : 'Edit the script'}
+                  >
+                    {editingScenes.has(scene.idx) ? (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M20 6 9 17l-5-5" /></svg>
+                    ) : (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+                    )}
+                  </button>
                   <button
                     onClick={() => handleRegenImage(scene.idx)}
                     disabled={loading === `regen-${scene.idx}`}
@@ -484,6 +550,10 @@ export function StoryboardEditor({
           onRetry={fetchRecommendedVoices}
           selected={selectedVoice}
           storyFirstLine={story?.body.split('\n')[0] ?? ''}
+          voiceSettings={voiceSettings}
+          voiceTouched={voiceTouched}
+          onVoiceSettingsChange={(s) => { setVoiceSettings(s); setVoiceTouched(true) }}
+          onResetVoiceSettings={() => { setVoiceSettings(initialVoiceSettings); setVoiceTouched(false) }}
           onSelect={(id) => { setSelectedVoice(id); setShowVoicePicker(false) }}
           onClose={() => setShowVoicePicker(false)}
         />
@@ -492,7 +562,7 @@ export function StoryboardEditor({
   )
 }
 
-function VoicePicker({ voices, recommended, loadingVoices, voicesError, onRetry, selected, storyFirstLine, onSelect, onClose }: {
+function VoicePicker({ voices, recommended, loadingVoices, voicesError, onRetry, selected, storyFirstLine, voiceSettings, voiceTouched, onVoiceSettingsChange, onResetVoiceSettings, onSelect, onClose }: {
   voices: PickerVoice[]
   recommended: boolean
   loadingVoices: boolean
@@ -500,12 +570,17 @@ function VoicePicker({ voices, recommended, loadingVoices, voicesError, onRetry,
   onRetry: () => void
   selected: string
   storyFirstLine: string
+  voiceSettings: VoiceSettings
+  voiceTouched: boolean
+  onVoiceSettingsChange: (s: VoiceSettings) => void
+  onResetVoiceSettings: () => void
   onSelect: (id: string) => void
   onClose: () => void
 }) {
   const [gender, setGender] = useState<'any' | 'female' | 'male'>('any')
   const [showAll, setShowAll] = useState(false)
-  const [playingId, setPlayingId] = useState<string | null>(null)
+  const [currentId, setCurrentId] = useState<string | null>(null) // voice loaded in the now-playing bar
+  const [playing, setPlaying] = useState(false)                   // is it actively playing (drives ▶/⏸)
   const [loadingId, setLoadingId] = useState<string | null>(null)
   const [previewError, setPreviewError] = useState(false)
   const audioRef = useRef<HTMLAudioElement>(null)
@@ -513,34 +588,50 @@ function VoicePicker({ voices, recommended, loadingVoices, voicesError, onRetry,
   // is ~4¢, so we pay it at most once per voice). One audio element; only one preview plays at a time.
   const cacheRef = useRef<Map<string, string>>(new Map())
   const previewText = (storyFirstLine || 'Ito ang boses para sa reel mo.').slice(0, 120)
+  const [showDelivery, setShowDelivery] = useState(voiceTouched)
+  // Change a delivery setting + stop the current preview, so the next ▶ re-synths with the new delivery.
+  const setSlider = (patch: Partial<VoiceSettings>) => {
+    onVoiceSettingsChange({ ...voiceSettings, ...patch })
+    audioRef.current?.pause()
+    setCurrentId(null)
+    setPlaying(false)
+  }
 
   async function preview(v: PickerVoice) {
     const audio = audioRef.current
     if (!audio) return
-    if (playingId === v.providerId) { audio.pause(); setPlayingId(null); return } // click again = stop
-    audio.pause()
-    setPlayingId(null)
+    // Already loaded in the bar → toggle pause/resume (onPlay/onPause sync `playing`).
+    if (currentId === v.providerId) {
+      if (playing) audio.pause()
+      else void audio.play().catch(() => {})
+      return
+    }
     setPreviewError(false)
-    const play = (url: string) => { audio.src = url; void audio.play().then(() => setPlayingId(v.providerId)).catch(() => setPlayingId(null)) }
-    const cached = cacheRef.current.get(v.providerId)
-    if (cached) { play(cached); return }
+    // Cache by voice + delivery settings — a tweak yields a new key so the preview re-synths with the
+    // new delivery, while replaying the same voice+settings stays free.
+    const cacheKey = `${v.providerId}|${voiceSettings.stability}|${voiceSettings.style}|${voiceSettings.speed}`
+    const load = (url: string) => { setCurrentId(v.providerId); audio.src = url; void audio.play().catch(() => {}) }
+    const cached = cacheRef.current.get(cacheKey)
+    if (cached) { load(cached); return }
     setLoadingId(v.providerId)
     try {
       const res = await fetch('/api/pipeline/preview-voice', {
         method: 'POST',
-        body: JSON.stringify({ voiceId: v.providerId, text: previewText }),
+        body: JSON.stringify({ voiceId: v.providerId, text: previewText, voiceSettings }),
         headers: { 'Content-Type': 'application/json' },
       })
       if (!res.ok) { setPreviewError(true); return }
       const url = URL.createObjectURL(await res.blob())
-      cacheRef.current.set(v.providerId, url)
-      play(url)
+      cacheRef.current.set(cacheKey, url)
+      load(url)
     } catch {
       setPreviewError(true)
     } finally {
       setLoadingId(null)
     }
   }
+
+  const currentVoiceName = voices.find((v) => v.providerId === currentId)?.name ?? 'Voice'
 
   // Default to the best-fit recommendations (with reasons) so the operator isn't scanning 45; a toggle
   // reveals the full pool. Gender filter narrows either set.
@@ -593,7 +684,7 @@ function VoicePicker({ voices, recommended, loadingVoices, voicesError, onRetry,
         <div className="mb-3 flex max-h-80 flex-col gap-2 overflow-y-auto">
           {shown.map((v) => {
             const active = selected === v.providerId
-            const isPlaying = playingId === v.providerId
+            const isPlaying = currentId === v.providerId && playing
             const isLoading = loadingId === v.providerId
             return (
               <div
@@ -602,10 +693,7 @@ function VoicePicker({ voices, recommended, loadingVoices, voicesError, onRetry,
                 className={`flex cursor-pointer items-center justify-between gap-2 rounded-lg border px-3 py-2.5 transition-colors ${active ? 'border-accent bg-accent-soft ring-1 ring-inset ring-accent' : 'border-border-strong hover:bg-subtle'}`}
               >
                 <div className="min-w-0">
-                  <p className="flex items-center gap-1.5 text-sm font-medium text-ink">
-                    {v.name}
-                    {v.reason && <span className="flex-shrink-0 rounded-full bg-accent/10 px-1.5 py-[1px] text-[9px] font-semibold uppercase tracking-wide text-accent">Fit</span>}
-                  </p>
+                  <p className="truncate text-sm font-medium text-ink">{v.name}</p>
                   <p className="line-clamp-2 text-xs text-muted">{v.reason || v.description || v.gender}</p>
                 </div>
                 <button
@@ -632,7 +720,44 @@ function VoicePicker({ voices, recommended, loadingVoices, voicesError, onRetry,
           </button>
         )}
         {previewError && <p className="mb-3 text-xs text-danger">Couldn&apos;t play that preview — try again.</p>}
-        <audio ref={audioRef} onEnded={() => setPlayingId(null)} className="hidden" />
+
+        {/* Now-playing bar — shows which voice is speaking, with scrub + pause. Always mounted (hidden
+            until a preview starts) so the audio ref exists when preview() runs. */}
+        <div className={currentId ? 'mb-3 rounded-lg border border-border bg-subtle/50 px-3 py-2' : 'hidden'}>
+          <p className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-ink">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-accent" aria-hidden>
+              <path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" />
+            </svg>
+            <span className="truncate">{playing ? 'Now playing' : 'Paused'} · {currentVoiceName}</span>
+          </p>
+          <audio
+            ref={audioRef}
+            controls
+            onPlay={() => setPlaying(true)}
+            onPause={() => setPlaying(false)}
+            onEnded={() => setPlaying(false)}
+            className="h-8 w-full"
+          />
+        </div>
+
+        {/* Adjust delivery — collapsible sliders that override the per-story auto-tuning for this reel. */}
+        <div className="mb-3">
+          <button type="button" onClick={() => setShowDelivery((s) => !s)} className="flex w-full items-center justify-between py-1 text-xs font-medium text-muted hover:text-ink">
+            <span>Adjust delivery{voiceTouched ? ' · custom' : ''}</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={showDelivery ? 'rotate-180' : ''} aria-hidden><path d="m6 9 6 6 6-6" /></svg>
+          </button>
+          {showDelivery && (
+            <div className="mt-2 flex flex-col gap-3 rounded-lg border border-border bg-subtle/40 p-3">
+              <p className="text-[11px] leading-relaxed text-faint">Delivery auto-tunes to each story&apos;s mood. Adjust to set it for this reel, then preview a voice to hear it.</p>
+              <DeliverySlider label="Pace" lo="Slower" hi="Faster" min={0.7} max={1.15} step={0.01} value={voiceSettings.speed} onChange={(v) => setSlider({ speed: v })} />
+              <DeliverySlider label="Expressiveness" lo="Subtle" hi="Dramatic" min={0} max={0.6} step={0.05} value={voiceSettings.style} onChange={(v) => setSlider({ style: v })} />
+              <DeliverySlider label="Steadiness" lo="Varied" hi="Steady" min={0.2} max={0.85} step={0.05} value={voiceSettings.stability} onChange={(v) => setSlider({ stability: v })} />
+              {voiceTouched && (
+                <button type="button" onClick={() => { onResetVoiceSettings(); audioRef.current?.pause(); setCurrentId(null); setPlaying(false) }} className="btn-ghost btn-sm self-start">Reset to auto</button>
+              )}
+            </div>
+          )}
+        </div>
 
         <div className="flex gap-2">
           <button onClick={() => onSelect(selected)} disabled={!selected} className="btn-accent flex-1">
@@ -643,6 +768,18 @@ function VoicePicker({ voices, recommended, loadingVoices, voicesError, onRetry,
           </button>
         </div>
       </div>
+    </div>
+  )
+}
+
+function DeliverySlider({ label, lo, hi, min, max, step, value, onChange }: {
+  label: string; lo: string; hi: string; min: number; max: number; step: number; value: number; onChange: (v: number) => void
+}) {
+  return (
+    <div>
+      <p className="mb-0.5 text-xs font-medium text-ink">{label}</p>
+      <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} className="w-full accent-accent" />
+      <div className="flex justify-between text-[10px] text-faint"><span>{lo}</span><span>{hi}</span></div>
     </div>
   )
 }

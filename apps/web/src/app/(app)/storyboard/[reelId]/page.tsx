@@ -2,7 +2,7 @@ import { getDb, reels, scenes, assets, channels, pipelineSteps } from '@reels/db
 import { and, desc, eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { requireAuth } from '@/lib/auth'
-import type { ChannelVoice } from '@reels/core'
+import { type ChannelVoice, type VoiceSettings, moodToVoiceSettings, ToneConfigSchema } from '@reels/core'
 import { StoryboardEditor } from './StoryboardEditor'
 
 export const dynamic = 'force-dynamic'
@@ -47,6 +47,12 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
   // This reel's own AI-composed bed (musicMode='ai'), so it can be heard/vetted on the review surface.
   const musicUrl = reel.musicKey ? `/api/asset?key=${encodeURIComponent(reel.musicKey)}` : null
 
+  // Starting point for the voice-picker's delivery sliders: the reel's saved override if it has one, else
+  // the channel's baseline delivery (tone only). Tweaking from here overrides the per-story auto-tuning.
+  const initialVoiceSettings: VoiceSettings =
+    (reel.voiceSettings as VoiceSettings | null) ??
+    moodToVoiceSettings([], ToneConfigSchema.parse(channel?.toneConfig ?? {}))
+
   // If the reel hard-failed, surface which step + why (the chain stops at the first failed step).
   let failure: { step: string; error: string } | null = null
   if (reel.status === 'failed') {
@@ -80,6 +86,8 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
       sceneVideoVariations={sceneVideoVariations}
       renderUrl={renderUrl}
       musicUrl={musicUrl}
+      initialVoiceSettings={initialVoiceSettings}
+      voiceSettingsOverridden={reel.voiceSettings != null}
       channelName={channel?.name ?? ''}
       failure={failure}
     />

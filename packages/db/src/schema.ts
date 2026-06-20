@@ -150,6 +150,7 @@ export const reels = pgTable(
     voiceId: text('voice_id'),
     audioScript: jsonb('audio_script'),   // annotated audio script (docs/04 §3)
     timings: jsonb('timings'),             // ComputeTimingsOutput (docs/08)
+    voiceSettings: jsonb('voice_settings'), // per-reel narrator DELIVERY override (ElevenLabs voice_settings); null = auto-derive from the story's mood
     musicKey: text('music_key'),           // R2 key of THIS reel's AI-generated bed (musicMode='ai'); null otherwise
     renderUrl: text('render_url'),
     costCents: integer('cost_cents').notNull().default(0),
