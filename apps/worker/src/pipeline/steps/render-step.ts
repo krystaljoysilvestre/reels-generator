@@ -93,6 +93,7 @@ export async function renderStep(reelId: string): Promise<void> {
           tier: scene.tier as 'still' | 'video',
           startMs: timing.startMs,
           endMs: timing.endMs,
+          mood: scene.mood,
         })
       }
 

@@ -38,6 +38,8 @@ For each scene write:
 - tier: "video" for the 2–3 highest-impact beats (always the hook and the climax), "still" otherwise.
 - mood: 2–3 words for ambient/grade hints.
 
+CHARACTERS: each scene image is generated independently, so a recurring person/figure/creature only reads as the SAME individual if you describe it the same way every time. The FIRST time one appears, fix its canonical look — build, age, hair, clothing, and ONE distinguishing detail — then repeat that SAME description (near-verbatim) in every later scene it appears in. Keep it within the imply rule: lock silhouette, posture, hair, and wardrobe; faces stay obscured.
+
 GUARDS: imply, never depict — silhouettes, doorways, reflections, things at the edge of frame. No gore, no faces of fear in close-up, no children in threatening contexts.
 
 OUTPUT (JSON only):

@@ -21,6 +21,7 @@ export interface RemotionRenderInput {
     tier: 'still' | 'video'
     startMs: number
     endMs: number
+    mood: string[]            // ambient/grade hints — drives per-scene atmosphere intensity
   }>
   subtitles: SubtitleChunk[]
   captionStyle: CaptionStyle
@@ -92,6 +93,7 @@ export async function renderReelWithRemotion(input: RemotionRenderInput): Promis
         tier: s.tier,
         startFrame,
         durationFrames: Math.max(1, endFrame - startFrame),
+        mood: s.mood,
       }
     }),
   )

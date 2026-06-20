@@ -264,12 +264,20 @@ budget-exceeded fails fast (no wasted retries). Remaining items below are delibe
 - **[✅ DONE] Living grade overlay** — `GradeOverlay` now animates: grain re-grains every frame (film
   shimmer, not a static texture), an unstable-light flicker, and a slow vignette breath. Frame-deterministic;
   scaled by the channel's grain/vignette. Camera motion (Ken Burns) already varied per scene (`SceneClip.tsx`).
-  Scene TRANSITIONS (hard cuts only) + per-scene mood-driven atmosphere intensity still TODO.
-- **[P2 — deferred to SaaS/character-driven] No character/location consistency** across scenes (each
-  regenerates independently). Low impact for atmospheric/silhouette channels; high for character-driven.
-  Needs reference/identity conditioning (world-bible characters + identity model).
-- **[future] i2v spike** — kling photorealism-drifts the stylized look; prove a stylized-friendly
-  image-to-video model on hook+climax beats or drop kling (currently opt-in by scene tier).
+- **[✅ DONE] Per-scene mood-driven atmosphere** — `ReelComposition` maps each scene's mood + tier →
+  intensity, so dread/climax beats grade harder (more grain/flicker/vignette) than quiet ones; a flat
+  channel stays flat. `mood` is plumbed scene → render-step → Remotion. Scene TRANSITIONS (hard cuts) still TODO.
+- **[✅ DONE — text-based] Character consistency within a reel** — `scenes.v1` fixes a recurring figure's
+  canonical look (build/hair/wardrobe/one detail) on first appearance and reuses it verbatim in later scenes,
+  so it reads as the same individual (verified: identical description across scenes + consistent generated
+  images). Faces stay obscured (imply rule). REMAINING for face-heavy / cross-reel niches: identity
+  conditioning (world-bible characters + an identity model) — a SaaS-tier build; wardrobe can still drop under flux.
+- **[✅ DONE — spike + fix] i2v video path** — the configured `kling-video/v1.6/image-to-video` was a DEAD
+  endpoint (404; fal now requires the `/standard/` tier segment), so the video path was silently broken.
+  Fixed in `config.ts`. Verified on a real photoreal scene: both kling-standard and the wan fallback hold the
+  style and give a clean camera push-in (no warping) — the "wrong for stylized" concern doesn't apply to THIS
+  photoreal channel. Both output 720p → upscaled to 1080×1920 at render; use kling `/pro/` for native 1080p
+  (higher cost). Invoked only for `tier:'video'` hero beats.
 - **[✅ DONE] Unmeasured loudness now FAILS** render_qa (was a warning).
 - **[✅ DONE] AI music is now PER-REEL, not per-channel.** `generate_music` composes one fresh original
   bed for each reel (seeded by the channel's `audioMood`, tilted by the story's mood, sized to the reel),

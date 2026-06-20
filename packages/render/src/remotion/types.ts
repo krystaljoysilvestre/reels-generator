@@ -12,6 +12,7 @@ export interface ReelScene {
   tier: 'still' | 'video'
   startFrame: number
   durationFrames: number
+  mood: string[] // ambient/grade hints from breakdown — drives per-scene atmosphere intensity
 }
 
 // One word within a chunk — drives the word-by-word "karaoke" highlight.

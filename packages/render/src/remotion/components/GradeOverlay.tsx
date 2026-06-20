@@ -4,6 +4,7 @@ import { useCurrentFrame, useVideoConfig } from 'remotion'
 interface GradeOverlayProps {
   grain: number       // 0–1, channel grain setting
   vignette: number    // 0–1, channel vignette setting
+  intensity?: number  // 0–1 per-scene atmosphere from mood+tier (0.5 = neutral); pushes grain/flicker/vignette
 }
 
 // Deterministic per-frame pseudo-random in [0,1). Remotion renders frames independently (and across
@@ -19,28 +20,33 @@ function frameRand(frame: number, salt: number): number {
 //   • a gentle, irregular flicker dims the frame like an unstable light / old generator
 //   • the vignette breathes very slowly so the frame feels alive rather than printed
 // All effects scale with the channel's existing grain/vignette intent — a flat channel (both 0) stays flat.
-export const GradeOverlay: React.FC<GradeOverlayProps> = ({ grain, vignette }) => {
+export const GradeOverlay: React.FC<GradeOverlayProps> = ({ grain, vignette, intensity = 0.5 }) => {
   const frame = useCurrentFrame()
   const { fps } = useVideoConfig()
 
-  if (grain === 0 && vignette === 0) return null
+  if (grain === 0 && vignette === 0) return null // flat channel stays flat regardless of scene intensity
 
-  const atmo = Math.min(1, grain + vignette) // overall grade intensity → drives the living-frame effects
+  // Per-scene push: a dread/climax beat (high intensity) grains + vignettes + flickers harder than a
+  // quiet one (low). Centred so 0.5 ≈ the channel's base look.
+  const i = Math.max(0, Math.min(1, intensity))
+  const effGrain = grain * (0.8 + 0.4 * i)
+  const effVignette = vignette * (0.85 + 0.3 * i)
+  const atmo = Math.min(1, grain + vignette) // presence of any grade at all
   const t = frame / fps
 
   // Grain shimmer: jump the noise tile to a fresh region each frame (large, directionless offsets so it
-  // re-grains in place rather than scrolling), with a slight density jitter. Same base intensity as before.
+  // re-grains in place rather than scrolling), with a slight density jitter.
   const gx = Math.floor(frameRand(frame, 1) * 200)
   const gy = Math.floor(frameRand(frame, 2) * 200)
-  const grainOpacity = grain * 0.25 * (0.85 + 0.3 * frameRand(frame, 3))
+  const grainOpacity = effGrain * 0.25 * (0.85 + 0.3 * frameRand(frame, 3))
 
   // Unstable-light flicker: sum of detuned sines → no obvious period; only ever *dims* (a candle/genset
-  // dipping), capped low and scaled by grade intensity so it's atmosphere, not a strobe.
+  // dipping). Amplitude grows with scene intensity so tense beats feel less stable.
   const wob = (Math.sin(t * 5.3) + Math.sin(t * 11.7) + Math.sin(t * 2.1)) / 3
-  const flicker = Math.max(0, wob) * 0.05 * atmo
+  const flicker = Math.max(0, wob) * (0.03 + 0.045 * i) * atmo
 
   // Vignette breathes very slowly (~10s period).
-  const vig = vignette * (0.92 + 0.08 * Math.sin(t * 0.6))
+  const vig = effVignette * (0.92 + 0.08 * Math.sin(t * 0.6))
 
   return (
     <>
