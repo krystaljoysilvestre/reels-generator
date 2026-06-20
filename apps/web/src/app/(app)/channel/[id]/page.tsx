@@ -5,7 +5,6 @@ import { notFound } from 'next/navigation'
 import { requireAuth } from '@/lib/auth'
 import { ChannelAvatar } from '@/components/ChannelAvatar'
 import { CreateReelButton } from './CreateReelButton'
-import { PLATFORM_PRESETS } from '@reels/core'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,7 +21,6 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
     orderBy: [desc(reels.createdAt)],
     with: { story: { columns: { title: true } } },
   })
-  const published = reelRows.filter((r) => r.status === 'published').length
   const languages = channel.languages ?? []
 
   return (
@@ -60,15 +58,6 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
       </header>
 
       <div className="mx-auto max-w-4xl p-8">
-        {/* Stat row — quick overview; the full creative genome lives on the Details page */}
-        <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-5">
-          <Stat label="Reels" value={reelRows.length} />
-          <Stat label="Published" value={published} />
-          <Stat label="Languages" value={languages.length} />
-          <Stat label="Reel length" value={`~${channel.targetSeconds ?? 75}s`} />
-          <Stat label="Platform" value={(PLATFORM_PRESETS[(channel.targetPlatform ?? 'all') as keyof typeof PLATFORM_PRESETS] ?? PLATFORM_PRESETS.all).label} />
-        </div>
-
         {/* Reels */}
         <section>
           <div className="mb-3 flex items-center justify-between">
@@ -93,15 +82,6 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
           )}
         </section>
       </div>
-    </div>
-  )
-}
-
-function Stat({ label, value }: { label: string; value: number | string }) {
-  return (
-    <div className="card px-4 py-3">
-      <p className="font-mono text-xl font-semibold tabular-nums text-ink">{value}</p>
-      <p className="text-xs text-muted">{label}</p>
     </div>
   )
 }
