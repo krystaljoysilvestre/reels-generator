@@ -3,6 +3,7 @@ import type { Readable } from 'node:stream'
 import { uploadBuffer } from '../shared/storage.js'
 import { ProviderError, ProviderRateLimitError } from '../shared/types.js'
 import type { AlignedChar, SfxResult, TtsProvider, TtsResult } from './types.js'
+import type { VoiceSettings } from '@reels/core'
 
 const TTS_COST_CENTS_PER_1K_CHARS = 30  // ElevenLabs Starter ~$0.30/1k chars
 const SFX_COST_CENTS_FLAT = 2
@@ -131,6 +132,7 @@ export class ElevenLabsTtsProvider implements TtsProvider {
     narration: string
     voiceId: string
     reelId: string
+    voiceSettings?: VoiceSettings
   }): Promise<TtsResult> {
     const client = getClient()
 
@@ -141,6 +143,8 @@ export class ElevenLabsTtsProvider implements TtsProvider {
         text: params.narration,
         model_id: 'eleven_multilingual_v2',
         output_format: 'mp3_44100_128',
+        // Per-reel delivery derived from the story's mood (omitted → ElevenLabs defaults).
+        ...(params.voiceSettings ? { voice_settings: params.voiceSettings } : {}),
       }, TTS_OPTS)
 
       const { audio_base64, alignment } = response
@@ -207,5 +211,56 @@ export async function generateSfx(params: {
       throw new ProviderRateLimitError('elevenlabs')
     }
     throw new ProviderError('elevenlabs', String(err))
+  }
+}
+
+// ── Music generation (Eleven Music) ───────────────────────────────────────────
+// The installed `elevenlabs` SDK (v1) exposes no music resource, so call the REST
+// endpoint directly (verified: POST /v1/music, xi-api-key, {prompt, music_length_ms}
+// → audio/mpeg). Returns the raw MP3 buffer; the CALLER uploads to R2, because the
+// two consumers use different keys (channel signature track vs preset bed).
+
+const MUSIC_COST_CENTS_FLAT = 10  // rough per-generation estimate for cost tracking
+const MUSIC_MIN_MS = 10_000       // Eleven Music length bounds
+const MUSIC_MAX_MS = 300_000
+
+export interface MusicResult {
+  audio: Buffer
+  durationMs: number
+  costCents: number
+}
+
+export async function generateMusic(params: {
+  prompt: string
+  lengthMs: number
+  forceInstrumental?: boolean  // default true — these are background beds, vocals would fight narration
+}): Promise<MusicResult> {
+  const apiKey = process.env['ELEVENLABS_API_KEY']
+  if (!apiKey) throw new Error('ELEVENLABS_API_KEY is not set')
+
+  const musicLengthMs = Math.min(MUSIC_MAX_MS, Math.max(MUSIC_MIN_MS, Math.round(params.lengthMs)))
+
+  try {
+    const res = await fetch('https://api.elevenlabs.io/v1/music', {
+      method: 'POST',
+      headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json' },
+      // force_instrumental GUARANTEES no vocals (prompt text alone doesn't reliably suppress them).
+      body: JSON.stringify({
+        prompt: params.prompt,
+        music_length_ms: musicLengthMs,
+        force_instrumental: params.forceInstrumental ?? true,
+      }),
+      signal: AbortSignal.timeout(180_000),
+    })
+    if (res.status === 429) throw new ProviderRateLimitError('elevenlabs')
+    if (!res.ok) {
+      const body = await res.text().catch(() => '')
+      throw new ProviderError('elevenlabs', `music generation failed (${res.status}): ${body.slice(0, 300)}`)
+    }
+    const audio = Buffer.from(await res.arrayBuffer())
+    return { audio, durationMs: musicLengthMs, costCents: MUSIC_COST_CENTS_FLAT }
+  } catch (err) {
+    if (err instanceof ProviderError || err instanceof ProviderRateLimitError) throw err
+    throw new ProviderError('elevenlabs', `music request failed: ${String(err)}`)
   }
 }

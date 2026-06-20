@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { VoiceSettings } from '@reels/core'
 
 // TtsProvider interface — ElevenLabs implements this; WhisperX-backed aligner
 // would implement Aligner (docs/08 §2). Keeping the seam so a swap is config, not code. [B2]
@@ -41,5 +42,6 @@ export interface TtsProvider {
     narration: string
     voiceId: string
     reelId: string
+    voiceSettings?: VoiceSettings  // per-reel delivery (derived from story mood); omitted = EL defaults
   }): Promise<TtsResult>
 }

@@ -15,25 +15,22 @@ Design rules:
 - 1 ambient bed for the whole reel, may evolve once (e.g. rain starts).
 - 3–7 SFX one-shots max. Less is scarier. Place them ON meaning-bearing words (the knock lands on the word for knock).
 - Mark 1 "silence_drop" if the story has a turn — cutting all sound is the strongest effect available.
-- Optional music: one low drone/swell toward the climax only. Set peak_anchor to the twist line.
+- Optional music: one low drone/swell toward the climax only. Set "peakAnchor" to the twist line.
 
-OUTPUT (JSON only) — schema "audio_script.v1":
+OUTPUT (JSON only) — schema "audio_script.v1". Use these EXACT field names; null where unused:
 {
-  "ambient": {
-    "packTags": ["province_night"],
-    "evolution": null
-  },
+  "ambient": { "packTags": ["province_night"], "evolution": null },
   "sfx": [
-    {
-      "anchor": "exact substring",
-      "offsetMs": 0,
-      "prompt": "sound description for generation",
-      "volumeDb": -8
-    }
+    { "anchor": "exact narration substring", "offsetMs": 0, "prompt": "sound to generate", "volumeDb": -8 }
   ],
   "silenceDrop": null,
   "music": null
-}`
+}
+
+When a field is populated instead of null, it MUST use exactly these keys (no others):
+- ambient.evolution: { "anchor": "exact substring", "change": "how the bed shifts, e.g. rain starts" }
+- silenceDrop: { "anchor": "exact substring", "durationMs": 800 }
+- music: { "type": "low_drone" | "drone_swell" | "riser_sting", "startAnchor": "substring or empty string", "peakAnchor": "the twist line or empty string", "moodTags": ["dread"] }`
 
   return { system, userMessage }
 }

@@ -82,15 +82,22 @@ export const channels = pgTable('channels', {
   avatarKey: text('avatar_key'),   // optional R2 key for the channel avatar image
   description: text('description'), // optional short blurb shown on the card/header
   nicheDescription: text('niche_description').notNull(),
+  tagline: text('tagline').notNull().default(''),  // AI-derived one-line positioning (shown in UI)
   languages: text('languages').array().notNull().default(['tagalog']),
   toneConfig: jsonb('tone_config').notNull().default({}),
   stylePreset: text('style_preset').notNull().default(''),
+  styleImageKey: text('style_image_key'),  // optional R2 key for the chosen visual-style sample
+  targetSeconds: integer('target_seconds').notNull().default(75),  // per-channel reel length (AI-derived per niche, operator-adjustable)
+  targetPlatform: text('target_platform').notNull().default('all'),  // tiktok | youtube_shorts | facebook_reels | all — shapes caption/length now, render presets later
   worldBible: jsonb('world_bible').notNull().default({}),
   lutConfig: jsonb('lut_config').notNull().default({}),
+  captionStyle: jsonb('caption_style').notNull().default({}),  // per-channel burned-in caption look (resolved CaptionStyle)
   voiceMode: text('voice_mode').notNull().default('single'),  // 'single' | 'per_story'
+  voiceSearchKeyword: text('voice_search_keyword').notNull().default(''),  // AI-derived genre tag for matching/recommending narrator voices
   voicePool: jsonb('voice_pool').notNull().default([]),        // selected real ElevenLabs voices
   audioPacks: jsonb('audio_packs').notNull().default({}),
   postingRules: jsonb('posting_rules').notNull().default({}),
+  costCents: integer('cost_cents').notNull().default(0), // what creating this channel cost us (derive + style options/previews)
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 })

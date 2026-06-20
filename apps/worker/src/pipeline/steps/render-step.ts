@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { mkdir, writeFile, readFile } from 'node:fs/promises'
 import { getDb, reels, scenes, assets, channels } from '@reels/db'
 import { downloadBuffer, uploadBuffer, buildInputHash } from '@reels/providers'
-import { TimingsSchema, LutConfigSchema } from '@reels/core'
+import { TimingsSchema, LutConfigSchema, CaptionStyleSchema, PLATFORM_PRESETS } from '@reels/core'
 import { renderReelWithRemotion } from '@reels/render/remotion/render-remotion'
 import { runStep, setReelStatus } from '../harness.js'
 
@@ -22,6 +22,9 @@ export async function renderStep(reelId: string): Promise<void> {
   const channel = await db.query.channels.findFirst({ where: eq(channels.id, reel.channelId) })
   if (!channel) throw new Error('Channel not found')
   const lutConfig = LutConfigSchema.parse(channel.lutConfig)
+  const captionStyle = CaptionStyleSchema.parse(channel.captionStyle)
+  const platformPreset = PLATFORM_PRESETS[(channel.targetPlatform ?? 'all') as keyof typeof PLATFORM_PRESETS] ?? PLATFORM_PRESETS.all
+  const captionSafeZonePct = platformPreset.safeZoneBottomPct
 
   const allAssets = await db.query.assets.findMany({ where: eq(assets.reelId, reelId) })
   const reelScenes = await db.query.scenes.findMany({ where: eq(scenes.reelId, reelId) })
@@ -98,6 +101,8 @@ export async function renderStep(reelId: string): Promise<void> {
       await renderReelWithRemotion({
         scenes: sceneInputs,
         subtitles: timings.subtitles,
+        captionStyle,
+        captionSafeZonePct,
         durationMs: timings.durationMs,
         grain: lutConfig.grain,
         vignette: lutConfig.vignette,

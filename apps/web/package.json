@@ -14,6 +14,7 @@
     "@reels/core": "workspace:*",
     "@reels/db": "workspace:*",
     "@reels/providers": "workspace:*",
+    "@reels/queue": "workspace:*",
     "@sentry/nextjs": "^8.37.1",
     "dotenv": "^16.4.5",
     "drizzle-orm": "^0.33.0",

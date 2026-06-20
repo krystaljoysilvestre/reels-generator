@@ -1,0 +1,1 @@
+ALTER TABLE "channels" ADD COLUMN "caption_style" jsonb DEFAULT '{}'::jsonb NOT NULL;

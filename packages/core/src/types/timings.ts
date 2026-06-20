@@ -19,10 +19,20 @@ export const SceneTimingSchema = z.object({
 })
 export type SceneTiming = z.infer<typeof SceneTimingSchema>
 
+// One word within a subtitle chunk, with its own audio start/end — enables
+// per-word "karaoke" highlight in the renderer (word-mode caption styles).
+export const SubtitleWordSchema = z.object({
+  text: z.string().min(1),
+  startMs: z.number().int().nonnegative(),
+  endMs: z.number().int().nonnegative(),
+})
+export type SubtitleWord = z.infer<typeof SubtitleWordSchema>
+
 export const SubtitleChunkSchema = z.object({
   text: z.string().min(1),
   startMs: z.number().int().nonnegative(),
   endMs: z.number().int().positive(),
+  words: z.array(SubtitleWordSchema).default([]), // per-word timings (for word-highlight captions)
 })
 export type SubtitleChunk = z.infer<typeof SubtitleChunkSchema>
 

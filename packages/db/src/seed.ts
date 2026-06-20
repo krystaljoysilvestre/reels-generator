@@ -16,10 +16,10 @@ const ASWANG_FILES_CHANNEL = {
     'Filipino horror narration channel. First-person confessional encounters with supernatural entities (aswang, multo, kapre, manananggal) set in rural Philippine provinces. Tagalog-first with natural Taglish code-switching. Slow-burn dread, sensory detail, twist endings.',
   languages: ['tagalog', 'taglish'],
   toneConfig: {
-    suspense: 8,
-    dread: 9,
-    pacing: 6,
-    gore: 2,
+    intensity: 9, // heavy, dread-laden
+    warmth: 2,    // cold, unsettling
+    energy: 4,    // measured, slow-burn
+    pacing: 4,
     humor: 0,
   },
   // 100-word style DNA — appended server-side to every image prompt; LLM never sees this

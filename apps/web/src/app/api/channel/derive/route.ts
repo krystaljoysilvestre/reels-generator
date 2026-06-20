@@ -13,6 +13,7 @@ const InputSchema = z.object({
   name: z.string().trim().min(1).max(80),
   nicheDescription: z.string().trim().min(20).max(2000),
   languages: z.array(z.string().trim().min(1)).min(1).max(6),
+  targetPlatform: z.enum(['tiktok', 'youtube_shorts', 'facebook_reels', 'all']).default('all'),
 })
 
 export async function POST(req: NextRequest) {
@@ -23,8 +24,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid input', issues: parsed.error.flatten() }, { status: 400 })
   }
 
-  const { name, nicheDescription, languages } = parsed.data
-  const { system, userMessage } = buildChannelDerivationPrompt({ name, nicheDescription, languages })
+  const { name, nicheDescription, languages, targetPlatform } = parsed.data
+  const { system, userMessage } = buildChannelDerivationPrompt({ name, nicheDescription, languages, targetPlatform })
 
   try {
     const result = await llmCall({

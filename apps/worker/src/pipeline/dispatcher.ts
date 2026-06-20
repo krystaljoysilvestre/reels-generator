@@ -3,6 +3,7 @@
 // Each job is idempotent; the harness handles resume logic.
 
 import type { Job } from 'bullmq'
+import { resolveNextStep, enqueueStep } from '@reels/queue'
 import { captureException } from '../monitoring/sentry.js'
 import {
   generateStory,
@@ -16,6 +17,7 @@ import {
   mixAudioStep,
   renderStep,
   renderQaStep,
+  generateChannelBeds,
 } from './index.js'
 
 export interface PipelineJobData {
@@ -65,8 +67,21 @@ export async function dispatchPipelineJob(job: Job<PipelineJobData>): Promise<vo
       case 'render_qa':
         await renderQaStep(reelId)
         break
+      case 'generate_channel_beds':
+        // Channel-scoped (carries channelId, no reel). Generates the bespoke AI-music pool once.
+        await generateChannelBeds(channelId!)
+        break
       default:
         throw new Error(`Unknown pipeline step: ${stepName}`)
+    }
+
+    // Auto-advance the pipeline: enqueue the next step, unless this one stops at a human gate
+    // (story_review / storyboard / spot_check) — resolveNextStep returns null there. Runs only on
+    // success; the deterministic jobId means a BullMQ retry of THIS job won't double-enqueue.
+    const next = await resolveNextStep(stepName, reelId)
+    if (next) {
+      await enqueueStep({ reelId, stepName: next })
+      console.log(`[pipeline] ${stepName} → enqueued ${next} reelId=${reelId}`)
     }
   } catch (err) {
     captureException(err, { reelId, stepName })

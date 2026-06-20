@@ -1,13 +1,28 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import { NICHE_PRESETS } from './niche-presets'
 import { SUPPORTED_LANGUAGES } from './languages'
 import { Dropdown } from '@/components/Dropdown'
 import { avatarGradient, avatarInitials } from '@/components/ChannelAvatar'
+import { CaptionPreview } from '@/components/CaptionPreview'
+import { PlatformPicker } from '@/components/PlatformPicker'
+import { type CaptionPreset, type CaptionStyle, type TargetPlatform, type AudioMood, resolveCaptionStyle, CaptionStyleSchema, PLATFORM_PRESETS, PRESET_BEDS, rankPresets } from '@reels/core'
 
-const DRAFT_KEY = 'reels:new-channel-draft'
+// v2: caption persistence changed from preset+highlight to a resolved captionStyle object.
+// Bumping the key drops pre-v2 drafts (which would otherwise fall back to the default
+// caption look) instead of half-restoring them.
+const DRAFT_KEY = 'reels:new-channel-draft:v2'
+
+type Phase = 'describe' | 'script' | 'voice' | 'sound' | 'visual'
+const PHASE_ORDER: Phase[] = ['describe', 'script', 'voice', 'sound', 'visual']
+const STEP_SUBTITLE: Record<Phase, string> = {
+  describe: 'Step 1 · Describe the channel',
+  script: 'Step 2 · Teach the channel\'s voice',
+  voice: 'Step 3 · Narrator voice',
+  sound: 'Step 4 · Sound',
+  visual: 'Step 5 · Visual style',
+}
 
 // After the API's own timeout + retries, a transient failure surfaces here —
 // show a clear "try again" instead of a raw SDK message.
@@ -18,7 +33,27 @@ function friendlyError(e: unknown, fallback: string): string {
     : msg
 }
 
-const TONE_KEYS = ['suspense', 'dread', 'pacing', 'gore', 'humor'] as const
+const TONE_KEYS = ['intensity', 'warmth', 'energy', 'pacing', 'humor'] as const
+
+// Caption-style presets shown in Step 4. `preset` matches core's CaptionPreset.
+const CAPTION_OPTIONS: { preset: CaptionPreset; label: string; vibe: string }[] = [
+  { preset: 'pop', label: 'Pop', vibe: 'Punchy word-by-word — lifestyle, vlog, food' },
+  { preset: 'hype', label: 'Hype', vibe: 'Highlight-box hustle — business, money, motivation' },
+  { preset: 'karaoke', label: 'Karaoke', vibe: 'Words fill as spoken — music, poetry' },
+  { preset: 'neon', label: 'Neon', vibe: 'Glowing pop — gaming, tech, nightlife' },
+  { preset: 'whisper', label: 'Whisper', vibe: 'Eerie typewriter — horror, mystery, true-crime' },
+  { preset: 'impact', label: 'Impact', vibe: 'Huge punch-in — sports, drama, hot-takes' },
+  { preset: 'elegant', label: 'Elegant', vibe: 'Wide-tracked fade — luxury, beauty, ASMR' },
+  { preset: 'clean', label: 'Clean', vibe: 'Refined white — explainer, documentary' },
+  { preset: 'comic', label: 'Comic', vibe: 'Playful tilted pop — comedy, memes, reactions' },
+  { preset: 'terminal', label: 'Terminal', vibe: 'Green mono typewriter — tech, coding, crypto' },
+  { preset: 'cinematic', label: 'Cinematic', vibe: 'Subtitle bar — film, storytelling, video essays' },
+  { preset: 'breaking', label: 'Breaking', vibe: 'News lower-third — news, sports, gossip' },
+  { preset: 'marker', label: 'Marker', vibe: 'Highlighter swipe — study, tips, how-to' },
+  { preset: 'script', label: 'Script', vibe: 'Handwritten cursive — faith, quotes, wellness' },
+  { preset: 'retro', label: 'Retro', vibe: 'Chrome/synthwave glow — retro, 80s, music' },
+  { preset: 'glitch', label: 'Glitch', vibe: 'RGB datamosh — gaming, cyber, edits' },
+]
 type ToneKey = (typeof TONE_KEYS)[number]
 type Tone = Record<ToneKey, number>
 
@@ -43,6 +78,12 @@ type VoiceMode = 'single' | 'per_story'
 interface Derived {
   tagline: string
   toneConfig: Tone
+  targetSeconds: number
+  captionPreset: CaptionPreset
+  captionHighlight: string
+  captionTextColor: string
+  captionPosition: 'bottom' | 'center' | 'top'
+  captionFontScale: number
   stylePreset: string
   worldBible: {
     region: string
@@ -52,11 +93,31 @@ interface Derived {
     vocabulary: Record<string, string>
   }
   voiceSearchKeyword: string
+  audioMood: AudioMood
+}
+
+// One proposed visual "look": friendly label + plain-English blurb (shown) +
+// technical DNA (hidden, used for image gen / stored as the channel's stylePreset).
+interface StyleOption {
+  label: string
+  description: string
+  stylePreset: string
+}
+interface StyleProposals {
+  sampleScene: string
+  styles: StyleOption[]
+}
+// Per-card preview lifecycle. Only one of imageKey/error is set at a time.
+interface PreviewState {
+  loading?: boolean
+  imageKey?: string
+  error?: string
+  errorKind?: 'filtered' | 'transient'
 }
 
 export function NewChannelWizard() {
   const router = useRouter()
-  const [phase, setPhase] = useState<'describe' | 'review'>('describe')
+  const [phase, setPhase] = useState<Phase>('describe')
 
   // ── describe inputs ──
   const [name, setName] = useState('')
@@ -64,6 +125,7 @@ export function NewChannelWizard() {
   const [description, setDescription] = useState('')
   const [niche, setNiche] = useState('')
   const [languages, setLanguages] = useState<string[]>(['English'])
+  const [targetPlatform, setTargetPlatform] = useState<TargetPlatform>('all') // shapes caption/length derivation + render presets
   const [presetId, setPresetId] = useState<string | null>(null)
   const nicheRef = useRef<HTMLTextAreaElement>(null)
 
@@ -79,17 +141,23 @@ export function NewChannelWizard() {
   const [costCents, setCostCents] = useState(0)
 
   // ── derived profile (generated + stored; not all shown at creation) ──
-  const [tone, setTone] = useState<Tone>({ suspense: 7, dread: 8, pacing: 6, gore: 2, humor: 1 })
+  const [tone, setTone] = useState<Tone>({ intensity: 5, warmth: 5, energy: 5, pacing: 5, humor: 3 })
+  const [targetSeconds, setTargetSeconds] = useState(75) // channel reel length (derived per niche, adjustable)
+  // Resolved caption style is the single source of truth: AI picks a preset + nudges a few
+  // safe knobs (accent / base color / position / size); switching chips re-resolves.
+  const [captionStyle, setCaptionStyle] = useState<CaptionStyle>(() => resolveCaptionStyle('pop'))
   const [style, setStyle] = useState('')
   const [region, setRegion] = useState('')
   const [era, setEra] = useState('')
   const [locations, setLocations] = useState<string[]>([])
   const [objects, setObjects] = useState<string[]>([])
   const [vocab, setVocab] = useState<Array<{ term: string; value: string }>>([])
+  // The describe inputs (niche+language) the profile was last derived from. Lets us
+  // "Continue" without re-deriving when nothing changed, and regenerate when it did.
+  const [derivedSig, setDerivedSig] = useState('')
 
   // ── narrator voices (real ElevenLabs voices) ──
-  const [voiceMode, setVoiceMode] = useState<VoiceMode | null>(null) // null = nothing chosen yet
-
+  const [voiceMode, setVoiceMode] = useState<VoiceMode | null>('single') // default to one voice (common case); operator can switch to per-story
   const [selectedVoices, setSelectedVoices] = useState<ChannelVoice[]>([])
   const [recommended, setRecommended] = useState<Array<VoiceOption & { reason: string }>>([])
   const [recsLoading, setRecsLoading] = useState(false)
@@ -99,15 +167,51 @@ export function NewChannelWizard() {
   const [showAllVoices, setShowAllVoices] = useState(false)
   const [voiceGender, setVoiceGender] = useState<'any' | 'female' | 'male'>('any')
   const [voiceSearchKeyword, setVoiceSearchKeyword] = useState('')
+  const [tagline, setTagline] = useState('') // AI-derived one-line positioning (persisted on the channel)
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
   const language = languages[0] ?? 'English'
 
-  // ── sample reel script preview (step 2) ──
-  const [sample, setSample] = useState<{ title: string; hook: string; script: string } | null>(null)
+  // ── sample script (step 2, optional) — manual preferred; "Generate draft" seeds it ──
+  const [sampleScript, setSampleScript] = useState('')
+  const [sampleIsAi, setSampleIsAi] = useState(false)
+  const [extraSampleScripts, setExtraSampleScripts] = useState<string[]>([]) // optional additional references (max 2)
   const [sampleLoading, setSampleLoading] = useState(false)
   const [sampleError, setSampleError] = useState('')
+
+  // ── sound (step 4) — background music ──
+  const [audioMood, setAudioMood] = useState<AudioMood | null>(null)  // derived brief (drives AI render-gen + preset ranking)
+  const [musicChoice, setMusicChoice] = useState<'preset' | 'ai' | 'upload' | 'none'>('preset')
+  const [selectedPresetIds, setSelectedPresetIds] = useState<string[]>([]) // multi-select preset pool
+  const [uploadedMusic, setUploadedMusic] = useState<Array<{ key: string; name: string }>>([]) // uploaded pool
+  const [musicUploading, setMusicUploading] = useState(false)
+  const [uploadMusicError, setUploadMusicError] = useState('')
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null)
+  const [previewingKey, setPreviewingKey] = useState<string | null>(null) // track key currently playing
+  const [presetPickedManually, setPresetPickedManually] = useState(false) // once true, stop auto-tracking the top match
+  const musicFileRef = useRef<HTMLInputElement>(null)
+
+  // ── visual style (step 5) ──
+  const [styleProposals, setStyleProposals] = useState<StyleProposals | null>(null)
+  const [selectedStyleIdx, setSelectedStyleIdx] = useState<number | null>(null)
+  const [stylePreviews, setStylePreviews] = useState<Record<number, PreviewState>>({})
+  const [styleLoading, setStyleLoading] = useState(false)
+  const [styleError, setStyleError] = useState('')
+  const styleReqRef = useRef(0) // guards against a superseded fetch clobbering newer state
+  const autoPreviewedGenRef = useRef(-1) // which proposals "generation" already auto-rendered (dedupes StrictMode + resolves)
+  // Operator-uploaded reference image → vision-derived style, added as a pickable tile.
+  const [uploadingRef, setUploadingRef] = useState(false)
+  const [refError, setRefError] = useState('')
+  const [uploadedStyleIdx, setUploadedStyleIdx] = useState<number | null>(null)
+  const styleRefInputRef = useRef<HTMLInputElement>(null)
+
+  // Pending exit target — non-null shows the "leave channel setup?" confirm modal.
+  const [leaveTo, setLeaveTo] = useState<string | null>(null)
+
+  // Chosen style image = the previewed image of the selected card, if it was previewed.
+  const chosenStyleImageKey =
+    selectedStyleIdx != null ? stylePreviews[selectedStyleIdx]?.imageKey ?? null : null
 
   // ── draft persistence: survive reloads / leaving the page until created ──
   const [hydrated, setHydrated] = useState(false)
@@ -116,12 +220,13 @@ export function NewChannelWizard() {
       const raw = localStorage.getItem(DRAFT_KEY)
       if (raw) {
         const d = JSON.parse(raw)
-        if (typeof d.phase === 'string') setPhase(d.phase)
+        if (['describe', 'script', 'voice', 'sound', 'visual'].includes(d.phase)) setPhase(d.phase)
         if (typeof d.name === 'string') setName(d.name)
         if (typeof d.committedName === 'string') setCommittedName(d.committedName)
         if (typeof d.description === 'string') setDescription(d.description)
         if (typeof d.niche === 'string') setNiche(d.niche)
         if (Array.isArray(d.languages) && d.languages.length) setLanguages(d.languages)
+        if (['tiktok', 'youtube_shorts', 'facebook_reels', 'all'].includes(d.targetPlatform)) setTargetPlatform(d.targetPlatform)
         if (d.presetId === null || typeof d.presetId === 'string') setPresetId(d.presetId)
         if (typeof d.avatarKey === 'string') {
           setAvatarKey(d.avatarKey)
@@ -129,6 +234,11 @@ export function NewChannelWizard() {
         }
         if (typeof d.costCents === 'number') setCostCents(d.costCents)
         if (d.tone) setTone(d.tone)
+        if (typeof d.targetSeconds === 'number') setTargetSeconds(d.targetSeconds)
+        if (d.captionStyle) {
+          const cs = CaptionStyleSchema.safeParse(d.captionStyle)
+          if (cs.success) setCaptionStyle(cs.data)
+        }
         if (typeof d.style === 'string') setStyle(d.style)
         if (typeof d.region === 'string') setRegion(d.region)
         if (typeof d.era === 'string') setEra(d.era)
@@ -137,7 +247,22 @@ export function NewChannelWizard() {
         if (Array.isArray(d.vocab)) setVocab(d.vocab)
         if (d.voiceMode === 'single' || d.voiceMode === 'per_story') setVoiceMode(d.voiceMode)
         if (Array.isArray(d.selectedVoices)) setSelectedVoices(d.selectedVoices)
+        if (Array.isArray(d.recommended)) setRecommended(d.recommended)
         if (typeof d.voiceSearchKeyword === 'string') setVoiceSearchKeyword(d.voiceSearchKeyword)
+        if (typeof d.tagline === 'string') setTagline(d.tagline)
+        if (typeof d.derivedSig === 'string') setDerivedSig(d.derivedSig)
+        if (typeof d.sampleScript === 'string') setSampleScript(d.sampleScript)
+        if (typeof d.sampleIsAi === 'boolean') setSampleIsAi(d.sampleIsAi)
+        if (Array.isArray(d.extraSampleScripts)) setExtraSampleScripts(d.extraSampleScripts.filter((s: unknown): s is string => typeof s === 'string'))
+        if (d.styleProposals && Array.isArray(d.styleProposals.styles)) setStyleProposals(d.styleProposals)
+        if (typeof d.selectedStyleIdx === 'number') setSelectedStyleIdx(d.selectedStyleIdx)
+        if (typeof d.uploadedStyleIdx === 'number') setUploadedStyleIdx(d.uploadedStyleIdx)
+        if (d.stylePreviews && typeof d.stylePreviews === 'object') setStylePreviews(d.stylePreviews)
+        if (d.audioMood) setAudioMood(d.audioMood)
+        if (['preset', 'ai', 'upload', 'none'].includes(d.musicChoice)) setMusicChoice(d.musicChoice)
+        if (Array.isArray(d.selectedPresetIds)) setSelectedPresetIds(d.selectedPresetIds)
+        if (typeof d.presetPickedManually === 'boolean') setPresetPickedManually(d.presetPickedManually)
+        if (Array.isArray(d.uploadedMusic)) setUploadedMusic(d.uploadedMusic)
       }
     } catch {
       /* ignore malformed draft */
@@ -148,46 +273,119 @@ export function NewChannelWizard() {
   useEffect(() => {
     if (!hydrated) return
     try {
+      // Persist only resolved previews (drop loading/error transients).
+      const previewKeys: Record<number, PreviewState> = {}
+      for (const [k, v] of Object.entries(stylePreviews)) {
+        if (v.imageKey) previewKeys[Number(k)] = { imageKey: v.imageKey }
+      }
       localStorage.setItem(
         DRAFT_KEY,
         JSON.stringify({
-          phase, name, committedName, description, niche, languages, presetId,
+          phase, name, committedName, description, niche, languages, targetPlatform, presetId,
           avatarKey, costCents, tone, style, region, era, locations, objects, vocab,
-          voiceMode, selectedVoices, voiceSearchKeyword,
+          voiceMode, selectedVoices, recommended, voiceSearchKeyword, tagline, derivedSig,
+          targetSeconds, captionStyle, sampleScript, sampleIsAi, extraSampleScripts,
+          audioMood, musicChoice, selectedPresetIds, presetPickedManually, uploadedMusic,
+          styleProposals, selectedStyleIdx, uploadedStyleIdx, stylePreviews: previewKeys,
         }),
       )
     } catch {
       /* storage full / unavailable — non-fatal */
     }
-  }, [hydrated, phase, name, committedName, description, niche, languages, presetId, avatarKey, costCents, tone, style, region, era, locations, objects, vocab, voiceMode, selectedVoices, voiceSearchKeyword])
+  }, [hydrated, phase, name, committedName, description, niche, languages, targetPlatform, presetId, avatarKey, costCents, tone, targetSeconds, style, region, era, locations, objects, vocab, voiceMode, selectedVoices, recommended, voiceSearchKeyword, tagline, derivedSig, captionStyle, sampleScript, sampleIsAi, extraSampleScripts, audioMood, musicChoice, selectedPresetIds, presetPickedManually, uploadedMusic, styleProposals, selectedStyleIdx, uploadedStyleIdx, stylePreviews])
 
-  // Single mode: recommend voices that fit the niche/language/tone (Claude picks
-  // from the real catalog). Per-story mode picks voices later, at render time.
+  // ── Unsaved-progress guard ──────────────────────────────────────────────────
+  // The draft autosaves, but leaving mid-flow still deserves a heads-up so the operator
+  // can choose to keep it for later or discard it. The wizard is a fixed overlay that
+  // covers the app sidebar, so the only in-app exit is the header "Channels" button; we
+  // also guard browser Back / close / refresh.
+  const hasProgress =
+    name.trim() !== '' || niche.trim() !== '' || derivedSig !== '' ||
+    sampleScript.trim() !== '' || avatarKey !== null
+
+  // Tab close / refresh / external URL → native confirm (message is browser-controlled).
   useEffect(() => {
-    if (phase !== 'review' || voiceMode !== 'single' || recommended.length > 0 || recsLoading) return
+    if (!hasProgress) return
+    const onBeforeUnload = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = '' }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [hasProgress])
+
+  // Browser Back (SPA history) → trap it once and route the decision through our modal.
+  useEffect(() => {
+    if (!hasProgress) return
+    window.history.pushState(null, '', window.location.href)
+    const onPop = () => {
+      window.history.pushState(null, '', window.location.href)
+      setLeaveTo('/dashboard')
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [hasProgress])
+
+  // Esc closes the confirm (= keep editing).
+  useEffect(() => {
+    if (leaveTo === null) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setLeaveTo(null) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [leaveTo])
+
+  // Requested an exit: prompt if there's progress, otherwise just go.
+  function requestLeave(href: string) {
+    if (hasProgress) setLeaveTo(href)
+    else router.push(href)
+  }
+  function leaveKeepDraft() {
+    const href = leaveTo ?? '/dashboard'
+    setLeaveTo(null)
+    router.push(href) // draft stays autosaved in localStorage → resumes next time
+  }
+  function leaveDiscardDraft() {
+    const href = leaveTo ?? '/dashboard'
+    try { localStorage.removeItem(DRAFT_KEY) } catch { /* noop */ }
+    setLeaveTo(null)
+    router.push(href)
+  }
+
+  // Prefetch voice recommendations in the background as soon as a profile is derived,
+  // so Step 3 is ready when reached (needs only niche/language/tone/voiceSearchKeyword).
+  // Guarded on recsLoading/recsError (one call, no retry loop); regenerating the profile
+  // resets recommended + derivedSig, re-triggering a fresh prefetch.
+  useEffect(() => {
+    if (derivedSig !== '' && recommended.length === 0 && !recsLoading && !recsError) {
+      void fetchRecommendations()
+    }
+  }, [derivedSig, recommended.length, recsLoading, recsError])
+
+  async function fetchRecommendations() {
     setRecsLoading(true)
     setRecsError('')
-    fetch('/api/voices/recommend', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nicheDescription: niche.trim(), language, toneConfig: tone, searchKeyword: voiceSearchKeyword || undefined }),
-    })
-      .then(async (res) => {
-        const json = await res.json()
-        if (!res.ok) throw new Error(json.error ?? 'Failed to recommend voices')
-        const recs = (json.voices ?? []) as Array<VoiceOption & { reason: string }>
-        setRecommended(recs)
-        // Pre-select the top pick so Create is ready.
-        setSelectedVoices((prev) =>
-          prev.length === 0 && recs[0]
-            ? [{ providerId: recs[0].id, name: recs[0].name, gender: recs[0].gender, description: recs[0].description }]
-            : prev,
-        )
+    try {
+      const res = await fetch('/api/voices/recommend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nicheDescription: niche.trim(), language, toneConfig: tone, searchKeyword: voiceSearchKeyword || undefined }),
       })
-      .catch((e) => setRecsError(friendlyError(e, 'Failed to recommend voices')))
-      .finally(() => setRecsLoading(false))
-  }, [phase, voiceMode, recommended.length, recsLoading, niche, language, tone, voiceSearchKeyword])
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Failed to recommend voices')
+      const recs = (json.voices ?? []) as Array<VoiceOption & { reason: string }>
+      setRecommended(recs)
+      // Pre-select the top pick so the step is ready.
+      setSelectedVoices((prev) =>
+        prev.length === 0 && recs[0]
+          ? [{ providerId: recs[0].id, name: recs[0].name, gender: recs[0].gender, description: recs[0].description }]
+          : prev,
+      )
+    } catch (e) {
+      setRecsError(friendlyError(e, 'Failed to recommend voices'))
+    } finally {
+      setRecsLoading(false)
+    }
+  }
 
+  // Pick a narrator persona → auto-match a real voice by the persona's keyword + gender.
+  // This is the whole point: the operator picks "creepy storyteller", we cast the voice.
   // "Show all voices" lazy-loads the full language-appropriate catalog.
   useEffect(() => {
     if (!showAllVoices || allVoices.length > 0 || voicesLoading) return
@@ -199,6 +397,160 @@ export function NewChannelWizard() {
       })
       .finally(() => setVoicesLoading(false))
   }, [showAllVoices, allVoices.length, voicesLoading, language])
+
+  // Prefetch the visual styles as soon as the operator LEAVES Step 2 (enters 'voice'),
+  // so Step 4 is as ready as possible. The narration (if any) is final by then; skipping
+  // Step 2 just means style-options invents a scene from the niche/world. Fires once
+  // (guarded on !styleProposals); 'visual' is the fallback if they jump straight there.
+  // The auto-render effect below then renders every preview in the background.
+  // Retry / Regenerate call fetchStyleOptions() directly.
+  useEffect(() => {
+    if ((phase === 'voice' || phase === 'visual') && !styleProposals && !styleLoading && !styleError) void fetchStyleOptions()
+  }, [phase])
+
+  // Presets is the default music option: auto-pick the best niche+mood-matched bed so a
+  // click-through channel still gets a fitting bed (operator can change it). Only fills when
+  // nothing is chosen yet; no-op until the preset library is seeded.
+  useEffect(() => {
+    if (musicChoice !== 'preset' || presetPickedManually || (PRESET_BEDS?.length ?? 0) === 0) return
+    // Default to the single best niche+mood match as the profile hydrates/derives; stop once the
+    // operator toggles any bed (they can build a multi-bed pool). Picking once + locking would
+    // freeze a stale default.
+    const top = rankPresets({ niche, moodTags: audioMood?.moodTags ?? [], tone })[0]?.id
+    if (top && !(selectedPresetIds.length === 1 && selectedPresetIds[0] === top)) setSelectedPresetIds([top])
+  }, [musicChoice, presetPickedManually, selectedPresetIds, niche, audioMood, tone])
+
+  // Once styles are proposed, auto-render every preview in parallel so the operator
+  // sees each personalized look without clicking (cards develop in as they finish).
+  // Guarded per proposals "generation" so it kicks off once (survives StrictMode's
+  // double-invoke); skips indices already resolved (e.g. hydrated from a saved draft).
+  useEffect(() => {
+    if (!styleProposals || autoPreviewedGenRef.current === styleReqRef.current) return
+    autoPreviewedGenRef.current = styleReqRef.current
+    styleProposals.styles.forEach((_, i) => {
+      if (!stylePreviews[i]) void previewStyle(i)
+    })
+  }, [styleProposals])
+
+  function vocabRecord(): Record<string, string> {
+    const v: Record<string, string> = {}
+    for (const { term, value } of vocab) if (term.trim()) v[term.trim()] = value
+    return v
+  }
+  function worldBiblePayload() {
+    return {
+      region: region.trim(),
+      era: era.trim(),
+      canonLocations: locations.filter((s) => s.trim()),
+      canonObjects: objects.filter((s) => s.trim()),
+      vocabulary: vocabRecord(),
+    }
+  }
+
+  async function fetchStyleOptions() {
+    const reqId = ++styleReqRef.current
+    setStyleLoading(true)
+    setStyleError('')
+    const basis = sampleScript.trim()
+    try {
+      const res = await fetch('/api/channel/style-options', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nicheDescription: niche.trim(),
+          toneConfig: tone,
+          worldBible: worldBiblePayload(),
+          sampleScript: basis || undefined,
+        }),
+      })
+      const json = await res.json()
+      if (styleReqRef.current !== reqId) return // a newer request superseded this one
+      if (!res.ok) throw new Error(json.error ?? 'Couldn’t propose styles')
+      const proposals: StyleProposals = { sampleScene: json.sampleScene, styles: json.styles ?? [] }
+      setStyleProposals(proposals)
+      setStylePreviews({})
+      setSelectedStyleIdx(0)
+      if (proposals.styles[0]) setStyle(proposals.styles[0].stylePreset)
+      setCostCents((c) => c + (json.costCents ?? 0))
+    } catch (e) {
+      if (styleReqRef.current === reqId) setStyleError(friendlyError(e, 'Couldn’t propose styles'))
+    } finally {
+      if (styleReqRef.current === reqId) setStyleLoading(false)
+    }
+  }
+
+  function selectStyle(idx: number) {
+    const card = styleProposals?.styles[idx]
+    if (!card) return
+    setSelectedStyleIdx(idx)
+    setStyle(card.stylePreset)
+  }
+
+  async function previewStyle(idx: number) {
+    const card = styleProposals?.styles[idx]
+    if (!card || !styleProposals) return
+    const reqId = styleReqRef.current // tie this render to the current proposals generation
+    const preset = card.stylePreset
+    const scene = styleProposals.sampleScene
+    setStylePreviews((p) => ({ ...p, [idx]: { loading: true } }))
+    try {
+      const res = await fetch('/api/channel/style-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stylePreset: preset, sampleScene: scene }),
+      })
+      const json = await res.json()
+      if (styleReqRef.current !== reqId) return // a regenerate superseded these proposals — drop the stale result
+      if (!res.ok) {
+        setStylePreviews((p) => ({
+          ...p,
+          [idx]: { error: json.error ?? 'Preview failed', errorKind: json.kind === 'filtered' ? 'filtered' : 'transient' },
+        }))
+        return
+      }
+      setStylePreviews((p) => ({ ...p, [idx]: { imageKey: json.imageKey } }))
+      setCostCents((c) => c + (json.costCents ?? 0))
+    } catch {
+      if (styleReqRef.current !== reqId) return
+      setStylePreviews((p) => ({ ...p, [idx]: { error: 'Couldn’t reach the image service.', errorKind: 'transient' } }))
+    }
+  }
+
+  // Upload 1–3 reference images → a vision pass derives the channel's style DNA; the
+  // result is added as a pickable tile (replacing a prior upload) and auto-selected.
+  async function handleStyleRefUpload(files: FileList | null) {
+    if (!files || files.length === 0) return
+    setUploadingRef(true)
+    setRefError('')
+    try {
+      const fd = new FormData()
+      Array.from(files).slice(0, 3).forEach((f) => fd.append('files', f))
+      fd.append('nicheDescription', niche.trim())
+      fd.append('toneConfig', JSON.stringify(tone))
+      const res = await fetch('/api/channel/style-ref', { method: 'POST', body: fd })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Couldn’t read the reference image')
+      const entry: StyleOption = {
+        label: json.label || 'Your reference',
+        description: json.description || 'Style from your uploaded reference.',
+        stylePreset: json.stylePreset,
+      }
+      const current = styleProposals ?? { sampleScene: '', styles: [] }
+      const idx = uploadedStyleIdx ?? current.styles.length
+      const styles = [...current.styles]
+      styles[idx] = entry
+      setStyleProposals({ ...current, styles })
+      setStylePreviews((p) => ({ ...p, [idx]: { imageKey: json.imageKey } }))
+      setUploadedStyleIdx(idx)
+      setSelectedStyleIdx(idx)
+      setStyle(entry.stylePreset)
+      setCostCents((c) => c + (json.costCents ?? 0))
+    } catch (e) {
+      setRefError(friendlyError(e, 'Couldn’t read the reference image'))
+    } finally {
+      setUploadingRef(false)
+    }
+  }
 
   function isVoiceSelected(id: string) {
     return selectedVoices.some((v) => v.providerId === id)
@@ -223,8 +575,27 @@ export function NewChannelWizard() {
   }
 
   const canGenerate = name.trim().length > 0 && niche.trim().length >= 20 && languages.length > 0
+  // Profile is "fresh" if the niche+language haven't changed since we derived it —
+  // then we can Continue without re-calling the API. (Name/description/avatar don't
+  // feed the creative bible, so editing them doesn't stale it.)
+  const hasDerived = derivedSig !== ''
+  const derivedFresh = hasDerived && derivedSig === `${niche.trim()}|${language}|${targetPlatform}`
   // Must pick a mode; single needs a chosen voice, per-story defers to render.
-  const canCreate = voiceMode === 'per_story' || (voiceMode === 'single' && selectedVoices.length > 0)
+  const canLeaveVoice = voiceMode === 'per_story' || (voiceMode === 'single' && selectedVoices.length > 0)
+  const canCreate = canLeaveVoice
+
+  // The track POOL to persist (preset/upload only; 'ai' generates per reel, 'none' is silent).
+  // >1 track → the renderer draws one at random per reel.
+  const chosenTracks =
+    musicChoice === 'preset'
+      ? selectedPresetIds
+          .map((id) => (PRESET_BEDS ?? []).find((p) => p.id === id))
+          .filter((b): b is NonNullable<typeof b> => !!b)
+          .map((b) => ({ id: b.id, path: b.path, type: b.type, moodTags: b.moodTags }))
+      : musicChoice === 'upload'
+        ? uploadedMusic.map((u) => ({ path: u.key, type: 'low_drone' as const, moodTags: [] as string[] }))
+        : []
+  const poolSize = chosenTracks.length
 
   // Voice lists for single mode (gender-filtered). Recommended stays on top;
   // "show all" appends the rest of the catalog below it.
@@ -288,12 +659,21 @@ export function NewChannelWizard() {
       const res = await fetch('/api/channel/derive', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), nicheDescription: niche.trim(), languages }),
+        body: JSON.stringify({ name: name.trim(), nicheDescription: niche.trim(), languages, targetPlatform }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Generation failed')
       const d = json.derived as Derived
       setTone(d.toneConfig)
+      if (typeof d.targetSeconds === 'number') setTargetSeconds(d.targetSeconds)
+      if (d.captionPreset) {
+        setCaptionStyle(resolveCaptionStyle(d.captionPreset, {
+          highlightColor: d.captionHighlight,
+          color: d.captionTextColor,
+          position: d.captionPosition,
+          fontScale: d.captionFontScale,
+        }))
+      }
       setStyle(d.stylePreset)
       setRegion(d.worldBible.region)
       setEra(d.worldBible.era)
@@ -301,8 +681,24 @@ export function NewChannelWizard() {
       setObjects(d.worldBible.canonObjects ?? [])
       setVocab(Object.entries(d.worldBible.vocabulary ?? {}).map(([term, value]) => ({ term, value })))
       setVoiceSearchKeyword(d.voiceSearchKeyword ?? '')
+      setTagline(d.tagline ?? '')
+      setAudioMood(d.audioMood ?? null)
       setCostCents(json.costCents ?? 0)
-      setPhase('review')
+      setDerivedSig(`${niche.trim()}|${language}|${targetPlatform}`)
+      // Fresh profile invalidates anything derived from the old one.
+      setRecommended([])
+      setSelectedVoices([])
+      // New audio mood → re-rank presets from scratch; clear any prior picks/uploads.
+      setSelectedPresetIds([])
+      setPresetPickedManually(false)
+      setUploadedMusic([])
+      setStyleProposals(null)
+      setStylePreviews({})
+      setSelectedStyleIdx(null)
+      setUploadedStyleIdx(null)
+      setStyleError('')
+      setRefError('')
+      setPhase('script')
     } catch (e) {
       setError(friendlyError(e, 'Generation failed'))
     } finally {
@@ -310,12 +706,10 @@ export function NewChannelWizard() {
     }
   }
 
-  async function handleSample() {
+  async function handleSampleDraft() {
     setSampleLoading(true)
     setSampleError('')
     try {
-      const vocabulary: Record<string, string> = {}
-      for (const { term, value } of vocab) if (term.trim()) vocabulary[term.trim()] = value
       const res = await fetch('/api/channel/sample-script', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -324,24 +718,60 @@ export function NewChannelWizard() {
           nicheDescription: niche.trim(),
           languages,
           toneConfig: tone,
-          worldBible: {
-            region: region.trim(),
-            era: era.trim(),
-            canonLocations: locations.filter((s) => s.trim()),
-            canonObjects: objects.filter((s) => s.trim()),
-            vocabulary,
-          },
+          targetSeconds,
+          targetPlatform,
+          worldBible: worldBiblePayload(),
           voiceStyle: selectedVoices[0]?.description,
         }),
       })
       const json = await res.json()
-      if (!res.ok) throw new Error(json.error ?? 'Sample failed')
-      setSample(json.sample)
+      if (!res.ok) throw new Error(json.error ?? 'Draft failed')
+      const s = json.sample as { title: string; hook: string; script: string }
+      setSampleScript(s.script?.trim() || s.hook || '')
+      setSampleIsAi(true)
+      setCostCents((c) => c + (json.costCents ?? 0))
     } catch (e) {
-      setSampleError(friendlyError(e, 'Sample failed'))
+      setSampleError(friendlyError(e, 'Draft failed'))
     } finally {
       setSampleLoading(false)
     }
+  }
+
+  // Upload one or more background tracks (Sound step). Appended to the pool; previewed like presets.
+  async function handleMusicUpload(files: FileList) {
+    setMusicUploading(true)
+    setUploadMusicError('')
+    try {
+      for (const file of Array.from(files)) {
+        const fd = new FormData()
+        fd.append('file', file)
+        const res = await fetch('/api/channel/music-upload', { method: 'POST', body: fd })
+        const json = await res.json()
+        if (!res.ok) throw new Error(json.error ?? 'Upload failed')
+        setUploadedMusic((prev) => [...prev, { key: json.key, name: file.name }])
+      }
+    } catch (e) {
+      setUploadMusicError(friendlyError(e, 'Upload failed'))
+    } finally {
+      setMusicUploading(false)
+    }
+  }
+
+  // Preview a track by its R2 key — music alone (no narration overlay), one at a time.
+  function playMusicPreview(key: string) {
+    if (previewAudioRef.current) previewAudioRef.current.pause()
+    if (previewingKey === key) { setPreviewingKey(null); return }  // toggle off
+    // Cache-bust: preset beds can be regenerated under the same key, so force a fresh fetch.
+    const audio = new Audio(`/api/asset?key=${encodeURIComponent(key)}&cb=${Date.now()}`)
+    previewAudioRef.current = audio
+    setPreviewingKey(key)
+    audio.onended = () => setPreviewingKey(null)
+    void audio.play().catch(() => setPreviewingKey(null))
+  }
+
+  function stopPreview() {
+    if (previewAudioRef.current) previewAudioRef.current.pause()
+    setPreviewingKey(null)
   }
 
   async function handleCreate() {
@@ -349,8 +779,6 @@ export function NewChannelWizard() {
     setCreating(true)
     setError('')
     try {
-      const vocabulary: Record<string, string> = {}
-      for (const { term, value } of vocab) if (term.trim()) vocabulary[term.trim()] = value
       const res = await fetch('/api/channel/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -359,18 +787,28 @@ export function NewChannelWizard() {
           avatarKey,
           description: description.trim() || null,
           nicheDescription: niche.trim(),
+          tagline,
           languages,
+          targetPlatform,
           toneConfig: tone,
+          voiceSearchKeyword,
+          targetSeconds,
+          captionStyle,
           stylePreset: style.trim(),
-          worldBible: {
-            region: region.trim(),
-            era: era.trim(),
-            canonLocations: locations.filter((s) => s.trim()),
-            canonObjects: objects.filter((s) => s.trim()),
-            vocabulary,
-          },
+          styleImageKey: chosenStyleImageKey,
+          worldBible: worldBiblePayload(),
           voiceMode,
           voicePool: selectedVoices,
+          sampleScript: sampleScript.trim() || null,
+          sampleSource: sampleIsAi ? 'ai' : 'user',
+          extraSampleScripts: extraSampleScripts.map((s) => s.trim()).filter(Boolean),
+          costCents, // accumulated creation cost → persisted on the channel
+
+          sound: {
+            musicMode: musicChoice,
+            tracks: chosenTracks,
+            audioMood: audioMood ?? undefined,
+          },
         }),
       })
       const json = await res.json()
@@ -385,33 +823,38 @@ export function NewChannelWizard() {
   }
 
   return (
-    <div className="min-h-screen">
+    // Focused full-screen flow: covers the app sidebar / mobile top bar so the
+    // wizard's own header is the only chrome — no nesting under the global header.
+    <div className="fixed inset-0 z-50 flex flex-col overflow-y-auto bg-bg">
       {/* Header */}
-      <header className="sticky top-0 z-10 border-b border-border bg-bg/80 px-5 py-4 backdrop-blur sm:px-8">
-        <div className="mx-auto flex max-w-2xl items-center gap-3">
-          <Link href="/dashboard" className="btn-ghost btn-sm -ml-1.5" title="Back to portfolio">
+      <header className="sticky top-0 z-10 flex-shrink-0 border-b border-border bg-bg/80 px-4 py-3 backdrop-blur sm:px-6">
+        <div className="flex items-center gap-3">
+          {/* Exits the wizard back to the channel list — labeled so it isn't mistaken
+              for the per-step "Back" button in each step's footer. Guards unsaved progress. */}
+          <button type="button" onClick={() => requestLeave('/dashboard')} className="btn-ghost btn-sm -ml-1 flex-shrink-0" title="Back to your channels">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
               <path d="m15 18-6-6 6-6" />
             </svg>
-          </Link>
-          <div className="flex-1">
-            <h1 className="text-base font-semibold tracking-tight text-ink">New channel</h1>
-            <p className="text-xs text-muted">
-              {phase === 'describe' ? 'Step 1 · Describe the channel' : 'Step 2 · Review & edit'}
-            </p>
+            Channels
+          </button>
+          <span className="hidden h-6 w-px flex-shrink-0 bg-border sm:block" aria-hidden />
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-base font-semibold tracking-tight text-ink">New channel</h1>
+            <p className="truncate text-xs text-muted">{STEP_SUBTITLE[phase]}</p>
           </div>
           <StepDots phase={phase} />
         </div>
       </header>
 
-      <div className="mx-auto max-w-2xl p-5 sm:p-8">
+      <div className="mx-auto w-full max-w-2xl p-5 sm:p-8">
         {error && (
           <div className="mb-5 rounded-lg border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger">
             {error}
           </div>
         )}
 
-        {phase === 'describe' ? (
+        {/* ─────────────────────────── STEP 1 · DESCRIBE ─────────────────────────── */}
+        {phase === 'describe' && (
           <div className="animate-fade-in flex flex-col gap-6">
             <div className="flex items-end gap-4">
               <AvatarPicker
@@ -428,7 +871,7 @@ export function NewChannelWizard() {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     onBlur={() => setCommittedName(name.trim())}
-                    placeholder="e.g. Aswang Files"
+                    placeholder="Your channel name"
                     autoFocus
                   />
                 </Field>
@@ -440,15 +883,15 @@ export function NewChannelWizard() {
                 className="input"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="e.g. Late-night provincial horror, told like a confession."
+                placeholder="A short line for the channel's card."
                 maxLength={140}
               />
             </Field>
 
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-ink">Niche</label>
+              <label className="text-sm font-medium text-ink">What&apos;s your channel about?</label>
               <p className="-mt-1 text-xs text-muted">
-                Tap a trending niche to start from a template, or write your own below. Either way you can edit everything.
+                Tap a trending topic to start from a template, or describe your own below. Either way you can edit everything.
               </p>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {NICHE_PRESETS.map((p) => {
@@ -486,18 +929,18 @@ export function NewChannelWizard() {
                     <NicheIcon name="custom" />
                   </span>
                   <span className="text-sm font-medium text-ink">Write your own</span>
-                  <span className="text-xs text-muted">Describe a custom niche</span>
+                  <span className="text-xs text-muted">Describe it in your words</span>
                 </button>
               </div>
             </div>
 
-            <Field label="Niche description" hint="What is this channel about? Genre, audience, format, tone — the more specific, the better the result.">
+            <Field label="Describe your channel" hint="Genre, audience, format, tone, how it's narrated — plus any recurring world or characters. The more you give us, the better every reel; we safely fill in the rest.">
               <textarea
                 ref={nicheRef}
-                className="input h-36 resize-none"
+                className="input h-44 resize-none"
                 value={niche}
                 onChange={(e) => { setNiche(e.target.value); setPresetId(null) }}
-                placeholder="e.g. Filipino horror narration channel. First-person confessional encounters with supernatural entities set in rural provinces. Tagalog-first with natural Taglish. Slow-burn dread, sensory detail, twist endings."
+                placeholder="e.g. Filipino horror folktales retold like your lola's late-night stories — slow-burn aswang and kapre encounters in remote barrios, first-person 'this happened to our family' framing, hushed Tagalog narration, dread over gore. (The more you describe the world, characters, and voice, the better.)"
               />
               <p className="mt-1 text-xs text-faint">{niche.trim().length}/20 min characters</p>
             </Field>
@@ -511,8 +954,18 @@ export function NewChannelWizard() {
               />
             </Field>
 
+            <Field label="Target platform" hint="Where these reels get posted — tunes length, caption safe-zones and aspect for that platform.">
+              <PlatformPicker value={targetPlatform} onChange={setTargetPlatform} />
+            </Field>
+
             <div className="flex items-center justify-end gap-3 border-t border-border pt-5">
-              <button onClick={handleGenerate} disabled={!canGenerate || loading} className="btn-accent">
+              {/* One consistent label. If the niche/language changed since deriving, clicking
+                  Continue silently re-derives first (handleGenerate); otherwise it just advances. */}
+              <button
+                onClick={derivedFresh ? () => setPhase('script') : handleGenerate}
+                disabled={!canGenerate || loading}
+                className="btn-accent"
+              >
                 {loading ? (
                   <>
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin" aria-hidden>
@@ -522,42 +975,98 @@ export function NewChannelWizard() {
                   </>
                 ) : (
                   <>
-                    Generate channel profile
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                      <path d="M5 12h14M13 5l7 7-7 7" />
-                    </svg>
+                    {hasDerived ? 'Continue' : 'Generate channel profile'}
+                    <FwdArrow />
                   </>
                 )}
               </button>
             </div>
           </div>
-        ) : (
+        )}
+
+        {/* ─────────────────────────── STEP 2 · SAMPLE SCRIPT ─────────────────────── */}
+        {phase === 'script' && (
           <div className="animate-fade-in flex flex-col gap-6">
-            {/* Recap */}
-            <div className="card flex items-center gap-4 p-5">
-              {avatarPreview ? (
-                <img src={avatarPreview} alt="" className="h-12 w-12 flex-shrink-0 rounded-xl object-cover" />
-              ) : (
-                <div
-                  className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl text-base font-semibold text-white"
-                  style={{ background: avatarGradient(name || 'channel') }}
-                >
-                  {avatarInitials(name || '?')}
+            <Recap name={name} description={description} language={language} avatarPreview={avatarPreview} />
+
+            <div className="card p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <SectionLabel>Sample script</SectionLabel>
+                  </div>
+                  <p className="mt-1 text-xs text-faint">
+                    This teaches your channel&apos;s writing voice — every reel is written to match it. Your own
+                    example works best; or generate a draft to start from and edit it.
+                  </p>
                 </div>
-              )}
-              <div className="min-w-0">
-                <p className="truncate text-base font-semibold tracking-tight text-ink">{name || 'Untitled channel'}</p>
-                {description && <p className="truncate text-sm text-muted">{description}</p>}
-                <span className="badge mt-1.5 bg-subtle text-muted">{language}</span>
+                <button onClick={handleSampleDraft} disabled={sampleLoading} className="btn-secondary btn-sm flex-shrink-0">
+                  {sampleLoading ? (
+                    <>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="animate-spin" aria-hidden>
+                        <path d="M21 12a9 9 0 1 1-6.22-8.56" />
+                      </svg>
+                      Writing…
+                    </>
+                  ) : sampleScript.trim() ? 'Regenerate draft' : 'Generate draft'}
+                </button>
               </div>
+              <textarea
+                className="input mt-3 h-64 resize-none leading-relaxed"
+                value={sampleScript}
+                onChange={(e) => { setSampleScript(e.target.value); setSampleIsAi(false) }}
+                placeholder="e.g. Hindi pa rin ako makatulog kapag umuulan — dahil sa nangyari sa amin noong isang gabi sa probinsya... (write or paste a real opening in your channel's voice — this is what every reel will sound like)"
+              />
+              {sampleError && <p className="mt-2 text-xs text-danger">{sampleError}</p>}
+
+              {/* Optional extra references — few-shot is stronger with 2–3 examples */}
+              {extraSampleScripts.map((s, i) => (
+                <div key={i} className="mt-3 flex gap-2">
+                  <textarea
+                    className="input h-28 flex-1 resize-none leading-relaxed"
+                    value={s}
+                    onChange={(e) => setExtraSampleScripts((prev) => prev.map((v, j) => (j === i ? e.target.value : v)))}
+                    placeholder="Another example in your channel's voice (optional)"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setExtraSampleScripts((prev) => prev.filter((_, j) => j !== i))}
+                    className="btn-ghost btn-sm self-start"
+                    title="Remove this reference"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M18 6 6 18M6 6l12 12" /></svg>
+                  </button>
+                </div>
+              ))}
+              {extraSampleScripts.length < 2 && (
+                <button type="button" onClick={() => setExtraSampleScripts((prev) => [...prev, ''])} className="btn-ghost btn-sm mt-3">
+                  + Add another reference
+                </button>
+              )}
             </div>
 
-            <p className="-mb-1 text-xs text-muted">
-              We&apos;ve generated this channel&apos;s tone, visual style, and story world from your niche.
-              Pick the narrator voice and preview a sample below — the rest stays editable later.
-            </p>
+            <div className="flex items-center justify-between gap-3 border-t border-border pt-5">
+              <button onClick={() => setPhase('describe')} className="btn-secondary">
+                <BackArrow /> Back
+              </button>
+              <div className="flex flex-col items-end gap-1">
+                {!sampleScript.trim() && (
+                  <p className="text-xs text-faint">Add an example — or tap Generate draft — to continue.</p>
+                )}
+                <button onClick={() => setPhase('voice')} disabled={!sampleScript.trim()} className="btn-accent">
+                  Next
+                  <FwdArrow />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
-            {/* Narrator voice */}
+        {/* ─────────────────────────── STEP 3 · NARRATOR VOICE ────────────────────── */}
+        {phase === 'voice' && (
+          <div className="animate-fade-in flex flex-col gap-6">
+            <Recap name={name} description={description} language={language} avatarPreview={avatarPreview} />
+
             <div className="card p-5">
               <SectionLabel>Narrator voice</SectionLabel>
               <p className="mt-1 text-xs text-faint">Real ElevenLabs voices — preview and select. Names &amp; descriptions aren&apos;t editable.</p>
@@ -580,9 +1089,7 @@ export function NewChannelWizard() {
                 </label>
               </div>
 
-              {!voiceMode && (
-                <p className="mt-2 text-xs text-faint">Choose one to continue.</p>
-              )}
+              {!voiceMode && <p className="mt-2 text-xs text-faint">Choose one to continue.</p>}
 
               {/* Voice list only appears once "one voice" is chosen */}
               {voiceMode === 'single' && (
@@ -595,7 +1102,10 @@ export function NewChannelWizard() {
                       Finding voices that fit your channel…
                     </div>
                   ) : recsError ? (
-                    <p className="text-sm text-danger">{recsError}</p>
+                    <div>
+                      <p className="text-sm text-danger">{recsError}</p>
+                      <button type="button" onClick={() => fetchRecommendations()} className="btn-secondary btn-sm mt-2">Try again</button>
+                    </div>
                   ) : (
                     <>
                       {/* Recommended header with the gender filter aligned right */}
@@ -673,44 +1183,302 @@ export function NewChannelWizard() {
               )}
             </div>
 
-            {/* Sample reel script */}
+            <div className="flex items-center justify-between gap-3 border-t border-border pt-5">
+              <button onClick={() => setPhase('script')} className="btn-secondary">
+                <BackArrow /> Back
+              </button>
+              <button onClick={() => setPhase('sound')} disabled={!canLeaveVoice} className="btn-accent">
+                Next <FwdArrow />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ─────────────────────────── STEP 4 · SOUND ─────────────────────────────── */}
+        {phase === 'sound' && (
+          <div className="animate-fade-in flex flex-col gap-6">
+            <Recap name={name} description={description} language={language} avatarPreview={avatarPreview} />
+
+            {/* Background music — one decision; loudness + SFX live in channel Settings, not here. */}
             <div className="card p-5">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <SectionLabel>Sample reel script</SectionLabel>
-                  <p className="mt-1 text-xs text-faint">Preview the channel&apos;s voice from this profile. Not saved — just a gut-check.</p>
-                </div>
-                <button onClick={handleSample} disabled={sampleLoading} className="btn-secondary btn-sm flex-shrink-0">
-                  {sampleLoading ? (
-                    <>
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="animate-spin" aria-hidden>
-                        <path d="M21 12a9 9 0 1 1-6.22-8.56" />
-                      </svg>
-                      Writing…
-                    </>
-                  ) : sample ? 'Regenerate' : 'Preview sample'}
-                </button>
+              <SectionLabel>Background music</SectionLabel>
+              <p className="mt-1 text-xs leading-relaxed text-muted">
+                The bed under your narration. It auto-ducks under the voice on every reel.
+              </p>
+
+              <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {([
+                  { key: 'preset', label: 'Presets', sub: 'Fitted to your niche' },
+                  { key: 'ai', label: 'AI-generated', sub: 'Original, for your channel' },
+                  { key: 'upload', label: 'Upload', sub: 'Your own tracks' },
+                  { key: 'none', label: 'No music', sub: 'Narration only' },
+                ] as const).map((opt) => {
+                  const active = musicChoice === opt.key
+                  return (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      onClick={() => { stopPreview(); setMusicChoice(opt.key) }}
+                      className={`flex flex-col items-start rounded-lg border px-3 py-2.5 text-left transition-colors ${active ? 'border-accent bg-accent-soft ring-1 ring-accent' : 'border-border-strong hover:bg-subtle'}`}
+                    >
+                      <span className="text-sm font-medium text-ink">{opt.label}</span>
+                      <span className="text-xs text-muted">{opt.sub}</span>
+                    </button>
+                  )
+                })}
               </div>
-              {sampleError && <p className="mt-2 text-xs text-danger">{sampleError}</p>}
-              {sample && (
-                <div className="mt-3 rounded-lg border border-border bg-subtle/40 p-4">
-                  <p className="text-sm font-semibold text-ink">{sample.title}</p>
-                  <p className="mt-1 text-sm italic text-accent">“{sample.hook}”</p>
-                  <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-ink/90">{sample.script}</p>
+
+              {/* Presets — our mood beds, ranked by niche + mood; pick one or several (random per reel) */}
+              {musicChoice === 'preset' && (
+                <div className="mt-4">
+                  {(() => {
+                    const ranked = rankPresets({ niche, moodTags: audioMood?.moodTags ?? [], tone })
+                    if (ranked.length === 0) {
+                      return (
+                        <p className="rounded-lg border border-border bg-subtle px-3 py-2.5 text-xs leading-relaxed text-muted">
+                          Preset beds are being prepared. For now, pick{' '}
+                          <span className="font-medium text-ink">AI-generated</span> (original beds for your channel) or{' '}
+                          <span className="font-medium text-ink">No music</span>.
+                        </p>
+                      )
+                    }
+                    // Show only the top 8 most-relevant beds (ranked by niche + mood/tone) — a
+                    // curated shortlist, no overwhelming full library, no off-niche clutter.
+                    const beds = ranked.slice(0, 8)
+                    return (
+                      <>
+                        <p className="mb-2 text-xs text-muted">Pick one, or several to vary it.{selectedPresetIds.length > 1 ? <span className="text-accent"> 🎲 We’ll pick one of your {selectedPresetIds.length} at random for each reel.</span> : ''}</p>
+                        <div className="flex flex-col gap-2">
+                          {beds.map((bed) => {
+                            const active = selectedPresetIds.includes(bed.id)
+                            return (
+                              <div
+                                key={bed.id}
+                                className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors ${active ? 'border-accent bg-accent-soft ring-1 ring-accent' : 'border-border-strong hover:bg-subtle'}`}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => { setPresetPickedManually(true); setSelectedPresetIds((prev) => prev.includes(bed.id) ? prev.filter((x) => x !== bed.id) : [...prev, bed.id]) }}
+                                  className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                                >
+                                  <span className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border ${active ? 'border-accent bg-accent text-white' : 'border-border-strong'}`}>
+                                    {active && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M20 6 9 17l-5-5" /></svg>}
+                                  </span>
+                                  <span className="min-w-0">
+                                    <span className="block text-sm font-medium text-ink">{bed.mood}</span>
+                                    <span className="block truncate text-xs text-muted">{bed.moodTags.join(' · ')}</span>
+                                  </span>
+                                </button>
+                                <button type="button" onClick={() => playMusicPreview(bed.path)} className="btn-secondary btn-sm flex-shrink-0" title="Preview">
+                                  {previewingKey === bed.path ? '◼' : '▶'}
+                                </button>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </>
+                    )
+                  })()}
+                </div>
+              )}
+
+              {/* AI-generated — bespoke beds composed for the channel (async after creation), mood-matched per reel */}
+              {musicChoice === 'ai' && (
+                <div className="mt-4 rounded-lg border border-border bg-subtle/50 p-4">
+                  <p className="text-xs leading-relaxed text-muted">
+                    We compose a few <span className="font-medium text-ink">original background beds for your channel</span> — nothing to pick here. They&apos;re generated right after you create the channel (ready in a minute or two), and each reel automatically uses the one that fits its mood.
+                  </p>
+                </div>
+              )}
+
+              {/* Upload — store the operator's own tracks (copyright is on them); random per reel if >1 */}
+              {musicChoice === 'upload' && (
+                <div className="mt-4 rounded-lg border border-border bg-subtle/50 p-4">
+                  <input
+                    ref={musicFileRef}
+                    type="file"
+                    multiple
+                    accept="audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,audio/wav,audio/x-wav,audio/ogg"
+                    className="hidden"
+                    onChange={(e) => { if (e.target.files?.length) void handleMusicUpload(e.target.files); e.target.value = '' }}
+                  />
+                  <button type="button" onClick={() => musicFileRef.current?.click()} disabled={musicUploading} className="btn-secondary btn-sm">
+                    {musicUploading ? 'Uploading…' : uploadedMusic.length ? 'Add another' : 'Choose audio file(s)'}
+                  </button>
+                  {uploadedMusic.length > 0 && (
+                    <div className="mt-3 flex flex-col gap-2">
+                      {uploadedMusic.map((u) => (
+                        <div key={u.key} className="flex items-center gap-3 rounded-lg border border-border-strong px-3 py-2">
+                          <p className="min-w-0 flex-1 truncate text-sm text-ink">{u.name}</p>
+                          <button type="button" onClick={() => playMusicPreview(u.key)} className="btn-secondary btn-sm flex-shrink-0" title="Preview">
+                            {previewingKey === u.key ? '◼' : '▶'}
+                          </button>
+                          <button type="button" onClick={() => { stopPreview(); setUploadedMusic((prev) => prev.filter((x) => x.key !== u.key)) }} className="btn-ghost btn-sm flex-shrink-0" title="Remove">✕</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {uploadedMusic.length > 1 && <p className="mt-2 text-xs text-accent">🎲 We’ll pick one of your {uploadedMusic.length} at random for each reel.</p>}
+                  {uploadMusicError && <p className="mt-2 text-xs text-danger">{uploadMusicError}</p>}
+                  <p className="mt-3 rounded-md border border-border bg-bg px-3 py-2 text-xs leading-relaxed text-muted">
+                    <span className="font-medium text-ink">⚠ Only upload music you own or have a commercial license for.</span>{' '}
+                    Copyrighted tracks can get your reels muted, blocked, or demonetized by TikTok / YouTube / Instagram audio-matching — we can’t clear those rights for you.
+                  </p>
                 </div>
               )}
             </div>
 
-            {/* Actions */}
             <div className="flex items-center justify-between gap-3 border-t border-border pt-5">
-              <button onClick={() => setPhase('describe')} className="btn-secondary">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                  <path d="M19 12H5M12 19l-7-7 7-7" />
-                </svg>
-                Back
+              <button onClick={() => { stopPreview(); setPhase('voice') }} className="btn-secondary">
+                <BackArrow /> Back
+              </button>
+              <button onClick={() => { stopPreview(); setPhase('visual') }} className="btn-accent">
+                Next <FwdArrow />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ─────────────────────────── STEP 5 · VISUAL STYLE ──────────────────────── */}
+        {phase === 'visual' && (
+          <div className="animate-fade-in flex flex-col gap-6">
+            <Recap name={name} description={description} language={language} avatarPreview={avatarPreview} />
+
+            <div className="card p-5">
+              <SectionLabel>Visual style</SectionLabel>
+              <p className="mt-1 text-xs text-faint">
+                Pick a look for your channel — or upload your own reference. Each is previewed on a sample scene from your niche.
+              </p>
+              <input
+                ref={styleRefInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                multiple
+                className="hidden"
+                onChange={(e) => { void handleStyleRefUpload(e.target.files); e.target.value = '' }}
+              />
+              {refError && <p className="mt-2 text-xs text-danger">{refError}</p>}
+
+              {styleLoading && !styleProposals ? (
+                <div className="mt-4 flex items-center gap-2 text-sm text-muted">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="animate-spin" aria-hidden>
+                    <path d="M21 12a9 9 0 1 1-6.22-8.56" />
+                  </svg>
+                  Sketching looks for your channel…
+                </div>
+              ) : styleError && !styleProposals ? (
+                <div className="mt-4 rounded-lg border border-danger/30 bg-danger-soft p-4">
+                  <p className="text-sm text-danger">{styleError}</p>
+                  <p className="mt-1 text-xs text-muted">You can still create the channel with its default style, or try again.</p>
+                  <button onClick={() => fetchStyleOptions()} className="btn-secondary btn-sm mt-3">Try again</button>
+                </div>
+              ) : styleProposals ? (
+                (() => {
+                  const sel = selectedStyleIdx ?? 0
+                  const selStyle = styleProposals.styles[sel]
+                  return (
+                    <div className="mt-4">
+                      <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4">
+                        {styleProposals.styles.map((s, idx) => {
+                          const pv = stylePreviews[idx]
+                          const selected = sel === idx
+                          return (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => selectStyle(idx)}
+                              title={`${s.label} — ${s.description}`}
+                              className={`group relative aspect-[9/16] overflow-hidden rounded-lg border transition-all ${selected ? 'border-accent ring-2 ring-accent' : 'border-border-strong hover:border-accent/60'}`}
+                            >
+                              {pv?.imageKey ? (
+                                <StylePreviewImage key={pv.imageKey} imageKey={pv.imageKey} />
+                              ) : pv?.error ? (
+                                <div className="flex h-full w-full items-center justify-center bg-subtle px-2 text-center text-[11px] text-faint">Couldn&apos;t preview</div>
+                              ) : (
+                                <div className="h-full w-full animate-shimmer bg-gradient-to-r from-subtle via-surface to-subtle bg-[length:200%_100%]" />
+                              )}
+                              {/* Name overlaid on the image */}
+                              <span className="absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-ink/85 via-ink/40 to-transparent px-2 pb-1.5 pt-6 text-left text-[11px] font-medium leading-tight text-white">
+                                {s.label}
+                              </span>
+                              {idx === uploadedStyleIdx ? (
+                                <span className="absolute left-1.5 top-1.5 rounded bg-ink/85 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white shadow-sm">Uploaded</span>
+                              ) : idx === 0 ? (
+                                <span className="absolute left-1.5 top-1.5 rounded bg-accent px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white shadow-sm">Recommended</span>
+                              ) : null}
+                              {selected && (
+                                <span className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-accent text-white shadow-sm">
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M20 6 9 17l-5-5" /></svg>
+                                </span>
+                              )}
+                            </button>
+                          )
+                        })}
+                        {/* Upload your own — integrated tile */}
+                        <button
+                          type="button"
+                          onClick={() => styleRefInputRef.current?.click()}
+                          disabled={uploadingRef}
+                          className="flex aspect-[9/16] flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-border-strong px-2 text-center text-muted transition-colors hover:border-accent hover:text-ink disabled:opacity-60"
+                        >
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className={uploadingRef ? 'animate-spin' : ''} aria-hidden>
+                            {uploadingRef ? <path d="M21 12a9 9 0 1 1-6.22-8.56" /> : <><path d="M12 16V4M7 9l5-5 5 5M5 20h14" /></>}
+                          </svg>
+                          <span className="text-[11px] font-medium leading-tight">{uploadingRef ? 'Reading…' : 'Upload your own'}</span>
+                        </button>
+                      </div>
+                      {selStyle && (
+                        <p className="mt-3 text-xs text-muted">
+                          <span className="font-medium text-ink">{selStyle.label}</span> — {selStyle.description}
+                        </p>
+                      )}
+                    </div>
+                  )
+                })()
+              ) : null}
+            </div>
+
+            <div className="card p-5">
+              <SectionLabel>Captions</SectionLabel>
+              <p className="mt-1 text-xs text-faint">
+                Burned into every reel (most are watched on mute) — playing live below, just like in the video.
+                Suggested for your niche; switch anytime.
+              </p>
+              <div className="mt-3">
+                <CaptionPreview
+                  key={captionStyle.preset}
+                  style={captionStyle}
+                  safeZonePct={PLATFORM_PRESETS[targetPlatform].safeZoneBottomPct}
+                  backgroundImageUrl={chosenStyleImageKey ? `/api/asset?key=${encodeURIComponent(chosenStyleImageKey)}` : undefined}
+                />
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {CAPTION_OPTIONS.map((o) => (
+                  <button
+                    key={o.preset}
+                    type="button"
+                    // Switching presets keeps the channel's brand palette (accent + base color)
+                    // but resets motion/size/placement to that preset's signature look.
+                    onClick={() => setCaptionStyle(resolveCaptionStyle(o.preset, { highlightColor: captionStyle.highlightColor, color: captionStyle.color }))}
+                    title={o.vibe}
+                    className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${captionStyle.preset === o.preset ? 'border-accent bg-accent-soft text-accent ring-1 ring-accent' : 'border-border-strong text-muted hover:bg-subtle'}`}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+              {(() => {
+                const selected = CAPTION_OPTIONS.find((o) => o.preset === captionStyle.preset)
+                return selected ? <p className="mt-2.5 text-xs text-muted">{selected.vibe}</p> : null
+              })()}
+            </div>
+
+            <div className="flex items-center justify-between gap-3 border-t border-border pt-5">
+              <button onClick={() => setPhase('sound')} className="btn-secondary">
+                <BackArrow /> Back
               </button>
               <div className="flex items-center gap-3">
-                <span className="font-mono text-xs tabular-nums text-faint">derivation ${(costCents / 100).toFixed(3)}</span>
+                <span className="font-mono text-xs tabular-nums text-faint">spent ${(costCents / 100).toFixed(2)}</span>
                 <button onClick={handleCreate} disabled={creating || !canCreate} className="btn-accent">
                   {creating ? 'Creating…' : 'Create channel'}
                 </button>
@@ -719,7 +1487,43 @@ export function NewChannelWizard() {
           </div>
         )}
       </div>
+
+      {/* Leave-confirmation: keep the autosaved draft, discard it, or stay. */}
+      {leaveTo !== null && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-ink/50 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setLeaveTo(null)}
+        >
+          <div className="card animate-fade-in w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-base font-semibold text-ink">Leave channel setup?</h2>
+            <p className="mt-2 text-sm leading-relaxed text-muted">
+              Keep your draft to finish later, or discard it and start fresh.
+            </p>
+            <div className="mt-5 flex flex-wrap items-center justify-end gap-2">
+              <button type="button" onClick={() => setLeaveTo(null)} className="btn-ghost btn-sm">Keep editing</button>
+              <button type="button" onClick={leaveDiscardDraft} className="btn-danger btn-sm">Discard</button>
+              <button type="button" onClick={leaveKeepDraft} className="btn-accent btn-sm">Leave &amp; save</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+  )
+}
+
+// Polaroid-style develop-in: blurred/faded until the image actually loads. Fills its
+// parent (the tile's aspect box), which provides the rounding/clipping.
+function StylePreviewImage({ imageKey }: { imageKey: string }) {
+  const [loaded, setLoaded] = useState(false)
+  return (
+    <img
+      src={`/api/asset?key=${encodeURIComponent(imageKey)}`}
+      alt="Style preview"
+      onLoad={() => setLoaded(true)}
+      className={`h-full w-full object-cover style-develop ${loaded ? 'style-develop-in' : ''}`}
+    />
   )
 }
 
@@ -757,6 +1561,47 @@ function NicheIcon({ name }: { name: string }) {
   )
 }
 
+function BackArrow() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M19 12H5M12 19l-7-7 7-7" />
+    </svg>
+  )
+}
+function FwdArrow() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M5 12h14M13 5l7 7-7 7" />
+    </svg>
+  )
+}
+
+function Recap({ name, description, language, avatarPreview }: {
+  name: string
+  description: string
+  language: string
+  avatarPreview: string | null
+}) {
+  return (
+    <div className="card flex items-center gap-3 p-4">
+      {avatarPreview ? (
+        <img src={avatarPreview} alt="" className="h-10 w-10 flex-shrink-0 rounded-lg object-cover" />
+      ) : (
+        <div
+          className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg text-sm font-semibold text-white"
+          style={{ background: avatarGradient(name || 'channel') }}
+        >
+          {avatarInitials(name || '?')}
+        </div>
+      )}
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-semibold tracking-tight text-ink">{name || 'Untitled channel'}</p>
+        {description && <p className="truncate text-xs text-muted">{description}</p>}
+      </div>
+      <span className="badge flex-shrink-0 bg-subtle text-muted">{language}</span>
+    </div>
+  )
+}
 
 function AvatarPicker({ committedName, preview, uploading, onPick, onRemove }: {
   committedName: string
@@ -851,11 +1696,13 @@ function VoiceRow({ v, selected, playing, reason, topPick, onPick, onPreview }: 
   )
 }
 
-function StepDots({ phase }: { phase: 'describe' | 'review' }) {
+function StepDots({ phase }: { phase: Phase }) {
+  const current = PHASE_ORDER.indexOf(phase)
   return (
     <div className="flex items-center gap-1.5">
-      <span className={`h-1.5 w-6 rounded-full ${phase === 'describe' ? 'bg-accent' : 'bg-border-strong'}`} />
-      <span className={`h-1.5 w-6 rounded-full ${phase === 'review' ? 'bg-accent' : 'bg-border-strong'}`} />
+      {PHASE_ORDER.map((p, i) => (
+        <span key={p} className={`h-1.5 w-5 rounded-full ${i <= current ? 'bg-accent' : 'bg-border-strong'}`} />
+      ))}
     </div>
   )
 }
@@ -873,4 +1720,3 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return <p className="text-sm font-semibold tracking-tight text-ink">{children}</p>
 }
-

@@ -7,7 +7,10 @@ export function assembleImagePrompt(
   stylePreset: string,
   negativeTerms?: string,
 ): string {
-  const base = `${contentPrompt.trim()}, ${stylePreset.trim()}, vertical 9:16 composition`
+  // Lead with the style: diffusion models weight earlier tokens more, so putting the
+  // medium/style DNA first makes it dominate (otherwise a photographic scene description
+  // collapses every look toward realism). The scene content follows.
+  const base = `${stylePreset.trim()}, ${contentPrompt.trim()}, vertical 9:16 composition`
   return negativeTerms ? base : base
 }
 

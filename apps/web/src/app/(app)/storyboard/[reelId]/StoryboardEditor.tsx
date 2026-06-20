@@ -3,17 +3,22 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import type { InferSelectModel } from 'drizzle-orm'
 import type { scenes, stories } from '@reels/db'
+import type { ChannelVoice } from '@reels/core'
 
 type Scene = InferSelectModel<typeof scenes>
 type Story = InferSelectModel<typeof stories>
 
-interface Voice { id: string; name: string; gender: string; style: string }
+// Voices stored on the channel are ChannelVoice: { providerId, name, gender, description }.
+// providerId IS the ElevenLabs voice id used at render — never use a non-existent `id`.
+type Voice = ChannelVoice
 
 interface StoryboardEditorProps {
   reel: { id: string; status: string; voiceId: string | null; costCents: number; operatorMinutes: number; language: string }
   story: Story | null
   scenes: Scene[]
   voicePool: Voice[]
+  // Context for recommending a narrator on the fly when voicePool is empty (per_story channels).
+  voiceRecommend: { nicheDescription: string; language: string; toneConfig: unknown; searchKeyword: string }
   sceneImages: Record<number, string>
   sceneVideoVariations: Record<number, string[]>
   renderUrl: string | null
@@ -21,18 +26,63 @@ interface StoryboardEditorProps {
 }
 
 export function StoryboardEditor({
-  reel, story, scenes: initialScenes, voicePool,
+  reel, story, scenes: initialScenes, voicePool, voiceRecommend,
   sceneImages, sceneVideoVariations, renderUrl: initialRenderUrl,
   channelName,
 }: StoryboardEditorProps) {
   const router = useRouter()
   const [scenes, setScenes] = useState(initialScenes)
-  const [selectedVoice, setSelectedVoice] = useState(reel.voiceId ?? voicePool[0]?.id ?? '')
+  const [selectedVoice, setSelectedVoice] = useState(reel.voiceId ?? voicePool[0]?.providerId ?? '')
   const [showVoicePicker, setShowVoicePicker] = useState(false)
   const [renderUrl, setRenderUrl] = useState(initialRenderUrl)
   const [loading, setLoading] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const [opMinutes, setOpMinutes] = useState(reel.operatorMinutes)
   const startedAt = useRef(Date.now())
+
+  // per_story channels store no voicePool; recommend narrators on the fly (same call the
+  // creation wizard uses) so this reel has something to pick and render isn't dead-ended.
+  const [recommendedPool, setRecommendedPool] = useState<Voice[]>([])
+  const [recsLoading, setRecsLoading] = useState(false)
+  const [recsError, setRecsError] = useState<string | null>(null)
+  const recsFetchedRef = useRef(false)
+  const needsRecs = voicePool.length === 0 && !!voiceRecommend.nicheDescription
+  // Single-voice channels use their stored pool; per_story falls back to recommendations.
+  const effectiveVoices = voicePool.length > 0 ? voicePool : recommendedPool
+
+  async function fetchRecommendedVoices() {
+    setRecsLoading(true)
+    setRecsError(null)
+    try {
+      const res = await fetch('/api/voices/recommend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nicheDescription: voiceRecommend.nicheDescription,
+          language: voiceRecommend.language,
+          toneConfig: voiceRecommend.toneConfig,
+          searchKeyword: voiceRecommend.searchKeyword || undefined,
+        }),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error ?? 'Could not load voices.')
+      const recs = (json.voices ?? []) as Array<{ id: string; name: string; gender: string; description: string }>
+      const pool: Voice[] = recs.map((v) => ({ providerId: v.id, name: v.name, gender: v.gender, description: v.description }))
+      setRecommendedPool(pool)
+      // Auto-select the top recommendation if the reel has no voice yet (operator can change it).
+      setSelectedVoice((cur) => cur || pool[0]?.providerId || '')
+    } catch (e) {
+      setRecsError(e instanceof Error ? e.message : 'Could not load voices.')
+    } finally {
+      setRecsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (recsFetchedRef.current || !needsRecs) return
+    recsFetchedRef.current = true
+    void fetchRecommendedVoices()
+  }, [needsRecs])
 
   // Operator-minutes: update every 30s [E5.6]
   useEffect(() => {
@@ -70,18 +120,67 @@ export function StoryboardEditor({
   }
 
   async function handleRender() {
+    // Guard: TTS hard-fails with no voice, so never queue a render without one.
+    if (!selectedVoice) { setShowVoicePicker(true); return }
     setLoading('render')
     const res = await fetch('/api/pipeline/trigger-render', {
       method: 'POST',
       body: JSON.stringify({ reelId: reel.id, voiceId: selectedVoice }),
       headers: { 'Content-Type': 'application/json' },
     })
+    if (!res.ok) {
+      const j = await res.json().catch(() => null)
+      setLoading(null)
+      setError(j?.error ?? 'Could not start the render.')
+      return
+    }
     setLoading(null)
     router.push('/dashboard')
   }
 
-  const currentVoice = voicePool.find((v) => v.id === selectedVoice)
+  // Spot-check gate: operator watches the rendered reel and signs it off.
+  async function handleApprove() {
+    setLoading('approve')
+    setError(null)
+    const res = await fetch('/api/pipeline/approve-spot-check', {
+      method: 'POST',
+      body: JSON.stringify({ reelId: reel.id, opMinutes }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+    if (!res.ok) {
+      const j = await res.json().catch(() => null)
+      setLoading(null)
+      setError(j?.error ?? 'Could not approve this reel.')
+      return
+    }
+    setLoading(null)
+    router.refresh()
+  }
+
+  // Operator has uploaded the exported package → mark it published (terminal).
+  async function handlePublish() {
+    setLoading('publish')
+    setError(null)
+    const res = await fetch('/api/pipeline/mark-published', {
+      method: 'POST',
+      body: JSON.stringify({ reelId: reel.id }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+    if (!res.ok) {
+      const j = await res.json().catch(() => null)
+      setLoading(null)
+      setError(j?.error ?? 'Could not mark this reel published.')
+      return
+    }
+    setLoading(null)
+    router.refresh()
+  }
+
+  const currentVoice = effectiveVoices.find((v) => v.providerId === selectedVoice)
   const isRenderable = ['storyboard', 'story_review', 'approved', 'failed'].includes(reel.status)
+  const canRender = isRenderable && !!selectedVoice
+  // Post-render gates (spot-check → approved → published) get their own action bar, not the voice/render one.
+  const isPostRender = ['spot_check', 'approved', 'scheduled', 'published'].includes(reel.status)
 
   return (
     <div className="flex min-h-screen flex-col bg-bg">
@@ -188,19 +287,30 @@ export function StoryboardEditor({
         </div>
       </div>
 
-      {/* Bottom bar — voice + render */}
+      {/* Bottom bar — voice + render (storyboard flow only) */}
+      {!isPostRender && (
       <div className="sticky bottom-0 flex flex-shrink-0 flex-wrap items-center gap-4 border-t border-border bg-bg/80 px-8 py-4 backdrop-blur">
-        <button onClick={() => setShowVoicePicker(true)} className="btn-secondary">
+        <button onClick={() => setShowVoicePicker(true)} className={`btn-secondary ${!selectedVoice ? 'ring-1 ring-accent' : ''}`}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3ZM19 11a7 7 0 0 1-14 0M12 18v3" />
           </svg>
-          {currentVoice ? `${currentVoice.name} · ${currentVoice.style}` : 'Pick voice'}
+          {currentVoice ? (currentVoice.description ? `${currentVoice.name} · ${currentVoice.description}` : currentVoice.name) : 'Pick voice'}
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-faint" aria-hidden>
             <path d="m6 9 6 6 6-6" />
           </svg>
         </button>
+        {error && <p className="text-sm text-danger">{error}</p>}
+        {isRenderable && !selectedVoice && !error && (
+          <p className="text-xs text-muted">
+            {recsLoading
+              ? 'Finding a narrator voice for this reel…'
+              : recsError
+                ? 'Could not load voices — open the picker to retry.'
+                : 'Pick a voice to render.'}
+          </p>
+        )}
         <div className="flex-1" />
-        <button onClick={handleRender} disabled={loading === 'render' || !isRenderable} className="btn-accent">
+        <button onClick={handleRender} disabled={loading === 'render' || !canRender} className="btn-accent" title={!selectedVoice ? 'Pick a narrator voice first' : undefined}>
           {loading === 'render' ? (
             'Queuing…'
           ) : (
@@ -213,6 +323,73 @@ export function StoryboardEditor({
           )}
         </button>
       </div>
+      )}
+
+      {/* Spot-check → approved → published gate */}
+      {isPostRender && (
+        <div className="sticky bottom-0 flex flex-shrink-0 flex-wrap items-center gap-3 border-t border-border bg-bg/80 px-8 py-4 backdrop-blur">
+          {reel.status === 'spot_check' && (
+            <>
+              <div className="mr-auto">
+                <p className="text-sm font-semibold text-ink">Spot-check</p>
+                <p className="text-xs text-muted">Watch the render below, then sign it off.</p>
+              </div>
+              <button onClick={handleApprove} disabled={loading === 'approve'} className="btn-accent">
+                {loading === 'approve' ? 'Approving…' : (
+                  <>
+                    Approve reel
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                      <path d="M20 6 9 17l-5-5" />
+                    </svg>
+                  </>
+                )}
+              </button>
+            </>
+          )}
+          {reel.status === 'approved' && (
+            <>
+              <div className="mr-auto">
+                <p className="flex items-center gap-1.5 text-sm font-semibold text-ink">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="text-accent" aria-hidden>
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                  Approved
+                </p>
+                <p className="text-xs text-muted">Download the package, upload to your platforms, then mark it published.</p>
+              </div>
+              <a href={`/api/pipeline/export-post-package?reelId=${reel.id}`} className="btn-secondary">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+                </svg>
+                Download post package
+              </a>
+              <button onClick={handlePublish} disabled={loading === 'publish'} className="btn-accent">
+                {loading === 'publish' ? 'Publishing…' : 'Mark published'}
+              </button>
+            </>
+          )}
+          {(reel.status === 'published' || reel.status === 'scheduled') && (
+            <>
+              <div className="mr-auto">
+                <p className="flex items-center gap-1.5 text-sm font-semibold text-ink">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="text-accent" aria-hidden>
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                  {reel.status === 'published' ? 'Published' : 'Scheduled'}
+                </p>
+                <p className="text-xs text-muted">Re-download the post package anytime.</p>
+              </div>
+              <a href={`/api/pipeline/export-post-package?reelId=${reel.id}`} className="btn-secondary">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+                </svg>
+                Download post package
+              </a>
+            </>
+          )}
+          {error && <p className="w-full text-sm text-danger">{error}</p>}
+        </div>
+      )}
 
       {/* Render preview */}
       {renderUrl && (
@@ -230,7 +407,11 @@ export function StoryboardEditor({
       {/* Voice picker modal */}
       {showVoicePicker && (
         <VoicePicker
-          voices={voicePool}
+          voices={effectiveVoices}
+          recommended={voicePool.length === 0}
+          loadingVoices={recsLoading}
+          voicesError={recsError}
+          onRetry={fetchRecommendedVoices}
           selected={selectedVoice}
           storyFirstLine={story?.body.split('\n')[0] ?? ''}
           reelId={reel.id}
@@ -242,8 +423,12 @@ export function StoryboardEditor({
   )
 }
 
-function VoicePicker({ voices, selected, storyFirstLine, reelId, onSelect, onClose }: {
+function VoicePicker({ voices, recommended, loadingVoices, voicesError, onRetry, selected, storyFirstLine, reelId, onSelect, onClose }: {
   voices: Voice[]
+  recommended: boolean
+  loadingVoices: boolean
+  voicesError: string | null
+  onRetry: () => void
   selected: string
   storyFirstLine: string
   reelId: string
@@ -252,6 +437,7 @@ function VoicePicker({ voices, selected, storyFirstLine, reelId, onSelect, onClo
 }) {
   const [previewing, setPreviewing] = useState<string | null>(null)
   const [audioSrc, setAudioSrc] = useState<string | null>(null)
+  void reelId
 
   async function handlePreview(voiceId: string) {
     setPreviewing(voiceId)
@@ -273,14 +459,38 @@ function VoicePicker({ voices, selected, storyFirstLine, reelId, onSelect, onClo
       onClick={onClose}
     >
       <div className="card w-96 p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
-        <p className="mb-4 text-sm font-semibold text-ink">Choose narrator voice</p>
+        <div className="mb-4">
+          <p className="text-sm font-semibold text-ink">Choose narrator voice</p>
+          {recommended && (
+            <p className="mt-0.5 text-xs text-muted">This channel picks a voice per reel — recommended for this one (top auto-selected).</p>
+          )}
+        </div>
+        {loadingVoices && voices.length === 0 && (
+          <p className="mb-4 flex items-center gap-2 rounded-lg border border-border bg-subtle px-3 py-2.5 text-xs text-muted">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin" aria-hidden>
+              <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+            </svg>
+            Finding voices that fit this channel…
+          </p>
+        )}
+        {voicesError && voices.length === 0 && (
+          <div className="mb-4 rounded-lg border border-danger/30 bg-danger/5 px-3 py-2.5 text-xs text-danger">
+            {voicesError}
+            <button onClick={onRetry} className="btn-secondary btn-sm mt-2">Try again</button>
+          </div>
+        )}
+        {!loadingVoices && !voicesError && voices.length === 0 && (
+          <p className="mb-4 rounded-lg border border-border bg-subtle px-3 py-2.5 text-xs text-muted">
+            No voices available. Set a voice in channel settings, or use a single-voice channel.
+          </p>
+        )}
         <div className="mb-4 flex flex-col gap-2">
           {voices.map((v) => {
-            const active = selected === v.id
+            const active = selected === v.providerId
             return (
               <div
-                key={v.id}
-                onClick={() => onSelect(v.id)}
+                key={v.providerId}
+                onClick={() => onSelect(v.providerId)}
                 className={`flex cursor-pointer items-center justify-between rounded-lg border px-3 py-2.5 transition-colors ${
                   active
                     ? 'border-accent bg-accent-soft ring-1 ring-accent'
@@ -289,15 +499,15 @@ function VoicePicker({ voices, selected, storyFirstLine, reelId, onSelect, onClo
               >
                 <div>
                   <p className="text-sm font-medium text-ink">{v.name}</p>
-                  <p className="text-xs text-muted">{v.style}</p>
+                  <p className="text-xs text-muted">{v.description || v.gender}</p>
                 </div>
                 <button
-                  onClick={(e) => { e.stopPropagation(); handlePreview(v.id) }}
-                  disabled={previewing === v.id}
+                  onClick={(e) => { e.stopPropagation(); handlePreview(v.providerId) }}
+                  disabled={previewing === v.providerId}
                   className="btn-secondary btn-sm"
                   title="Preview voice"
                 >
-                  {previewing === v.id ? (
+                  {previewing === v.providerId ? (
                     '…'
                   ) : (
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
@@ -311,8 +521,8 @@ function VoicePicker({ voices, selected, storyFirstLine, reelId, onSelect, onClo
         </div>
         {audioSrc && <audio src={audioSrc} autoPlay controls className="mb-3 w-full" />}
         <div className="flex gap-2">
-          <button onClick={() => onSelect(selected)} className="btn-accent flex-1">
-            Use {voices.find((v) => v.id === selected)?.name}
+          <button onClick={() => onSelect(selected)} disabled={!selected} className="btn-accent flex-1">
+            {selected ? `Use ${voices.find((v) => v.providerId === selected)?.name ?? 'voice'}` : 'Pick a voice'}
           </button>
           <button onClick={onClose} className="btn-secondary">
             Cancel

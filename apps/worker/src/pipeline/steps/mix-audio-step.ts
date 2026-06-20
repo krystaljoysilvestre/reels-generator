@@ -3,10 +3,35 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getDb, reels, assets, channels } from '@reels/db'
 import { downloadBuffer, uploadBuffer, buildInputHash } from '@reels/providers'
-import { TimingsSchema, AudioScriptSchema, AudioPacksSchema } from '@reels/core'
+import { TimingsSchema, AudioScriptSchema, AudioPacksSchema, musicIntensityToDb } from '@reels/core'
 import { mixAudio, premixSfx } from '@reels/render/ffmpeg/mix-audio'
 import { writeFile, mkdir } from 'node:fs/promises'
 import { runStep } from '../harness.js'
+
+// Deterministic per-reel pick from the bed pool: same reel always draws the same bed (stable on
+// re-run / idempotent), but different reels spread across the pool — variety without per-reel gen.
+function pickReelIndex(seed: string, n: number): number {
+  let h = 0
+  for (let i = 0; i < seed.length; i++) h = (Math.imul(h, 31) + seed.charCodeAt(i)) >>> 0
+  return h % n
+}
+
+// Mood-match THIS reel to the best bed in the pool: score each bed by how many of its moodTags the
+// reel wants, pick the highest. No reel-mood signal (or no overlap) → fall back to the deterministic
+// per-reel pick. So bespoke AI beds (core/intense/calm) + multi-preset pools both fit the story.
+function pickBedForMood<T extends { moodTags: string[] }>(pool: T[], reelMoodTags: string[], reelId: string): T {
+  if (reelMoodTags.length > 0) {
+    const wanted = new Set(reelMoodTags.map((t) => t.toLowerCase()))
+    let bestIdx = -1
+    let bestScore = 0
+    pool.forEach((bed, i) => {
+      const score = bed.moodTags.reduce((n, t) => n + (wanted.has(t.toLowerCase()) ? 1 : 0), 0)
+      if (score > bestScore) { bestScore = score; bestIdx = i }
+    })
+    if (bestIdx >= 0) return pool[bestIdx]!
+  }
+  return pool[pickReelIndex(reelId, pool.length)]!
+}
 
 export async function mixAudioStep(reelId: string): Promise<void> {
   const db = getDb()
@@ -60,7 +85,7 @@ export async function mixAudioStep(reelId: string): Promise<void> {
         await exec('ffmpeg', [
           '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=mono',
           '-t', String(timings.durationMs / 1000),
-          '-c:a', 'aac', '-y', ambientPath,
+          '-c:a', 'libmp3lame', '-y', ambientPath,  // ambientPath is .mp3 → mp3 encoder, not aac
         ])
       }
 
@@ -84,17 +109,33 @@ export async function mixAudioStep(reelId: string): Promise<void> {
         tmpDir: tmp,
       })
 
-      // Full mix
+      // Pick ONE bed from the channel's pool for THIS reel — mood-matched to the story (falls back to a
+      // deterministic per-reel pick when there's no mood signal). Download it locally (the mixer needs a
+      // local file, not an R2 key) and pass a 1-bed pack.
+      const pool = audioPacks.musicPack
+      let localMusicPack = pool
+      if (pool.length > 0) {
+        const picked = pickBedForMood(pool, audioScript.music?.moodTags ?? [], reelId)
+        const ext = picked.path.split('.').pop() || 'mp3'
+        const musicLocalPath = join(tmp, `music.${ext}`)
+        await writeFile(musicLocalPath, await downloadBuffer(picked.path))
+        localMusicPack = [{ ...picked, path: musicLocalPath }]
+      }
+
+      // Full mix — music loudness follows the channel's intensity setting (Sound step).
       const mixPath = join(tmp, 'mix.m4a')
+      const { bedDb, peakDb } = musicIntensityToDb(audioPacks.musicIntensity)
       await mixAudio({
         voiceoverPath,
         ambientPath,
         sfxPremixedPath: sfxPremixPath,
-        musicPack: audioPacks.musicPack,
+        musicPack: localMusicPack,
         timings,
         outputPath: mixPath,
         musicType: audioScript.music?.type ?? null,
         musicMoodTags: audioScript.music?.moodTags ?? [],
+        bedDb,
+        peakDb,
       })
 
       // Upload result

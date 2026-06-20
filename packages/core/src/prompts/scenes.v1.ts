@@ -8,6 +8,7 @@ export interface ScenesPromptVars {
   era: string
   regionDescriptor: string
   narration: string
+  targetScenes: number // ~1 scene per ~12s of reel — scales with the channel's reel length
 }
 
 export function buildScenesPrompt(v: ScenesPromptVars): { system: string; userMessage: string } {
@@ -17,7 +18,7 @@ WORLD BIBLE: ${v.worldBibleJson}
 Visual canon: use canonical names for recurring places/objects so they render consistently.
 Era: ${v.era}. Region look: ${v.regionDescriptor}.`
 
-  const userMessage = `Split the narration into 6–10 scenes. Each scene covers a contiguous span of narration with no gaps and no overlaps, in order.
+  const userMessage = `Split the narration into about ${v.targetScenes} scenes (no fewer than 3, no more than 16) — scale to the narration's length. Each scene covers a contiguous span of narration with no gaps and no overlaps, in order.
 
 Narration:
 """${v.narration}"""

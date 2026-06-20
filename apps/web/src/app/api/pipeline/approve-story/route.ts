@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { getDb, reels } from '@reels/db'
 import { eq } from 'drizzle-orm'
 import { transition } from '@reels/core'
+import { enqueueStep } from '@reels/queue'
 import { getSession } from '@/lib/auth'
 
 export async function POST(req: NextRequest) {
@@ -24,8 +25,9 @@ export async function POST(req: NextRequest) {
     })
     .where(eq(reels.id, reelId))
 
-  // Enqueue downstream pipeline steps (annotate_audio_script → breakdown_scenes → etc.)
-  // Worker picks up via BullMQ; for Phase 1 the operator can also trigger manually from storyboard
+  // Run scene breakdown → image generation; the chain STOPS at the storyboard gate so the operator
+  // can edit scenes, pick a voice, and trigger the render.
+  await enqueueStep({ reelId, stepName: 'breakdown_scenes' })
 
   return NextResponse.json({ ok: true })
 }

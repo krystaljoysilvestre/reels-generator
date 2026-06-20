@@ -24,10 +24,13 @@ export async function GET(req: NextRequest) {
   const contentType = MIME[ext] ?? 'application/octet-stream'
 
   const buf = await downloadBuffer(key)
+  // Preset beds are regenerated under the SAME key (re-seed), so browser-caching them makes a
+  // re-seed look like "nothing changed". Serve those uncached; other assets are immutable → 1h.
+  const regenerable = key.startsWith('audio/presets/')
   return new NextResponse(new Uint8Array(buf), {
     headers: {
       'Content-Type': contentType,
-      'Cache-Control': 'private, max-age=3600',
+      'Cache-Control': regenerable ? 'no-store, must-revalidate' : 'private, max-age=3600',
     },
   })
 }

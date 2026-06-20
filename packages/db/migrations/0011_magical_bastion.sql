@@ -1,0 +1,1 @@
+ALTER TABLE "channels" ADD COLUMN "cost_cents" integer DEFAULT 0 NOT NULL;

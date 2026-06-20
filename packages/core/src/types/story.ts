@@ -7,7 +7,7 @@ export const StoryOutputSchema = z.object({
   narration: z.string().min(1),
   logline: z.string().min(1),
   subgenreTags: z.array(z.string()),
-  twistAnchor: z.string().min(1),
+  peakMoment: z.string().min(1), // the reel's peak line (verbatim substring of narration) — drives music timing
   newCanon: z.array(z.string()).default([]),
 })
 export type StoryOutput = z.infer<typeof StoryOutputSchema>
@@ -24,6 +24,6 @@ export const SceneOutputSchema = z.object({
 export type SceneOutput = z.infer<typeof SceneOutputSchema>
 
 export const ScenesOutputSchema = z.object({
-  scenes: z.array(SceneOutputSchema).min(6).max(10),
+  scenes: z.array(SceneOutputSchema).min(3).max(16),
 })
 export type ScenesOutput = z.infer<typeof ScenesOutputSchema>

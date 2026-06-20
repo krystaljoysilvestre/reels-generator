@@ -16,6 +16,7 @@
     "@reels/core": "workspace:*",
     "@reels/db": "workspace:*",
     "@reels/providers": "workspace:*",
+    "@reels/queue": "workspace:*",
     "@reels/render": "workspace:*",
     "@bull-board/api": "^6.5.0",
     "@bull-board/express": "^6.5.0",

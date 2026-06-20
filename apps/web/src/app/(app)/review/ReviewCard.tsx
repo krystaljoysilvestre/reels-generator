@@ -39,10 +39,9 @@ export function ReviewCard({ reel, story, remaining, allPendingIds }: ReviewCard
       body: JSON.stringify({ reelId: reel.id, opMinutes }),
       headers: { 'Content-Type': 'application/json' },
     })
-    // Next reel in queue
-    const nextId = allPendingIds.find((id) => id !== reel.id)
-    if (nextId) router.push(`/review?reelId=${nextId}`)
-    else router.push('/dashboard')
+    // Continue THIS reel into the storyboard — scenes + images are generating now and appear there
+    // once ready (the chain stops at the storyboard gate for editing + voice + render).
+    router.push(`/storyboard/${reel.id}`)
   }
 
   async function handleReject(reasonCode: string) {

@@ -142,7 +142,15 @@ export async function GET(req: NextRequest) {
     { name: 'AI-DISCLOSURE.txt', data: Buffer.from(disclosure, 'utf8') },
   ])
 
-  const slug = (story?.title ?? reelId).toLowerCase().replace(/\s+/g, '-').slice(0, 40)
+  // The filename goes into an HTTP header (ByteString/Latin1) — collapse anything that isn't a
+  // plain ASCII alphanumeric to a dash so LLM titles with em dashes / smart quotes / accents don't
+  // blow up the Content-Disposition header.
+  const slug =
+    (story?.title ?? reelId)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 40) || reelId
   return new NextResponse(new Uint8Array(zip), {
     headers: {
       'Content-Type': 'application/zip',

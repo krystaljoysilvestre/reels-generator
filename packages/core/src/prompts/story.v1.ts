@@ -29,25 +29,29 @@ Language for this story: ${v.language}${
 
 WORLD BIBLE — stay consistent with this world:
 ${v.worldBibleJson}
-Rules: reuse established locations/objects by their canonical names. Do not invent new recurring elements unless flagged as "new_canon".
+Rules: reuse established locations/objects by their canonical names. Do not invent new recurring elements unless flagged as "newCanon".
 
-REFERENCE STORIES — match their voice, rhythm, and intimacy (do NOT copy plots, twists, or specific imagery):
+REFERENCE STORIES — these define this channel's voice, rhythm, and intimacy. Match them (do NOT copy their plots, structure, or specific imagery):
 ${v.fewshotStories}
 
 GUARDS:
-- Fictionalize all specific real places: invented barangay/street names, real region allowed (e.g., "somewhere in Quezon province").
-- No real persons. No gore described anatomically — fear lives in implication, sound, and what is almost seen.
-- Nothing involving harm to children as content of the horror.
-- Original work only: no retelling of known creepypastas or films.`
+- Fictionalize specific real places: invented street/barangay/business names; a real region/era is fine (e.g., "somewhere in Quezon province").
+- No real, identifiable people.
+- Keep it platform-safe: no graphic gore or sexual content, and never harm to minors as subject matter — imply intensity through restraint, not explicit detail.
+- Original work only — do not retell known films, books, or copypastas.`
 
-  const userMessage = `Write one original story for a ${v.targetSeconds}-second narrated reel (≈${v.targetWords} words at natural narration pace).
+  const userMessage = `Write one original ${v.language} narrated reel script for a ${v.targetSeconds}-second reel (≈${v.targetWords} words at natural narration pace). Make it feel like a real reel on THIS channel — match the niche, tone, and the reference scripts' voice.
 
-Structural requirements:
-1. HOOK (first 1–2 sentences, ≤3 seconds spoken): open mid-tension or with an unresolvable detail. Never open with setting description or greeting.
-2. SLOW BUILD: grounded, sensory, specific. Real textures of daily life before anything unusual. The mundane detail is what makes it believable.
-3. ESCALATION: one impossible thing, then doubt, then confirmation.
-4. TWIST/STING (final 1–3 sentences): recontextualize, don't just shock. The best ending makes the viewer re-hear an earlier line differently.
-5. First person, past tense, confessional register — told to a friend at 2 AM, not performed to an audience.
+Shape it to the niche — do NOT force a fiction twist onto a channel that isn't narrative:
+- Narrative / story niches: HOOK, then a grounded, sensory, specific build (real textures of daily life before anything unusual), escalation or development, and a satisfying ending that pays off something established earlier — a twist, a punchline, a moral, or an emotional turn, whatever the niche wants. Not a flat stop.
+- Informational niches: HOOK, then 2–4 vivid concrete points, end on a satisfying payoff.
+- Persuasive / monologue niches: HOOK, develop one sharp idea with a concrete example, close on a memorable line.
+
+Craft:
+- HOOK = the first 1–2 sentences (≤3 seconds spoken): open mid-tension or on a curiosity gap / unresolvable detail. Never open with setting description or a greeting.
+- Point of view + register follow what the niche naturally wants (first-hand account, retold legend, reported, explainer, direct second-person address) — do NOT default to a first-person confession.
+- Write it the way it is SPOKEN — short lines, roughly one beat per line — for natural narration cadence.
+- Grounded and specific; stay consistent with the world and its canonical names.
 
 Avoid (anti-patterns from rejected reels): ${v.rejectionAvoidList || 'none yet'}
 
@@ -56,10 +60,10 @@ OUTPUT (JSON only):
   "title": "",
   "language": "",
   "narration": "",
-  "logline": "",
-  "subgenreTags": [],
-  "twistAnchor": "",
-  "newCanon": []
+  "logline": "",                 // one-line summary of the reel
+  "subgenreTags": [],            // 2–4 short tags for the angle/subgenre
+  "peakMoment": "",              // the SINGLE most important line — the reel's PEAK (climax, reveal, payoff, punchline, key takeaway, or core insight). Copy it VERBATIM from the narration; it's used to time the music.
+  "newCanon": []                 // new recurring locations/objects worth adding to the world bible (names only); [] if none
 }`
 
   return { system, userMessage }

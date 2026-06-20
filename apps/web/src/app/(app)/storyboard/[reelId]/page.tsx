@@ -2,6 +2,7 @@ import { getDb, reels, scenes, assets, channels } from '@reels/db'
 import { eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { requireAuth } from '@/lib/auth'
+import type { ChannelVoice } from '@reels/core'
 import { StoryboardEditor } from './StoryboardEditor'
 
 export const dynamic = 'force-dynamic'
@@ -19,7 +20,12 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
 
   const channel = await db.query.channels.findFirst({
     where: eq(channels.id, reel.channelId),
-    columns: { id: true, name: true, voicePool: true },
+    // voicePool serves single-voice channels; the niche/tone/keyword fields let the editor
+    // recommend a narrator on the fly for per_story channels (empty pool) so render isn't blocked.
+    columns: {
+      id: true, name: true, voicePool: true,
+      nicheDescription: true, toneConfig: true, voiceSearchKeyword: true,
+    },
   })
 
   const reelAssets = await db.query.assets.findMany({ where: eq(assets.reelId, reelId) })
@@ -51,7 +57,13 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
       }}
       story={reel.story ?? null}
       scenes={reel.scenes.sort((a, b) => a.idx - b.idx)}
-      voicePool={(channel?.voicePool ?? []) as Array<{ id: string; name: string; gender: string; style: string }>}
+      voicePool={(channel?.voicePool ?? []) as ChannelVoice[]}
+      voiceRecommend={{
+        nicheDescription: channel?.nicheDescription ?? '',
+        language: reel.language,
+        toneConfig: channel?.toneConfig ?? null,
+        searchKeyword: channel?.voiceSearchKeyword ?? '',
+      }}
       sceneImages={sceneImages}
       sceneVideoVariations={sceneVideoVariations}
       renderUrl={renderUrl}

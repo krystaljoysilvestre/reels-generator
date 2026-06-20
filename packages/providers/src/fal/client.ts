@@ -10,6 +10,7 @@ import {
 import {
   FAL_CONTENT_FILTER_CODES,
   FAL_IMAGE_COST_CENTS,
+  FAL_IMAGE_COST_CENTS_DEV,
   FAL_VIDEO_COST_CENTS_PER_SEC,
   FAL_VIDEO_COST_CENTS_PER_SEC_BUDGET,
   type FalEngine,
@@ -60,12 +61,25 @@ async function fetchToBuffer(url: string): Promise<Buffer> {
 
 // ── Image generation ─────────────────────────────────────────────────────────
 
+// Channel/reel aspect → fal image_size. Reels are vertical 9:16; the others exist so a
+// future non-9:16 platform preset can drive generation without touching this file.
+const ASPECT_TO_FAL_SIZE: Record<string, string> = {
+  '9:16': 'portrait_16_9',
+  '4:3': 'portrait_4_3',
+  '1:1': 'square_hd',
+  '16:9': 'landscape_16_9',
+}
+
 export interface ImageGenParams {
   prompt: string
   negativePrompt?: string
   reelId: string
   sceneIdx: number
   engine: FalEngine
+  storageKey?: string         // override the R2 key (e.g. for ephemeral style-option previews)
+  aspect?: string             // '9:16' (default — the reel frame), etc. Drives image_size.
+  guidanceScale?: number      // flux/dev honors this (push prompt/style adherence); schnell ignores it
+  numInferenceSteps?: number  // flux/dev quality knob; schnell runs few distilled steps
 }
 
 export async function generateImage(params: ImageGenParams): Promise<ProviderResult> {
@@ -76,9 +90,11 @@ export async function generateImage(params: ImageGenParams): Promise<ProviderRes
       input: {
         prompt: params.prompt,
         negative_prompt: params.negativePrompt ?? '',
-        image_size: 'portrait_4_3',
+        image_size: ASPECT_TO_FAL_SIZE[params.aspect ?? '9:16'] ?? 'portrait_16_9',
         num_images: 1,
         enable_safety_checker: true,
+        ...(params.guidanceScale != null ? { guidance_scale: params.guidanceScale } : {}),
+        ...(params.numInferenceSteps != null ? { num_inference_steps: params.numInferenceSteps } : {}),
       },
     })
 
@@ -88,12 +104,15 @@ export async function generateImage(params: ImageGenParams): Promise<ProviderRes
     }
 
     const buffer = await fetchToBuffer(parsed.data.images[0].url)
-    const storageKey = `reels/${params.reelId}/scenes/${params.sceneIdx}/image.webp`
+    const storageKey = params.storageKey ?? `reels/${params.reelId}/scenes/${params.sceneIdx}/image.webp`
     await uploadBuffer(storageKey, buffer, 'image/webp')
 
+    const costCents = params.engine.imageModelId.includes('flux/dev')
+      ? FAL_IMAGE_COST_CENTS_DEV
+      : FAL_IMAGE_COST_CENTS
     return {
       asset: { storageKey, meta: { prompt: params.prompt } },
-      costCents: FAL_IMAGE_COST_CENTS,
+      costCents,
       providerJobId: result.requestId,
     }
   } catch (err) {

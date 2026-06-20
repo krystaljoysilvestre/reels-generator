@@ -62,7 +62,7 @@ export async function generateStory(reelId: string, channelId: string, language:
 
   const worldBible = WorldBibleSchema.parse(channel.worldBible)
   const toneConfig = ToneConfigSchema.parse(channel.toneConfig)
-  const targetSeconds = 75
+  const targetSeconds = channel.targetSeconds ?? 75 // per-channel reel length (derived per niche)
   const targetWords = Math.round(targetSeconds * 2.5) // ~2.5 words/sec narration pace
 
   const { system, userMessage } = buildStoryPrompt({
@@ -104,7 +104,7 @@ export async function generateStory(reelId: string, channelId: string, language:
         title: result.output.title,
         body: result.output.narration,
         logline: result.output.logline,
-        twistAnchor: result.output.twistAnchor,
+        twistAnchor: result.output.peakMoment, // stored in the internal music-timing anchor column
         subgenreTags: result.output.subgenreTags,
       })
       .returning()

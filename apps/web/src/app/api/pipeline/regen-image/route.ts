@@ -22,7 +22,8 @@ export async function POST(req: NextRequest) {
   if (!scene.visualPrompt) return NextResponse.json({ error: 'No visual prompt' }, { status: 400 })
 
   const finalPrompt = assembleImagePrompt(scene.visualPrompt, channel.stylePreset)
-  const engine = FalEngineSchema.parse({})
+  // Match generate-images: scene images render on flux/dev for palette + detail fidelity (style spike).
+  const engine = FalEngineSchema.parse({ imageModelId: 'fal-ai/flux/dev' })
 
   const result = await generateImage({
     prompt: finalPrompt,
@@ -30,6 +31,8 @@ export async function POST(req: NextRequest) {
     reelId,
     sceneIdx,
     engine,
+    guidanceScale: 3.5,
+    numInferenceSteps: 28,
   })
 
   const [asset] = await db.insert(assets).values({

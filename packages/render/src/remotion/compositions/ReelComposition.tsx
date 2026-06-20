@@ -16,6 +16,8 @@ export const REEL_FPS = 30
 export const ReelComposition: React.FC<ReelCompositionProps> = ({
   scenes,
   subtitles,
+  captionStyle,
+  captionSafeZonePct,
   grain,
   vignette,
 }) => {
@@ -45,7 +47,7 @@ export const ReelComposition: React.FC<ReelCompositionProps> = ({
       <GradeOverlay grain={grain} vignette={vignette} />
 
       {/* Burned-in subtitles — always on top */}
-      <SubtitleOverlay subtitles={subtitles} />
+      <SubtitleOverlay subtitles={subtitles} captionStyle={captionStyle} safeZonePct={captionSafeZonePct} />
     </AbsoluteFill>
   )
 }

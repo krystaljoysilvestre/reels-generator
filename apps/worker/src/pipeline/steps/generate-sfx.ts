@@ -45,14 +45,16 @@ export async function generateSfx(reelId: string): Promise<void> {
   }
 
   // ── Generate all SFX cues via ElevenLabs in one idempotent step ─────────
-  const sfxAnchors = audioScript.sfx.map((c) => c.anchor).sort().join('|')
-  const inputHash = buildInputHash('sfx.elevenlabs.v1', { sfxAnchors, reelId })
+  // "Smart sound effects" toggle (Sound step): when off, generate no SFX for this channel.
+  const sfxCues = audioPacks.sfxEnabled ? audioScript.sfx : []
+  const sfxAnchors = sfxCues.map((c) => c.anchor).sort().join('|')
+  const inputHash = buildInputHash('sfx.elevenlabs.v1', { sfxAnchors, reelId, sfxEnabled: audioPacks.sfxEnabled })
 
   await runStep(
     { reelId, stepName: 'generate_sfx', inputHash },
     async () => {
       let totalCost = 0
-      for (const cue of audioScript.sfx) {
+      for (const cue of sfxCues) {
         const sfxResult = await elGenerateSfx({
           prompt: cue.prompt,
           reelId,
@@ -73,7 +75,7 @@ export async function generateSfx(reelId: string): Promise<void> {
           })
           .onConflictDoNothing()
       }
-      return { output: { sfxCount: audioScript.sfx.length }, costCents: totalCost }
+      return { output: { sfxCount: sfxCues.length }, costCents: totalCost }
     },
   )
 }

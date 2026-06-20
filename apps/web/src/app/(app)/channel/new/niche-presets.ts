@@ -14,16 +14,6 @@ export interface NichePreset {
 
 export const NICHE_PRESETS: NichePreset[] = [
   {
-    id: 'horror',
-    icon: 'horror',
-    color: 'bg-violet-50 text-violet-600',
-    label: 'Horror & folklore',
-    blurb: 'Confessional scary stories, local myths',
-    description:
-      'Horror narration channel. First-person confessional encounters with supernatural entities and local folklore, set in specific real-but-fictionalized places. Slow-burn dread, sensory detail, believable mundane setup, twist endings.',
-    language: 'Taglish',
-  },
-  {
     id: 'true-crime',
     icon: 'crime',
     color: 'bg-red-50 text-red-600',
@@ -102,5 +92,15 @@ export const NICHE_PRESETS: NichePreset[] = [
     description:
       'Psychology channel. Bite-size insights on human behavior, relationships, and dating dynamics — why people do what they do. Warm but sharp tone, a relatable scenario, one insight that reframes it.',
     language: 'English',
+  },
+  {
+    id: 'horror',
+    icon: 'horror',
+    color: 'bg-violet-50 text-violet-600',
+    label: 'Horror & folklore',
+    blurb: 'Scary stories, local myths & legends',
+    description:
+      'Horror narration channel covering supernatural encounters, creatures, and local folklore, set in specific real-but-fictionalized places. Slow-burn dread, sensory detail, believable mundane setup, twist endings. The telling can vary — first-hand encounters, retold legends, cautionary tales, found accounts — not one fixed format.',
+    language: 'Taglish',
   },
 ]

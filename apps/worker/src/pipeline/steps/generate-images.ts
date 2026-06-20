@@ -1,7 +1,7 @@
 import { eq, and } from 'drizzle-orm'
 import { getDb, reels, scenes, assets, channels } from '@reels/db'
 import { generateImage, buildInputHash, ContentFilterError, FalEngineSchema, llmCall } from '@reels/providers'
-import { assembleImagePrompt, assembleNegativePrompt } from '@reels/core'
+import { assembleImagePrompt, assembleNegativePrompt, PLATFORM_PRESETS } from '@reels/core'
 import { z } from 'zod'
 import { buildRephrasePrompt, REPHRASE_V1_VERSION } from '../../prompts-bridge.js'
 import { runStep } from '../harness.js'
@@ -11,6 +11,15 @@ import { runStep } from '../harness.js'
 // Content-filter rejection → rephrase.v1 retry (max 3) → mood-only downgrade.
 
 const MAX_REPHRASE_ATTEMPTS = 3
+
+// Scene images render on flux/dev (not the cheaper schnell). The style spike showed dev renders the
+// full stylePreset palette (e.g. the channel's second accent colour the distilled schnell dropped) +
+// finer woodcut/illustration detail, and it MATCHES the flux/dev style-option previews the operator
+// approves at creation (schnell reels otherwise look worse than the preview they signed off). ~2×
+// cost/image (~4¢→8¢) — worth it for the final reel.
+const SCENE_IMAGE_MODEL = 'fal-ai/flux/dev'
+const SCENE_IMAGE_GUIDANCE = 3.5
+const SCENE_IMAGE_STEPS = 28
 
 export async function generateImages(reelId: string): Promise<void> {
   const db = getDb()
@@ -24,8 +33,10 @@ export async function generateImages(reelId: string): Promise<void> {
   ])
   if (!channel) throw new Error(`Channel not found: ${reel.channelId}`)
 
-  // Engine config from channel or default
-  const engine = FalEngineSchema.parse({})
+  // Engine config — scene images on flux/dev for palette + detail fidelity (see SCENE_IMAGE_MODEL).
+  const engine = FalEngineSchema.parse({ imageModelId: SCENE_IMAGE_MODEL })
+  // Generate at the channel's platform aspect (reels are 9:16) so scene images fill the frame.
+  const aspect = (PLATFORM_PRESETS[(channel.targetPlatform ?? 'all') as keyof typeof PLATFORM_PRESETS] ?? PLATFORM_PRESETS.all).aspect
 
   // Fan-out: generate each scene image in sequence (BullMQ rate-limit handles concurrency)
   for (const scene of reelScenes) {
@@ -40,6 +51,7 @@ export async function generateImages(reelId: string): Promise<void> {
       finalPrompt,
       sceneIdx: scene.idx,
       reelId,
+      model: engine.imageModelId,
     })
 
     await runStep(
@@ -51,6 +63,7 @@ export async function generateImages(reelId: string): Promise<void> {
           reelId,
           sceneIdx: scene.idx,
           engine,
+          aspect,
           mood: scene.mood,
         })
 
@@ -85,6 +98,7 @@ interface ImageGenAttemptParams {
   reelId: string
   sceneIdx: number
   engine: ReturnType<typeof FalEngineSchema.parse>
+  aspect: string
   mood: string[]
 }
 
@@ -101,6 +115,9 @@ async function generateImageWithRetry(params: ImageGenAttemptParams) {
         reelId: params.reelId,
         sceneIdx: params.sceneIdx,
         engine: params.engine,
+        aspect: params.aspect,
+        guidanceScale: SCENE_IMAGE_GUIDANCE,
+        numInferenceSteps: SCENE_IMAGE_STEPS,
       })
       return { ...result, costCents: result.costCents + totalCost }
     } catch (err) {

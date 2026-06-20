@@ -145,8 +145,9 @@ export function computeTimings(input: ComputeTimingsInput): Timings {
     const scene = input.scenes[i]!
     const sceneCps = Array.from(scene.narrationText)
 
-    // Skip leading whitespace at cursor
-    while (cursor < cps.length && cps[cursor] === ' ') cursor++
+    // Skip leading whitespace at cursor — spaces AND newlines/tabs; the narration has line breaks
+    // between spoken beats, so scene boundaries land on '\n' as often as ' '.
+    while (cursor < cps.length && /\s/.test(cps[cursor]!)) cursor++
 
     // Match scene text at cursor position
     let matched = true
@@ -347,5 +348,6 @@ function flushChunk(words: WordTiming[]): SubtitleChunk {
     text: words.map((w) => w.text).join(' '),
     startMs: words[0]!.startMs,
     endMs: words[words.length - 1]!.endMs,
+    words: words.map((w) => ({ text: w.text, startMs: w.startMs, endMs: w.endMs })), // kept for word-highlight captions
   }
 }

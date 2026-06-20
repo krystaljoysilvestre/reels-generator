@@ -17,38 +17,123 @@ channel portfolio.
   primitives in `apps/web/src/app/globals.css`, tokens in `tailwind.config.ts`.
 - **Portfolio dashboard** — `/dashboard` lists channels (empty state +
   Create-channel button); per-channel reel/published counts.
-- **Channel creation flow** — `/channel/new`, minimal + AI-derived:
-  operator gives name + niche + languages → Claude derives the creative bible
-  (tone, visual style DNA, world bible, narrator voices) → operator reviews/edits
-  → channel is created. (`channel.v1` prompt; `/api/channel/derive` +
-  `/api/channel/create`.)
+- **Channel creation flow** — `/channel/new`, a 4-step wizard, AI-assisted:
+  **(1) Describe** — name + niche + language + target platform → Claude derives the
+  creative bible (tone, visual DNA, world bible, captions, `voiceSearchKeyword`).
+  **(2) Sample script** *(optional)* — write/generate one short example narration.
+  **(3) Narrator voice** — pick the channel's voice (recommended by niche + genre).
+  **(4) Visual style** — pick a look → channel is created.
+  (`channel.v1` prompt; `/api/channel/derive` + `/api/channel/create`.)
   - Optional **channel avatar** (R2 upload) and **preset niches** (curated
     trending short-form niches that seed the description) in step 1. Niche
     presets use colored, outlined icons.
+  - **Genre-neutral, no horror bias**: tone is modeled as genre-agnostic axes —
+    `intensity / warmth / energy / pacing / humor` (replacing the old horror-specific
+    `suspense / dread / gore`), so a kids/finance/space channel scores meaningfully
+    (e.g. high warmth + humor) instead of always-zero dread/gore. Step-1 placeholders
+    and copy are neutral (no "Aswang Files" example) and the preset grid no longer
+    leads with Horror. (`gore`/`violence` remain only as image **safety negatives**.)
   - **One language per channel**, picked from a fixed **dropdown** of
     pipeline-supported languages (`languages.ts`) — no free text. Want another
     language → make another channel. (Stored as a 1-element array.) Claude writes
     the language, ElevenLabs narrates it; ~30 languages offered.
-  - **Sample reel script preview** in step 2 — generates one short narration
-    on-demand from the (edited) bible so you can gut-check the channel's voice
-    before creating. (`channel-sample.v1`; `/api/channel/sample-script`.)
+  - **Sample script (step 2, optional)** — an editable narration the operator
+    writes by hand (preferred) or seeds with a "Generate draft" (`channel-sample.v1`;
+    `/api/channel/sample-script`). The draft is a **complete, coherent piece sized to
+    the channel's reel length** with a **niche-adaptive arc** (narrative: hook→build→
+    recontextualizing turn; informational: hook→points→payoff; persuasive: hook→idea→
+    close), in spoken beat-per-line cadence, with Taglish code-switch — no forced horror
+    twist. It drives the step-4 preview scene and is saved as the channel's **first
+    reference story** (`is_reference=true`, `source` user/ai) so the few-shot selector
+    has a seed example from day one.
+  - **Per-channel reel length** — `channel.v1` derives `targetSeconds` (15–180) per
+    niche (quick informational ~20–40s, atmospheric/narrative ~75–120s), applied
+    automatically (no Step-2 control — the suggested length is used; a custom script of
+    any length is handled as-is). Stored on the channel (`channels.target_seconds`) and
+    **honored end-to-end**: the generated sample mirrors it, `generate-story` uses it
+    instead of a hardcoded 75s, and scene breakdown scales (`~1 scene / 12s`, clamped
+    3–16) so short and long reels both render sensibly. Shown on the detail page. The
+    sample script has no tight character limit (a generous 20k server ceiling only).
+  - **Target platform** (Step 1) — TikTok / YouTube Shorts / Facebook Reels / All,
+    stored on the channel (`channels.target_platform`). A single `PLATFORM_PRESETS`
+    table (in core) is the source of truth: per-platform aspect (all 9:16), **length
+    cap**, sweet-spot, caption + hook hints, **caption safe-zone**, and **watermark**
+    default. Today it feeds `channel.v1` (length + caption tailored to the platform) and
+    **hard-caps length** on create/edit (e.g. Shorts ≤60s — verified: same niche →
+    TikTok 90s, Shorts 55s, All 55s; a 150s Shorts channel is clamped to 60). Editable
+    in Settings (length slider max tracks the platform) and shown on the detail page.
+    **Caption safe-zone is deterministic now**: the platform's `safeZoneBottomPct` offsets
+    the caption band so it clears each platform's UI — applied in the live `CaptionPreview`
+    (verified: Reels sits higher than Shorts) and threaded through the Remotion renderer
+    (`SubtitleOverlay`) for the video phase. **Aspect ratio is real now too**: the platform
+    aspect (all 9:16) drives image generation — `generateImage` was hardcoded to 3:4
+    (`portrait_4_3`), now maps the preset aspect → fal `image_size` (verified: previews
+    generate 576×1024 = 9:16), the real reel's `generate-images` passes the channel's
+    platform aspect, and **Step-4 style tiles render 9:16** so they match the actual frame.
+    **Hook style is applied at Step 2 now**: the platform's `hookHint` shapes the sample/
+    reference script's opening (verified — same niche yields a pattern-interrupt hook for
+    TikTok, a curiosity-promise for Shorts, a relatable opener for Reels); it'll feed real
+    story-gen from the same source when that's built. The Step-1 picker uses the platforms'
+    **actual brand logos** (shared `PlatformPicker`, used by wizard + Settings). Still
+    **captured-but-not-applied**: **watermark** (render) — lights up in the video phase.
+    (Caption *preset* remains a soft AI hint, niche-dominated — not a hard platform rule.)
+  - **Per-channel caption style** — competitive, *animated* burned-in captions (the kind
+    that win on TikTok/Reels/Shorts), not plain subtitles. **16 expressive presets**, each
+    with a signature motion: **pop** (word-by-word scale), **hype** (Hormozi highlight-box),
+    **karaoke** (progressive fill), **neon** (glow), **whisper** (eerie typewriter+cursor),
+    **impact** (oversized punch-in + tilt), **elegant** (wide-tracked italic serif fade),
+    **clean** (refined white), **comic** (tilted playful pop), **terminal** (green monospace
+    on a panel), **cinematic** (Netflix subtitle bar), **breaking** (solid news lower-third),
+    **marker** (highlighter swipe), **script** (handwritten cursive), **retro** (chrome/
+    synthwave gradient + glow), **glitch** (RGB-split datamosh) — plus `backplate`
+    (translucent/solid panel) and `gradient` (clipped text fill) style fields.
+    **Hybrid derivation:** `channel.v1` picks the preset **per
+    niche energy** (horror→whisper, money→hype, gaming→neon, luxury→elegant, …) *and* nudges
+    a few **safe, clamped knobs** on top — accent **highlight color**, **base text color**
+    (near-white unless the niche calls for a tint), **placement** (bottom/center/top), and a
+    bounded **font scale** (0.85–1.25). The preset's signature motion/font/stroke stay fixed
+    so the look can't break; `resolveCaptionStyle()` merges the knobs and the zod schema
+    clamps anything out of range. (Switching presets in the wizard keeps the channel's brand
+    palette but resets motion/size/placement to that preset's identity.)
+    The `CaptionStyle` spec (animation, font/weight/size, color/activeColor/highlight,
+    stroke, shadow|glow, letter-spacing, uppercase/italic, rotation, position) is stored on
+    the channel (`channels.caption_style`) and read by the **Remotion** `SubtitleOverlay`,
+    which animates word-by-word from the per-word timings preserved through `compute-timings`.
+    A shared **`CaptionPreview`** client component plays the style **live, looping, on a dark
+    "video-frame" stage** — so the wizard Step-4 picker and the channel detail page show
+    captions exactly as they'll appear in the reel. (Full per-field editing is deferred to
+    Settings; the renderer path is typecheck-verified — the reel pipeline hasn't run E2E yet.)
   - Optional channel **description** (shown on card/header), **default gradient
     avatar** monogram when no image, custom animated **Dropdown** (language +
     voice gender), smooth animations + responsive widths.
-  - Step 2 review **simplified**: shows only a recap (avatar/name/description/
-    language), narrator voices, and the sample script. Tone / visual style /
-    story world / positioning are still generated + stored, just hidden at
-    creation (too technical) — they'll be editable in channel Settings.
-  - **Draft persistence**: the whole wizard (both steps, incl. generated profile
-    + voices + avatar) is saved to `localStorage` and rehydrated on reload;
-    cleared on successful create. Survives reloads and leaving the page.
-  - **Real voice picker** (replaces AI-invented voices). **Radio** choice —
-    *one voice* vs *different voice per story* (each explained); the voice list
-    stays hidden until "one voice" is picked. One-voice shows Claude-**recommended**
-    voices for the niche/language/tone (`/api/voices/recommend`), read-only
-    metadata + instant preview + "show all" fallback, top auto-selected. Per-story
-    stores no voice (chosen per reel at render). Default channel language is
-    **English**. **Language → ElevenLabs voices:** English uses premade voices;
+  - **Visual style (step 4)** — `style-options.v1` proposes a content-safe scene + **4–5
+    recognizable styles** from a known palette, **curated on merit** from niche + **mood**
+    (no realism bias — horror surfaces creepy comic / manga / woodcut; a niche that suits
+    photoreal can still get it), each tuned with a "why it fits". Previews **auto-render in
+    parallel on flux/dev** (~8¢, ≈40¢/channel) and are **prefetched in the background when
+    leaving Step 2**, so Step 4 is ready on arrival. Shown as a **compact grid** of tiles
+    (image + label; selected ringed, first badged Recommended; the selected style's "why it
+    fits" below) with a blur→sharp develop-in reveal, shimmer while rendering, and a graceful
+    "couldn't preview" placeholder. No re-roll buttons (cost).
+  - **Upload your own reference (step 4)** — the operator can upload **1–3 reference images**;
+    a **vision pass** (`style-ref.v1`, `/api/channel/style-ref`) distills their shared *style*
+    into the channel's DNA (medium/lighting/palette/texture/mood — not the subjects), added as a
+    pickable **"Uploaded"** tile and auto-selected. The first image is kept as `styleImageKey`,
+    the derived DNA as `stylePreset` — so it flows through the text-to-image pipeline with no
+    downstream change. (True image-conditioned generation is a deferred upgrade.)
+  - The chosen style's DNA is saved as `stylePreset` and its image as `styleImageKey`. A slim recap (avatar/name/language) sits atop steps 2–4; tone /
+    world / positioning are still generated + stored, hidden at creation (editable
+    later in Settings).
+  - **Draft persistence**: the whole wizard (all 4 steps, incl. generated profile,
+    sample script, voices, avatar, style proposals + selection + resolved previews)
+    is saved to `localStorage` and rehydrated on reload; cleared on successful
+    create. Survives reloads and leaving the page.
+  - **Real voice picker (Step 3)** — **radio** choice: *one voice* vs *different voice per
+    story*; the voice list stays hidden until "one voice" is picked. One-voice shows
+    Claude-**recommended** voices for the niche/language/tone (`/api/voices/recommend`),
+    read-only metadata + instant preview + "show all" fallback, top auto-selected. Per-story
+    stores no voice (chosen per reel at render). Default channel language is **English**.
+    **Language → ElevenLabs voices:** English uses premade voices;
     other languages pull from the shared library by code (Tagalog/Taglish →
     `fil`, etc.) so e.g. a Taglish channel sees real Filipino voices.
     Recommendation pool is filtered: **narration** use-case, **popularity** sort,
@@ -58,16 +143,25 @@ channel portfolio.
 - **Design conventions** captured in `DESIGN.md` (root): always animate, always
   responsive, primitives-first, custom controls, outlined icons, light theme.
 - **Channel detail page (`/channel/[id]`)** — read-only overview: header,
-  stat row, niche, tone bars, visual style, story world, narrator voices (real,
-  with voice-mode badge), and a reels section (empty state). Portfolio cards
-  open it.
+  stat row, niche, tone bars, visual style (the chosen **style image** when one
+  was previewed, above the DNA text), story world, narrator voices (real, with
+  voice-mode badge), and a reels section (empty state). Portfolio cards open it.
 
 ## Next steps
 
-1. **Channel settings / edit** — the detail page is read-only; make the bible
-   editable (it reuses the wizard's review fields). Header has a disabled
-   "Settings" button as the placeholder. This is also where deferred config
-   (LUT, audio packs, posting rules) gets edited.
+1. ✅ **Channel settings / edit** (done) — `/channel/[id]/settings` makes the
+   derived bible editable post-creation: identity (name/description/tagline),
+   niche, tone (sliders), reel length, **captions** (live preview + all 16
+   presets), visual-style DNA, and the full world bible (region/era/locations/
+   objects/vocabulary). `PATCH /api/channel/[id]` validates with the same zod
+   schemas as creation. Settings button on the detail page now links here.
+   *Still deferred:* editing voices, avatar, language, and the not-yet-real
+   config (LUT, audio packs, posting rules).
+   Also fixed alongside: the **voice-id shape bug** (storyboard read a
+   non-existent `id`/`style`; now uses `providerId`/`description`, so a chosen
+   voice actually reaches render) + a render-time guard so an empty voice can't
+   silently crash TTS; and **`tagline` + `voiceSearchKeyword` are now persisted**
+   on the channel (were derived then discarded).
 
 2. **Per-channel workspace** — fold the old `/review` and `/storyboard/[id]`
    views into the channel detail page (reels, review queue, analytics tabs).
@@ -80,6 +174,25 @@ channel portfolio.
 
 4. **Derivation prompt tuning** — iterate on `channel.v1` if the generated
    tone/style/world doesn't match what we imagine for a given niche.
+
+5. **Align reel rendering to the chosen style** — Step-4 previews render on **flux/dev** for
+   faithful stylization; the worker reel pipeline (`generate-images`) still uses **flux/schnell**
+   (cheaper, but collapses non-photoreal styles toward realism). Before producing reels for real,
+   decide the per-image model/quality so produced reels match the style the operator picked at
+   creation (flux/dev everywhere, or a per-channel quality tier). `assembleImagePrompt` already
+   leads with the style DNA, so only the model/guidance differs.
+
+6. **De-bias `channel.v1` style derivation (optional)** — Step-4 curation no longer uses the derived
+   `stylePreset` (it picks mediums on merit from niche + mood). But `channel.v1` still derives a
+   film/photographic `stylePreset` ("film stock/medium … analog photography aesthetic"), now used only
+   as the pre-Step-4 default + fallback if style-options fails. If that fallback ever matters, broaden
+   `channel.v1` so the default look isn't reflexively cinematic either.
+
+7. **Length follow-ups** — the `$8` short-reel budget cap (`DEFAULT_BUDGET_CAPS_CENTS.short`) is flat;
+   a ~180s reel (more scenes + more TTS) should scale the cap so long-form channels don't false-fail.
+   Also two still-horror-flavored bits to de-bias when generalizing the writing pipeline:
+   `scenes.v1` guards ("no faces of fear", "children in threatening contexts") and the hardcoded
+   `audienceDescriptor: 'young Filipino adult'` in `generate-story`.
 
 ### Deferred config (currently schema defaults at creation)
 

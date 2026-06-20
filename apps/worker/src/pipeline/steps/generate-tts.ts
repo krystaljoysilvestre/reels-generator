@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm'
-import { getDb, reels, stories, assets, channels } from '@reels/db'
+import { getDb, reels, stories, scenes, assets, channels } from '@reels/db'
 import { ElevenLabsTtsProvider, buildInputHash } from '@reels/providers'
+import { moodToVoiceSettings, ToneConfigSchema } from '@reels/core'
 import { runStep } from '../harness.js'
 
 const ttsProvider = new ElevenLabsTtsProvider()
@@ -22,9 +23,20 @@ export async function generateTts(reelId: string): Promise<void> {
   const channel = await db.query.channels.findFirst({ where: eq(channels.id, reel.channelId) })
   if (!channel) throw new Error(`Channel not found: ${reel.channelId}`)
 
+  // Per-reel delivery: derive ElevenLabs voice_settings from the channel's tone baseline + this reel's
+  // mood (aggregated from its scene moods, which exist by now). A tense story reads differently from a
+  // wistful one — no operator UI, stays in the channel's character. [Step 3]
+  const reelScenes = await db.query.scenes.findMany({
+    where: eq(scenes.reelId, reelId),
+    columns: { mood: true },
+  })
+  const moodTags = [...new Set(reelScenes.flatMap((s) => s.mood ?? []))]
+  const voiceSettings = moodToVoiceSettings(moodTags, ToneConfigSchema.parse(channel.toneConfig ?? {}))
+
   const inputHash = buildInputHash('tts.elevenlabs.v1', {
     narration: story.body,   // hash of the exact text to catch any upstream mutation
     voiceId: reel.voiceId,
+    voiceSettings,           // re-run if the derived delivery changes
   })
 
   const result = await runStep(
@@ -35,6 +47,7 @@ export async function generateTts(reelId: string): Promise<void> {
         narration: story.body,
         voiceId: reel.voiceId!,
         reelId,
+        voiceSettings,
       })
 
       return {

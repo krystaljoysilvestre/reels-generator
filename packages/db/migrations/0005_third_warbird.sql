@@ -1,0 +1,1 @@
+ALTER TABLE "channels" ADD COLUMN "target_seconds" integer DEFAULT 75 NOT NULL;

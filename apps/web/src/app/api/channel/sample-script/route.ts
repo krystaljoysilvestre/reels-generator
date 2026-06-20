@@ -2,7 +2,7 @@ import type { NextRequest} from 'next/server';
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { llmCall } from '@reels/providers'
-import { ToneConfigSchema, WorldBibleSchema } from '@reels/core'
+import { ToneConfigSchema, WorldBibleSchema, TargetPlatformSchema, PLATFORM_PRESETS } from '@reels/core'
 import {
   buildChannelSamplePrompt,
   ChannelSampleSchema,
@@ -16,7 +16,9 @@ const InputSchema = z.object({
   languages: z.array(z.string().trim().min(1)).min(1).max(6),
   toneConfig: ToneConfigSchema,
   worldBible: WorldBibleSchema,
+  targetSeconds: z.number().int().min(15).max(180).default(75),
   voiceStyle: z.string().trim().optional(),
+  targetPlatform: TargetPlatformSchema.default('all'),
 })
 
 export async function POST(req: NextRequest) {
@@ -34,6 +36,8 @@ export async function POST(req: NextRequest) {
     language: c.languages[0]!,
     toneJson: JSON.stringify(c.toneConfig),
     worldJson: JSON.stringify(c.worldBible),
+    targetSeconds: c.targetSeconds,
+    hookHint: PLATFORM_PRESETS[c.targetPlatform].hookHint,
     ...(c.voiceStyle ? { voiceStyle: c.voiceStyle } : {}),
   })
 
@@ -43,7 +47,7 @@ export async function POST(req: NextRequest) {
       schema: ChannelSampleSchema,
       system,
       messages: [{ role: 'user', content: userMessage }],
-      maxTokens: 900,
+      maxTokens: 1500,
     })
     return NextResponse.json({ sample: result.data, costCents: result.costCents })
   } catch (err) {

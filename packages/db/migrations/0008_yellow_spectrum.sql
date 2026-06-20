@@ -1,0 +1,1 @@
+ALTER TABLE "channels" ADD COLUMN "target_platform" text DEFAULT 'all' NOT NULL;

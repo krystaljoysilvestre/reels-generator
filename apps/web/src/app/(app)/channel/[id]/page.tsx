@@ -4,11 +4,32 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { requireAuth } from '@/lib/auth'
 import { ChannelAvatar } from '@/components/ChannelAvatar'
+import { CaptionPreview } from '@/components/CaptionPreview'
+import { CreateReelButton } from './CreateReelButton'
 import type { ToneConfig, WorldBible, ChannelVoice } from '@reels/core'
+import { CaptionStyleSchema, PLATFORM_PRESETS, AudioPacksSchema } from '@reels/core'
 
 export const dynamic = 'force-dynamic'
 
-const TONE_KEYS: Array<keyof ToneConfig> = ['suspense', 'dread', 'pacing', 'gore', 'humor']
+const TONE_KEYS: Array<keyof ToneConfig> = ['intensity', 'warmth', 'energy', 'pacing', 'humor']
+const CAPTION_LABELS: Record<string, string> = {
+  clean: 'Clean',
+  pop: 'Pop',
+  hype: 'Hype',
+  karaoke: 'Karaoke',
+  neon: 'Neon',
+  whisper: 'Whisper',
+  impact: 'Impact',
+  elegant: 'Elegant',
+  comic: 'Comic',
+  terminal: 'Terminal',
+  cinematic: 'Cinematic',
+  breaking: 'Breaking',
+  marker: 'Marker',
+  script: 'Script',
+  retro: 'Retro',
+  glitch: 'Glitch',
+}
 
 export default async function ChannelPage({ params }: { params: Promise<{ id: string }> }) {
   await requireAuth()
@@ -30,6 +51,9 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
   const voices = (channel.voicePool ?? []) as ChannelVoice[]
   const voiceMode = (channel.voiceMode ?? 'single') as 'single' | 'per_story'
   const languages = channel.languages ?? []
+  const caption = CaptionStyleSchema.parse(channel.captionStyle ?? {})
+  const audio = AudioPacksSchema.parse(channel.audioPacks ?? {})
+  const bespokeBeds = audio.musicPack.filter((t) => t.path.startsWith(`audio/channel/${id}/`))
 
   return (
     <div className="min-h-screen">
@@ -45,25 +69,27 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-base font-semibold tracking-tight text-ink">{channel.name}</h1>
             <p className="truncate text-xs text-muted">
-              {channel.description ? channel.description : languages.join(' · ') || 'no language set'}
+              {channel.description || channel.tagline || languages.join(' · ') || 'no language set'}
             </p>
           </div>
-          <button className="btn-secondary btn-sm" disabled title="Channel settings — coming next">
+          <Link href={`/channel/${channel.id}/settings`} className="btn-secondary btn-sm" title="Edit channel settings">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
               <circle cx="12" cy="12" r="3" />
               <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" />
             </svg>
             Settings
-          </button>
+          </Link>
         </div>
       </header>
 
       <div className="mx-auto max-w-4xl p-8">
         {/* Stat row */}
-        <div className="mb-6 grid grid-cols-3 gap-4">
+        <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-5">
           <Stat label="Reels" value={reelRows.length} />
           <Stat label="Published" value={published} />
           <Stat label="Languages" value={languages.length} />
+          <Stat label="Reel length" value={`~${channel.targetSeconds ?? 75}s`} />
+          <Stat label="Platform" value={(PLATFORM_PRESETS[(channel.targetPlatform ?? 'all') as keyof typeof PLATFORM_PRESETS] ?? PLATFORM_PRESETS.all).label} />
         </div>
 
         {/* Niche */}
@@ -71,6 +97,7 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
           <SectionLabel>Niche</SectionLabel>
           <p className="mt-2 text-sm leading-relaxed text-ink/90">{channel.nicheDescription}</p>
         </section>
+
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           {/* Tone */}
@@ -95,9 +122,36 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
           {/* Visual style */}
           <section className="card p-5">
             <SectionLabel>Visual style</SectionLabel>
+            {channel.styleImageKey && (
+              <img
+                src={`/api/asset?key=${encodeURIComponent(channel.styleImageKey)}`}
+                alt="Channel visual style reference"
+                className="mt-3 w-full max-w-[200px] rounded-lg border border-border object-cover"
+              />
+            )}
             <p className="mt-2 text-sm leading-relaxed text-muted">{channel.stylePreset || '—'}</p>
           </section>
         </div>
+
+        {/* Captions */}
+        <section className="card mt-6 p-5">
+          <div className="flex items-center justify-between gap-3">
+            <SectionLabel>Captions</SectionLabel>
+            <span className="rounded-full bg-subtle px-2.5 py-0.5 text-xs font-medium text-muted">
+              {CAPTION_LABELS[caption.preset] ?? caption.preset}
+            </span>
+          </div>
+          <div className="mt-3">
+            <CaptionPreview
+              style={caption}
+              safeZonePct={(PLATFORM_PRESETS[(channel.targetPlatform ?? 'all') as keyof typeof PLATFORM_PRESETS] ?? PLATFORM_PRESETS.all).safeZoneBottomPct}
+              backgroundImageUrl={channel.styleImageKey ? `/api/asset?key=${encodeURIComponent(channel.styleImageKey)}` : undefined}
+            />
+          </div>
+          <p className="mt-2 text-xs text-faint">
+            Burned into every reel · {caption.animation} animation · {caption.position}
+          </p>
+        </section>
 
         {/* Story world */}
         <section className="card mt-6 p-5">
@@ -148,23 +202,48 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
           )}
         </section>
 
+        {/* AI music — bespoke beds composed for the channel (only for musicMode='ai') */}
+        {(audio.musicMode === 'ai' || bespokeBeds.length > 0) && (
+          <section className="card mt-6 p-5">
+            <SectionLabel>AI music</SectionLabel>
+            {bespokeBeds.length === 0 ? (
+              <p className="mt-2 text-sm text-muted">Composing your channel&apos;s original beds… refresh in a minute or two.</p>
+            ) : (
+              <div className="mt-3 flex flex-col gap-3">
+                {bespokeBeds.map((bed) => (
+                  <div key={bed.id} className="flex items-center gap-3 rounded-lg border border-border px-3 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium capitalize text-ink">{bed.id.replace('channel-', '')}</p>
+                      <p className="truncate text-xs text-muted">{bed.moodTags.join(' · ')}</p>
+                    </div>
+                    <audio controls preload="none" src={`/api/asset?key=${encodeURIComponent(bed.path)}`} className="h-8" />
+                  </div>
+                ))}
+              </div>
+            )}
+            <p className="mt-2 text-xs text-faint">Original beds composed for this channel · each reel uses the one that fits its mood.</p>
+          </section>
+        )}
+
         {/* Reels */}
         <section className="mt-6">
           <div className="mb-3 flex items-center justify-between">
             <SectionLabel>Reels</SectionLabel>
+            {reelRows.length > 0 && <CreateReelButton channelId={channel.id} compact />}
           </div>
           {reelRows.length === 0 ? (
             <div className="card flex flex-col items-center justify-center px-6 py-12 text-center">
               <p className="text-sm font-medium text-ink">No reels yet</p>
-              <p className="mt-1 max-w-xs text-sm text-muted">Reel production for this channel is the next milestone.</p>
+              <p className="mb-4 mt-1 max-w-xs text-sm text-muted">Generate your first reel — we’ll draft a story for you to approve, then build the visuals and audio.</p>
+              <CreateReelButton channelId={channel.id} />
             </div>
           ) : (
             <div className="card divide-y divide-border">
               {reelRows.map((r) => (
-                <div key={r.id} className="flex items-center justify-between px-5 py-3">
-                  <p className="text-sm font-medium text-ink">{r.story?.title ?? 'Untitled'}</p>
+                <Link key={r.id} href={reelHref(r.status, r.id)} className="flex items-center justify-between px-5 py-3 transition-colors hover:bg-subtle">
+                  <p className="truncate text-sm font-medium text-ink">{r.story?.title ?? 'Untitled'}</p>
                   <span className="badge bg-subtle text-muted">{r.status.replace(/_/g, ' ')}</span>
-                </div>
+                </Link>
               ))}
             </div>
           )}
@@ -174,7 +253,7 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
   )
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+function Stat({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="card px-4 py-3">
       <p className="font-mono text-xl font-semibold tabular-nums text-ink">{value}</p>
@@ -185,6 +264,12 @@ function Stat({ label, value }: { label: string; value: number }) {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return <p className="text-sm font-semibold tracking-tight text-ink">{children}</p>
+}
+
+// Where a reel row links, by status: still drafting / awaiting story approval → the review queue;
+// everything past that → the storyboard (which also surfaces the render preview).
+function reelHref(status: string, id: string): string {
+  return status === 'drafting' || status === 'story_review' ? '/review' : `/storyboard/${id}`
 }
 
 function Meta({ label, value }: { label: string; value?: string }) {

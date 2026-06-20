@@ -40,14 +40,18 @@ export async function breakdownScenes(reelId: string): Promise<void> {
 
   const worldBible = WorldBibleSchema.parse(channel.worldBible)
 
+  // ~1 scene per ~12s of reel, clamped to the schema's 3–16 range.
+  const targetScenes = Math.min(16, Math.max(3, Math.round((channel.targetSeconds ?? 75) / 12)))
+
   const { system, userMessage } = buildScenesPrompt({
     worldBibleJson: JSON.stringify(worldBible, null, 2),
     era: worldBible.era,
     regionDescriptor: worldBible.region,
     narration: story.body,
+    targetScenes,
   })
 
-  const inputHash = buildInputHash(SCENES_V1_VERSION, { narration: story.body, channelId: channel.id })
+  const inputHash = buildInputHash(SCENES_V1_VERSION, { narration: story.body, channelId: channel.id, targetScenes })
 
   const result = await runStep(
     { reelId, stepName: 'breakdown_scenes', inputHash },

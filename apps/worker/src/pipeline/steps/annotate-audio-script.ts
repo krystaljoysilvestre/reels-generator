@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { getDb, reels, stories } from '@reels/db'
 import { llmCall, buildInputHash } from '@reels/providers'
-import { AudioScriptSchema, type AudioScript } from '@reels/core'
+import { AudioScriptSchema, AudioPacksSchema, type AudioScript } from '@reels/core'
 import { buildAudioScriptPrompt, AUDIOSCRIPT_V1_VERSION } from '../../prompts-bridge.js'
 import { runStep } from '../harness.js'
 
@@ -80,9 +80,22 @@ export async function annotateAudioScript(reelId: string): Promise<void> {
     },
   )
 
+  // The channel's signature bed (Sound step) should play on every reel. If this reel's
+  // script proposed no music, inject the bed — empty anchors let compute-timings pick the
+  // start (0) and peak (twist/0.8×duration), and selectMusicTrack matches it by type.
+  const audioScript = result.output as AudioScript
+  if (!audioScript.music) {
+    const { channels } = await import('@reels/db')
+    const channel = await db.query.channels.findFirst({ where: eq(channels.id, reel.channelId) })
+    const bed = channel ? AudioPacksSchema.parse(channel.audioPacks).musicPack[0] : undefined
+    if (bed) {
+      audioScript.music = { type: bed.type, startAnchor: '', peakAnchor: '', moodTags: bed.moodTags }
+    }
+  }
+
   // Persist audio_script to reel
   await db
     .update(reels)
-    .set({ audioScript: result.output as never, updatedAt: new Date() })
+    .set({ audioScript: audioScript as never, updatedAt: new Date() })
     .where(eq(reels.id, reelId))
 }
