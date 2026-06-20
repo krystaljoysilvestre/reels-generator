@@ -1246,32 +1246,36 @@ export function NewChannelWizard({
                 The bed under your narration. It auto-ducks under the voice on every reel.
               </p>
 
-              <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {/* Radio rows — same pattern as Step 3's voice mode, for consistency. */}
+              <div className="mt-4 flex flex-col gap-2">
                 {([
-                  { key: 'ai', label: 'AI-generated', sub: 'A fresh bed per reel', badge: 'Recommended' },
-                  { key: 'preset', label: 'Presets', sub: 'Fitted to your niche', badge: '' },
-                  { key: 'upload', label: 'Upload', sub: 'Your own tracks', badge: '' },
-                  { key: 'none', label: 'No music', sub: 'Narration only', badge: '' },
-                ] as const).map((opt) => {
-                  const active = musicChoice === opt.key
-                  return (
-                    <button
-                      key={opt.key}
-                      type="button"
-                      onClick={() => { stopPreview(); setMusicChoice(opt.key) }}
-                      className={`flex flex-col items-start rounded-lg border px-3 py-2.5 text-left transition-colors ${active ? 'border-accent bg-accent-soft ring-1 ring-accent' : 'border-border-strong hover:bg-subtle'}`}
-                    >
-                      {/* Reserved badge row keeps every tile's label aligned; only the recommended one fills it. */}
-                      <span className="mb-1 flex h-[15px] items-center">
+                  { key: 'ai', label: 'AI-generated', sub: 'A fresh, original bed composed for every reel — nothing to pick.', badge: 'Recommended' },
+                  { key: 'preset', label: 'Presets', sub: 'Pick from our library, fitted to your niche.', badge: '' },
+                  { key: 'upload', label: 'Upload', sub: 'Use your own tracks.', badge: '' },
+                  { key: 'none', label: 'No music', sub: 'Narration only.', badge: '' },
+                ] as const).map((opt) => (
+                  <label
+                    key={opt.key}
+                    className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${musicChoice === opt.key ? 'border-accent bg-accent-soft ring-1 ring-accent' : 'border-border-strong hover:bg-subtle'}`}
+                  >
+                    <input
+                      type="radio"
+                      name="musicChoice"
+                      checked={musicChoice === opt.key}
+                      onChange={() => { stopPreview(); setMusicChoice(opt.key) }}
+                      className="mt-0.5 h-4 w-4 flex-shrink-0 accent-accent"
+                    />
+                    <span className="min-w-0">
+                      <span className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-ink">{opt.label}</span>
                         {opt.badge ? (
                           <span className="rounded-full bg-accent/10 px-1.5 py-[1px] text-[9px] font-semibold uppercase tracking-wide text-accent">{opt.badge}</span>
                         ) : null}
                       </span>
-                      <span className="text-sm font-medium text-ink">{opt.label}</span>
-                      <span className="text-xs text-muted">{opt.sub}</span>
-                    </button>
-                  )
-                })}
+                      <span className="mt-0.5 block text-xs text-muted">{opt.sub}</span>
+                    </span>
+                  </label>
+                ))}
               </div>
 
               {/* Presets — our mood beds, ranked by niche + mood; pick one or several (random per reel) */}
@@ -1328,16 +1332,11 @@ export function NewChannelWizard({
                 </div>
               )}
 
-              {/* AI-generated — a fresh original bed composed per reel at render (generate_music), seeded by the channel's audioMood */}
+              {/* AI-generated — the effect (fresh bed per reel) is in the row sub; this adds cost + vetting detail. */}
               {musicChoice === 'ai' && (
-                <div className="mt-4 rounded-lg border border-border bg-subtle/50 p-4">
-                  <p className="text-xs leading-relaxed text-muted">
-                    Nothing to pick here. We compose a <span className="font-medium text-ink">fresh, original bed for every reel</span> — tuned to that story&apos;s mood and your channel&apos;s sound — so no two reels share the same backing track. You&apos;ll hear it in the reel preview before publishing.
-                  </p>
-                  <p className="mt-2 text-[11px] leading-relaxed text-faint">
-                    Composed at render — a few cents per reel. Want no per-reel cost? Pick <span className="font-medium">Presets</span> instead.
-                  </p>
-                </div>
+                <p className="mt-3 text-xs leading-relaxed text-muted">
+                  Each reel is scored at render — a few cents per reel — tuned to that story&apos;s mood and your channel&apos;s sound, so no two reels share a backing track. You&apos;ll hear it in the preview before publishing. Prefer no per-reel cost? Pick <span className="font-medium text-ink">Presets</span>.
+                </p>
               )}
 
               {/* Upload — store the operator's own tracks (copyright is on them); random per reel if >1 */}
