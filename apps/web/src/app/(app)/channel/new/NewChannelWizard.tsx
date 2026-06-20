@@ -303,13 +303,9 @@ export function NewChannelWizard() {
     name.trim() !== '' || niche.trim() !== '' || derivedSig !== '' ||
     sampleScript.trim() !== '' || avatarKey !== null
 
-  // Tab close / refresh / external URL → native confirm (message is browser-controlled).
-  useEffect(() => {
-    if (!hasProgress) return
-    const onBeforeUnload = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = '' }
-    window.addEventListener('beforeunload', onBeforeUnload)
-    return () => window.removeEventListener('beforeunload', onBeforeUnload)
-  }, [hasProgress])
+  // No `beforeunload` confirm on reload / tab-close: the draft autosaves to localStorage on every
+  // change and restores on return, so reloading or closing loses nothing — the native prompt would
+  // just nag about a non-problem. (Browser Back still routes through our own in-app modal below.)
 
   // Browser Back (SPA history) → trap it once and route the decision through our modal.
   useEffect(() => {
