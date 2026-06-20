@@ -3,7 +3,9 @@
 // Each job is idempotent; the harness handles resume logic.
 
 import type { Job } from 'bullmq'
+import { UnrecoverableError } from 'bullmq'
 import { resolveNextStep, enqueueStep } from '@reels/queue'
+import { BudgetExceededError } from '@reels/core'
 import { captureException } from '../monitoring/sentry.js'
 import {
   generateStory,
@@ -85,6 +87,9 @@ export async function dispatchPipelineJob(job: Job<PipelineJobData>): Promise<vo
     }
   } catch (err) {
     captureException(err, { reelId, stepName })
-    throw err  // rethrow so BullMQ marks the job failed + retries
+    // Over-budget is PERMANENT — retrying can't help. Fail fast (no wasted retries); the worker's
+    // 'failed' handler still marks the reel failed (it treats UnrecoverableError as terminal).
+    if (err instanceof BudgetExceededError) throw new UnrecoverableError(err.message)
+    throw err  // transient errors: rethrow so BullMQ retries with backoff
   }
 }

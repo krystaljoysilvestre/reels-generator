@@ -94,10 +94,45 @@ export async function runRenderQa(params: QaParams): Promise<QaResult> {
         )
       }
     } else {
-      warnings.push('Could not parse LUFS from loudnorm output')
+      failures.push('Could not measure loudness (no input_i from loudnorm) — unverified audio')
     }
   } catch {
-    warnings.push('LUFS measurement failed — ffmpeg loudnorm error')
+    failures.push('LUFS measurement failed — ffmpeg loudnorm error')
+  }
+
+  // ── Black-frame check ──────────────────────────────────────────────────────
+  // A failed/missing scene image renders as a black placeholder (render-step.ts). blackdetect flags
+  // segments where ≥98% of pixels are near-black for ≥1s; >1.5s total means a scene is dead-black.
+  try {
+    const { stderr } = await execFileAsync('ffmpeg', [
+      '-i', params.renderPath,
+      '-vf', 'blackdetect=d=1.0:pic_th=0.98',
+      '-an', '-f', 'null', '-',
+    ])
+    const blackMs = [...stderr.matchAll(/black_duration:\s*([\d.]+)/g)]
+      .reduce((sum, m) => sum + parseFloat(m[1]!) * 1000, 0)
+    if (blackMs > 1500) {
+      failures.push(`Black video detected: ${Math.round(blackMs)}ms near-black (a scene image likely failed)`)
+    }
+  } catch {
+    warnings.push('Black-frame check failed — ffmpeg blackdetect error')
+  }
+
+  // ── Silent-audio check ─────────────────────────────────────────────────────
+  // A broken mix can render near-silent; narration should peak near 0 dB. Belt-and-suspenders to the
+  // LUFS check (which can mis-handle pure silence).
+  try {
+    const { stderr } = await execFileAsync('ffmpeg', [
+      '-i', params.renderPath,
+      '-af', 'volumedetect',
+      '-vn', '-f', 'null', '-',
+    ])
+    const maxV = stderr.match(/max_volume:\s*(-?[\d.]+)\s*dB/)
+    if (maxV?.[1] && parseFloat(maxV[1]) < -45) {
+      failures.push(`Audio is near-silent: max volume ${maxV[1]} dB (expected speech near 0 dB)`)
+    }
+  } catch {
+    warnings.push('Silent-audio check failed — ffmpeg volumedetect error')
   }
 
   return {

@@ -38,6 +38,7 @@ export const ReelComposition: React.FC<ReelCompositionProps> = ({
               videoSrc={scene.videoSrc}
               tier={scene.tier}
               durationFrames={scene.durationFrames}
+              idx={scene.idx}
             />
           </AbsoluteFill>
         </Sequence>

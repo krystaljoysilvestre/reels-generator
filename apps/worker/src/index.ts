@@ -28,7 +28,8 @@ pipelineWorker.on('failed', (job, err) => {
   // instead of a silent stall. `attemptsMade` equals `attempts` only on the final failure. Skip
   // channel-scoped jobs (generate_channel_beds puts a channelId in reelId, not a real reel).
   const maxAttempts = job?.opts.attempts ?? 1
-  if (job && reelId && stepName !== 'generate_channel_beds' && job.attemptsMade >= maxAttempts) {
+  const permanent = job && (job.attemptsMade >= maxAttempts || err.name === 'UnrecoverableError')
+  if (permanent && reelId && stepName !== 'generate_channel_beds') {
     void markReelFailed(reelId, stepName, err.message)
       .then(() => console.error(`[worker] reel ${reelId.slice(0, 8)} → FAILED (${stepName} exhausted ${maxAttempts} attempts)`))
       .catch((e) => console.error('[worker] could not mark reel failed:', e))

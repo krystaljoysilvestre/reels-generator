@@ -233,7 +233,10 @@ channel portfolio.
 
 ## Audit backlog (2026-06-20) — fix AFTER channel creation
 Pre-production audit (3 passes: channel creation, quality, robustness). Prioritized; pull as
-evidence demands. The P1 silent-failure item is being fixed this session.
+evidence demands. **✅ Done 2026-06-20:** silent-failure surfacing + retry; `render_qa` hardening
+(black-frame + silent-audio + unmeasured-loudness now fail); varied Ken Burns motion;
+budget-exceeded fails fast (no wasted retries). Remaining items below are deliberately deferred
+(scale / edge / big-bet / marginal-for-horror) — pull when real channels demand them.
 
 ### Robustness
 - **[P1 — fixing now] Silent failure → no signal.** On permanent step failure the `pipeline_steps`
@@ -245,17 +248,17 @@ evidence demands. The P1 silent-failure item is being fixed this session.
   rate limits (`ProviderRateLimitError` → BullMQ). Fine at low volume; revisit before batch.
 - **[P2] Per-provider rate-limit queues defined but unused** — all steps run on the single PIPELINE
   queue (concurrency 2, 50/min). OK for low volume; split to FAL_IMAGE/TTS queues when scaling.
-- **[P3] Budget-exceeded retries uselessly** (permanent error treated as transient) — skip retries on `BudgetExceededError`.
+- **[✅ DONE] Budget-exceeded fails fast** — thrown as BullMQ `UnrecoverableError` (no wasted retries); reel marked failed + surfaced.
 - **[P3] Wizard style-image previews fire ~4–5 in parallel un-throttled** — debounce/limit before heavy use.
 
 ### Quality ceiling (pull as niches demand)
-- **[P2] render_qa is thin**: only duration + streams + LUFS — a failed-image BLACK frame or SILENT
-  audio passes as "ok". Add black-frame (histogram) + audio-RMS checks (`packages/render/src/qa/render-qa.ts`).
+- **[✅ DONE] render_qa hardened**: now also fails on black frames (`blackdetect`), near-silent audio
+  (`volumedetect`), and unmeasured loudness (`packages/render/src/qa/render-qa.ts`).
 - **[P2] No character/location consistency** across scenes (each regenerates independently). Low impact
   for atmospheric/silhouette channels; high for character-driven. Needs reference/identity conditioning.
-- **[P3] Uniform Ken Burns** (1.0→1.05 every scene) + **hard cuts only**. `motionPrompt` exists but is
-  ignored on stills (`SceneClip.tsx`). Vary motion + add transitions.
-- **[P3] loudnorm failure is only a warning** — a reel can pass render_qa with unmeasured loudness.
+- **[✅ motion DONE] Camera motion** now varies per scene (zoom in/out + occasional drift,
+  `SceneClip.tsx`). Scene TRANSITIONS (hard cuts only) still TODO.
+- **[✅ DONE] Unmeasured loudness now FAILS** render_qa (was a warning).
 
 ### Channel creation
 - **[P2] Derived genome goes stale on edit**: changing niche in Settings doesn't re-derive tone/style/
