@@ -26,7 +26,7 @@ export function usePipelineStatus(
   const [status, setStatus] = useState<PipelineStatus | null>(null)
   const stopWhenRef = useRef(opts.stopWhen)
   stopWhenRef.current = opts.stopWhen
-  const lastStatusRef = useRef<string | null>(null)
+  const lastSigRef = useRef<string | null>(null)
 
   useEffect(() => {
     if (!enabled || !reelId) return
@@ -50,8 +50,15 @@ export function usePipelineStatus(
         if (cancelled) return
         errs = 0
         setStatus(data)
-        if (data.reelStatus !== lastStatusRef.current) {
-          lastStatusRef.current = data.reelStatus
+        // Refresh the server view on ANY progress — top-level status, a step changing state, or a new
+        // scene image landing — not just reelStatus. (During the storyboard build the status stays
+        // 'storyboard' while scenes/images stream in, so a status-only check would never update.)
+        const sig =
+          data.reelStatus +
+          '|' + data.steps.map((s) => `${s.stepName}:${s.status}`).join(',') +
+          '|' + (data.scenes ? data.scenes.filter((s) => s.hasImage).length : 0)
+        if (sig !== lastSigRef.current) {
+          lastSigRef.current = sig
           router.refresh()
         }
         inFlight = false

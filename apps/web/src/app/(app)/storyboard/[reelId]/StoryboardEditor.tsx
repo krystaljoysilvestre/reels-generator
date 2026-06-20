@@ -13,6 +13,9 @@ type Story = InferSelectModel<typeof stories>
 // Voices stored on the channel are ChannelVoice: { providerId, name, gender, description }.
 // providerId IS the ElevenLabs voice id used at render — never use a non-existent `id`.
 type Voice = ChannelVoice
+// In the picker, a recommended voice also carries a "why it fits this reel" reason (per_story
+// recommendations). Single-channel pool voices are plain ChannelVoice (no reason).
+type PickerVoice = ChannelVoice & { reason?: string | undefined }
 
 interface StoryboardEditorProps {
   reel: { id: string; status: string; voiceId: string | null; costCents: number; operatorMinutes: number; language: string }
@@ -46,13 +49,13 @@ export function StoryboardEditor({
 
   // per_story channels store no voicePool; recommend narrators on the fly (same call the
   // creation wizard uses) so this reel has something to pick and render isn't dead-ended.
-  const [recommendedPool, setRecommendedPool] = useState<Voice[]>([])
+  const [recommendedPool, setRecommendedPool] = useState<PickerVoice[]>([])
   const [recsLoading, setRecsLoading] = useState(false)
   const [recsError, setRecsError] = useState<string | null>(null)
   const recsFetchedRef = useRef(false)
   const needsRecs = voicePool.length === 0 && !!voiceRecommend.nicheDescription
   // Single-voice channels use their stored pool; per_story falls back to recommendations.
-  const effectiveVoices = voicePool.length > 0 ? voicePool : recommendedPool
+  const effectiveVoices: PickerVoice[] = voicePool.length > 0 ? voicePool : recommendedPool
 
   async function fetchRecommendedVoices() {
     setRecsLoading(true)
@@ -70,8 +73,8 @@ export function StoryboardEditor({
       })
       const json = await res.json().catch(() => null)
       if (!res.ok) throw new Error(json?.error ?? 'Could not load voices.')
-      const recs = (json.voices ?? []) as Array<{ id: string; name: string; gender: string; description: string }>
-      const pool: Voice[] = recs.map((v) => ({ providerId: v.id, name: v.name, gender: v.gender, description: v.description }))
+      const recs = (json.voices ?? []) as Array<{ id: string; name: string; gender: string; description: string; reason?: string }>
+      const pool: PickerVoice[] = recs.map((v) => ({ providerId: v.id, name: v.name, gender: v.gender, description: v.description, reason: v.reason }))
       setRecommendedPool(pool)
       // Auto-select the top recommendation if the reel has no voice yet (operator can change it).
       setSelectedVoice((cur) => cur || pool[0]?.providerId || '')
@@ -481,7 +484,6 @@ export function StoryboardEditor({
           onRetry={fetchRecommendedVoices}
           selected={selectedVoice}
           storyFirstLine={story?.body.split('\n')[0] ?? ''}
-          reelId={reel.id}
           onSelect={(id) => { setSelectedVoice(id); setShowVoicePicker(false) }}
           onClose={() => setShowVoicePicker(false)}
         />
@@ -490,48 +492,81 @@ export function StoryboardEditor({
   )
 }
 
-function VoicePicker({ voices, recommended, loadingVoices, voicesError, onRetry, selected, storyFirstLine, reelId, onSelect, onClose }: {
-  voices: Voice[]
+function VoicePicker({ voices, recommended, loadingVoices, voicesError, onRetry, selected, storyFirstLine, onSelect, onClose }: {
+  voices: PickerVoice[]
   recommended: boolean
   loadingVoices: boolean
   voicesError: string | null
   onRetry: () => void
   selected: string
   storyFirstLine: string
-  reelId: string
   onSelect: (id: string) => void
   onClose: () => void
 }) {
-  const [previewing, setPreviewing] = useState<string | null>(null)
-  const [audioSrc, setAudioSrc] = useState<string | null>(null)
-  void reelId
+  const [gender, setGender] = useState<'any' | 'female' | 'male'>('any')
+  const [showAll, setShowAll] = useState(false)
+  const [playingId, setPlayingId] = useState<string | null>(null)
+  const [loadingId, setLoadingId] = useState<string | null>(null)
+  const [previewError, setPreviewError] = useState(false)
+  const audioRef = useRef<HTMLAudioElement>(null)
+  // Cache each voice's synthesized preview for this session — replaying is then instant + free (a synth
+  // is ~4¢, so we pay it at most once per voice). One audio element; only one preview plays at a time.
+  const cacheRef = useRef<Map<string, string>>(new Map())
+  const previewText = (storyFirstLine || 'Ito ang boses para sa reel mo.').slice(0, 120)
 
-  async function handlePreview(voiceId: string) {
-    setPreviewing(voiceId)
-    const res = await fetch('/api/pipeline/preview-voice', {
-      method: 'POST',
-      body: JSON.stringify({ voiceId, text: storyFirstLine.slice(0, 100) }),
-      headers: { 'Content-Type': 'application/json' },
-    })
-    if (res.ok) {
-      const blob = await res.blob()
-      setAudioSrc(URL.createObjectURL(blob))
+  async function preview(v: PickerVoice) {
+    const audio = audioRef.current
+    if (!audio) return
+    if (playingId === v.providerId) { audio.pause(); setPlayingId(null); return } // click again = stop
+    audio.pause()
+    setPlayingId(null)
+    setPreviewError(false)
+    const play = (url: string) => { audio.src = url; void audio.play().then(() => setPlayingId(v.providerId)).catch(() => setPlayingId(null)) }
+    const cached = cacheRef.current.get(v.providerId)
+    if (cached) { play(cached); return }
+    setLoadingId(v.providerId)
+    try {
+      const res = await fetch('/api/pipeline/preview-voice', {
+        method: 'POST',
+        body: JSON.stringify({ voiceId: v.providerId, text: previewText }),
+        headers: { 'Content-Type': 'application/json' },
+      })
+      if (!res.ok) { setPreviewError(true); return }
+      const url = URL.createObjectURL(await res.blob())
+      cacheRef.current.set(v.providerId, url)
+      play(url)
+    } catch {
+      setPreviewError(true)
+    } finally {
+      setLoadingId(null)
     }
-    setPreviewing(null)
   }
 
+  // Default to the best-fit recommendations (with reasons) so the operator isn't scanning 45; a toggle
+  // reveals the full pool. Gender filter narrows either set.
+  const hasRecommended = recommended && voices.some((v) => v.reason)
+  const genderOk = (v: PickerVoice) => gender === 'any' || (v.gender || '').toLowerCase() === gender
+  const shown = voices.filter(genderOk).filter((v) => showAll || !hasRecommended || !!v.reason)
+
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/30 p-6 backdrop-blur-sm"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/30 p-6 backdrop-blur-sm" onClick={onClose}>
       <div className="card w-96 p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-4">
-          <p className="text-sm font-semibold text-ink">Choose narrator voice{voices.length > 0 ? ` · ${voices.length}` : ''}</p>
-          {recommended && (
-            <p className="mt-0.5 text-xs text-muted">Best fits for this reel are first — scroll for more. Preview before you commit.</p>
-          )}
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-ink">Choose narrator voice</p>
+            {recommended && (
+              <p className="mt-0.5 text-xs text-muted">
+                {hasRecommended && !showAll ? 'Best fits for this reel.' : 'Preview, then pick.'}
+              </p>
+            )}
+          </div>
+          <div className="flex flex-shrink-0 items-center gap-0.5 rounded-lg bg-subtle p-0.5">
+            {(['any', 'female', 'male'] as const).map((g) => (
+              <button key={g} type="button" onClick={() => setGender(g)} className={`rounded-md px-2 py-0.5 text-xs font-medium capitalize transition-colors ${gender === g ? 'bg-surface text-ink shadow-xs' : 'text-muted hover:text-ink'}`}>{g}</button>
+            ))}
+          </div>
         </div>
+
         {loadingVoices && voices.length === 0 && (
           <p className="mb-4 flex items-center gap-2 rounded-lg border border-border bg-subtle px-3 py-2.5 text-xs text-muted">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin" aria-hidden>
@@ -551,42 +586,54 @@ function VoicePicker({ voices, recommended, loadingVoices, voicesError, onRetry,
             No voices available. Set a voice in channel settings, or use a single-voice channel.
           </p>
         )}
-        <div className="mb-4 flex max-h-80 flex-col gap-2 overflow-y-auto">
-          {voices.map((v) => {
+        {voices.length > 0 && shown.length === 0 && (
+          <p className="mb-3 rounded-lg border border-border bg-subtle px-3 py-2.5 text-xs text-muted">No {gender} voices in this set — try a different filter or “Show all”.</p>
+        )}
+
+        <div className="mb-3 flex max-h-80 flex-col gap-2 overflow-y-auto">
+          {shown.map((v) => {
             const active = selected === v.providerId
+            const isPlaying = playingId === v.providerId
+            const isLoading = loadingId === v.providerId
             return (
               <div
                 key={v.providerId}
                 onClick={() => onSelect(v.providerId)}
-                className={`flex cursor-pointer items-center justify-between rounded-lg border px-3 py-2.5 transition-colors ${
-                  active
-                    ? 'border-accent bg-accent-soft ring-1 ring-accent'
-                    : 'border-border-strong hover:bg-subtle'
-                }`}
+                className={`flex cursor-pointer items-center justify-between gap-2 rounded-lg border px-3 py-2.5 transition-colors ${active ? 'border-accent bg-accent-soft ring-1 ring-inset ring-accent' : 'border-border-strong hover:bg-subtle'}`}
               >
-                <div>
-                  <p className="text-sm font-medium text-ink">{v.name}</p>
-                  <p className="text-xs text-muted">{v.description || v.gender}</p>
+                <div className="min-w-0">
+                  <p className="flex items-center gap-1.5 text-sm font-medium text-ink">
+                    {v.name}
+                    {v.reason && <span className="flex-shrink-0 rounded-full bg-accent/10 px-1.5 py-[1px] text-[9px] font-semibold uppercase tracking-wide text-accent">Fit</span>}
+                  </p>
+                  <p className="line-clamp-2 text-xs text-muted">{v.reason || v.description || v.gender}</p>
                 </div>
                 <button
-                  onClick={(e) => { e.stopPropagation(); handlePreview(v.providerId) }}
-                  disabled={previewing === v.providerId}
-                  className="btn-secondary btn-sm"
-                  title="Preview voice"
+                  onClick={(e) => { e.stopPropagation(); void preview(v) }}
+                  className="btn-secondary btn-sm flex-shrink-0"
+                  title={isPlaying ? 'Stop' : 'Preview'}
                 >
-                  {previewing === v.providerId ? (
-                    '…'
+                  {isLoading ? (
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="animate-spin" aria-hidden><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>
+                  ) : isPlaying ? (
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
                   ) : (
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                      <path d="M7 5v14l11-7L7 5Z" />
-                    </svg>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M7 5v14l11-7L7 5Z" /></svg>
                   )}
                 </button>
               </div>
             )
           })}
         </div>
-        {audioSrc && <audio src={audioSrc} autoPlay controls className="mb-3 w-full" />}
+
+        {hasRecommended && (
+          <button type="button" onClick={() => setShowAll((s) => !s)} className="btn-ghost btn-sm mb-3 w-full">
+            {showAll ? 'Show best fits only' : `Show all ${voices.length} voices`}
+          </button>
+        )}
+        {previewError && <p className="mb-3 text-xs text-danger">Couldn&apos;t play that preview — try again.</p>}
+        <audio ref={audioRef} onEnded={() => setPlayingId(null)} className="hidden" />
+
         <div className="flex gap-2">
           <button onClick={() => onSelect(selected)} disabled={!selected} className="btn-accent flex-1">
             {selected ? `Use ${voices.find((v) => v.providerId === selected)?.name ?? 'voice'}` : 'Pick a voice'}
