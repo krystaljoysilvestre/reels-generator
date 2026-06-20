@@ -527,9 +527,9 @@ function VoicePicker({ voices, recommended, loadingVoices, voicesError, onRetry,
     >
       <div className="card w-96 p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4">
-          <p className="text-sm font-semibold text-ink">Choose narrator voice</p>
+          <p className="text-sm font-semibold text-ink">Choose narrator voice{voices.length > 0 ? ` · ${voices.length}` : ''}</p>
           {recommended && (
-            <p className="mt-0.5 text-xs text-muted">This channel picks a voice per reel — recommended for this one (top auto-selected).</p>
+            <p className="mt-0.5 text-xs text-muted">Best fits for this reel are first — scroll for more. Preview before you commit.</p>
           )}
         </div>
         {loadingVoices && voices.length === 0 && (
@@ -551,7 +551,7 @@ function VoicePicker({ voices, recommended, loadingVoices, voicesError, onRetry,
             No voices available. Set a voice in channel settings, or use a single-voice channel.
           </p>
         )}
-        <div className="mb-4 flex flex-col gap-2">
+        <div className="mb-4 flex max-h-80 flex-col gap-2 overflow-y-auto">
           {voices.map((v) => {
             const active = selected === v.providerId
             return (

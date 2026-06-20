@@ -53,8 +53,21 @@ export async function POST(req: NextRequest) {
       })
       .filter((v): v is NonNullable<typeof v> => v !== null)
 
-    // Fallback: if the model returned nothing usable, surface the first few voices.
-    const voices = recommended.length > 0 ? recommended : catalog.slice(0, 4).map((v) => ({ ...v, reason: '' }))
+    // Don't hand the operator only the model's few picks — return the WHOLE browsable pool, with the
+    // recommended ones surfaced first (and their reasons). Broaden past the genre keyword too (the
+    // multilingual TTS narrates this language with any voice), so there are plenty to choose from.
+    const broad = parsed.data.searchKeyword
+      ? await listVoices(parsed.data.language).catch(() => [])
+      : []
+    const seen = new Set(recommended.map((v) => v.id))
+    const rest: Array<(typeof catalog)[number] & { reason: string }> = []
+    for (const v of [...catalog, ...broad]) {
+      if (v.id && !seen.has(v.id)) {
+        seen.add(v.id)
+        rest.push({ ...v, reason: '' })
+      }
+    }
+    const voices = [...recommended, ...rest]
     return NextResponse.json({ voices, costCents: result.costCents })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Recommendation failed'
