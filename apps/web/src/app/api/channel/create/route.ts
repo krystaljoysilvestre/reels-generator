@@ -2,6 +2,7 @@ import type { NextRequest} from 'next/server';
 import { NextResponse } from 'next/server'
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
+import { eq } from 'drizzle-orm'
 import { getDb, channels, stories } from '@reels/db'
 import { ToneConfigSchema, WorldBibleSchema, ChannelVoiceSchema, VoiceModeSchema, CaptionStyleSchema, TargetPlatformSchema, PLATFORM_PRESETS, MusicIntensitySchema, MusicModeSchema, AudioMoodSchema, peakFracForType } from '@reels/core'
 import { enqueueStep } from '@reels/queue'
@@ -30,6 +31,7 @@ const InputSchema = z.object({
   sampleSource: z.enum(['user', 'ai']).default('user'),
   extraSampleScripts: z.array(z.string().trim().min(1).max(20000)).max(2).default([]), // additional references
   costCents: z.number().int().min(0).default(0), // accumulated creation cost (derive + style + previews)
+  draftChannelId: z.string().uuid().nullish(), // finishing a saved draft → promote that row instead of inserting
   // Sound step: optional background-music track (AI-generated or preset; null = no music),
   // the SFX toggle, music loudness, and the derived mood (kept for later regeneration).
   sound: z.object({
@@ -83,32 +85,49 @@ export async function POST(req: NextRequest) {
   }
   const db = getDb()
 
-  const [channel] = await db
-    .insert(channels)
-    .values({
-      name: c.name,
-      avatarKey: c.avatarKey ?? null,
-      description: c.description ?? null,
-      nicheDescription: c.nicheDescription,
-      tagline: c.tagline,
-      languages: c.languages,
-      targetPlatform: c.targetPlatform,
-      toneConfig: c.toneConfig,
-      stylePreset: c.stylePreset,
-      styleImageKey: c.styleImageKey ?? null,
-      targetSeconds,
-      captionStyle: c.captionStyle,
-      worldBible: c.worldBible,
-      voiceMode: c.voiceMode,
-      voiceSearchKeyword: c.voiceSearchKeyword,
-      voicePool, // real ElevenLabs voices selected by the operator
-      // LUT configured later (needs real asset files): keep schema defaults.
-      lutConfig: { grain: 0.15, vignette: 0.25 },
-      audioPacks,
-      postingRules: { platforms: ['fb', 'yt'], scheduleUtcHour: 13, qualityThreshold: 0 },
-      costCents: c.costCents, // what creating this channel cost us (derive + style options/previews)
-    })
-    .returning()
+  const values = {
+    name: c.name,
+    avatarKey: c.avatarKey ?? null,
+    description: c.description ?? null,
+    nicheDescription: c.nicheDescription,
+    tagline: c.tagline,
+    languages: c.languages,
+    targetPlatform: c.targetPlatform,
+    toneConfig: c.toneConfig,
+    stylePreset: c.stylePreset,
+    styleImageKey: c.styleImageKey ?? null,
+    targetSeconds,
+    captionStyle: c.captionStyle,
+    worldBible: c.worldBible,
+    voiceMode: c.voiceMode,
+    voiceSearchKeyword: c.voiceSearchKeyword,
+    voicePool, // real ElevenLabs voices selected by the operator
+    // LUT configured later (needs real asset files): keep schema defaults.
+    lutConfig: { grain: 0.15, vignette: 0.25 },
+    audioPacks,
+    postingRules: { platforms: ['fb', 'yt'], scheduleUtcHour: 13, qualityThreshold: 0 },
+    costCents: c.costCents, // what creating this channel cost us (derive + style options/previews)
+  }
+
+  // If finishing a saved draft, promote that same row (draft → active, state cleared) so the dashboard
+  // entry the operator already saw becomes the real channel — no orphaned draft left behind. Otherwise
+  // (or if the draft was deleted / already promoted) insert a fresh channel as usual.
+  let channel: typeof channels.$inferSelect | undefined
+  if (c.draftChannelId) {
+    const existing = await db.query.channels.findFirst({ where: eq(channels.id, c.draftChannelId) })
+    if (existing && existing.status === 'draft') {
+      const updated = await db
+        .update(channels)
+        .set({ ...values, status: 'active', draftState: null, updatedAt: new Date() })
+        .where(eq(channels.id, c.draftChannelId))
+        .returning()
+      channel = updated[0]
+    }
+  }
+  if (!channel) {
+    const inserted = await db.insert(channels).values(values).returning()
+    channel = inserted[0]
+  }
 
   // Step-2 sample script(s) become the channel's first reference stories, so the few-shot selector
   // has seed examples to anchor the writing voice from the very first reel. (Approved reels later

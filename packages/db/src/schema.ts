@@ -98,6 +98,11 @@ export const channels = pgTable('channels', {
   audioPacks: jsonb('audio_packs').notNull().default({}),
   postingRules: jsonb('posting_rules').notNull().default({}),
   costCents: integer('cost_cents').notNull().default(0), // what creating this channel cost us (derive + style options/previews)
+  // Lifecycle: 'active' = a finished channel; 'draft' = an in-progress wizard the operator saved to
+  // resume later. Drafts keep their unfinished wizard state in `draftState`, are shown separately on
+  // the dashboard, and are promoted to 'active' (draftState cleared) when the wizard is finished.
+  status: text('status').notNull().default('active'),
+  draftState: jsonb('draft_state'),  // wizard state blob for resuming a draft; null once active
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 })

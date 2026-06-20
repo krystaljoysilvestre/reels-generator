@@ -115,7 +115,13 @@ interface PreviewState {
   errorKind?: 'filtered' | 'transient'
 }
 
-export function NewChannelWizard() {
+export function NewChannelWizard({
+  initialDraft = null,
+  initialDraftChannelId = null,
+}: {
+  initialDraft?: Record<string, unknown> | null // stored wizard state when resuming a saved draft
+  initialDraftChannelId?: string | null // the draft channel's id, so finishing promotes that same row
+} = {}) {
   const router = useRouter()
   const [phase, setPhase] = useState<Phase>('describe')
 
@@ -208,6 +214,10 @@ export function NewChannelWizard() {
 
   // Pending exit target — non-null shows the "leave channel setup?" confirm modal.
   const [leaveTo, setLeaveTo] = useState<string | null>(null)
+  // The saved-draft channel row (if this wizard was resumed from one, or after "Leave & save"): so
+  // re-saves update the same row and finishing promotes it to 'active' instead of orphaning a draft.
+  const [draftChannelId, setDraftChannelId] = useState<string | null>(initialDraftChannelId)
+  const [savingDraft, setSavingDraft] = useState(false)
 
   // Chosen style image = the previewed image of the selected card, if it was previewed.
   const chosenStyleImageKey =
@@ -217,9 +227,10 @@ export function NewChannelWizard() {
   const [hydrated, setHydrated] = useState(false)
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(DRAFT_KEY)
-      if (raw) {
-        const d = JSON.parse(raw)
+      // Resuming a saved draft → hydrate from the DB blob; otherwise from the localStorage autosave.
+      const raw = initialDraft ? null : localStorage.getItem(DRAFT_KEY)
+      const d = initialDraft ?? (raw ? JSON.parse(raw) : null)
+      if (d) {
         if (['describe', 'script', 'voice', 'sound', 'visual'].includes(d.phase)) setPhase(d.phase)
         if (typeof d.name === 'string') setName(d.name)
         if (typeof d.committedName === 'string') setCommittedName(d.committedName)
@@ -263,6 +274,9 @@ export function NewChannelWizard() {
         if (Array.isArray(d.selectedPresetIds)) setSelectedPresetIds(d.selectedPresetIds)
         if (typeof d.presetPickedManually === 'boolean') setPresetPickedManually(d.presetPickedManually)
         if (Array.isArray(d.uploadedMusic)) setUploadedMusic(d.uploadedMusic)
+        // Same-browser resume: relink to the draft row this autosave was last saved to (the DB-resume
+        // path sets this from the prop instead, so the blob itself never carries it).
+        if (typeof d.draftChannelId === 'string') setDraftChannelId(d.draftChannelId)
       }
     } catch {
       /* ignore malformed draft */
@@ -270,29 +284,34 @@ export function NewChannelWizard() {
     setHydrated(true)
   }, [])
 
+  // The full wizard state as a plain serializable object — the single source for both the
+  // localStorage autosave and the DB draft blob (sent to /api/channel/save-draft on "Leave & save").
+  function buildDraft() {
+    // Persist only resolved previews (drop loading/error transients).
+    const previewKeys: Record<number, PreviewState> = {}
+    for (const [k, v] of Object.entries(stylePreviews)) {
+      if (v.imageKey) previewKeys[Number(k)] = { imageKey: v.imageKey }
+    }
+    return {
+      phase, name, committedName, description, niche, languages, targetPlatform, presetId,
+      avatarKey, costCents, tone, style, region, era, locations, objects, vocab,
+      voiceMode, selectedVoices, recommended, voiceSearchKeyword, tagline, derivedSig,
+      targetSeconds, captionStyle, sampleScript, sampleIsAi, extraSampleScripts,
+      audioMood, musicChoice, selectedPresetIds, presetPickedManually, uploadedMusic,
+      styleProposals, selectedStyleIdx, uploadedStyleIdx, stylePreviews: previewKeys,
+    }
+  }
+
   useEffect(() => {
     if (!hydrated) return
     try {
-      // Persist only resolved previews (drop loading/error transients).
-      const previewKeys: Record<number, PreviewState> = {}
-      for (const [k, v] of Object.entries(stylePreviews)) {
-        if (v.imageKey) previewKeys[Number(k)] = { imageKey: v.imageKey }
-      }
-      localStorage.setItem(
-        DRAFT_KEY,
-        JSON.stringify({
-          phase, name, committedName, description, niche, languages, targetPlatform, presetId,
-          avatarKey, costCents, tone, style, region, era, locations, objects, vocab,
-          voiceMode, selectedVoices, recommended, voiceSearchKeyword, tagline, derivedSig,
-          targetSeconds, captionStyle, sampleScript, sampleIsAi, extraSampleScripts,
-          audioMood, musicChoice, selectedPresetIds, presetPickedManually, uploadedMusic,
-          styleProposals, selectedStyleIdx, uploadedStyleIdx, stylePreviews: previewKeys,
-        }),
-      )
+      // draftChannelId rides along only in localStorage (not the DB blob) so same-browser resume can
+      // relink to the row; the DB-resume path supplies it via prop instead.
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...buildDraft(), draftChannelId }))
     } catch {
       /* storage full / unavailable — non-fatal */
     }
-  }, [hydrated, phase, name, committedName, description, niche, languages, targetPlatform, presetId, avatarKey, costCents, tone, targetSeconds, style, region, era, locations, objects, vocab, voiceMode, selectedVoices, recommended, voiceSearchKeyword, tagline, derivedSig, captionStyle, sampleScript, sampleIsAi, extraSampleScripts, audioMood, musicChoice, selectedPresetIds, presetPickedManually, uploadedMusic, styleProposals, selectedStyleIdx, uploadedStyleIdx, stylePreviews])
+  }, [hydrated, phase, name, committedName, description, niche, languages, targetPlatform, presetId, avatarKey, costCents, tone, targetSeconds, style, region, era, locations, objects, vocab, voiceMode, selectedVoices, recommended, voiceSearchKeyword, tagline, derivedSig, captionStyle, sampleScript, sampleIsAi, extraSampleScripts, audioMood, musicChoice, selectedPresetIds, presetPickedManually, uploadedMusic, styleProposals, selectedStyleIdx, uploadedStyleIdx, stylePreviews, draftChannelId])
 
   // ── Unsaved-progress guard ──────────────────────────────────────────────────
   // The draft autosaves, but leaving mid-flow still deserves a heads-up so the operator
@@ -332,14 +351,38 @@ export function NewChannelWizard() {
     if (hasProgress) setLeaveTo(href)
     else router.push(href)
   }
-  function leaveKeepDraft() {
+  // "Leave & save" → persist the draft as a real channel (status='draft') so it shows on the dashboard
+  // and can be resumed from any browser. The localStorage autosave is the fallback if the request fails.
+  async function leaveKeepDraft() {
     const href = leaveTo ?? '/dashboard'
+    setSavingDraft(true)
+    try {
+      const res = await fetch('/api/channel/save-draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ draftChannelId, name, nicheDescription: niche, draftState: buildDraft() }),
+      })
+      if (res.ok) {
+        const { channelId } = (await res.json()) as { channelId: string }
+        setDraftChannelId(channelId)
+        // Relink the localStorage autosave to this row before navigating away.
+        try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...buildDraft(), draftChannelId: channelId })) } catch { /* noop */ }
+      }
+    } catch {
+      /* network error — the localStorage autosave still holds the draft, so nothing is lost */
+    }
+    setSavingDraft(false)
     setLeaveTo(null)
-    router.push(href) // draft stays autosaved in localStorage → resumes next time
+    router.push(href)
   }
-  function leaveDiscardDraft() {
+  // "Discard" → drop the work: clear the autosave and delete the draft row if one was saved.
+  async function leaveDiscardDraft() {
     const href = leaveTo ?? '/dashboard'
     try { localStorage.removeItem(DRAFT_KEY) } catch { /* noop */ }
+    if (draftChannelId) {
+      try { await fetch(`/api/channel/save-draft?id=${draftChannelId}`, { method: 'DELETE' }) } catch { /* noop */ }
+    }
+    setDraftChannelId(null)
     setLeaveTo(null)
     router.push(href)
   }
@@ -799,6 +842,7 @@ export function NewChannelWizard() {
           sampleSource: sampleIsAi ? 'ai' : 'user',
           extraSampleScripts: extraSampleScripts.map((s) => s.trim()).filter(Boolean),
           costCents, // accumulated creation cost → persisted on the channel
+          draftChannelId, // if this was a saved draft, promote that row instead of inserting a new one
 
           sound: {
             musicMode: musicChoice,
@@ -1495,12 +1539,12 @@ export function NewChannelWizard() {
           <div className="card animate-fade-in w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-base font-semibold text-ink">Leave channel setup?</h2>
             <p className="mt-2 text-sm leading-relaxed text-muted">
-              Keep your draft to finish later, or discard it and start fresh.
+              Save it as a draft on your dashboard to pick up later, or discard it and start fresh.
             </p>
             <div className="mt-5 flex flex-wrap items-center justify-end gap-2">
-              <button type="button" onClick={() => setLeaveTo(null)} className="btn-ghost btn-sm">Keep editing</button>
-              <button type="button" onClick={leaveDiscardDraft} className="btn-danger btn-sm">Discard</button>
-              <button type="button" onClick={leaveKeepDraft} className="btn-accent btn-sm">Leave &amp; save</button>
+              <button type="button" onClick={() => setLeaveTo(null)} disabled={savingDraft} className="btn-ghost btn-sm">Keep editing</button>
+              <button type="button" onClick={leaveDiscardDraft} disabled={savingDraft} className="btn-danger btn-sm">Discard</button>
+              <button type="button" onClick={leaveKeepDraft} disabled={savingDraft} className="btn-accent btn-sm">{savingDraft ? 'Saving…' : 'Leave & save'}</button>
             </div>
           </div>
         </div>

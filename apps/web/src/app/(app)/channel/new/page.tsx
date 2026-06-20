@@ -1,9 +1,31 @@
+import { eq } from 'drizzle-orm'
+import { getDb, channels } from '@reels/db'
 import { requireAuth } from '@/lib/auth'
 import { NewChannelWizard } from './NewChannelWizard'
 
 export const dynamic = 'force-dynamic'
 
-export default async function NewChannelPage() {
+export default async function NewChannelPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ draft?: string }>
+}) {
   await requireAuth()
-  return <NewChannelWizard />
+  const { draft } = await searchParams
+
+  // Resuming a saved draft (?draft=<id>): load its stored wizard state so the wizard hydrates from
+  // the DB. This works even on a different browser than where it was saved (the localStorage autosave
+  // doesn't), and is what makes a dashboard "Resume" reliable.
+  let initialDraft: Record<string, unknown> | null = null
+  let initialDraftChannelId: string | null = null
+  if (draft) {
+    const db = getDb()
+    const row = await db.query.channels.findFirst({ where: eq(channels.id, draft) })
+    if (row && row.status === 'draft' && row.draftState && typeof row.draftState === 'object') {
+      initialDraft = row.draftState as Record<string, unknown>
+      initialDraftChannelId = row.id
+    }
+  }
+
+  return <NewChannelWizard initialDraft={initialDraft} initialDraftChannelId={initialDraftChannelId} />
 }
