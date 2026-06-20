@@ -1,18 +1,11 @@
-// Languages the pipeline can realistically handle: Claude writes the story in
-// them, and ElevenLabs TTS supports them for narration. "Taglish" is our special
-// Tagalog↔English code-switch. Picked from a fixed list (no free text) so we
-// never store a language we can't actually produce.
-//
-// NOTE: the per-reel story prompt (story.v1) currently formally types only
-// tagalog/taglish/english — widen that union when we wire reel production for
-// non-Filipino channels. Storing these on the channel is fine today.
+// Languages the pipeline can handle: Claude writes the story in them, and ElevenLabs TTS narrates
+// them. "Taglish" is a Tagalog↔English code-switch. A fixed list (no free text) so we never store a
+// language we can't produce. Default is English (set in the wizard); the rest are alphabetical, so the
+// picker reads as niche/region-neutral. (TTS voice coverage varies by language — verify per language
+// when producing non-English channels.)
 
 export const SUPPORTED_LANGUAGES: string[] = [
-  // Filipino-first (our core)
-  'Tagalog',
-  'Taglish',
   'English',
-  // Rest, alphabetical
   'Arabic',
   'Bulgarian',
   'Chinese',
@@ -38,6 +31,8 @@ export const SUPPORTED_LANGUAGES: string[] = [
   'Slovak',
   'Spanish',
   'Swedish',
+  'Tagalog',
+  'Taglish',
   'Tamil',
   'Turkish',
   'Ukrainian',

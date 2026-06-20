@@ -35,7 +35,7 @@ REFERENCE STORIES — these define this channel's voice, rhythm, and intimacy. M
 ${v.fewshotStories}
 
 GUARDS:
-- Fictionalize specific real places: invented street/barangay/business names; a real region/era is fine (e.g., "somewhere in Quezon province").
+- Fictionalize specific real places: invented street/neighborhood/business names; a real region/era is fine (e.g., "a small coastal town in the late 1980s").
 - No real, identifiable people.
 - Keep it platform-safe: no graphic gore or sexual content, and never harm to minors as subject matter — imply intensity through restraint, not explicit detail.
 - Original work only — do not retell known films, books, or copypastas.`

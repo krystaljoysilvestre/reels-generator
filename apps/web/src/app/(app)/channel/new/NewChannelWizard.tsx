@@ -940,7 +940,7 @@ export function NewChannelWizard() {
                 className="input h-44 resize-none"
                 value={niche}
                 onChange={(e) => { setNiche(e.target.value); setPresetId(null) }}
-                placeholder="e.g. Filipino horror folktales retold like your lola's late-night stories — slow-burn aswang and kapre encounters in remote barrios, first-person 'this happened to our family' framing, hushed Tagalog narration, dread over gore. (The more you describe the world, characters, and voice, the better.)"
+                placeholder="e.g. 'true-crime cases cracked by one overlooked detail, calm narration', or 'cozy 2-minute pasta recipes, warm and upbeat', or 'mind-bending space facts told with awe'. Cover the genre, audience, format, tone, and how it's narrated — the more detail, the better; we safely fill in the rest."
               />
               <p className="mt-1 text-xs text-faint">{niche.trim().length}/20 min characters</p>
             </Field>
@@ -1015,7 +1015,7 @@ export function NewChannelWizard() {
                 className="input mt-3 h-64 resize-none leading-relaxed"
                 value={sampleScript}
                 onChange={(e) => { setSampleScript(e.target.value); setSampleIsAi(false) }}
-                placeholder="e.g. Hindi pa rin ako makatulog kapag umuulan — dahil sa nangyari sa amin noong isang gabi sa probinsya... (write or paste a real opening in your channel's voice — this is what every reel will sound like)"
+                placeholder="Write or paste a real opening in your channel's voice — the first lines exactly as you'd want them narrated, in any niche and any language. This is what every reel will sound like, so the closer to your real voice, the better."
               />
               {sampleError && <p className="mt-2 text-xs text-danger">{sampleError}</p>}
 

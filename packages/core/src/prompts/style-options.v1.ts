@@ -28,7 +28,7 @@ export const STYLE_PALETTE = [
 ] as const
 
 export const StyleOptionSchema = z.object({
-  label: z.string(),       // 1–3 word niche-flavored look, e.g. "Realistic Horror", "Dark Anime", "Meme Style"
+  label: z.string(),       // 1–3 word niche-flavored look, e.g. "Case-File Noir", "Vintage Engraving", "Meme Style"
   description: z.string(), // ONE plain-English sentence: why this style fits THIS channel — no technical jargon
   stylePreset: z.string(), // 80–100-word comma-separated visual DNA: this niche rendered in this style
 })
@@ -65,9 +65,10 @@ Rules:
   Order best-fit FIRST — the first is the recommended default, picked on merit (not reflexively photoreal).
 - Labels are SHORT, evocative looks tuned to THIS niche (1–3 words) — combine a medium/treatment WITH the
   niche's flavor so each reads as "a look for this channel", not a generic art-class term. Vary them per
-  niche, e.g. horror → "Realistic Horror", "Cinematic Horror", "Found Footage", "Dark Anime", "Province
-  Horror"; comedy → "Pixar Style", "Realistic Filipino", "Cartoon", "Meme Style". Recognizable at a glance,
-  no jargon — the "why it fits" line carries the rest.
+  niche, e.g. true-crime → "Case-File Noir", "Evidence Board", "Docu-Realism"; cooking → "Bright Studio",
+  "Rustic Film"; history → "Vintage Engraving", "Sepia Archive"; comedy → "Pixar Style", "Meme Style";
+  horror → "Cinematic Horror", "Found Footage". Recognizable at a glance, no jargon — the "why it fits"
+  line carries the rest.
 - Each style's "stylePreset" is the technical DNA that renders THIS niche IN THAT style — so the same
   niche looks distinctly anime vs. oil-painting vs. photoreal across the options. The DNA MUST begin
   with the explicit medium phrase (e.g. "flat cel-shaded anime illustration", "classical oil painting
@@ -93,7 +94,7 @@ Return JSON only:
   "sampleScene": "one depictable, non-graphic scene (content only — what to show; no style words). If sample narration is given, pick one vivid visual moment from it; else invent one true to the niche/world.",
   "styles": [
     {
-      "label": "1–3 word evocative look tuned to THIS niche (e.g. 'Realistic Horror', 'Found Footage', 'Dark Anime', 'Province Horror', 'Pixar Style', 'Meme Style') — niche-flavored and recognizable, no jargon",
+      "label": "1–3 word evocative look tuned to THIS niche (e.g. 'Case-File Noir', 'Vintage Engraving', 'Bright Studio', 'Dark Anime', 'Pixar Style', 'Meme Style') — niche-flavored and recognizable, no jargon",
       "description": "ONE plain-English sentence on why this style fits THIS channel — no technical jargon",
       "stylePreset": "80–100 words of comma-separated VISUAL descriptors for an image model. START with the explicit medium phrase (e.g. 'flat cel-shaded anime illustration', 'cinematic photoreal film still'), THEN technique, lighting, color palette, texture, mood — this niche rendered in this look. For non-photographic styles include 'illustration, not a photograph' and avoid photographic words. Style DNA only, no story content."
     }

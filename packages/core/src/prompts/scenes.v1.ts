@@ -41,7 +41,7 @@ OUTPUT (JSON only):
       "imagePrompt": "",
       "motionPrompt": "",
       "tier": "still",
-      "mood": ["dread", "quiet"]
+      "mood": ["tense", "quiet"]
     }
   ]
 }`
