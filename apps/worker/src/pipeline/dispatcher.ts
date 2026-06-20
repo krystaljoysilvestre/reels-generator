@@ -16,10 +16,10 @@ import {
   generateSfx,
   generateImages,
   animateScenes,
+  generateMusicStep,
   mixAudioStep,
   renderStep,
   renderQaStep,
-  generateChannelBeds,
 } from './index.js'
 
 export interface PipelineJobData {
@@ -60,6 +60,10 @@ export async function dispatchPipelineJob(job: Job<PipelineJobData>): Promise<vo
       case 'animate_scenes':
         await animateScenes(reelId)
         break
+      case 'generate_music':
+        // Per-reel AI bed (musicMode='ai' only; no-ops otherwise). Runs before the mix.
+        await generateMusicStep(reelId)
+        break
       case 'mix_audio':
         await mixAudioStep(reelId)
         break
@@ -68,10 +72,6 @@ export async function dispatchPipelineJob(job: Job<PipelineJobData>): Promise<vo
         break
       case 'render_qa':
         await renderQaStep(reelId)
-        break
-      case 'generate_channel_beds':
-        // Channel-scoped (carries channelId, no reel). Generates the bespoke AI-music pool once.
-        await generateChannelBeds(channelId!)
         break
       default:
         throw new Error(`Unknown pipeline step: ${stepName}`)

@@ -80,16 +80,28 @@ export async function annotateAudioScript(reelId: string): Promise<void> {
     },
   )
 
-  // The channel's signature bed (Sound step) should play on every reel. If this reel's
-  // script proposed no music, inject the bed — empty anchors let compute-timings pick the
-  // start (0) and peak (twist/0.8×duration), and selectMusicTrack matches it by type.
+  // Every reel should have background music (Sound step). If this reel's script proposed none, inject
+  // an intent — empty anchors let compute-timings pick the start (0) and peak (twist/0.8×duration).
+  //  • AI-music channels have no pool (each reel's bed is generated downstream by generate_music), so
+  //    seed the intent from the channel's derived audioMood.
+  //  • preset/upload channels seed from their first pool bed; selectMusicTrack matches it by type.
   const audioScript = result.output as AudioScript
   if (!audioScript.music) {
     const { channels } = await import('@reels/db')
     const channel = await db.query.channels.findFirst({ where: eq(channels.id, reel.channelId) })
-    const bed = channel ? AudioPacksSchema.parse(channel.audioPacks).musicPack[0] : undefined
-    if (bed) {
-      audioScript.music = { type: bed.type, startAnchor: '', peakAnchor: '', moodTags: bed.moodTags }
+    const audioPacks = channel ? AudioPacksSchema.parse(channel.audioPacks) : undefined
+    if (audioPacks?.musicMode === 'ai') {
+      audioScript.music = {
+        type: audioPacks.audioMood?.type ?? 'low_drone',
+        startAnchor: '',
+        peakAnchor: '',
+        moodTags: audioPacks.audioMood?.moodTags ?? [],
+      }
+    } else {
+      const bed = audioPacks?.musicPack[0]
+      if (bed) {
+        audioScript.music = { type: bed.type, startAnchor: '', peakAnchor: '', moodTags: bed.moodTags }
+      }
     }
   }
 

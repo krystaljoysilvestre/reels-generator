@@ -1249,7 +1249,7 @@ export function NewChannelWizard({
               <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {([
                   { key: 'preset', label: 'Presets', sub: 'Fitted to your niche' },
-                  { key: 'ai', label: 'AI-generated', sub: 'Original, for your channel' },
+                  { key: 'ai', label: 'AI-generated', sub: 'A fresh bed per reel' },
                   { key: 'upload', label: 'Upload', sub: 'Your own tracks' },
                   { key: 'none', label: 'No music', sub: 'Narration only' },
                 ] as const).map((opt) => {
@@ -1277,7 +1277,7 @@ export function NewChannelWizard({
                       return (
                         <p className="rounded-lg border border-border bg-subtle px-3 py-2.5 text-xs leading-relaxed text-muted">
                           Preset beds are being prepared. For now, pick{' '}
-                          <span className="font-medium text-ink">AI-generated</span> (original beds for your channel) or{' '}
+                          <span className="font-medium text-ink">AI-generated</span> (a fresh bed per reel) or{' '}
                           <span className="font-medium text-ink">No music</span>.
                         </p>
                       )
@@ -1322,11 +1322,11 @@ export function NewChannelWizard({
                 </div>
               )}
 
-              {/* AI-generated — bespoke beds composed for the channel (async after creation), mood-matched per reel */}
+              {/* AI-generated — a fresh original bed composed per reel at render (generate_music), seeded by the channel's audioMood */}
               {musicChoice === 'ai' && (
                 <div className="mt-4 rounded-lg border border-border bg-subtle/50 p-4">
                   <p className="text-xs leading-relaxed text-muted">
-                    We compose a few <span className="font-medium text-ink">original background beds for your channel</span> — nothing to pick here. They&apos;re generated right after you create the channel (ready in a minute or two), and each reel automatically uses the one that fits its mood.
+                    Nothing to pick here. We compose a <span className="font-medium text-ink">fresh, original bed for every reel</span> — tuned to that story&apos;s mood and your channel&apos;s sound — so no two reels share the same backing track. You&apos;ll hear it in the reel preview before publishing.
                   </p>
                 </div>
               )}

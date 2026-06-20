@@ -259,11 +259,19 @@ budget-exceeded fails fast (no wasted retries). Remaining items below are delibe
 - **[✅ motion DONE] Camera motion** now varies per scene (zoom in/out + occasional drift,
   `SceneClip.tsx`). Scene TRANSITIONS (hard cuts only) still TODO.
 - **[✅ DONE] Unmeasured loudness now FAILS** render_qa (was a warning).
+- **[✅ DONE] AI music is now PER-REEL, not per-channel.** `generate_music` composes one fresh original
+  bed for each reel (seeded by the channel's `audioMood`, tilted by the story's mood, sized to the reel),
+  replacing the fixed channel-bed pool — so no two reels share a backing track, and each is vetted in
+  context at spot_check. Cost ~10¢/reel (vs ~30¢ once); ~8s added per render. The pooled approach can
+  return later as an "economy" toggle (cheaper, consistent) for cost-sensitive SaaS tiers.
+- **[future] Scored music** — arc-synced to `peakMoment` (rises/drops timed to the story beats), built
+  on the per-reel `generate_music` foundation. The premium tier above today's flat per-reel bed.
 
 ### Channel creation
 - **[P2] Derived genome goes stale on edit**: changing niche in Settings doesn't re-derive tone/style/
   voice-keyword/audioMood. Add a "Regenerate profile" action.
 - **[P2] Hardcoded, should be per-niche**: ambient SFX pack (`province_night`), LUT grade, posting rules.
 - **[P3] derive timeout can hang Step 1** (manual retry only) — add a client timeout + retry UX.
-- **[P3] Validate `musicMode='ai'` has an `audioMood`** at create (else bespoke beds are generic).
+- **[P3] Validate `musicMode='ai'` has an `audioMood`** at create (else per-reel beds fall back to a
+  generic niche/tone prompt instead of the channel's sonic DNA).
 - **[P3] Some derived fields locked/hidden post-creation**: caption colors/position, audioMood.

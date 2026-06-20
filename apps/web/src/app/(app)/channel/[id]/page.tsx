@@ -53,7 +53,6 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
   const languages = channel.languages ?? []
   const caption = CaptionStyleSchema.parse(channel.captionStyle ?? {})
   const audio = AudioPacksSchema.parse(channel.audioPacks ?? {})
-  const bespokeBeds = audio.musicPack.filter((t) => t.path.startsWith(`audio/channel/${id}/`))
 
   return (
     <div className="min-h-screen">
@@ -202,26 +201,15 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
           )}
         </section>
 
-        {/* AI music — bespoke beds composed for the channel (only for musicMode='ai') */}
-        {(audio.musicMode === 'ai' || bespokeBeds.length > 0) && (
+        {/* AI music — a fresh original bed is composed per reel (musicMode='ai') */}
+        {audio.musicMode === 'ai' && (
           <section className="card mt-6 p-5">
-            <SectionLabel>AI music</SectionLabel>
-            {bespokeBeds.length === 0 ? (
-              <p className="mt-2 text-sm text-muted">Composing your channel&apos;s original beds… refresh in a minute or two.</p>
-            ) : (
-              <div className="mt-3 flex flex-col gap-3">
-                {bespokeBeds.map((bed) => (
-                  <div key={bed.id} className="flex items-center gap-3 rounded-lg border border-border px-3 py-2.5">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium capitalize text-ink">{bed.id.replace('channel-', '')}</p>
-                      <p className="truncate text-xs text-muted">{bed.moodTags.join(' · ')}</p>
-                    </div>
-                    <audio controls preload="none" src={`/api/asset?key=${encodeURIComponent(bed.path)}`} className="h-8" />
-                  </div>
-                ))}
-              </div>
-            )}
-            <p className="mt-2 text-xs text-faint">Original beds composed for this channel · each reel uses the one that fits its mood.</p>
+            <SectionLabel>Music</SectionLabel>
+            <p className="mt-2 text-sm text-muted">
+              <span className="text-ink">AI-generated</span> — a fresh, original instrumental bed is composed for{' '}
+              <span className="text-ink">each reel</span>, tuned to that story&apos;s mood and your channel&apos;s sound.
+              You&apos;ll hear it in the reel preview before publishing.
+            </p>
           </section>
         )}
 

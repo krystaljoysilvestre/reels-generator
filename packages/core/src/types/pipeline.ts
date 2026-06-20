@@ -12,6 +12,7 @@ export const PIPELINE_STEPS = [
   'compute_timings',
   'generate_sfx',
   'animate_scenes',
+  'generate_music',
   'mix_audio',
   'render',
   'render_qa',
@@ -20,7 +21,7 @@ export const PIPELINE_STEPS = [
 
 export type PipelineStepName = (typeof PIPELINE_STEPS)[number]
 
-export const PIPELINE_STEP_COUNT = PIPELINE_STEPS.length // 13
+export const PIPELINE_STEP_COUNT = PIPELINE_STEPS.length // 14
 
 // Provider call return contract (docs — E2.1): clients write nothing, workers persist.
 export const ProviderResultSchema = z.object({

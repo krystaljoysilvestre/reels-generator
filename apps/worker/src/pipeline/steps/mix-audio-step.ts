@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getDb, reels, assets, channels } from '@reels/db'
 import { downloadBuffer, uploadBuffer, buildInputHash } from '@reels/providers'
-import { TimingsSchema, AudioScriptSchema, AudioPacksSchema, musicIntensityToDb, moodMatchScore } from '@reels/core'
+import { TimingsSchema, AudioScriptSchema, AudioPacksSchema, musicIntensityToDb, moodMatchScore, peakFracForType } from '@reels/core'
 import { mixAudio, premixSfx } from '@reels/render/ffmpeg/mix-audio'
 import { writeFile, mkdir } from 'node:fs/promises'
 import { runStep } from '../harness.js'
@@ -59,6 +59,7 @@ export async function mixAudioStep(reelId: string): Promise<void> {
     ambient: ambient?.storageKey ?? 'none',
     sfxCount: sfxAssets.length,
     hasMusic: !!timings.music,
+    musicKey: reel.musicKey ?? 'none', // AI bed → re-mix when the per-reel bed (re)generates
     reelId,
   })
 
@@ -110,14 +111,27 @@ export async function mixAudioStep(reelId: string): Promise<void> {
         tmpDir: tmp,
       })
 
-      // Pick ONE bed from the channel's pool for THIS reel — mood-matched to the story (falls back to a
-      // deterministic per-reel pick when there's no mood signal). Download it locally (the mixer needs a
-      // local file, not an R2 key) and pass a 1-bed pack.
-      const pool = audioPacks.musicPack
+      // Source THIS reel's bed:
+      //  • AI-music channels → the reel's OWN generated bed (generate_music), tailored to its story.
+      //  • preset/upload     → mood-match a bed from the channel's track pool.
+      //  • none / AI-bed-missing → empty pool, the mixer renders without music.
+      const reelMoods = audioScript.music?.moodTags ?? []
+      const pool =
+        audioPacks.musicMode === 'ai'
+          ? reel.musicKey
+            ? [{
+                id: 'reel',
+                path: reel.musicKey,
+                type: audioScript.music?.type ?? 'low_drone',
+                peakFrac: peakFracForType(audioScript.music?.type ?? 'low_drone'),
+                moodTags: reelMoods,
+              }]
+            : []
+          : audioPacks.musicPack
       let localMusicPack = pool
       if (pool.length > 0) {
-        const picked = pickBedForMood(pool, audioScript.music?.moodTags ?? [], reelId)
-        console.log(`[mix] ${reelId} music bed=${picked.id} mood=[${picked.moodTags.join(',')}] (reel mood=[${(audioScript.music?.moodTags ?? []).join(',')}])`)
+        const picked = pickBedForMood(pool, reelMoods, reelId)
+        console.log(`[mix] ${reelId} music mode=${audioPacks.musicMode} bed=${picked.id} mood=[${picked.moodTags.join(',')}] (reel mood=[${reelMoods.join(',')}])`)
         const ext = picked.path.split('.').pop() || 'mp3'
         const musicLocalPath = join(tmp, `music.${ext}`)
         await writeFile(musicLocalPath, await downloadBuffer(picked.path))

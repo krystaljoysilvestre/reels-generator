@@ -5,7 +5,6 @@ import { z } from 'zod'
 import { eq } from 'drizzle-orm'
 import { getDb, channels, stories } from '@reels/db'
 import { ToneConfigSchema, WorldBibleSchema, ChannelVoiceSchema, VoiceModeSchema, CaptionStyleSchema, TargetPlatformSchema, PLATFORM_PRESETS, MusicIntensitySchema, MusicModeSchema, AudioMoodSchema, peakFracForType } from '@reels/core'
-import { enqueueStep } from '@reels/queue'
 import { getSession } from '@/lib/auth'
 
 const InputSchema = z.object({
@@ -149,12 +148,8 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  // AI-music channels get a bespoke bed pool composed asynchronously (onboarding doesn't wait — the
-  // beds appear on the channel shortly after, ready to preview/vet). Channel-scoped job: reelId carries
-  // the channelId so the BullMQ jobId is unique per channel.
-  if (c.sound.musicMode === 'ai') {
-    await enqueueStep({ reelId: channel!.id, stepName: 'generate_channel_beds', channelId: channel!.id })
-  }
+  // AI-music channels compose a fresh, story-fit bed PER REEL at render time (generate_music) seeded by
+  // the channel's audioMood — nothing to pre-generate here. (Was: a bespoke channel bed pool at creation.)
 
   return NextResponse.json({ channelId: channel!.id })
 }

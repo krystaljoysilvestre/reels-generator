@@ -25,11 +25,10 @@ pipelineWorker.on('failed', (job, err) => {
   const reelId = job?.data.reelId
   console.error(`[worker] ✗ ${stepName} (${reelId?.slice(0, 8) ?? '?'}):`, err.message)
   // On PERMANENT failure (BullMQ retries exhausted), flip the reel to 'failed' so the operator SEES it
-  // instead of a silent stall. `attemptsMade` equals `attempts` only on the final failure. Skip
-  // channel-scoped jobs (generate_channel_beds puts a channelId in reelId, not a real reel).
+  // instead of a silent stall. `attemptsMade` equals `attempts` only on the final failure.
   const maxAttempts = job?.opts.attempts ?? 1
   const permanent = job && (job.attemptsMade >= maxAttempts || err.name === 'UnrecoverableError')
-  if (permanent && reelId && stepName !== 'generate_channel_beds') {
+  if (permanent && reelId) {
     void markReelFailed(reelId, stepName, err.message)
       .then(() => console.error(`[worker] reel ${reelId.slice(0, 8)} → FAILED (${stepName} exhausted ${maxAttempts} attempts)`))
       .catch((e) => console.error('[worker] could not mark reel failed:', e))

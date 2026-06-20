@@ -83,8 +83,9 @@ export const PIPELINE_CHAIN: Record<string, string | null> = {
   generate_tts: 'annotate_audio_script',
   annotate_audio_script: 'compute_timings',
   compute_timings: 'generate_sfx',
-  generate_sfx: 'mix_audio',             // resolveNextStep reroutes to animate_scenes if any video-tier scene
-  animate_scenes: 'mix_audio',
+  generate_sfx: 'generate_music',        // resolveNextStep reroutes to animate_scenes if any video-tier scene
+  animate_scenes: 'generate_music',
+  generate_music: 'mix_audio',           // per-reel AI bed (no-op for non-AI channels), then mix
   mix_audio: 'render',
   render: 'render_qa',
   render_qa: null,                       // → spot_check (human spot-check)
@@ -98,7 +99,7 @@ export async function resolveNextStep(stepName: string, reelId: string): Promise
       where: and(eq(scenes.reelId, reelId), eq(scenes.tier, 'video')),
       columns: { id: true },
     })
-    return hasVideo ? 'animate_scenes' : 'mix_audio'
+    return hasVideo ? 'animate_scenes' : 'generate_music'
   }
   return PIPELINE_CHAIN[stepName] ?? null
 }
