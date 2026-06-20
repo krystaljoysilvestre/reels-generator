@@ -188,7 +188,7 @@ export function NewChannelWizard({
 
   // ── sound (step 4) — background music ──
   const [audioMood, setAudioMood] = useState<AudioMood | null>(null)  // derived brief (drives AI render-gen + preset ranking)
-  const [musicChoice, setMusicChoice] = useState<'preset' | 'ai' | 'upload' | 'none'>('preset')
+  const [musicChoice, setMusicChoice] = useState<'preset' | 'ai' | 'upload' | 'none'>('ai') // AI is the recommended default — original, story-fit music with nothing to pick
   const [selectedPresetIds, setSelectedPresetIds] = useState<string[]>([]) // multi-select preset pool
   const [uploadedMusic, setUploadedMusic] = useState<Array<{ key: string; name: string }>>([]) // uploaded pool
   const [musicUploading, setMusicUploading] = useState(false)
@@ -1248,10 +1248,10 @@ export function NewChannelWizard({
 
               <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {([
-                  { key: 'preset', label: 'Presets', sub: 'Fitted to your niche' },
-                  { key: 'ai', label: 'AI-generated', sub: 'A fresh bed per reel' },
-                  { key: 'upload', label: 'Upload', sub: 'Your own tracks' },
-                  { key: 'none', label: 'No music', sub: 'Narration only' },
+                  { key: 'ai', label: 'AI-generated', sub: 'A fresh bed per reel', badge: 'Recommended' },
+                  { key: 'preset', label: 'Presets', sub: 'Fitted to your niche', badge: '' },
+                  { key: 'upload', label: 'Upload', sub: 'Your own tracks', badge: '' },
+                  { key: 'none', label: 'No music', sub: 'Narration only', badge: '' },
                 ] as const).map((opt) => {
                   const active = musicChoice === opt.key
                   return (
@@ -1261,6 +1261,12 @@ export function NewChannelWizard({
                       onClick={() => { stopPreview(); setMusicChoice(opt.key) }}
                       className={`flex flex-col items-start rounded-lg border px-3 py-2.5 text-left transition-colors ${active ? 'border-accent bg-accent-soft ring-1 ring-accent' : 'border-border-strong hover:bg-subtle'}`}
                     >
+                      {/* Reserved badge row keeps every tile's label aligned; only the recommended one fills it. */}
+                      <span className="mb-1 flex h-[15px] items-center">
+                        {opt.badge ? (
+                          <span className="rounded-full bg-accent/10 px-1.5 py-[1px] text-[9px] font-semibold uppercase tracking-wide text-accent">{opt.badge}</span>
+                        ) : null}
+                      </span>
                       <span className="text-sm font-medium text-ink">{opt.label}</span>
                       <span className="text-xs text-muted">{opt.sub}</span>
                     </button>
@@ -1327,6 +1333,9 @@ export function NewChannelWizard({
                 <div className="mt-4 rounded-lg border border-border bg-subtle/50 p-4">
                   <p className="text-xs leading-relaxed text-muted">
                     Nothing to pick here. We compose a <span className="font-medium text-ink">fresh, original bed for every reel</span> — tuned to that story&apos;s mood and your channel&apos;s sound — so no two reels share the same backing track. You&apos;ll hear it in the reel preview before publishing.
+                  </p>
+                  <p className="mt-2 text-[11px] leading-relaxed text-faint">
+                    Composed at render — a few cents per reel. Want no per-reel cost? Pick <span className="font-medium">Presets</span> instead.
                   </p>
                 </div>
               )}
