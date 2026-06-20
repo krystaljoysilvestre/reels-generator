@@ -4,32 +4,10 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { requireAuth } from '@/lib/auth'
 import { ChannelAvatar } from '@/components/ChannelAvatar'
-import { CaptionPreview } from '@/components/CaptionPreview'
 import { CreateReelButton } from './CreateReelButton'
-import type { ToneConfig, WorldBible, ChannelVoice } from '@reels/core'
-import { CaptionStyleSchema, PLATFORM_PRESETS, AudioPacksSchema } from '@reels/core'
+import { PLATFORM_PRESETS } from '@reels/core'
 
 export const dynamic = 'force-dynamic'
-
-const TONE_KEYS: Array<keyof ToneConfig> = ['intensity', 'warmth', 'energy', 'pacing', 'humor']
-const CAPTION_LABELS: Record<string, string> = {
-  clean: 'Clean',
-  pop: 'Pop',
-  hype: 'Hype',
-  karaoke: 'Karaoke',
-  neon: 'Neon',
-  whisper: 'Whisper',
-  impact: 'Impact',
-  elegant: 'Elegant',
-  comic: 'Comic',
-  terminal: 'Terminal',
-  cinematic: 'Cinematic',
-  breaking: 'Breaking',
-  marker: 'Marker',
-  script: 'Script',
-  retro: 'Retro',
-  glitch: 'Glitch',
-}
 
 export default async function ChannelPage({ params }: { params: Promise<{ id: string }> }) {
   await requireAuth()
@@ -45,14 +23,7 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
     with: { story: { columns: { title: true } } },
   })
   const published = reelRows.filter((r) => r.status === 'published').length
-
-  const tone = (channel.toneConfig ?? {}) as ToneConfig
-  const world = (channel.worldBible ?? {}) as WorldBible
-  const voices = (channel.voicePool ?? []) as ChannelVoice[]
-  const voiceMode = (channel.voiceMode ?? 'single') as 'single' | 'per_story'
   const languages = channel.languages ?? []
-  const caption = CaptionStyleSchema.parse(channel.captionStyle ?? {})
-  const audio = AudioPacksSchema.parse(channel.audioPacks ?? {})
 
   return (
     <div className="min-h-screen">
@@ -71,6 +42,13 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
               {channel.description || channel.tagline || languages.join(' · ') || 'no language set'}
             </p>
           </div>
+          <Link href={`/channel/${channel.id}/details`} className="btn-secondary btn-sm" title="Channel details — niche, tone, style, captions, world, voice, music">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 16v-4M12 8h.01" />
+            </svg>
+            Details
+          </Link>
           <Link href={`/channel/${channel.id}/settings`} className="btn-secondary btn-sm" title="Edit channel settings">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
               <circle cx="12" cy="12" r="3" />
@@ -82,7 +60,7 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
       </header>
 
       <div className="mx-auto max-w-4xl p-8">
-        {/* Stat row */}
+        {/* Stat row — quick overview; the full creative genome lives on the Details page */}
         <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-5">
           <Stat label="Reels" value={reelRows.length} />
           <Stat label="Published" value={published} />
@@ -91,130 +69,8 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
           <Stat label="Platform" value={(PLATFORM_PRESETS[(channel.targetPlatform ?? 'all') as keyof typeof PLATFORM_PRESETS] ?? PLATFORM_PRESETS.all).label} />
         </div>
 
-        {/* Niche */}
-        <section className="card mb-6 p-5">
-          <SectionLabel>Niche</SectionLabel>
-          <p className="mt-2 text-sm leading-relaxed text-ink/90">{channel.nicheDescription}</p>
-        </section>
-
-
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {/* Tone */}
-          <section className="card p-5">
-            <SectionLabel>Tone</SectionLabel>
-            <div className="mt-3 flex flex-col gap-2.5">
-              {TONE_KEYS.map((k) => {
-                const v = Number(tone[k] ?? 0)
-                return (
-                  <div key={k} className="flex items-center gap-3">
-                    <span className="w-20 text-sm capitalize text-muted">{k}</span>
-                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-subtle">
-                      <div className="h-full rounded-full bg-accent" style={{ width: `${v * 10}%` }} />
-                    </div>
-                    <span className="w-6 text-right font-mono text-xs tabular-nums text-ink">{v}</span>
-                  </div>
-                )
-              })}
-            </div>
-          </section>
-
-          {/* Visual style */}
-          <section className="card p-5">
-            <SectionLabel>Visual style</SectionLabel>
-            {channel.styleImageKey && (
-              <img
-                src={`/api/asset?key=${encodeURIComponent(channel.styleImageKey)}`}
-                alt="Channel visual style reference"
-                className="mt-3 w-full max-w-[200px] rounded-lg border border-border object-cover"
-              />
-            )}
-            <p className="mt-2 text-sm leading-relaxed text-muted">{channel.stylePreset || '—'}</p>
-          </section>
-        </div>
-
-        {/* Captions */}
-        <section className="card mt-6 p-5">
-          <div className="flex items-center justify-between gap-3">
-            <SectionLabel>Captions</SectionLabel>
-            <span className="rounded-full bg-subtle px-2.5 py-0.5 text-xs font-medium text-muted">
-              {CAPTION_LABELS[caption.preset] ?? caption.preset}
-            </span>
-          </div>
-          <div className="mt-3">
-            <CaptionPreview
-              style={caption}
-              safeZonePct={(PLATFORM_PRESETS[(channel.targetPlatform ?? 'all') as keyof typeof PLATFORM_PRESETS] ?? PLATFORM_PRESETS.all).safeZoneBottomPct}
-              backgroundImageUrl={channel.styleImageKey ? `/api/asset?key=${encodeURIComponent(channel.styleImageKey)}` : undefined}
-            />
-          </div>
-          <p className="mt-2 text-xs text-faint">
-            Burned into every reel · {caption.animation} animation · {caption.position}
-          </p>
-        </section>
-
-        {/* Story world */}
-        <section className="card mt-6 p-5">
-          <SectionLabel>Story world</SectionLabel>
-          <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Meta label="Region" value={world.region} />
-            <Meta label="Era" value={world.era} />
-          </div>
-          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <ChipList label="Canon locations" items={world.canonLocations ?? []} />
-            <ChipList label="Canon objects" items={world.canonObjects ?? []} />
-          </div>
-          {world.vocabulary && Object.keys(world.vocabulary).length > 0 && (
-            <div className="mt-4">
-              <p className="text-xs font-medium text-muted">Vocabulary</p>
-              <dl className="mt-2 divide-y divide-border rounded-lg border border-border">
-                {Object.entries(world.vocabulary).map(([term, value]) => (
-                  <div key={term} className="flex gap-3 px-3 py-2 text-sm">
-                    <dt className="w-1/3 font-medium text-ink">{term}</dt>
-                    <dd className="flex-1 text-muted">{value}</dd>
-                  </div>
-                ))}
-              </dl>
-            </div>
-          )}
-        </section>
-
-        {/* Voices */}
-        <section className="card mt-6 p-5">
-          <div className="flex items-center justify-between gap-2">
-            <SectionLabel>Narrator voice{voices.length === 1 ? '' : 's'}</SectionLabel>
-            <span className="badge bg-subtle text-muted">{voiceMode === 'single' ? 'one voice' : 'per story'}</span>
-          </div>
-          {voiceMode === 'per_story' ? (
-            <p className="mt-3 text-sm text-muted">A voice is chosen for each reel when it&apos;s produced.</p>
-          ) : (
-            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {voices.map((v, i) => (
-                <div key={i} className="rounded-lg border border-border p-3">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium text-ink">{v.name}</p>
-                    <span className="badge bg-subtle text-muted">{v.gender}</span>
-                  </div>
-                  {v.description && <p className="mt-1 text-sm text-muted">{v.description}</p>}
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-
-        {/* AI music — a fresh original bed is composed per reel (musicMode='ai') */}
-        {audio.musicMode === 'ai' && (
-          <section className="card mt-6 p-5">
-            <SectionLabel>Music</SectionLabel>
-            <p className="mt-2 text-sm text-muted">
-              <span className="text-ink">AI-generated</span> — a fresh, original instrumental bed is composed for{' '}
-              <span className="text-ink">each reel</span>, tuned to that story&apos;s mood and your channel&apos;s sound.
-              You&apos;ll hear it in the reel preview before publishing.
-            </p>
-          </section>
-        )}
-
         {/* Reels */}
-        <section className="mt-6">
+        <section>
           <div className="mb-3 flex items-center justify-between">
             <SectionLabel>Reels</SectionLabel>
             {reelRows.length > 0 && <CreateReelButton channelId={channel.id} compact />}
@@ -258,28 +114,4 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 // everything past that → the storyboard (which also surfaces the render preview).
 function reelHref(status: string, id: string): string {
   return status === 'drafting' || status === 'story_review' ? '/review' : `/storyboard/${id}`
-}
-
-function Meta({ label, value }: { label: string; value?: string }) {
-  return (
-    <div>
-      <p className="text-xs font-medium text-muted">{label}</p>
-      <p className="mt-0.5 text-sm text-ink">{value || '—'}</p>
-    </div>
-  )
-}
-
-function ChipList({ label, items }: { label: string; items: string[] }) {
-  return (
-    <div>
-      <p className="text-xs font-medium text-muted">{label}</p>
-      <div className="mt-1.5 flex flex-wrap gap-1.5">
-        {items.length === 0 ? (
-          <span className="text-sm text-faint">—</span>
-        ) : (
-          items.map((it, i) => <span key={i} className="badge bg-subtle text-muted">{it}</span>)
-        )}
-      </div>
-    </div>
-  )
 }
