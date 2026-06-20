@@ -60,10 +60,6 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
       <div className="mx-auto max-w-4xl p-8">
         {/* Reels */}
         <section>
-          <div className="mb-3 flex items-center justify-between">
-            <SectionLabel>Reels</SectionLabel>
-            {reelRows.length > 0 && <CreateReelButton channelId={channel.id} compact />}
-          </div>
           {reelRows.length === 0 ? (
             <div className="card flex flex-col items-center justify-center px-6 py-12 text-center">
               <p className="text-sm font-medium text-ink">No reels yet</p>
@@ -71,23 +67,24 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
               <CreateReelButton channelId={channel.id} />
             </div>
           ) : (
-            <div className="card divide-y divide-border">
-              {reelRows.map((r) => (
-                <Link key={r.id} href={reelHref(r.status, r.id)} className="flex items-center justify-between px-5 py-3 transition-colors hover:bg-subtle">
-                  <p className="truncate text-sm font-medium text-ink">{r.story?.title ?? 'Untitled'}</p>
-                  <span className={`badge ${r.status === 'failed' ? 'bg-danger-soft text-danger' : 'bg-subtle text-muted'}`}>{r.status.replace(/_/g, ' ')}</span>
-                </Link>
-              ))}
-            </div>
+            <>
+              <div className="mb-3 flex justify-end">
+                <CreateReelButton channelId={channel.id} compact />
+              </div>
+              <div className="card divide-y divide-border">
+                {reelRows.map((r) => (
+                  <Link key={r.id} href={reelHref(r.status, r.id)} className="flex items-center justify-between px-5 py-3 transition-colors hover:bg-subtle">
+                    <p className="truncate text-sm font-medium text-ink">{r.story?.title ?? 'Untitled'}</p>
+                    <span className={`badge ${r.status === 'failed' ? 'bg-danger-soft text-danger' : 'bg-subtle text-muted'}`}>{r.status.replace(/_/g, ' ')}</span>
+                  </Link>
+                ))}
+              </div>
+            </>
           )}
         </section>
       </div>
     </div>
   )
-}
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <p className="text-sm font-semibold tracking-tight text-ink">{children}</p>
 }
 
 // Where a reel row links, by status: still drafting / awaiting story approval → the review queue;
