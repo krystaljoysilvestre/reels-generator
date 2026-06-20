@@ -22,6 +22,7 @@ const UpdateSchema = z
     stylePreset: z.string().trim().min(1),
     captionStyle: CaptionStyleSchema,
     worldBible: WorldBibleSchema,
+    generationMode: z.enum(['review', 'auto']),
   })
   .partial()
   .strict()

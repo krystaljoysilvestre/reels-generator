@@ -33,6 +33,7 @@ interface Initial {
   toneConfig: ToneConfig
   worldBible: WorldBible
   captionStyle: CaptionStyle
+  generationMode: 'review' | 'auto'
 }
 
 export function ChannelSettings({ id, initial }: { id: string; initial: Initial }) {
@@ -46,6 +47,7 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
   const [stylePreset, setStylePreset] = useState(initial.stylePreset)
   const [tone, setTone] = useState<ToneConfig>(initial.toneConfig)
   const [captionStyle, setCaptionStyle] = useState<CaptionStyle>(initial.captionStyle)
+  const [generationMode, setGenerationMode] = useState<'review' | 'auto'>(initial.generationMode)
   const [region, setRegion] = useState(initial.worldBible.region ?? '')
   const [era, setEra] = useState(initial.worldBible.era ?? '')
   const [locations, setLocations] = useState((initial.worldBible.canonLocations ?? []).join('\n'))
@@ -73,6 +75,7 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
       targetSeconds,
       stylePreset: stylePreset.trim(),
       captionStyle,
+      generationMode,
       worldBible: {
         region: region.trim(),
         era: era.trim(),
@@ -130,6 +133,28 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
           <Field label="Tagline" hint="One-line positioning.">
             <input value={tagline} onChange={(e) => setTagline(e.target.value)} maxLength={200} className="input" />
           </Field>
+        </section>
+
+        {/* Generation mode */}
+        <section className="card space-y-3 p-5">
+          <SectionLabel>Generation</SectionLabel>
+          <div className="flex flex-col gap-2">
+            {([
+              { key: 'review', label: 'With reviews', sub: 'Stop to approve the story, edit the storyboard, and check the render on every reel.' },
+              { key: 'auto', label: 'Fully automated', sub: 'Run each reel end-to-end to a finished render — no stops. Publishing stays manual.' },
+            ] as const).map((opt) => (
+              <label
+                key={opt.key}
+                className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${generationMode === opt.key ? 'border-accent bg-accent-soft ring-1 ring-accent' : 'border-border-strong hover:bg-subtle'}`}
+              >
+                <input type="radio" name="generationMode" checked={generationMode === opt.key} onChange={() => setGenerationMode(opt.key)} className="mt-0.5 h-4 w-4 flex-shrink-0 accent-accent" />
+                <span>
+                  <span className="block text-sm font-medium text-ink">{opt.label}</span>
+                  <span className="mt-0.5 block text-xs text-muted">{opt.sub}</span>
+                </span>
+              </label>
+            ))}
+          </div>
         </section>
 
         {/* Niche */}

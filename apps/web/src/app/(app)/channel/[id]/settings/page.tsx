@@ -29,6 +29,7 @@ export default async function ChannelSettingsPage({ params }: { params: Promise<
         toneConfig: ToneConfigSchema.parse(channel.toneConfig ?? {}),
         worldBible: WorldBibleSchema.parse(channel.worldBible ?? {}),
         captionStyle: CaptionStyleSchema.parse(channel.captionStyle ?? {}),
+        generationMode: (channel.generationMode === 'auto' ? 'auto' : 'review'),
       }}
     />
   )

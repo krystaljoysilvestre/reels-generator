@@ -64,7 +64,7 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
             <div className="card flex flex-col items-center justify-center px-6 py-12 text-center">
               <p className="text-sm font-medium text-ink">No reels yet</p>
               <p className="mb-4 mt-1 max-w-xs text-sm text-muted">Generate your first reel — we’ll draft a story for you to approve, then build the visuals and audio.</p>
-              <CreateReelButton channelId={channel.id} />
+              <CreateReelButton channelId={channel.id} promptMode />
             </div>
           ) : (
             <>

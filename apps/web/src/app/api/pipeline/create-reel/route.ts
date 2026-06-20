@@ -8,12 +8,21 @@ import { getSession } from '@/lib/auth'
 export async function POST(req: NextRequest) {
   if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { channelId } = (await req.json().catch(() => ({}))) as { channelId?: string }
+  const { channelId, generationMode } = (await req.json().catch(() => ({}))) as {
+    channelId?: string
+    generationMode?: string
+  }
   if (!channelId) return NextResponse.json({ error: 'channelId is required' }, { status: 400 })
 
   const db = getDb()
   const channel = await db.query.channels.findFirst({ where: eq(channels.id, channelId) })
   if (!channel) return NextResponse.json({ error: 'Channel not found' }, { status: 404 })
+
+  // First reel sets how this channel produces reels — 'review' (stop at the human gates) or 'auto'
+  // (run end-to-end to a finished render). Persisted on the channel; the worker reads it per gate.
+  if (generationMode === 'auto' || generationMode === 'review') {
+    await db.update(channels).set({ generationMode, updatedAt: new Date() }).where(eq(channels.id, channelId))
+  }
 
   const language = (channel.languages[0] ?? 'tagalog').toLowerCase()
   const [reel] = await db.insert(reels).values({

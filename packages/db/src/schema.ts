@@ -103,6 +103,10 @@ export const channels = pgTable('channels', {
   // the dashboard, and are promoted to 'active' (draftState cleared) when the wizard is finished.
   status: text('status').notNull().default('active'),
   draftState: jsonb('draft_state'),  // wizard state blob for resuming a draft; null once active
+  // How reels are produced: 'review' = stop at the human gates (story / storyboard / spot-check);
+  // 'auto' = run end-to-end through to a finished render, no stops. Set on the first reel, editable in
+  // Settings. (Publishing stays manual either way.)
+  generationMode: text('generation_mode').notNull().default('review'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 })

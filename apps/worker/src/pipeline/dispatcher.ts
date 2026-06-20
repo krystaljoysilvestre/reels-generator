@@ -7,6 +7,7 @@ import { UnrecoverableError } from 'bullmq'
 import { resolveNextStep, enqueueStep } from '@reels/queue'
 import { BudgetExceededError } from '@reels/core'
 import { captureException } from '../monitoring/sentry.js'
+import { autoCrossGate } from './auto-gate.js'
 import {
   generateStory,
   annotateAudioScript,
@@ -84,6 +85,10 @@ export async function dispatchPipelineJob(job: Job<PipelineJobData>): Promise<vo
     if (next) {
       await enqueueStep({ reelId, stepName: next })
       console.log(`[pipeline] ${stepName} → enqueued ${next} reelId=${reelId}`)
+    } else {
+      // No next step → a human gate (story_review / storyboard / spot_check). In 'auto' generation
+      // mode the channel crosses it automatically; in 'review' mode this is a no-op and we wait.
+      await autoCrossGate(stepName, reelId)
     }
   } catch (err) {
     captureException(err, { reelId, stepName })
