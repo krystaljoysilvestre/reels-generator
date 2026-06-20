@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getDb, reels, assets, channels } from '@reels/db'
 import { downloadBuffer, uploadBuffer, buildInputHash } from '@reels/providers'
-import { TimingsSchema, AudioScriptSchema, AudioPacksSchema, musicIntensityToDb } from '@reels/core'
+import { TimingsSchema, AudioScriptSchema, AudioPacksSchema, musicIntensityToDb, moodMatchScore } from '@reels/core'
 import { mixAudio, premixSfx } from '@reels/render/ffmpeg/mix-audio'
 import { writeFile, mkdir } from 'node:fs/promises'
 import { runStep } from '../harness.js'
@@ -21,11 +21,12 @@ function pickReelIndex(seed: string, n: number): number {
 // per-reel pick. So bespoke AI beds (core/intense/calm) + multi-preset pools both fit the story.
 function pickBedForMood<T extends { moodTags: string[] }>(pool: T[], reelMoodTags: string[], reelId: string): T {
   if (reelMoodTags.length > 0) {
-    const wanted = new Set(reelMoodTags.map((t) => t.toLowerCase()))
+    // Bucket-based match (mood-match.ts) so rich story moods (dread/grief) fit generic bed tags
+    // (dark/tense) via shared canonical buckets — not brittle exact-string overlap.
     let bestIdx = -1
     let bestScore = 0
     pool.forEach((bed, i) => {
-      const score = bed.moodTags.reduce((n, t) => n + (wanted.has(t.toLowerCase()) ? 1 : 0), 0)
+      const score = moodMatchScore(reelMoodTags, bed.moodTags)
       if (score > bestScore) { bestScore = score; bestIdx = i }
     })
     if (bestIdx >= 0) return pool[bestIdx]!
@@ -116,6 +117,7 @@ export async function mixAudioStep(reelId: string): Promise<void> {
       let localMusicPack = pool
       if (pool.length > 0) {
         const picked = pickBedForMood(pool, audioScript.music?.moodTags ?? [], reelId)
+        console.log(`[mix] ${reelId} music bed=${picked.id} mood=[${picked.moodTags.join(',')}] (reel mood=[${(audioScript.music?.moodTags ?? []).join(',')}])`)
         const ext = picked.path.split('.').pop() || 'mp3'
         const musicLocalPath = join(tmp, `music.${ext}`)
         await writeFile(musicLocalPath, await downloadBuffer(picked.path))
