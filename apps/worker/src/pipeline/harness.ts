@@ -120,3 +120,16 @@ export async function setReelStatus(
   const db = getDb()
   await db.update(reels).set({ status: status as never, updatedAt: new Date() }).where(eq(reels.id, reelId))
 }
+
+// Mark a reel permanently failed (called when BullMQ retries are exhausted) so it surfaces in the UI
+// instead of silently stalling. Also ensures a 'failed' pipeline_steps row exists for the step — the
+// harness already writes one for failures INSIDE runStep (with a richer error); this covers failures
+// that throw BEFORE runStep (e.g. validation), so the storyboard banner + retry always have data.
+export async function markReelFailed(reelId: string, stepName: string, error: string): Promise<void> {
+  const db = getDb()
+  await db.update(reels).set({ status: 'failed' as never, updatedAt: new Date() }).where(eq(reels.id, reelId))
+  await db
+    .insert(pipelineSteps)
+    .values({ reelId, stepName: stepName as never, status: 'failed', attempt: 1, error, finishedAt: new Date() })
+    .onConflictDoNothing()  // keep the harness's richer error if a row already exists
+}

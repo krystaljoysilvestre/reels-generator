@@ -1,5 +1,5 @@
-import { getDb, reels, scenes, assets, channels } from '@reels/db'
-import { eq } from 'drizzle-orm'
+import { getDb, reels, scenes, assets, channels, pipelineSteps } from '@reels/db'
+import { and, desc, eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { requireAuth } from '@/lib/auth'
 import type { ChannelVoice } from '@reels/core'
@@ -45,6 +45,16 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
   const renderAsset = reelAssets.find((a) => a.kind === 'render')
   const renderUrl = renderAsset ? `/api/asset?key=${encodeURIComponent(renderAsset.storageKey)}` : null
 
+  // If the reel hard-failed, surface which step + why (the chain stops at the first failed step).
+  let failure: { step: string; error: string } | null = null
+  if (reel.status === 'failed') {
+    const failed = await db.query.pipelineSteps.findFirst({
+      where: and(eq(pipelineSteps.reelId, reelId), eq(pipelineSteps.status, 'failed')),
+      orderBy: [desc(pipelineSteps.startedAt)],
+    })
+    if (failed) failure = { step: failed.stepName, error: (failed.error ?? 'Unknown error').slice(0, 300) }
+  }
+
   return (
     <StoryboardEditor
       reel={{
@@ -68,6 +78,7 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
       sceneVideoVariations={sceneVideoVariations}
       renderUrl={renderUrl}
       channelName={channel?.name ?? ''}
+      failure={failure}
     />
   )
 }

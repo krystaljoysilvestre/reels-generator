@@ -23,12 +23,13 @@ interface StoryboardEditorProps {
   sceneVideoVariations: Record<number, string[]>
   renderUrl: string | null
   channelName: string
+  failure: { step: string; error: string } | null
 }
 
 export function StoryboardEditor({
   reel, story, scenes: initialScenes, voicePool, voiceRecommend,
   sceneImages, sceneVideoVariations, renderUrl: initialRenderUrl,
-  channelName,
+  channelName, failure,
 }: StoryboardEditorProps) {
   const router = useRouter()
   const [scenes, setScenes] = useState(initialScenes)
@@ -176,6 +177,25 @@ export function StoryboardEditor({
     router.refresh()
   }
 
+  // Recover a hard-failed reel: re-run the failed step (prior steps are cached) and resume the chain.
+  async function handleRetry() {
+    setLoading('retry')
+    setError(null)
+    const res = await fetch('/api/pipeline/retry-reel', {
+      method: 'POST',
+      body: JSON.stringify({ reelId: reel.id }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+    if (!res.ok) {
+      const j = await res.json().catch(() => null)
+      setLoading(null)
+      setError(j?.error ?? 'Could not retry this reel.')
+      return
+    }
+    setLoading(null)
+    router.refresh()
+  }
+
   const currentVoice = effectiveVoices.find((v) => v.providerId === selectedVoice)
   const isRenderable = ['storyboard', 'story_review', 'approved', 'failed'].includes(reel.status)
   const canRender = isRenderable && !!selectedVoice
@@ -208,6 +228,19 @@ export function StoryboardEditor({
           <span title="Operator minutes">{opMinutes} min</span>
         </div>
       </div>
+
+      {/* Failure banner — surfaces a hard pipeline failure so the reel isn't a silent stall */}
+      {reel.status === 'failed' && failure && (
+        <div className="flex flex-shrink-0 items-start justify-between gap-4 border-b border-danger/30 bg-danger-soft px-8 py-4">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-danger">This reel failed at “{failure.step.replace(/_/g, ' ')}”</p>
+            <p className="mt-0.5 break-words text-xs text-danger/80">{failure.error}</p>
+          </div>
+          <button onClick={handleRetry} disabled={loading === 'retry'} className="btn-secondary btn-sm flex-shrink-0">
+            {loading === 'retry' ? 'Retrying…' : 'Retry'}
+          </button>
+        </div>
+      )}
 
       {/* Scene strip — horizontal scroll */}
       <div className="flex-1 overflow-x-auto overflow-y-hidden">

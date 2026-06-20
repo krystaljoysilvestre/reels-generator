@@ -242,7 +242,7 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
               {reelRows.map((r) => (
                 <Link key={r.id} href={reelHref(r.status, r.id)} className="flex items-center justify-between px-5 py-3 transition-colors hover:bg-subtle">
                   <p className="truncate text-sm font-medium text-ink">{r.story?.title ?? 'Untitled'}</p>
-                  <span className="badge bg-subtle text-muted">{r.status.replace(/_/g, ' ')}</span>
+                  <span className={`badge ${r.status === 'failed' ? 'bg-danger-soft text-danger' : 'bg-subtle text-muted'}`}>{r.status.replace(/_/g, ' ')}</span>
                 </Link>
               ))}
             </div>

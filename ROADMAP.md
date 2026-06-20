@@ -227,5 +227,40 @@ channel portfolio.
 
 - Sidebar nav is portfolio-only now; per-channel nav (reels/review/analytics)
   moves into the channel detail page.
-- End-to-end reel production (create reel → review → render → export) has never
-  been run start to finish — still the key product milestone.
+- ~~End-to-end reel production has never run start to finish~~ — **DONE**: first reel
+  rendered 2026-06-19; channel-creation polish + flux/dev images + voice delivery + AI
+  music shipped 2026-06-20.
+
+## Audit backlog (2026-06-20) — fix AFTER channel creation
+Pre-production audit (3 passes: channel creation, quality, robustness). Prioritized; pull as
+evidence demands. The P1 silent-failure item is being fixed this session.
+
+### Robustness
+- **[P1 — fixing now] Silent failure → no signal.** On permanent step failure the `pipeline_steps`
+  row is marked failed but `reel.status` is NOT updated and nothing shows in the UI — the reel
+  silently stalls (`harness.ts`, `dispatcher.ts`). Fix: mark `reel.status='failed'` on permanent
+  BullMQ failure + a storyboard "failed" banner (step + error) + one-click retry
+  (`/api/pipeline/retry-reel`).
+- **[P2] 429 = hard fail** after 3 quick retries (5s exponential). No dedicated long backoff for
+  rate limits (`ProviderRateLimitError` → BullMQ). Fine at low volume; revisit before batch.
+- **[P2] Per-provider rate-limit queues defined but unused** — all steps run on the single PIPELINE
+  queue (concurrency 2, 50/min). OK for low volume; split to FAL_IMAGE/TTS queues when scaling.
+- **[P3] Budget-exceeded retries uselessly** (permanent error treated as transient) — skip retries on `BudgetExceededError`.
+- **[P3] Wizard style-image previews fire ~4–5 in parallel un-throttled** — debounce/limit before heavy use.
+
+### Quality ceiling (pull as niches demand)
+- **[P2] render_qa is thin**: only duration + streams + LUFS — a failed-image BLACK frame or SILENT
+  audio passes as "ok". Add black-frame (histogram) + audio-RMS checks (`packages/render/src/qa/render-qa.ts`).
+- **[P2] No character/location consistency** across scenes (each regenerates independently). Low impact
+  for atmospheric/silhouette channels; high for character-driven. Needs reference/identity conditioning.
+- **[P3] Uniform Ken Burns** (1.0→1.05 every scene) + **hard cuts only**. `motionPrompt` exists but is
+  ignored on stills (`SceneClip.tsx`). Vary motion + add transitions.
+- **[P3] loudnorm failure is only a warning** — a reel can pass render_qa with unmeasured loudness.
+
+### Channel creation
+- **[P2] Derived genome goes stale on edit**: changing niche in Settings doesn't re-derive tone/style/
+  voice-keyword/audioMood. Add a "Regenerate profile" action.
+- **[P2] Hardcoded, should be per-niche**: ambient SFX pack (`province_night`), LUT grade, posting rules.
+- **[P3] derive timeout can hang Step 1** (manual retry only) — add a client timeout + retry UX.
+- **[P3] Validate `musicMode='ai'` has an `audioMood`** at create (else bespoke beds are generic).
+- **[P3] Some derived fields locked/hidden post-creation**: caption colors/position, audioMood.

@@ -3,6 +3,7 @@ import { initSentry } from './monitoring/sentry.js'
 import { startBullBoard } from './monitoring/bull-board.js'
 import { makeWorker, QUEUE } from './queues/index.js'
 import { dispatchPipelineJob } from './pipeline/dispatcher.js'
+import { markReelFailed } from './pipeline/harness.js'
 
 initSentry()
 
@@ -20,7 +21,18 @@ pipelineWorker.on('completed', (job) => {
 })
 
 pipelineWorker.on('failed', (job, err) => {
-  console.error(`[worker] ✗ ${job?.data.stepName ?? '?'} (${job?.data.reelId?.slice(0, 8) ?? '?'}):`, err.message)
+  const stepName = job?.data.stepName ?? '?'
+  const reelId = job?.data.reelId
+  console.error(`[worker] ✗ ${stepName} (${reelId?.slice(0, 8) ?? '?'}):`, err.message)
+  // On PERMANENT failure (BullMQ retries exhausted), flip the reel to 'failed' so the operator SEES it
+  // instead of a silent stall. `attemptsMade` equals `attempts` only on the final failure. Skip
+  // channel-scoped jobs (generate_channel_beds puts a channelId in reelId, not a real reel).
+  const maxAttempts = job?.opts.attempts ?? 1
+  if (job && reelId && stepName !== 'generate_channel_beds' && job.attemptsMade >= maxAttempts) {
+    void markReelFailed(reelId, stepName, err.message)
+      .then(() => console.error(`[worker] reel ${reelId.slice(0, 8)} → FAILED (${stepName} exhausted ${maxAttempts} attempts)`))
+      .catch((e) => console.error('[worker] could not mark reel failed:', e))
+  }
 })
 
 // ── Bull Board UI ────────────────────────────────────────────────────────────
