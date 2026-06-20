@@ -44,6 +44,8 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
 
   const renderAsset = reelAssets.find((a) => a.kind === 'render')
   const renderUrl = renderAsset ? `/api/asset?key=${encodeURIComponent(renderAsset.storageKey)}` : null
+  // This reel's own AI-composed bed (musicMode='ai'), so it can be heard/vetted on the review surface.
+  const musicUrl = reel.musicKey ? `/api/asset?key=${encodeURIComponent(reel.musicKey)}` : null
 
   // If the reel hard-failed, surface which step + why (the chain stops at the first failed step).
   let failure: { step: string; error: string } | null = null
@@ -77,6 +79,7 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
       sceneImages={sceneImages}
       sceneVideoVariations={sceneVideoVariations}
       renderUrl={renderUrl}
+      musicUrl={musicUrl}
       channelName={channel?.name ?? ''}
       failure={failure}
     />

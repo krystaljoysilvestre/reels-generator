@@ -22,13 +22,14 @@ interface StoryboardEditorProps {
   sceneImages: Record<number, string>
   sceneVideoVariations: Record<number, string[]>
   renderUrl: string | null
+  musicUrl: string | null // this reel's AI-composed bed (musicMode='ai'), for hearing/vetting on review
   channelName: string
   failure: { step: string; error: string } | null
 }
 
 export function StoryboardEditor({
   reel, story, scenes: initialScenes, voicePool, voiceRecommend,
-  sceneImages, sceneVideoVariations, renderUrl: initialRenderUrl,
+  sceneImages, sceneVideoVariations, renderUrl: initialRenderUrl, musicUrl,
   channelName, failure,
 }: StoryboardEditorProps) {
   const router = useRouter()
@@ -434,6 +435,21 @@ export function StoryboardEditor({
             className="max-h-[28rem] rounded-xl border border-border shadow-sm"
             style={{ aspectRatio: '9/16' }}
           />
+
+          {/* AI-composed bed for this reel — hear the music on its own to vet it (it's mixed under the
+              narration in the video above). Only present for AI-music channels. */}
+          {musicUrl && (
+            <div className="mt-4 max-w-md rounded-lg border border-border bg-subtle/40 p-3">
+              <p className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-ink">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" />
+                </svg>
+                Music · AI-composed for this reel
+              </p>
+              <audio src={musicUrl} controls preload="none" className="h-9 w-full" />
+              <p className="mt-1.5 text-[11px] leading-relaxed text-faint">An original bed composed for this story&apos;s mood — heard on its own here, mixed under the narration in the video.</p>
+            </div>
+          )}
         </div>
       )}
 
