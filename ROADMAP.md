@@ -254,10 +254,22 @@ budget-exceeded fails fast (no wasted retries). Remaining items below are delibe
 ### Quality ceiling (pull as niches demand)
 - **[✅ DONE] render_qa hardened**: now also fails on black frames (`blackdetect`), near-silent audio
   (`volumedetect`), and unmeasured loudness (`packages/render/src/qa/render-qa.ts`).
-- **[P2] No character/location consistency** across scenes (each regenerates independently). Low impact
-  for atmospheric/silhouette channels; high for character-driven. Needs reference/identity conditioning.
-- **[✅ motion DONE] Camera motion** now varies per scene (zoom in/out + occasional drift,
-  `SceneClip.tsx`). Scene TRANSITIONS (hard cuts only) still TODO.
+- **[✅ DONE] Scene image beat-adherence** — `scenes.v1` now front-loads the load-bearing beat (the
+  subject/action that carries the shot) before framing/light, so flux renders the actual moment (e.g. the
+  scare) instead of generic atmosphere. Plus style-neutral quality-floor negatives (`imageprompt.ts`) and
+  a content-filter fallback that keeps the channel style (`generate-images.ts`).
+- **[✅ DONE] Beat-aware scene count** — `breakdown_scenes` cuts on dramatic beats within a length-scaled
+  range (e.g. 120s → 7–14) instead of a fixed `len/12`; the `peakMoment` (`story.twistAnchor`) gets its
+  own dedicated shot. Verbatim-tiling + music-timing invariants unchanged; empty-peak degrades gracefully.
+- **[✅ DONE] Living grade overlay** — `GradeOverlay` now animates: grain re-grains every frame (film
+  shimmer, not a static texture), an unstable-light flicker, and a slow vignette breath. Frame-deterministic;
+  scaled by the channel's grain/vignette. Camera motion (Ken Burns) already varied per scene (`SceneClip.tsx`).
+  Scene TRANSITIONS (hard cuts only) + per-scene mood-driven atmosphere intensity still TODO.
+- **[P2 — deferred to SaaS/character-driven] No character/location consistency** across scenes (each
+  regenerates independently). Low impact for atmospheric/silhouette channels; high for character-driven.
+  Needs reference/identity conditioning (world-bible characters + identity model).
+- **[future] i2v spike** — kling photorealism-drifts the stylized look; prove a stylized-friendly
+  image-to-video model on hook+climax beats or drop kling (currently opt-in by scene tier).
 - **[✅ DONE] Unmeasured loudness now FAILS** render_qa (was a warning).
 - **[✅ DONE] AI music is now PER-REEL, not per-channel.** `generate_music` composes one fresh original
   bed for each reel (seeded by the channel's `audioMood`, tilted by the story's mood, sized to the reel),

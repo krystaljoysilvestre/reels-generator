@@ -65,6 +65,7 @@ export async function generateImages(reelId: string): Promise<void> {
           engine,
           aspect,
           mood: scene.mood,
+          stylePreset: channel.stylePreset,
         })
 
         // Persist asset + link to scene
@@ -100,12 +101,12 @@ interface ImageGenAttemptParams {
   engine: ReturnType<typeof FalEngineSchema.parse>
   aspect: string
   mood: string[]
+  stylePreset: string
 }
 
 async function generateImageWithRetry(params: ImageGenAttemptParams) {
   let currentPrompt = params.prompt
   let totalCost = 0
-  const db = getDb()
 
   for (let attempt = 0; attempt < MAX_REPHRASE_ATTEMPTS; attempt++) {
     try {
@@ -135,8 +136,12 @@ async function generateImageWithRetry(params: ImageGenAttemptParams) {
       currentPrompt = typeof rephrase.data === 'string' ? rephrase.data : currentPrompt
 
       if (attempt === MAX_REPHRASE_ATTEMPTS - 1) {
-        // Final attempt failed → mood-only downgrade
-        currentPrompt = `${params.mood.join(', ')} atmosphere, abstract, cinematic still, vertical 9:16`
+        // Final attempt failed → mood-only downgrade. Drop the (rejected) subject but KEEP the channel
+        // style so the fallback still looks like the rest of the reel, not a generic off-brand still.
+        currentPrompt = assembleImagePrompt(
+          `${params.mood.join(', ')} atmosphere, empty scene, abstract shapes, deep shadow, negative space`,
+          params.stylePreset,
+        )
       }
     }
   }
