@@ -53,6 +53,7 @@ export async function breakdownScenes(reelId: string): Promise<void> {
     worldBibleJson: JSON.stringify(worldBible, null, 2),
     era: worldBible.era,
     regionDescriptor: worldBible.region,
+    nicheDescription: channel.nicheDescription ?? '',
     narration: story.body,
     minScenes,
     maxScenes,

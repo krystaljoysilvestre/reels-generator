@@ -28,9 +28,10 @@ SHARED visual style into reusable DNA that an image model can apply to BRAND-NEW
 Rules:
 - Describe only the STYLE, never the specific subjects/objects/people in the images — so it transfers
   to other scenes. (e.g. "grainy 1990s VHS look", not "a man holding a lamp".)
-- Capture: medium/technique, lighting, color palette, texture, framing feel, mood. START with the
-  explicit medium (e.g. "flat cel-shaded anime illustration", "grainy 35mm film photograph",
-  "inked comic-book panel", "loose watercolor illustration").
+- Capture: medium/technique, color palette, texture, framing feel, mood, and lighting QUALITY
+  (contrast/softness) — but NOT a time of day or light level (the scene sets day vs night), so the
+  style transfers to both. START with the explicit medium (e.g. "flat cel-shaded anime illustration",
+  "grainy 35mm film photograph", "inked comic-book panel", "loose watercolor illustration").
 - If the look is NON-photographic, include "illustration, not a photograph" and avoid photographic
   words (35mm, photo, depth of field). If it IS photographic, photographic terms are fine.
 - Be faithful to what's actually in the image(s); use the niche/mood only to resolve ambiguity, not
@@ -45,7 +46,7 @@ Return JSON only:
 {
   "label": "SHORT recognizable medium name, 1–2 words, no slash/dash (e.g. 'Anime', 'Oil painting')",
   "description": "ONE plain-English sentence describing the look — no jargon",
-  "stylePreset": "80–100 words of comma-separated VISUAL descriptors, medium first, STYLE ONLY (no specific subjects from the images)"
+  "stylePreset": "80–100 words of comma-separated VISUAL descriptors, medium first, STYLE ONLY (no specific subjects from the images, and no fixed time of day or light level — the scene controls lighting)"
 }
 
 No prose, no code fences.`

@@ -96,7 +96,7 @@ Return JSON only:
     {
       "label": "1–3 word evocative look tuned to THIS niche (e.g. 'Case-File Noir', 'Vintage Engraving', 'Bright Studio', 'Dark Anime', 'Pixar Style', 'Meme Style') — niche-flavored and recognizable, no jargon",
       "description": "ONE plain-English sentence on why this style fits THIS channel — no technical jargon",
-      "stylePreset": "80–100 words of comma-separated VISUAL descriptors for an image model. START with the explicit medium phrase (e.g. 'flat cel-shaded anime illustration', 'cinematic photoreal film still'), THEN technique, lighting, color palette, texture, mood — this niche rendered in this look. For non-photographic styles include 'illustration, not a photograph' and avoid photographic words. Style DNA only, no story content."
+      "stylePreset": "80–100 words of comma-separated VISUAL descriptors for an image model. START with the explicit medium phrase (e.g. 'flat cel-shaded anime illustration', 'cinematic photoreal film still'), THEN technique, color palette, texture, mood, and lighting QUALITY (contrast/softness) — this niche rendered in this look. Do NOT fix a time of day or light level (no 'night', 'daylight', 'low-light', 'moonlight') — each scene sets its own lighting, so the style must work in both day and night. For non-photographic styles include 'illustration, not a photograph' and avoid photographic words. Style DNA only, no story content."
     }
     // 4 or 5 GENUINELY DIFFERENT looks tuned to the niche — span realism/cinematic, animation/illustration,
     // and a niche-specific/local look — ordered best-fit FIRST (the first is the recommended default, on merit).
