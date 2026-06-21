@@ -22,6 +22,9 @@ export function assembleNegativePrompt(channelNegativeTerms?: string): string {
     'low quality', 'low resolution', 'jpeg artifacts', 'oversaturated', 'overexposed',
     'washed out', 'flat lighting', 'harsh flash', 'amateur', 'stock photo',
     'cropped', 'frame border', 'collage', 'split image',
+    // Malformed-architecture artifacts (never wanted in any niche) — flux otherwise renders doors as a
+    // weird double panel / two doors on one hinge / a frame with no door.
+    'double door', 'duplicate door', 'deformed door', 'extra door', 'distorted doorway', 'misaligned door',
   ]
   const channel = channelNegativeTerms ? channelNegativeTerms.split(',').map((s) => s.trim()) : []
   return [...defaults, ...channel].join(', ')

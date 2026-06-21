@@ -7,19 +7,32 @@ import { buildRephrasePrompt, REPHRASE_V1_VERSION } from '../../prompts-bridge.j
 import { runStep } from '../harness.js'
 
 // generate_images — step 4 (docs/02 §4)
-// Fan-out: one image per scene. Style preset injected server-side [CLAUDE.md rule 2].
+// One image per scene (text-to-image). Style preset injected server-side [CLAUDE.md rule 2].
+// Continuity: same-`location` scenes share a generation SEED (and the director describes the place
+// consistently via the SETTING rule), so the room reads as the same place across shots — WITHOUT the
+// framing/lighting flattening that image-to-image chaining causes (close-ups stay close, day stays day).
+// (img2img is still available in the fal client for true same-shot continuity, just not the default.)
 // Content-filter rejection → rephrase.v1 retry (max 3) → mood-only downgrade.
 
 const MAX_REPHRASE_ATTEMPTS = 3
 
-// Scene images render on flux/dev (not the cheaper schnell). The style spike showed dev renders the
-// full stylePreset palette (e.g. the channel's second accent colour the distilled schnell dropped) +
-// finer woodcut/illustration detail, and it MATCHES the flux/dev style-option previews the operator
-// approves at creation (schnell reels otherwise look worse than the preview they signed off). ~2×
-// cost/image (~4¢→8¢) — worth it for the final reel.
+// Scene images render on flux/dev (not the cheaper schnell) for palette + detail fidelity, matching the
+// flux/dev style-option previews the operator approves at creation. ~2× cost/image (~4¢→8¢).
 const SCENE_IMAGE_MODEL = 'fal-ai/flux/dev'
 const SCENE_IMAGE_GUIDANCE = 3.5
 const SCENE_IMAGE_STEPS = 28
+const IMAGE_CONCURRENCY = 4
+
+// Stable seed from a string (FNV-1a). Same location string → same seed → flux nudges the room toward
+// a consistent layout/palette across that location's scenes.
+function seedFromString(s: string): number {
+  let h = 2166136261
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return (h >>> 0) % 2_000_000_000
+}
 
 export async function generateImages(reelId: string): Promise<void> {
   const db = getDb()
@@ -38,20 +51,21 @@ export async function generateImages(reelId: string): Promise<void> {
   // Generate at the channel's platform aspect (reels are 9:16) so scene images fill the frame.
   const aspect = (PLATFORM_PRESETS[(channel.targetPlatform ?? 'all') as keyof typeof PLATFORM_PRESETS] ?? PLATFORM_PRESETS.all).aspect
 
-  // Fan-out: generate each scene image in sequence (BullMQ rate-limit handles concurrency)
-  for (const scene of reelScenes) {
-    if (!scene.visualPrompt) continue
-    if (scene.imageAssetId) continue // already generated (idempotency)
+  const pending = reelScenes.filter((s) => s.visualPrompt && !s.imageAssetId) // skip already-generated (idempotency)
 
+  const processScene = async (scene: (typeof pending)[number]) => {
     // Server-side style suffix injection [CLAUDE.md rule 2 — LLM never sees this]
-    const finalPrompt = assembleImagePrompt(scene.visualPrompt, channel.stylePreset)
+    const finalPrompt = assembleImagePrompt(scene.visualPrompt!, channel.stylePreset)
     const negativePrompt = assembleNegativePrompt()
+    // Same-location scenes share a seed → consistent room. Untagged scenes get their own (idx-based) seed.
+    const seed = seedFromString(`${reelId}:${scene.location ?? `solo_${scene.idx}`}`)
 
     const inputHash = buildInputHash('generate_images.v1', {
       finalPrompt,
       sceneIdx: scene.idx,
       reelId,
       model: engine.imageModelId,
+      seed,
     })
 
     await runStep(
@@ -66,6 +80,7 @@ export async function generateImages(reelId: string): Promise<void> {
           aspect,
           mood: scene.mood,
           stylePreset: channel.stylePreset,
+          seed,
         })
 
         // Persist asset + link to scene
@@ -91,6 +106,11 @@ export async function generateImages(reelId: string): Promise<void> {
       },
     )
   }
+
+  // Capped-concurrency batches — fast without flooding fal with connections.
+  for (let i = 0; i < pending.length; i += IMAGE_CONCURRENCY) {
+    await Promise.all(pending.slice(i, i + IMAGE_CONCURRENCY).map(processScene))
+  }
 }
 
 interface ImageGenAttemptParams {
@@ -102,6 +122,7 @@ interface ImageGenAttemptParams {
   aspect: string
   mood: string[]
   stylePreset: string
+  seed?: number
 }
 
 async function generateImageWithRetry(params: ImageGenAttemptParams) {
@@ -119,6 +140,7 @@ async function generateImageWithRetry(params: ImageGenAttemptParams) {
         aspect: params.aspect,
         guidanceScale: SCENE_IMAGE_GUIDANCE,
         numInferenceSteps: SCENE_IMAGE_STEPS,
+        ...(params.seed != null ? { seed: params.seed } : {}),
       })
       return { ...result, costCents: result.costCents + totalCost }
     } catch (err) {

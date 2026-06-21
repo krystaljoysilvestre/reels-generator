@@ -35,7 +35,9 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
   const sceneVideoVariations: Record<number, string[]> = {}
   for (const scene of reel.scenes) {
     const imgAsset = reelAssets.find((a) => a.id === scene.imageAssetId)
-    if (imgAsset) sceneImages[scene.idx] = `/api/asset?key=${encodeURIComponent(imgAsset.storageKey)}`
+    // ?v=<assetId> busts the browser cache: a regenerated scene gets a NEW asset id → a new URL, so the
+    // browser can never show the previous (e.g. pre-fix) image for the same storage key.
+    if (imgAsset) sceneImages[scene.idx] = `/api/asset?key=${encodeURIComponent(imgAsset.storageKey)}&v=${imgAsset.id}`
     const videos = reelAssets.filter(
       (a) => a.kind === 'video' && (a.meta as Record<string, unknown>)['sceneIdx'] === scene.idx,
     )
@@ -43,7 +45,7 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
   }
 
   const renderAsset = reelAssets.find((a) => a.kind === 'render')
-  const renderUrl = renderAsset ? `/api/asset?key=${encodeURIComponent(renderAsset.storageKey)}` : null
+  const renderUrl = renderAsset ? `/api/asset?key=${encodeURIComponent(renderAsset.storageKey)}&v=${renderAsset.id}` : null
   // This reel's own AI-composed bed (musicMode='ai'), so it can be heard/vetted on the review surface.
   const musicUrl = reel.musicKey ? `/api/asset?key=${encodeURIComponent(reel.musicKey)}` : null
 

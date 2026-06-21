@@ -80,23 +80,47 @@ export interface ImageGenParams {
   aspect?: string             // '9:16' (default — the reel frame), etc. Drives image_size.
   guidanceScale?: number      // flux/dev honors this (push prompt/style adherence); schnell ignores it
   numInferenceSteps?: number  // flux/dev quality knob; schnell runs few distilled steps
+  referenceImageKey?: string  // if set → image-to-image FROM this R2 image: inherits its composition/room/lighting
+  strength?: number           // i2i denoise strength 0–1 (lower = closer to the reference); default 0.6
+  seed?: number               // fixed seed → reproducible noise. Same seed across same-location scenes nudges them toward a consistent room.
 }
 
 export async function generateImage(params: ImageGenParams): Promise<ProviderResult> {
   initFal()
 
   try {
-    const result = await fal.subscribe(params.engine.imageModelId, {
-      input: {
-        prompt: params.prompt,
-        negative_prompt: params.negativePrompt ?? '',
-        image_size: ASPECT_TO_FAL_SIZE[params.aspect ?? '9:16'] ?? 'portrait_16_9',
-        num_images: 1,
-        enable_safety_checker: true,
-        ...(params.guidanceScale != null ? { guidance_scale: params.guidanceScale } : {}),
-        ...(params.numInferenceSteps != null ? { num_inference_steps: params.numInferenceSteps } : {}),
-      },
-    })
+    let result
+    if (params.referenceImageKey) {
+      // Image-to-image: keep the reference's room/door/bed/light + framing, render THIS scene's action.
+      // Used to chain same-location scenes off a shared anchor so the place stays continuous.
+      const { downloadBuffer } = await import('../shared/storage.js')
+      const refBuf = await downloadBuffer(params.referenceImageKey)
+      result = await fal.subscribe(`${params.engine.imageModelId}/image-to-image`, {
+        input: {
+          image_url: `data:image/webp;base64,${refBuf.toString('base64')}`,
+          prompt: params.prompt,
+          negative_prompt: params.negativePrompt ?? '',
+          strength: params.strength ?? 0.6,
+          num_images: 1,
+          enable_safety_checker: true,
+          ...(params.guidanceScale != null ? { guidance_scale: params.guidanceScale } : {}),
+          ...(params.numInferenceSteps != null ? { num_inference_steps: params.numInferenceSteps } : {}),
+        },
+      })
+    } else {
+      result = await fal.subscribe(params.engine.imageModelId, {
+        input: {
+          prompt: params.prompt,
+          negative_prompt: params.negativePrompt ?? '',
+          image_size: ASPECT_TO_FAL_SIZE[params.aspect ?? '9:16'] ?? 'portrait_16_9',
+          num_images: 1,
+          enable_safety_checker: true,
+          ...(params.guidanceScale != null ? { guidance_scale: params.guidanceScale } : {}),
+          ...(params.numInferenceSteps != null ? { num_inference_steps: params.numInferenceSteps } : {}),
+          ...(params.seed != null ? { seed: params.seed } : {}),
+        },
+      })
+    }
 
     const parsed = FalImageOutputSchema.safeParse(result.data)
     if (!parsed.success || !parsed.data.images[0]) {

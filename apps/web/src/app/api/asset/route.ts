@@ -24,9 +24,10 @@ export async function GET(req: NextRequest) {
   const contentType = MIME[ext] ?? 'application/octet-stream'
 
   const buf = await downloadBuffer(key)
-  // Preset beds are regenerated under the SAME key (re-seed), so browser-caching them makes a
-  // re-seed look like "nothing changed". Serve those uncached; other assets are immutable → 1h.
-  const regenerable = key.startsWith('audio/presets/')
+  // Anything regenerated under the SAME key must be served uncached, or the browser shows a stale
+  // copy after a re-gen ("nothing changed"). That's ALL reel assets (scene images/videos + render are
+  // re-generated in place via regen-image, re-tier, style edits, re-render) plus preset beds.
+  const regenerable = key.startsWith('reels/') || key.startsWith('audio/presets/')
   return new NextResponse(new Uint8Array(buf), {
     headers: {
       'Content-Type': contentType,

@@ -111,6 +111,7 @@ export async function breakdownScenes(reelId: string): Promise<void> {
         motionPrompt: s.motionPrompt,
         tier: s.tier,
         mood: s.mood,
+        location: s.location,
       })
       .onConflictDoUpdate({
         target: [scenes.reelId, scenes.idx],
@@ -120,6 +121,7 @@ export async function breakdownScenes(reelId: string): Promise<void> {
           motionPrompt: s.motionPrompt,
           tier: s.tier,
           mood: s.mood,
+          location: s.location,
         },
       })
   }

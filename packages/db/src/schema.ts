@@ -205,6 +205,9 @@ export const scenes = pgTable(
     startMs: integer('start_ms'),
     endMs: integer('end_ms'),
     mood: text('mood').array().notNull().default([]),
+    // Canonical place label (e.g. "rented bedroom"). Scenes sharing a location are kept visually
+    // continuous: the location's first scene is the anchor, the rest are image-to-image'd from it.
+    location: text('location'),
   },
   (t) => ({
     idxReel: index('idx_scenes_reel').on(t.reelId),

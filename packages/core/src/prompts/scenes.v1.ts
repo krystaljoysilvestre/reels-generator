@@ -41,13 +41,25 @@ For each scene write:
 - motionPrompt: one slow camera/element movement, present tense ("camera pushes in slowly; curtain shifts once"). No cuts, no fast moves.
 - tier: "video" for the 2–3 highest-impact beats (always the hook and the climax), "still" otherwise.
 - mood: 2–3 words for ambient/grade hints.
+- location: a short canonical label for WHERE this scene takes place (e.g. "rented bedroom", "hallway", "sari-sari store"). Use the EXACT same label for every scene in the same place, and a NEW label only when the place actually changes. (Scenes that share a location are kept visually continuous; a change starts a fresh look — so be honest about when the place is truly the same vs different.)
 
 CHARACTERS: each scene image is generated independently, so a recurring person, figure, or creature only reads as the SAME individual if you describe it the same way every time. The FIRST time one appears, fix its canonical look — build, age, hair, clothing, and ONE distinguishing detail — then repeat that SAME description (near-verbatim) in every later scene it appears in. Lock the details that read as identity: build, posture, hair, wardrobe (and face, if this genre shows faces). If the genre implies people rather than showing them, keep them as consistent silhouettes with faces in shadow.
 
-LIGHTING & TIME: read the time of day from the narration (including Tagalog cues) and make it unmistakable in the image — a time LABEL alone won't render correctly, you must describe the actual light. Night / gabi / madaling-araw / "alas-[1-4]" / 3 AM = NEAR-TOTAL DARKNESS: most of the frame deep black, the ONLY light from the source you name (a lamp, candle, the moon, a phone), and every window or opening is a BLACK rectangle — no daylight, no glow, nothing visible outside. Dusk/dawn = low warm/cold ambient. Day / umaga / tanghali / hapon = natural daylight. Lead with the darkness for night beats; never let a 3 AM scene look like a lit evening room.
+SETTING: scenes that share a place (the same room, house, street, store) must read as the SAME location — this is what makes the reel feel connected instead of a set of unrelated images. The first time a place appears, fix its canonical look — layout, key furniture/objects, wall + floor materials, colours, signs of wear — using the world-bible's canonical location names, then reuse those SAME details every time you return there. Carry continuity across cuts (the door, window, bed seen in scene 2 are the same ones in scene 6). Don't re-invent the room each scene.
+
+KEY OBJECTS & SETUP: name the objects that matter in the frame concretely — their count, state, and condition, not just the bare noun. A vaguely-named object renders generic, wrong-state, or malformed (a "door" tends to come out open or as a double panel on one hinge; a "window" tends to glow). So pin it down: one or many, open or shut, on or off, intact or broken, and how it sits in the space — e.g. "a single closed wooden door flush in the far wall", "a dark window with nothing visible outside". Match the state the story implies (a shadow under the door ⇒ it's shut; a knock with no one seen ⇒ the door stays closed).
+
+LIGHTING & TIME: read the time of day from the narration (including Tagalog cues) and make it unmistakable in the image — a time LABEL alone won't render correctly, you must describe the actual light. Night / gabi / madaling-araw / "alas-[1-4]" / 3 AM = NEAR-TOTAL DARKNESS: most of the frame deep black, the ONLY light a small INTERIOR source you name (a weak lamp, a candle, a phone screen) — NOT the moon, NOT light through a window. Every window or opening is a solid BLACK rectangle: deep night in the rural tropics has no usable moonlight, so NO daylight, NO moon glow, nothing lit or visible outside (a window glowing at 3 AM is the #1 mistake — don't). Dusk/dawn = low warm/cold ambient. Day / umaga / tanghali / hapon = natural daylight. Lead with the darkness for night beats; never let a 3 AM scene look like a lit evening room.
 
 SAFETY (all genres): no gore, no graphic violence, no nudity or sexualization, no minors in harmful or sexual contexts. (This also keeps generations within the image model's content policy.)
-GENRE TREATMENT: render tension the way THIS genre does. For atmospheric / horror / thriller beats, imply rather than depict — silhouettes, doorways, reflections, the edge of frame — instead of showing graphic detail. For non-threatening genres, just show the subject clearly and well-lit per the scene.
+GENRE TREATMENT: render tension the way THIS genre does. For horror / thriller / paranormal, actively build DREAD — compose for unease: heavy negative space that feels occupied, something subtly WRONG at the edge of frame, the suggestion of a presence just out of view, oppressive shadow, an unsettling off-centre focal point. Imply rather than depict (silhouettes, reflections, what's barely visible) — scarier than showing it outright, and it stays within content policy. For non-threatening genres, just show the subject clearly and well-lit per the scene.
+
+SHOW ONLY WHAT IS SEEN: depict what the narrator actually sees — no more. If something is only HEARD (a voice, a knock, footsteps, breathing) or only FELT (being watched, a presence in the room) and the narration never says it was SEEN, do NOT render its source — not even a silhouette. Instead render the narrator hearing/sensing it and the charged, empty dark around them (e.g. a voice in the night → the person frozen in bed facing the dark, NOT a figure standing there). Inventing a visible figure the story kept unseen destroys the fear. Only show a presence when the narration explicitly says it was seen (a shadow, a shape, a glimpse).
+
+PERSPECTIVE: detect the narration's voice from the FULL narration, then apply ONE perspective to EVERY scene in the reel (don't mix).
+- FIRST-PERSON (the narrator tells their own experience — "ako", "ko", "akin", "nakita ko", "I", "my") → shoot the WHOLE reel in POV: the camera IS the narrator's eyes. Every shot is what THEY see — the door, the shadow beneath it, the dark corner, the person they're speaking to, the road ahead — optionally with their own hands, feet, or shoulder at the edge of frame. NEVER show the narrator as a separate full figure (they are the camera). Keep it from going static by varying the POV: wide of the room from the bed, a close push on the door, a glance down at the floor, etc.
+- THIRD-PERSON (the story is about someone else) → observer framing: show the character(s) in the scene normally.
+The narrator being unseen in POV is separate from CHARACTERS, which still governs any OTHER recurring person who IS seen.
 
 OUTPUT (JSON only):
 {
@@ -58,7 +70,8 @@ OUTPUT (JSON only):
       "imagePrompt": "",
       "motionPrompt": "",
       "tier": "still",
-      "mood": ["tense", "quiet"]
+      "mood": ["tense", "quiet"],
+      "location": "rented bedroom"
     }
   ]
 }`

@@ -44,6 +44,9 @@ export function StoryboardEditor({
   const [scenes, setScenes] = useState(initialScenes)
   const [sceneSaving, setSceneSaving] = useState<Record<number, 'saving' | 'saved'>>({}) // per-scene script-edit status
   const [editingScenes, setEditingScenes] = useState<Set<number>>(new Set()) // scenes whose script is unlocked for editing
+  const [activeVar, setActiveVar] = useState<Record<number, number>>({}) // which video variation plays per scene tile
+  const [loadedMedia, setLoadedMedia] = useState<Set<number>>(new Set()) // scenes whose image/video has loaded (for develop-in)
+  const markLoaded = (idx: number) => setLoadedMedia((s) => (s.has(idx) ? s : new Set(s).add(idx)))
   const [selectedVoice, setSelectedVoice] = useState(reel.voiceId ?? voicePool[0]?.providerId ?? '')
   const [showVoicePicker, setShowVoicePicker] = useState(false)
   // Narrator delivery: the picker's sliders edit this; `voiceTouched` = the operator overrode the
@@ -308,17 +311,45 @@ export function StoryboardEditor({
             const imgSrc = sceneImages[scene.idx]
             const variations = sceneVideoVariations[scene.idx] ?? []
             const isVideo = scene.tier === 'video'
+            const vIdx = activeVar[scene.idx] ?? 0
+            const videoKey = variations[vIdx]
+            const hasMedia = Boolean(videoKey || imgSrc)
+            const mediaLoaded = loadedMedia.has(scene.idx)
             return (
               <div key={scene.idx} className="flex w-52 flex-shrink-0 flex-col gap-3">
                 {/* Image / placeholder */}
                 <div className="group relative overflow-hidden rounded-xl border border-border bg-subtle shadow-sm" style={{ height: 208 }}>
-                  {imgSrc ? (
-                    <img src={imgSrc} alt={`Scene ${scene.idx}`} className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-xs text-faint">
-                      scene {scene.idx}
+                  {/* Shimmer skeleton sits BEHIND the media (z-0) — shown while the scene is still
+                      generating or its image/video is loading. The media is opaque on top (z-10), so it
+                      always shows once loaded even if the onLoad handler is missed (hydration race). */}
+                  {(!hasMedia || !mediaLoaded) && (
+                    <div className="absolute inset-0 z-0 animate-shimmer bg-gradient-to-r from-subtle via-surface to-subtle bg-[length:200%_100%]" />
+                  )}
+                  {!hasMedia && (
+                    <div className="absolute inset-0 z-0 flex flex-col items-center justify-center gap-2 text-xs text-faint">
+                      <span className="h-2.5 w-2.5 animate-breathe rounded-full bg-accent/70" />
+                      generating scene {scene.idx}…
                     </div>
                   )}
+                  {videoKey ? (
+                    <video
+                      key={videoKey}
+                      src={`/api/asset?key=${encodeURIComponent(videoKey)}`}
+                      autoPlay
+                      muted
+                      loop
+                      playsInline
+                      onLoadedData={() => markLoaded(scene.idx)}
+                      className="absolute inset-0 z-10 h-full w-full object-cover"
+                    />
+                  ) : imgSrc ? (
+                    <img
+                      src={imgSrc}
+                      alt={`Scene ${scene.idx}`}
+                      onLoad={() => markLoaded(scene.idx)}
+                      className="absolute inset-0 z-10 h-full w-full object-cover"
+                    />
+                  ) : null}
                   {/* Scene-type badge */}
                   {(scene.idx === 1 || isVideo) && (
                     <span
@@ -329,11 +360,17 @@ export function StoryboardEditor({
                       {scene.idx === 1 ? 'HOOK' : 'VIDEO'}
                     </span>
                   )}
-                  {/* Video variations badge */}
+                  {/* Animated-clip badge — click to cycle which variation plays */}
                   {variations.length > 0 && (
-                    <span className="badge absolute right-2 top-2 bg-black/55 text-white backdrop-blur">
-                      {variations.length}v
-                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setActiveVar((m) => ({ ...m, [scene.idx]: ((m[scene.idx] ?? 0) + 1) % variations.length }))}
+                      disabled={variations.length < 2}
+                      className="badge absolute right-2 top-2 bg-black/55 text-white backdrop-blur"
+                      title={variations.length > 1 ? `Variation ${vIdx + 1} of ${variations.length} — click to switch` : 'Animated preview'}
+                    >
+                      ▶ {vIdx + 1}/{variations.length}
+                    </button>
                   )}
                   {/* Timing chip */}
                   <span className="badge absolute bottom-2 left-2 bg-black/55 font-mono text-white backdrop-blur">

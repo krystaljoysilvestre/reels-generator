@@ -20,6 +20,7 @@ export const SceneOutputSchema = z.object({
   motionPrompt: z.string().min(1),
   tier: z.enum(['still', 'video']),
   mood: z.array(z.string()).min(1).max(3),
+  location: z.string().min(1), // canonical place label; same label across scenes = same place (drives i2i continuity)
 })
 export type SceneOutput = z.infer<typeof SceneOutputSchema>
 
