@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm'
 import { getDb, reels, stories, scenes, channels } from '@reels/db'
 import { llmCall, buildInputHash } from '@reels/providers'
 import { ScenesOutputSchema, WorldBibleSchema, reviewSceneBreakdown } from '@reels/core'
-import { buildScenesPrompt, SCENES_V1_VERSION } from '../../prompts-bridge.js'
+import { buildScenesPrompt, SCENES_V1_VERSION, buildPeakExtractPrompt, PEAK_EXTRACT_V1_VERSION, PeakExtractSchema } from '../../prompts-bridge.js'
 import { runStep } from '../harness.js'
 
 // breakdown_scenes — step 3 (docs/02 §4)
@@ -47,7 +47,29 @@ export async function breakdownScenes(reelId: string): Promise<void> {
   const seconds = channel.targetSeconds ?? 75
   const minScenes = Math.max(3, Math.floor(seconds / 16))
   const maxScenes = Math.min(16, Math.max(minScenes + 1, Math.ceil(seconds / 9)))
-  const peakMoment = story.twistAnchor ?? ''
+
+  // Peak line drives the climax scene (here) + the music swell/sting (compute_timings reads twist_anchor).
+  // Generated stories carry it; BYO/legacy stories don't, so extract one and persist it so BOTH consumers
+  // benefit. Idempotent: once twist_anchor is set, a re-run skips this and the breakdown hash stays stable.
+  let peakMoment = story.twistAnchor?.trim() ?? ''
+  let peakCost = 0
+  if (!peakMoment) {
+    const peak = buildPeakExtractPrompt(story.body)
+    const peakLlm = await llmCall({
+      templateVersion: PEAK_EXTRACT_V1_VERSION,
+      schema: PeakExtractSchema,
+      system: peak.system,
+      messages: [{ role: 'user', content: peak.userMessage }],
+    })
+    peakCost = peakLlm.costCents
+    const candidate = peakLlm.data.peakMoment.trim()
+    // Trust it only if it's a real verbatim substring (the schema can't enforce that); else leave empty
+    // and the climax/music fall back to their soft defaults rather than anchoring to a hallucinated line.
+    if (candidate && story.body.includes(candidate)) {
+      peakMoment = candidate
+      await db.update(stories).set({ twistAnchor: candidate }).where(eq(stories.id, story.id))
+    }
+  }
 
   const { system, userMessage } = buildScenesPrompt({
     worldBibleJson: JSON.stringify(worldBible, null, 2),
@@ -115,7 +137,7 @@ export async function breakdownScenes(reelId: string): Promise<void> {
         console.warn(`[scene-qa] ${reelId.slice(0, 8)} ${notes.length} note(s):\n  - ${notes.join('\n  - ')}`)
       }
 
-      return { output: final, costCents: cost }
+      return { output: final, costCents: cost + peakCost }
     },
   )
 
