@@ -506,7 +506,7 @@ export function StoryboardEditor({
                     )}
                   </button>
                   <button
-                    onClick={() => setTweakOpen((prev) => { const n = new Set(prev); n.has(scene.idx) ? n.delete(scene.idx) : n.add(scene.idx); return n })}
+                    onClick={() => setTweakOpen((prev) => { const n = new Set(prev); if (n.has(scene.idx)) n.delete(scene.idx); else n.add(scene.idx); return n })}
                     disabled={loading === `regen-${scene.idx}`}
                     className={`btn-sm w-8 px-0 ${tweakOpen.has(scene.idx) ? 'btn bg-accent-soft text-accent' : 'btn-secondary'}`}
                     title="Regenerate image"

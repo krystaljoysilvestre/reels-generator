@@ -6,8 +6,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false)
 
   return (
-    <div className="flex min-h-screen bg-bg">
-      {/* Desktop sidebar */}
+    <div className="flex h-screen overflow-hidden bg-bg">
+      {/* Desktop sidebar — fixed full-height; only <main> scrolls (see h-screen + overflow-hidden above). */}
       <div className="hidden md:flex">
         <Sidebar />
       </div>
