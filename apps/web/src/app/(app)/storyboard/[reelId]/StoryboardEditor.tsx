@@ -44,6 +44,8 @@ export function StoryboardEditor({
   const [scenes, setScenes] = useState(initialScenes)
   const [sceneSaving, setSceneSaving] = useState<Record<number, 'saving' | 'saved'>>({}) // per-scene script-edit status
   const [editingScenes, setEditingScenes] = useState<Set<number>>(new Set()) // scenes whose script is unlocked for editing
+  const [tweakOpen, setTweakOpen] = useState<Set<number>>(new Set()) // scenes with the image-tweak panel open
+  const [tweakText, setTweakText] = useState<Record<number, string>>({}) // per-scene "what to change" instruction (optional)
   const [activeVar, setActiveVar] = useState<Record<number, number>>({}) // which video variation plays per scene tile
   const [loadedMedia, setLoadedMedia] = useState<Set<number>>(new Set()) // scenes whose image/video has loaded (for develop-in)
   const markLoaded = (idx: number) => setLoadedMedia((s) => (s.has(idx) ? s : new Set(s).add(idx)))
@@ -117,17 +119,32 @@ export function StoryboardEditor({
     return () => clearInterval(interval)
   }, [reel.id, reel.operatorMinutes])
 
+  // Regenerate a scene's image (fresh re-roll). The optional `instruction` ("lights off, more shadow") is
+  // rewritten by the LLM into a proper image prompt before generating; with no instruction it's a plain re-roll.
   async function handleRegenImage(sceneIdx: number) {
+    setError(null)
     setLoading(`regen-${sceneIdx}`)
-    // A new image invalidates any motion (the clip was animated from the old image), so the route resets
-    // the scene to a still and discards the stale clip. Flip the local switch off so it reflects that
-    // immediately; the operator re-enables Motion to animate the fresh image.
-    await fetch('/api/pipeline/regen-image', {
+    const res = await fetch('/api/pipeline/regen-image', {
       method: 'POST',
-      body: JSON.stringify({ reelId: reel.id, sceneIdx }),
+      body: JSON.stringify({
+        reelId: reel.id, sceneIdx,
+        instruction: tweakText[sceneIdx]?.trim() || undefined,
+      }),
       headers: { 'Content-Type': 'application/json' },
     })
+    if (!res.ok) {
+      const j = await res.json().catch(() => null)
+      setLoading(null)
+      setError(j?.error ?? 'Could not regenerate this image.')
+      return
+    }
+    // The regenerated image gets a NEW asset id → a new URL (page.tsx cache-busts on it), so the tile
+    // swaps once it lands. Clear this scene's loaded flag so the shimmer shows while the fresh image
+    // loads instead of holding the stale one. A new image also invalidates any motion (the clip was
+    // animated off the old image): the route reset the scene to a still, so reflect that locally too.
+    setLoadedMedia((s) => { const n = new Set(s); n.delete(sceneIdx); return n })
     setScenes((prev) => prev.map((s) => (s.idx === sceneIdx ? { ...s, tier: 'still' } : s)))
+    setTweakOpen((prev) => { const n = new Set(prev); n.delete(sceneIdx); return n })
     setLoading(null)
     router.refresh()
   }
@@ -351,6 +368,16 @@ export function StoryboardEditor({
               <div key={scene.idx} className="flex w-64 flex-shrink-0 flex-col gap-3">
                 {/* Image / placeholder */}
                 <div className="group relative overflow-hidden rounded-xl border border-border bg-subtle shadow-sm" style={{ height: 384 }}>
+                  {/* Regenerating overlay — covers the tile while the new image is being generated, so the
+                      operator sees the action is in flight (the old image stays visible underneath until it
+                      lands). Once the request returns, the loaded flag is cleared and the shimmer takes over
+                      while the fresh image loads. */}
+                  {loading === `regen-${scene.idx}` && (
+                    <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-2 bg-ink/45 text-xs font-medium text-white backdrop-blur-sm">
+                      <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/70 border-t-transparent" />
+                      Regenerating…
+                    </div>
+                  )}
                   {/* Shimmer skeleton sits BEHIND the media (z-0) — shown while the scene is still
                       generating or its image/video is loading. The media is opaque on top (z-10), so it
                       always shows once loaded even if the onLoad handler is missed (hydration race). */}
@@ -479,9 +506,9 @@ export function StoryboardEditor({
                     )}
                   </button>
                   <button
-                    onClick={() => handleRegenImage(scene.idx)}
+                    onClick={() => setTweakOpen((prev) => { const n = new Set(prev); n.has(scene.idx) ? n.delete(scene.idx) : n.add(scene.idx); return n })}
                     disabled={loading === `regen-${scene.idx}`}
-                    className="btn-secondary btn-sm w-8 px-0"
+                    className={`btn-sm w-8 px-0 ${tweakOpen.has(scene.idx) ? 'btn bg-accent-soft text-accent' : 'btn-secondary'}`}
                     title="Regenerate image"
                     aria-label="Regenerate image"
                   >
@@ -490,6 +517,34 @@ export function StoryboardEditor({
                     </svg>
                   </button>
                 </div>
+
+                {/* Image-regenerate panel — opens from the ↻ button. Optionally describe a change in plain
+                    words (rewritten into a proper prompt by the LLM), then regenerate. With no text it's a
+                    plain re-roll. Regenerating drops any Motion clip (it was animated off the old image). */}
+                {tweakOpen.has(scene.idx) && (() => {
+                  const busy = loading === `regen-${scene.idx}`
+                  return (
+                    <div className="flex flex-col gap-2 rounded-lg border border-border bg-subtle/40 p-2.5">
+                      <textarea
+                        value={tweakText[scene.idx] ?? ''}
+                        onChange={(e) => setTweakText((t) => ({ ...t, [scene.idx]: e.target.value }))}
+                        rows={2}
+                        autoFocus
+                        className="input resize-y text-xs leading-relaxed"
+                        placeholder="Optional: describe a change in plain words — e.g. brighter light, a wider shot, or a different setting"
+                        aria-label={`Scene ${scene.idx} image change`}
+                      />
+                      <p className="text-[11px] leading-relaxed text-faint">Leave blank to just re-roll, or describe a change — it’s rewritten into a proper image prompt for you.</p>
+                      <button
+                        onClick={() => handleRegenImage(scene.idx)}
+                        disabled={busy}
+                        className="btn-accent btn-sm w-full"
+                      >
+                        {busy ? 'Regenerating…' : 'Regenerate'}
+                      </button>
+                    </div>
+                  )
+                })()}
 
                 {/* Narration — full text, never truncated. Read-only until unlocked via the Edit button. */}
                 <div>

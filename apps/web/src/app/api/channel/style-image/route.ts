@@ -8,6 +8,9 @@ import {
   assembleNegativePrompt,
   FalEngineSchema,
   ContentFilterError,
+  SCENE_IMAGE_MODEL_ID,
+  SCENE_IMAGE_GUIDANCE,
+  SCENE_IMAGE_STEPS,
 } from '@reels/providers'
 import { getSession } from '@/lib/auth'
 
@@ -36,11 +39,12 @@ export async function POST(req: NextRequest) {
       storageKey,
       reelId: 'style-options',
       sceneIdx: 0,
-      // Previews use flux/dev (honors guidance + stylizes faithfully) so anime looks like
-      // anime and oil painting looks painted — Schnell collapses these toward realism.
-      engine: FalEngineSchema.parse({ imageModelId: 'fal-ai/flux/dev' }),
-      guidanceScale: 4.5,
-      numInferenceSteps: 28,
+      // Render the preview with the EXACT scene recipe (model + guidance + steps) so the look the operator
+      // approves here is the look their scenes actually get. Previously this ran hotter (guidance 4.5) and
+      // oversold the stylization vs the 3.5 scenes. Shared constants keep the two from drifting again.
+      engine: FalEngineSchema.parse({ imageModelId: SCENE_IMAGE_MODEL_ID }),
+      guidanceScale: SCENE_IMAGE_GUIDANCE,
+      numInferenceSteps: SCENE_IMAGE_STEPS,
     })
     return NextResponse.json({ imageKey: result.asset.storageKey, costCents: result.costCents })
   } catch (err) {

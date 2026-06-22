@@ -2,14 +2,19 @@ import type { NextRequest} from 'next/server';
 import { NextResponse } from 'next/server'
 import { getDb, scenes, assets, channels, reels } from '@reels/db'
 import { eq, and, inArray } from 'drizzle-orm'
-import { generateImage, FalEngineSchema } from '@reels/providers'
+import { generateImage, FalEngineSchema, ContentFilterError, ProviderRateLimitError, llmCall, SCENE_IMAGE_MODEL_ID, SCENE_IMAGE_GUIDANCE, SCENE_IMAGE_STEPS } from '@reels/providers'
 import { assembleImagePrompt, assembleNegativePrompt } from '@reels/core'
+import { buildReviseScenePrompt, REVISE_SCENE_V1_VERSION, ReviseSceneSchema } from '@reels/core/prompts/revise-scene.v1'
 import { getSession } from '@/lib/auth'
 
 export async function POST(req: NextRequest) {
   if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { reelId, sceneIdx } = (await req.json()) as { reelId: string; sceneIdx: number }
+  // `instruction` = an optional plain-language change ("lights off", "show the old house instead"); it's
+  // turned into a proper image prompt by the LLM below, never fed to flux raw. Always a fresh re-roll.
+  const { reelId, sceneIdx, instruction } = (await req.json()) as {
+    reelId: string; sceneIdx: number; instruction?: string
+  }
   const db = getDb()
 
   const reel = await db.query.reels.findFirst({ where: eq(reels.id, reelId) })
@@ -19,21 +24,56 @@ export async function POST(req: NextRequest) {
   const channel = reel ? await db.query.channels.findFirst({ where: eq(channels.id, reel.channelId) }) : null
   if (!scene || !channel) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  if (!scene.visualPrompt) return NextResponse.json({ error: 'No visual prompt' }, { status: 400 })
+  const basePrompt = (scene.visualPrompt || '').trim()
+  if (!basePrompt) return NextResponse.json({ error: 'No visual prompt' }, { status: 400 })
 
-  const finalPrompt = assembleImagePrompt(scene.visualPrompt, channel.stylePreset)
-  // Match generate-images: scene images render on flux/dev for palette + detail fidelity (style spike).
-  const engine = FalEngineSchema.parse({ imageModelId: 'fal-ai/flux/dev' })
+  // A plain-language change goes through the LLM, NOT straight into flux. flux can't follow instructions —
+  // feeding it "show the old house instead" as tokens produces muddy, confused images. So the LLM bakes the
+  // change into a proper, content-only image prompt (same conventions scenes.v1 produces); flux then always
+  // gets a well-formed description. The result is persisted as the scene's new description (below).
+  const tweak = instruction?.trim()
+  let contentPrompt = basePrompt
+  if (tweak) {
+    try {
+      const { system, userMessage } = buildReviseScenePrompt(basePrompt, tweak)
+      const revised = await llmCall({
+        templateVersion: REVISE_SCENE_V1_VERSION,
+        schema: ReviseSceneSchema,
+        system,
+        messages: [{ role: 'user', content: userMessage }],
+      })
+      contentPrompt = revised.data.imagePrompt.trim() || basePrompt
+    } catch {
+      return NextResponse.json({ error: 'Could not apply your change — try rephrasing it.' }, { status: 502 })
+    }
+  }
+  // The style preset always leads (system owns style); the content (LLM-revised or operator-edited) follows.
+  const finalPrompt = assembleImagePrompt(contentPrompt, channel.stylePreset)
+  // Render with the shared scene recipe so a regenerated image matches the rest of the reel exactly.
+  const engine = FalEngineSchema.parse({ imageModelId: SCENE_IMAGE_MODEL_ID })
 
-  const result = await generateImage({
-    prompt: finalPrompt,
-    negativePrompt: assembleNegativePrompt(),
-    reelId,
-    sceneIdx,
-    engine,
-    guidanceScale: 3.5,
-    numInferenceSteps: 28,
-  })
+  let result
+  try {
+    result = await generateImage({
+      prompt: finalPrompt,
+      negativePrompt: assembleNegativePrompt(),
+      reelId,
+      sceneIdx,
+      engine,
+      guidanceScale: SCENE_IMAGE_GUIDANCE,
+      numInferenceSteps: SCENE_IMAGE_STEPS,
+    })
+  } catch (err) {
+    // Surface a usable message instead of an opaque 500 — a content-filter rejection on the tweak is the
+    // operator's to fix (reword it), and a rate limit is worth retrying.
+    if (err instanceof ContentFilterError) {
+      return NextResponse.json({ error: 'The image was rejected by the safety filter — try rewording your change.' }, { status: 422 })
+    }
+    if (err instanceof ProviderRateLimitError) {
+      return NextResponse.json({ error: 'Image service is busy — wait a moment and try again.' }, { status: 429 })
+    }
+    return NextResponse.json({ error: 'Image generation failed — try again.' }, { status: 502 })
+  }
 
   const [asset] = await db.insert(assets).values({
     reelId,
@@ -47,9 +87,12 @@ export async function POST(req: NextRequest) {
 
   // A new image invalidates any motion: the clip was animated from the OLD image. So reset the scene to a
   // still (Motion toggle off) and discard the stale clips. The operator flips Motion back on to re-animate
-  // the fresh image. `isHero` is left intact — the scene is still a designated key beat.
+  // the fresh image. `isHero` is left intact — the scene is still a designated key beat. When the operator's
+  // change rewrote the description (via the LLM), persist it so later regens build on the updated scene
+  // rather than reverting to the original.
+  const descChanged = contentPrompt !== scene.visualPrompt
   await db.update(scenes)
-    .set({ imageAssetId: asset!.id, tier: 'still' })
+    .set({ imageAssetId: asset!.id, tier: 'still', ...(descChanged ? { visualPrompt: contentPrompt } : {}) })
     .where(and(eq(scenes.reelId, reelId), eq(scenes.idx, sceneIdx)))
 
   const reelVideos = await db.query.assets.findMany({ where: and(eq(assets.reelId, reelId), eq(assets.kind, 'video')) })

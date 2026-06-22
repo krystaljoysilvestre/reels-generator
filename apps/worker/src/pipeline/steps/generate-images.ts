@@ -1,6 +1,6 @@
 import { eq, and } from 'drizzle-orm'
 import { getDb, reels, scenes, assets, channels, stories } from '@reels/db'
-import { generateImage, buildInputHash, ContentFilterError, FalEngineSchema, llmCall, downloadBuffer } from '@reels/providers'
+import { generateImage, buildInputHash, ContentFilterError, FalEngineSchema, llmCall, downloadBuffer, SCENE_IMAGE_MODEL_ID, SCENE_IMAGE_GUIDANCE, SCENE_IMAGE_STEPS } from '@reels/providers'
 import { assembleImagePrompt, assembleNegativePrompt, PLATFORM_PRESETS } from '@reels/core'
 import { z } from 'zod'
 import { buildRephrasePrompt, REPHRASE_V1_VERSION, buildImageQAPrompt, IMAGE_QA_V1_VERSION, ImageQASchema } from '../../prompts-bridge.js'
@@ -19,11 +19,9 @@ import { runStep } from '../harness.js'
 
 const MAX_REPHRASE_ATTEMPTS = 3
 
-// Scene images render on flux/dev (not the cheaper schnell) for palette + detail fidelity, matching the
-// flux/dev style-option previews the operator approves at creation. ~2× cost/image (~4¢→8¢).
-const SCENE_IMAGE_MODEL = 'fal-ai/flux/dev'
-const SCENE_IMAGE_GUIDANCE = 3.5 // 4.0 was tried but flattened the look (lost the best shots) without helping adherence — kept at 3.5
-const SCENE_IMAGE_STEPS = 28
+// Scene-image render recipe (model + guidance + steps) is the shared SCENE_IMAGE_* recipe from
+// @reels/providers, so scene generation, in-editor regenerate, and the onboarding style previews all
+// render identically — what the operator approves at creation is what their scenes look like.
 const IMAGE_CONCURRENCY = 4
 const IMAGE_QA_MODEL = 'claude-haiku-4-5-20251001' // vision QA — cheap + sees images
 // hero/peak scenes get ONE extra attempt on a QA fail — a cheap hedge against a transient miss (an
@@ -87,8 +85,8 @@ export async function generateImages(reelId: string): Promise<void> {
   ])
   if (!channel) throw new Error(`Channel not found: ${reel.channelId}`)
 
-  // Engine config — scene images on flux/dev for palette + detail fidelity (see SCENE_IMAGE_MODEL).
-  const engine = FalEngineSchema.parse({ imageModelId: SCENE_IMAGE_MODEL })
+  // Engine config — scene images on flux/dev for palette + detail fidelity (see SCENE_IMAGE_MODEL_ID).
+  const engine = FalEngineSchema.parse({ imageModelId: SCENE_IMAGE_MODEL_ID })
   // Generate at the channel's platform aspect (reels are 9:16) so scene images fill the frame.
   const aspect = (PLATFORM_PRESETS[(channel.targetPlatform ?? 'all') as keyof typeof PLATFORM_PRESETS] ?? PLATFORM_PRESETS.all).aspect
 

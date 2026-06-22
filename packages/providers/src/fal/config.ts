@@ -15,6 +15,14 @@ export const FalEngineSchema = z.object({
 })
 export type FalEngine = z.infer<typeof FalEngineSchema>
 
+// Canonical scene-image render recipe — the SINGLE source of truth for how a scene image is rendered,
+// used by scene generation, the in-editor regenerate, AND the onboarding style previews. They MUST share
+// these so the preview an operator approves at creation renders identically to the scenes they later get.
+// (They drifted once — previews ran at guidance 4.5 and looked more stylized than the 3.5 scenes they sold.)
+export const SCENE_IMAGE_MODEL_ID = 'fal-ai/flux/dev'  // flux/dev (not schnell) for palette + detail fidelity (~2× cost: 4¢→8¢)
+export const SCENE_IMAGE_GUIDANCE = 3.5 // 4.0 was tried but flattened the look (lost the best shots) without helping adherence — kept at 3.5
+export const SCENE_IMAGE_STEPS = 28
+
 // Cost estimates (USD) as of June 2026 — re-verify at build [M6]
 export const FAL_IMAGE_COST_CENTS = 4      // ~$0.04/image, Flux Schnell
 export const FAL_IMAGE_COST_CENTS_DEV = 8  // ~$0.08/image, Flux Dev
