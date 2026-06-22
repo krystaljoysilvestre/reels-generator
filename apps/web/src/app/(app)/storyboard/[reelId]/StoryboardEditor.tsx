@@ -303,7 +303,7 @@ export function StoryboardEditor({
   return (
     <div className="flex min-h-screen flex-col bg-bg">
       {/* Header */}
-      <div className="sticky top-0 z-10 flex flex-shrink-0 items-center justify-between gap-4 border-b border-border bg-bg/80 px-8 py-4 backdrop-blur">
+      <div className="sticky top-0 z-40 flex flex-shrink-0 items-center justify-between gap-4 border-b border-border bg-bg/80 px-8 py-4 backdrop-blur">
         <div className="flex items-center gap-3">
           <a href="/dashboard" className="btn-ghost btn-sm -ml-1.5" title="Back to reels">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -367,7 +367,7 @@ export function StoryboardEditor({
             return (
               <div key={scene.idx} className="flex w-64 flex-shrink-0 flex-col gap-3">
                 {/* Image / placeholder */}
-                <div className="group relative overflow-hidden rounded-xl border border-border bg-subtle shadow-sm" style={{ height: 384 }}>
+                <div className="group relative isolate overflow-hidden rounded-xl border border-border bg-subtle shadow-sm" style={{ height: 384 }}>
                   {/* Regenerating overlay — covers the tile while the new image is being generated, so the
                       operator sees the action is in flight (the old image stays visible underneath until it
                       lands). Once the request returns, the loaded flag is cleared and the shimmer takes over
@@ -578,7 +578,7 @@ export function StoryboardEditor({
 
       {/* Bottom bar — voice + render (storyboard flow only) */}
       {!isPostRender && (
-      <div className="sticky bottom-0 flex flex-shrink-0 flex-wrap items-center gap-4 border-t border-border bg-bg/80 px-8 py-4 backdrop-blur">
+      <div className="sticky bottom-0 z-40 flex flex-shrink-0 flex-wrap items-center gap-4 border-t border-border bg-bg/80 px-8 py-4 backdrop-blur">
         <button onClick={() => setShowVoicePicker(true)} className={`btn-secondary ${!selectedVoice ? 'ring-1 ring-accent' : ''}`}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3ZM19 11a7 7 0 0 1-14 0M12 18v3" />
@@ -616,7 +616,7 @@ export function StoryboardEditor({
 
       {/* Spot-check → approved → published gate */}
       {isPostRender && (
-        <div className="sticky bottom-0 flex flex-shrink-0 flex-wrap items-center gap-3 border-t border-border bg-bg/80 px-8 py-4 backdrop-blur">
+        <div className="sticky bottom-0 z-40 flex flex-shrink-0 flex-wrap items-center gap-3 border-t border-border bg-bg/80 px-8 py-4 backdrop-blur">
           {reel.status === 'spot_check' && (
             <>
               <div className="mr-auto">
