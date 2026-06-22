@@ -119,24 +119,53 @@ export function StoryboardEditor({
 
   async function handleRegenImage(sceneIdx: number) {
     setLoading(`regen-${sceneIdx}`)
+    // A new image invalidates any motion (the clip was animated from the old image), so the route resets
+    // the scene to a still and discards the stale clip. Flip the local switch off so it reflects that
+    // immediately; the operator re-enables Motion to animate the fresh image.
     await fetch('/api/pipeline/regen-image', {
       method: 'POST',
       body: JSON.stringify({ reelId: reel.id, sceneIdx }),
       headers: { 'Content-Type': 'application/json' },
     })
+    setScenes((prev) => prev.map((s) => (s.idx === sceneIdx ? { ...s, tier: 'still' } : s)))
     setLoading(null)
     router.refresh()
   }
 
-  async function handleTierToggle(sceneIdx: number, current: string) {
-    const next = current === 'video' ? 'still' : 'video'
-    setScenes((prev) => prev.map((s) => s.idx === sceneIdx ? { ...s, tier: next } : s))
+  // The Motion switch = pure intent: does this beat animate at render? Toggling is instant + free — it
+  // just sets the scene's tier (no generation, no spend). Optimistic local update so the tile flips at
+  // once. A cached clip is kept when switching off, so flipping back on instantly plays it again.
+  async function toggleMotion(sceneIdx: number, currentlyVideo: boolean) {
+    const tier = currentlyVideo ? 'still' : 'video'
+    setScenes((prev) => prev.map((s) => (s.idx === sceneIdx ? { ...s, tier } : s)))
     await fetch('/api/pipeline/set-scene-tier', {
       method: 'POST',
-      body: JSON.stringify({ reelId: reel.id, sceneIdx, tier: next }),
+      body: JSON.stringify({ reelId: reel.id, sceneIdx, tier }),
       headers: { 'Content-Type': 'application/json' },
     })
   }
+
+  // Preview = the single paid generate action: animate this (video-tier) scene now so you can watch the
+  // motion before render (Kling i2v, ~50¢). The clip is reused at render. Shown for any video-tier scene
+  // without a clip yet — hero or one you just switched on. (At render, animate_scenes generates any that
+  // were never previewed, so previewing is always optional.)
+  async function handlePreview(sceneIdx: number) {
+    setError(null)
+    setLoading(`animate-${sceneIdx}`)
+    const res = await fetch('/api/pipeline/preview-animation', {
+      method: 'POST',
+      body: JSON.stringify({ reelId: reel.id, sceneIdx }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+    setLoading(null)
+    if (!res.ok) {
+      const j = await res.json().catch(() => null)
+      setError(j?.error ?? 'Could not animate this scene.')
+      return
+    }
+    router.refresh() // pull in the new video asset so the tile starts playing it
+  }
+
 
   // Persist an edited scene's narration (on blur). The route rebuilds story.body from all scenes so the
   // render's audio + timings match the edited script. Re-render to apply.
@@ -303,7 +332,7 @@ export function StoryboardEditor({
       <div className="flex-1 overflow-x-auto overflow-y-hidden">
         <div className="flex min-w-max gap-4 p-8">
           {scenes.length === 0 && (
-            <div className="flex h-64 w-52 items-center justify-center rounded-xl border border-dashed border-border-strong text-xs text-faint">
+            <div className="flex w-64 flex-shrink-0 items-center justify-center rounded-xl border border-dashed border-border-strong text-xs text-faint" style={{ height: 384 }}>
               No scenes yet
             </div>
           )}
@@ -313,12 +342,15 @@ export function StoryboardEditor({
             const isVideo = scene.tier === 'video'
             const vIdx = activeVar[scene.idx] ?? 0
             const videoKey = variations[vIdx]
+            // A scene reverted to 'still' keeps its cached clip but shows the image — gate playback on tier.
+            const showVideo = isVideo && Boolean(videoKey)
+            const animatingThis = loading === `animate-${scene.idx}`
             const hasMedia = Boolean(videoKey || imgSrc)
             const mediaLoaded = loadedMedia.has(scene.idx)
             return (
-              <div key={scene.idx} className="flex w-52 flex-shrink-0 flex-col gap-3">
+              <div key={scene.idx} className="flex w-64 flex-shrink-0 flex-col gap-3">
                 {/* Image / placeholder */}
-                <div className="group relative overflow-hidden rounded-xl border border-border bg-subtle shadow-sm" style={{ height: 208 }}>
+                <div className="group relative overflow-hidden rounded-xl border border-border bg-subtle shadow-sm" style={{ height: 384 }}>
                   {/* Shimmer skeleton sits BEHIND the media (z-0) — shown while the scene is still
                       generating or its image/video is loading. The media is opaque on top (z-10), so it
                       always shows once loaded even if the onLoad handler is missed (hydration race). */}
@@ -331,7 +363,7 @@ export function StoryboardEditor({
                       generating scene {scene.idx}…
                     </div>
                   )}
-                  {videoKey ? (
+                  {showVideo ? (
                     <video
                       key={videoKey}
                       src={`/api/asset?key=${encodeURIComponent(videoKey)}`}
@@ -350,32 +382,113 @@ export function StoryboardEditor({
                       className="absolute inset-0 z-10 h-full w-full object-cover"
                     />
                   ) : null}
-                  {/* Scene-type badge */}
-                  {(scene.idx === 1 || isVideo) && (
-                    <span
-                      className={`badge absolute left-2 top-2 backdrop-blur ${
-                        scene.idx === 1 ? 'bg-info/90 text-white' : 'bg-accent/90 text-white'
-                      }`}
-                    >
-                      {scene.idx === 1 ? 'HOOK' : 'VIDEO'}
+                  {/* Scene-role badge (top-left): HOOK marks the opening; otherwise a ★ HERO badge marks the
+                      LLM's key visual beats (durable `isHero`, independent of the Motion toggle). Motion
+                      itself lives in the bottom-right switch. */}
+                  {scene.idx === 1 ? (
+                    <span className="badge absolute left-2 top-2 z-20 bg-info/90 text-white backdrop-blur">HOOK</span>
+                  ) : scene.isHero ? (
+                    <span className="badge absolute left-2 top-2 z-20 inline-flex items-center justify-center bg-warning/90 px-1 text-white backdrop-blur" title="Hero scene — a key visual beat the story designed to stand out">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                        <path d="M12 2l2.9 6.3 6.9.7-5.1 4.6 1.4 6.8L12 17.8 5.9 21.2l1.4-6.8L2.2 9.8l6.9-.7L12 2Z" />
+                      </svg>
                     </span>
+                  ) : null}
+                  {/* Motion switch (per scene), bottom-right. The knob itself carries the motion glyph (no
+                      separate label) to save space. ON = animated. Flipping ON generates a clip (~50¢; the
+                      knob shows a spinner while it works); OFF reverts to the still, keeping the clip cached
+                      so re-enabling is instant. */}
+                  {imgSrc && (
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={isVideo}
+                      disabled={animatingThis}
+                      onClick={() => toggleMotion(scene.idx, isVideo)}
+                      title={
+                        isVideo
+                          ? 'Motion on — animates at render. Switch off to keep it a still.'
+                          : 'Motion off — renders as a still. Switch on to animate at render.'
+                      }
+                      aria-label={isVideo ? 'Motion on — switch off to keep a still' : 'Motion off — switch on to animate'}
+                      className={`absolute bottom-2 right-2 z-20 inline-flex h-5 w-9 items-center rounded-full shadow ring-1 ring-inset backdrop-blur transition-colors disabled:cursor-wait ${isVideo ? 'bg-accent ring-white/30' : 'bg-black/45 ring-white/40'}`}
+                    >
+                      <span className={`flex h-4 w-4 items-center justify-center rounded-full bg-white shadow transition-transform ${isVideo ? 'translate-x-[18px]' : 'translate-x-[2px]'}`}>
+                        <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" className={isVideo ? 'text-accent' : 'text-faint'} aria-hidden>
+                          <path d="M7 5v14l11-7L7 5Z" />
+                        </svg>
+                      </span>
+                    </button>
                   )}
-                  {/* Animated-clip badge — click to cycle which variation plays */}
-                  {variations.length > 0 && (
+                  {/* Timing chip */}
+                  <span className="badge absolute bottom-2 left-2 z-20 bg-black/55 font-mono text-white backdrop-blur">
+                    {scene.startMs != null ? `${(scene.startMs / 1000).toFixed(1)}s` : '—'}
+                  </span>
+                  {/* Preview chip (top-right) — the generate action: animate a video beat that has no clip
+                      yet so you can watch it now (~50¢). Shown for any Motion-on scene without a clip; it
+                      animates at render regardless, so this is always optional. Spins while generating. */}
+                  {isVideo && imgSrc && variations.length === 0 && (
+                    <button
+                      type="button"
+                      onClick={() => handlePreview(scene.idx)}
+                      disabled={animatingThis}
+                      className="badge absolute right-2 top-2 z-20 inline-flex items-center gap-1 bg-accent/90 text-white backdrop-blur hover:bg-accent disabled:cursor-wait"
+                      title="Watch this scene's motion now — Kling i2v, ~50¢ (it animates at render either way)"
+                    >
+                      {animatingThis ? (
+                        <>
+                          <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                          Animating…
+                        </>
+                      ) : (
+                        <>
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                            <path d="M7 5v14l11-7L7 5Z" />
+                          </svg>
+                          Preview
+                        </>
+                      )}
+                    </button>
+                  )}
+                  {/* Variation cycler (top-right) — only when an animated scene has 2+ clips (after a render). */}
+                  {showVideo && variations.length > 1 && (
                     <button
                       type="button"
                       onClick={() => setActiveVar((m) => ({ ...m, [scene.idx]: ((m[scene.idx] ?? 0) + 1) % variations.length }))}
-                      disabled={variations.length < 2}
-                      className="badge absolute right-2 top-2 bg-black/55 text-white backdrop-blur"
-                      title={variations.length > 1 ? `Variation ${vIdx + 1} of ${variations.length} — click to switch` : 'Animated preview'}
+                      className="badge absolute right-2 top-2 z-20 bg-black/55 text-white backdrop-blur hover:bg-black/70"
+                      title={`Variation ${vIdx + 1} of ${variations.length} — click to switch`}
                     >
                       ▶ {vIdx + 1}/{variations.length}
                     </button>
                   )}
-                  {/* Timing chip */}
-                  <span className="badge absolute bottom-2 left-2 bg-black/55 font-mono text-white backdrop-blur">
-                    {scene.startMs != null ? `${(scene.startMs / 1000).toFixed(1)}s` : '—'}
-                  </span>
+                </div>
+
+                {/* Utility toolbar — icon-only squares, directly under the image (consistent position
+                    across tiles). Animation lives on the image itself, not here. */}
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => toggleSceneEdit(scene.idx, scene.narrationText)}
+                    className={`btn-sm w-8 px-0 ${editingScenes.has(scene.idx) ? 'btn bg-accent-soft text-accent' : 'btn-secondary'}`}
+                    title={editingScenes.has(scene.idx) ? 'Done editing the script' : 'Edit the script'}
+                    aria-label={editingScenes.has(scene.idx) ? 'Done editing the script' : 'Edit the script'}
+                  >
+                    {editingScenes.has(scene.idx) ? (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M20 6 9 17l-5-5" /></svg>
+                    ) : (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => handleRegenImage(scene.idx)}
+                    disabled={loading === `regen-${scene.idx}`}
+                    className="btn-secondary btn-sm w-8 px-0"
+                    title="Regenerate image"
+                    aria-label="Regenerate image"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden className={loading === `regen-${scene.idx}` ? 'animate-spin' : ''}>
+                      <path d="M21 12a9 9 0 1 1-2.64-6.36M21 4v5h-5" />
+                    </svg>
+                  </button>
                 </div>
 
                 {/* Narration — full text, never truncated. Read-only until unlocked via the Edit button. */}
@@ -401,43 +514,6 @@ export function StoryboardEditor({
                   {sceneSaving[scene.idx] && (
                     <p className="mt-0.5 text-[10px] text-faint">{sceneSaving[scene.idx] === 'saving' ? 'Saving…' : 'Saved ✓ · re-render to apply'}</p>
                   )}
-                </div>
-
-                {/* Actions */}
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => toggleSceneEdit(scene.idx, scene.narrationText)}
-                    className={editingScenes.has(scene.idx) ? 'btn btn-sm bg-accent-soft text-accent' : 'btn-secondary btn-sm'}
-                    title={editingScenes.has(scene.idx) ? 'Done editing the script' : 'Edit the script'}
-                    aria-label={editingScenes.has(scene.idx) ? 'Done editing the script' : 'Edit the script'}
-                  >
-                    {editingScenes.has(scene.idx) ? (
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M20 6 9 17l-5-5" /></svg>
-                    ) : (
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
-                    )}
-                  </button>
-                  <button
-                    onClick={() => handleRegenImage(scene.idx)}
-                    disabled={loading === `regen-${scene.idx}`}
-                    className="btn-secondary btn-sm"
-                    title="Regenerate image"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden className={loading === `regen-${scene.idx}` ? 'animate-spin' : ''}>
-                      <path d="M21 12a9 9 0 1 1-2.64-6.36M21 4v5h-5" />
-                    </svg>
-                    Regen
-                  </button>
-                  <button
-                    onClick={() => handleTierToggle(scene.idx, scene.tier)}
-                    className={isVideo ? 'btn btn-sm bg-accent-soft text-accent' : 'btn-secondary btn-sm'}
-                    title={isVideo ? 'Animated (click to make still)' : 'Still (click to animate)'}
-                  >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                      <path d="M7 5v14l11-7L7 5Z" />
-                    </svg>
-                    {isVideo ? 'Kling' : 'Still'}
-                  </button>
                 </div>
               </div>
             )

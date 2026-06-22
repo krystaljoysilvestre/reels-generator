@@ -155,6 +155,7 @@ export async function breakdownScenes(reelId: string): Promise<void> {
         visualPrompt: s.imagePrompt,   // content only; style injected in generate_images
         motionPrompt: s.motionPrompt,
         tier: s.tier,
+        isHero: s.tier === 'video', // durable hero designation = the LLM's video pick (tier may change later)
         mood: s.mood,
         location: s.location,
       })
@@ -165,6 +166,7 @@ export async function breakdownScenes(reelId: string): Promise<void> {
           visualPrompt: s.imagePrompt,
           motionPrompt: s.motionPrompt,
           tier: s.tier,
+          isHero: s.tier === 'video',
           mood: s.mood,
           location: s.location,
         },

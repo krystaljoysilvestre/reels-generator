@@ -127,6 +127,13 @@
       "when": 1782093411674,
       "tag": "0017_workable_hulk",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1782106947434,
+      "tag": "0018_scene_is_hero",
+      "breakpoints": true
     }
   ]
 }

@@ -4,7 +4,9 @@ import { generateVideo, buildInputHash, FalEngineSchema } from '@reels/providers
 import { runStep } from '../harness.js'
 
 // animate_scenes — step 8 (docs/02 §4)
-// tier=video scenes only. 2 variations for hero scenes. Model audio stripped at render step.
+// tier=video scenes only. One clip per scene (render composites variationIdx 0). Model audio stripped
+// at render. (Was 2 variations, but render only ever used v0 and there's no UI to pick the other — the
+// second was pure waste, ~50¢/scene, so we generate just the one.)
 
 export async function animateScenes(reelId: string): Promise<void> {
   const db = getDb()
@@ -25,9 +27,21 @@ export async function animateScenes(reelId: string): Promise<void> {
     })
     if (!imageAsset) continue
 
-    const variationCount = 2  // always 2 variations for hero scenes [docs/01 §5]
+    const variationCount = 1  // one clip per scene; render composites variationIdx 0
+
+    // Skip variations that already have a video asset — e.g. the operator pre-vetted this scene via the
+    // storyboard's "Preview animation" button. Reuses that paid work instead of regenerating at render.
+    const existing = await db.query.assets.findMany({
+      where: and(eq(assets.reelId, reelId), eq(assets.kind, 'video')),
+    })
+    const haveVariation = new Set(
+      existing
+        .filter((a) => (a.meta as Record<string, unknown>)['sceneIdx'] === scene.idx)
+        .map((a) => (a.meta as Record<string, unknown>)['variationIdx']),
+    )
 
     for (let v = 0; v < variationCount; v++) {
+      if (haveVariation.has(v)) continue
       const inputHash = buildInputHash('animate_scenes.v1', {
         imageKey: imageAsset.storageKey,
         motionPrompt: scene.motionPrompt ?? '',

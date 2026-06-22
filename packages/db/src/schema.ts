@@ -204,6 +204,9 @@ export const scenes = pgTable(
     visualPrompt: text('visual_prompt'),  // content only, style injected server-side
     motionPrompt: text('motion_prompt'),
     tier: text('tier').notNull().default('still'), // 'still' | 'video'
+    // Durable "this is a key visual beat" flag, set at breakdown = the LLM's video designation. Unlike
+    // `tier` (which the Motion toggle and regen mutate), this stays put so the hero marker persists.
+    isHero: boolean('is_hero').notNull().default(false),
     imageAssetId: uuid('image_asset_id'),
     videoAssetId: uuid('video_asset_id'),
     startMs: integer('start_ms'),

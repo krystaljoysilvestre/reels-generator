@@ -1,7 +1,7 @@
 import type { NextRequest} from 'next/server';
 import { NextResponse } from 'next/server'
 import { getDb, scenes, assets, channels, reels } from '@reels/db'
-import { eq, and } from 'drizzle-orm'
+import { eq, and, inArray } from 'drizzle-orm'
 import { generateImage, FalEngineSchema } from '@reels/providers'
 import { assembleImagePrompt, assembleNegativePrompt } from '@reels/core'
 import { getSession } from '@/lib/auth'
@@ -45,9 +45,16 @@ export async function POST(req: NextRequest) {
     meta: result.asset.meta,
   }).returning()
 
+  // A new image invalidates any motion: the clip was animated from the OLD image. So reset the scene to a
+  // still (Motion toggle off) and discard the stale clips. The operator flips Motion back on to re-animate
+  // the fresh image. `isHero` is left intact — the scene is still a designated key beat.
   await db.update(scenes)
-    .set({ imageAssetId: asset!.id })
+    .set({ imageAssetId: asset!.id, tier: 'still' })
     .where(and(eq(scenes.reelId, reelId), eq(scenes.idx, sceneIdx)))
+
+  const reelVideos = await db.query.assets.findMany({ where: and(eq(assets.reelId, reelId), eq(assets.kind, 'video')) })
+  const staleIds = reelVideos.filter((a) => (a.meta as Record<string, unknown>)['sceneIdx'] === sceneIdx).map((a) => a.id)
+  if (staleIds.length) await db.delete(assets).where(inArray(assets.id, staleIds))
 
   // Accumulate cost
   if (reel) {

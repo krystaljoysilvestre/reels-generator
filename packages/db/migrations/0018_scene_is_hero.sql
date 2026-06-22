@@ -1,0 +1,1 @@
+ALTER TABLE "scenes" ADD COLUMN "is_hero" boolean DEFAULT false NOT NULL;
