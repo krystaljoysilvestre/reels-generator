@@ -1,0 +1,1 @@
+ALTER TABLE "channels" ADD COLUMN "genre_category" text DEFAULT 'general' NOT NULL;

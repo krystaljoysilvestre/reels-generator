@@ -1,18 +1,22 @@
 // scenes.v1 — scene breakdown template (docs/04 §4, updated per [M9])
 // Each scene emits its FULL contiguous narration substring (not a "start…end" marker).
 //
-// Structure: a niche-NEUTRAL CORE (always sent) + ONE genre MODULE chosen from the channel's niche, so
-// a reel only pays for its own genre's rules (a cooking reel never reads the horror darkness rules; a
-// horror reel never reads "show the subject bright and clear"). Classification is keyword-based for now;
-// the upgrade path is an LLM-derived category stored on the channel at creation.
+// Structure: a niche-NEUTRAL CORE (always sent) + ONE genre MODULE, so a reel only pays for its own
+// genre's rules (a cooking reel never reads the horror darkness rules; a horror reel never reads "show
+// the subject bright and clear"). The module is chosen from the channel's `genreCategory` — an
+// LLM-derived bucket stored at channel creation (channel.v1). `classifyGenre` is the keyword fallback,
+// used when a channel predates the column (or the value is unrecognized).
 
 export const SCENES_V1_VERSION = 'scenes.v1'
+
+export type GenreModule = 'horror' | 'informational' | 'lifestyle' | 'general'
 
 export interface ScenesPromptVars {
   worldBibleJson: string
   era: string
   regionDescriptor: string
-  nicheDescription: string // the channel's genre/niche — drives the visual language + which module loads
+  nicheDescription: string // the channel's genre/niche — drives the visual language
+  genreCategory?: string // LLM-derived bucket stored on the channel; falls back to classifyGenre(niche)
   narration: string
   // Beat-driven count: a length-scaled range the director picks WITHIN by cutting on dramatic beats.
   minScenes: number
@@ -20,15 +24,19 @@ export interface ScenesPromptVars {
   peakMoment: string // the reel's peak line (verbatim substring) — gets its own scene; '' to skip
 }
 
-type GenreModule = 'horror' | 'informational' | 'lifestyle' | 'general'
-
 // Coarse genre bucket from the niche text — picks which module loads. Deterministic + free.
+// Used as the fallback when a channel has no stored genreCategory (pre-dates the column).
 export function classifyGenre(niche: string): GenreModule {
   const n = niche.toLowerCase()
   if (/horror|thriller|paranormal|aswang|multo|kulam|true[- ]?crime|creepy|scary|ghost|haunt|spooky|nightmare|eerie/.test(n)) return 'horror'
   if (/news|explain|educat|tutorial|histor|science|finance|document|how[- ]?to|fact|tech|business|review/.test(n)) return 'informational'
   if (/cook|food|recipe|travel|vlog|lifestyle|fashion|beauty|fitness|product|diy|craft|makeup/.test(n)) return 'lifestyle'
   return 'general'
+}
+
+// Coerce a stored/derived string to a known module, defaulting unknown values to 'general'.
+export function asGenreModule(v: string | null | undefined): GenreModule | null {
+  return v === 'horror' || v === 'informational' || v === 'lifestyle' || v === 'general' ? v : null
 }
 
 // One genre MODULE is appended to the core (only the matched one is sent).
@@ -54,7 +62,9 @@ Era: ${v.era}. Region look: ${v.regionDescriptor}.`
     ? `\n\nThe PEAK of this reel is this line: "${v.peakMoment.trim()}" — give it its OWN dedicated scene (don't bury it inside a longer span) so it lands as its own shot.`
     : ''
 
-  const genreModule = GENRE_MODULES[classifyGenre(v.nicheDescription)]
+  // Prefer the channel's LLM-derived category; fall back to keyword classification for older channels.
+  const module = asGenreModule(v.genreCategory) ?? classifyGenre(v.nicheDescription)
+  const genreModule = GENRE_MODULES[module]
   const moduleBlock = genreModule ? `\n\n${genreModule}` : ''
 
   const userMessage = `Cut the narration into scenes on its DRAMATIC BEATS — start a new scene at each real shift in location, time, focus, or tension, NOT at even time intervals. Use between ${v.minScenes} and ${v.maxScenes} scenes; let the story's structure decide the exact number. Each scene covers a contiguous span of narration with no gaps and no overlaps, in order.${peakBlock}
@@ -64,18 +74,20 @@ Narration:
 
 For each scene write:
 - narrationText: the COMPLETE, VERBATIM substring of the narration this scene covers (copy-paste exactly, no "…").
-- imagePrompt: CONTENT ONLY. START with the single most important thing the viewer must see — the exact subject, person, or action the line is about (concrete, NOT a generic empty room). THEN, in order: shot size + camera angle; one foreground element for depth; the light source + its direction; a touch of atmosphere. One concrete sentence ~20-35 words — don't bury the key element. World-bible nouns, not synonyms. NO style/medium words ("cinematic", "photo", "painting", colour-grade terms) — the system owns the look.
+- imagePrompt: CONTENT ONLY, leading with the key subject (see VISUAL PRIORITY below). THEN, in order: shot size + camera angle; one foreground element for depth; the light source + its direction; a touch of atmosphere. ~30-50 words — enough to pin every element concretely without padding. World-bible nouns, not synonyms. NO style/medium words ("cinematic", "photo", "painting", colour-grade terms) — the system owns the look.
 - motionPrompt: one slow camera/element movement, present tense ("camera pushes in slowly"). No cuts, no fast moves.
 - tier: "video" for the 2–3 most visually DYNAMIC beats — always include the opening; "still" otherwise. At most 3 video.
 - mood: 2–3 words for ambient/grade hints.
 - location: a short canonical label for WHERE this scene is (e.g. "rented bedroom"). Same label for the same place; a new label only when the place actually changes.
+
+VISUAL PRIORITY (every genre): each imagePrompt MUST begin with the most important VISIBLE thing — the specific subject, person, or action the line is about — never the setting it merely sits in. The setting is context, not the shot. Lead with the collapsed bridge, not the city skyline; the crispy pork belly on the board, not the kitchen; the couple boarding the banca, not the beach; the shadow under the closed door, not the empty hallway. If the line has no concrete subject, lead with the single detail that carries its meaning.
 
 CONTINUITY (people, places, objects): each image is generated independently, so a recurring element reads as the SAME one ONLY if described the same way every time. First appearance → fix its defining traits; reuse them near-verbatim on every return; never redesign a recurring element.
 - People/figures: build, age, hair, wardrobe, ONE distinguishing detail (+ face if this genre shows faces; if it only implies people, consistent silhouettes with faces in shadow).
 - Places: layout, key furniture, materials, colours, wear — the door/window/bed in one scene are the SAME ones when you return.
 - Objects: concretely — count, state, condition (a vague "door" renders open or as a double panel; a "window" glows). Pin it: "a single closed wooden door flush in the wall". Match the state the story implies (a shadow under the door ⇒ it's shut).
 
-LIGHTING & TIME: match the narration's time of day (incl. Tagalog cues) by describing the actual light, not just a label. Night / gabi / madaling-araw / 3 AM = dark: the room dark, lit only by the small source you name (lamp/candle/phone), windows dark with nothing visible outside — never a lit evening room. Day / umaga / tanghali = daylight. Dusk/dawn = low ambient.
+LIGHTING & TIME: match the narration's time of day (incl. Tagalog cues) by naming the ACTUAL light sources present in THIS place — not a label, and not a default. Night / gabi / madaling-araw / 3 AM → light only by what genuinely exists there: a lamp or candle in a rural bedroom, but stall lights and neon in a night market, streetlights and signage on a city road, a screen, a fire. Do NOT assume night means a dark room — a brightly lit night scene is correct when the place has light. Day / umaga / tanghali = daylight; dusk/dawn = low ambient. (How DARK a night gets, and whether windows go black, is a genre decision — see the genre module if one applies.)
 
 SHOW ONLY WHAT IS SEEN: depict what the narrator actually sees. If something is only HEARD (a voice, a knock) or FELT (a presence) and never said to be SEEN, do NOT render its source — render the narrator sensing it and the charged, empty space around them. Only show a presence when the narration says it was seen.
 

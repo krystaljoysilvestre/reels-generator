@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { getDb, reels, stories, scenes, channels } from '@reels/db'
 import { llmCall, buildInputHash } from '@reels/providers'
-import { ScenesOutputSchema, WorldBibleSchema } from '@reels/core'
+import { ScenesOutputSchema, WorldBibleSchema, reviewSceneBreakdown } from '@reels/core'
 import { buildScenesPrompt, SCENES_V1_VERSION } from '../../prompts-bridge.js'
 import { runStep } from '../harness.js'
 
@@ -54,6 +54,7 @@ export async function breakdownScenes(reelId: string): Promise<void> {
     era: worldBible.era,
     regionDescriptor: worldBible.region,
     nicheDescription: channel.nicheDescription ?? '',
+    genreCategory: channel.genreCategory ?? undefined, // LLM-derived bucket; builder keyword-classifies if absent
     narration: story.body,
     minScenes,
     maxScenes,
@@ -72,13 +73,23 @@ export async function breakdownScenes(reelId: string): Promise<void> {
         messages: [{ role: 'user', content: userMessage }],
       })
 
-      // Validate tiling — repair if scenes don't cover narration gaplessly
-      const tilingError = validateSceneTiling(
-        story.body,
-        llm.data.scenes.map((s) => s.narrationText),
-      )
+      // QA the breakdown. Two severities: tiling errors (gaps/coverage) + structural QA errors (peak
+      // split, too many video tiers) earn ONE LLM repair round; warnings (image-prompt hygiene, soft
+      // misses) are logged for observability, never block.
+      const qaInput = (s: typeof llm.data.scenes) => ({
+        narration: story.body,
+        peakMoment,
+        minScenes,
+        maxScenes,
+        scenes: s.map((x) => ({ narrationText: x.narrationText, imagePrompt: x.imagePrompt, tier: x.tier, location: x.location })),
+      })
+      const tilingError = validateSceneTiling(story.body, llm.data.scenes.map((s) => s.narrationText))
+      const qa = reviewSceneBreakdown(qaInput(llm.data.scenes))
+      const errors = [tilingError, ...qa.errors].filter((e): e is string => Boolean(e))
 
-      if (tilingError) {
+      let final = llm.data
+      let cost = llm.costCents
+      if (errors.length > 0) {
         const repairLlm = await llmCall({
           templateVersion: SCENES_V1_VERSION,
           schema: ScenesOutputSchema,
@@ -88,24 +99,36 @@ export async function breakdownScenes(reelId: string): Promise<void> {
             { role: 'assistant', content: JSON.stringify(llm.data) },
             {
               role: 'user',
-              content: `Scene coverage error: ${tilingError}. Each scene's narrationText must be a verbatim copy-paste from the narration, no ellipsis. Together they must tile the entire narration with no gaps. Return corrected JSON only.`,
+              content: `Fix these issues with the scene breakdown, then return the corrected JSON only:\n- ${errors.join('\n- ')}\nEvery narrationText must be a verbatim copy-paste from the narration (no ellipsis); together they must tile the entire narration with no gaps or overlaps.`,
             },
           ],
         })
-        return { output: repairLlm.data, costCents: llm.costCents + repairLlm.costCents }
+        final = repairLlm.data
+        cost += repairLlm.costCents
       }
 
-      return { output: llm.data, costCents: llm.costCents }
+      // Log residual notes (post-repair) so real failures accumulate without blocking the render.
+      const residualTiling = validateSceneTiling(story.body, final.scenes.map((s) => s.narrationText))
+      const finalQa = reviewSceneBreakdown(qaInput(final.scenes))
+      const notes = [...(residualTiling ? [residualTiling] : []), ...finalQa.errors, ...finalQa.warnings]
+      if (notes.length > 0) {
+        console.warn(`[scene-qa] ${reelId.slice(0, 8)} ${notes.length} note(s):\n  - ${notes.join('\n  - ')}`)
+      }
+
+      return { output: final, costCents: cost }
     },
   )
 
-  // Persist scenes (upsert by reel + idx)
-  for (const s of result.output.scenes) {
+  // Persist scenes (upsert by reel + idx). Renumber idx by array (= narration) order rather than trusting
+  // the LLM's idx values: the upsert keys on [reelId, idx], so a duplicate idx from the model would
+  // silently overwrite a scene. Post-tiling the array is already in narration order, so i+1 is canonical.
+  for (let i = 0; i < result.output.scenes.length; i++) {
+    const s = result.output.scenes[i]!
     await db
       .insert(scenes)
       .values({
         reelId,
-        idx: s.idx,
+        idx: i + 1,
         narrationText: s.narrationText,
         visualPrompt: s.imagePrompt,   // content only; style injected in generate_images
         motionPrompt: s.motionPrompt,

@@ -90,6 +90,10 @@ export const channels = pgTable('channels', {
   targetSeconds: integer('target_seconds').notNull().default(75),  // per-channel reel length (AI-derived per niche, operator-adjustable)
   targetPlatform: text('target_platform').notNull().default('all'),  // tiktok | youtube_shorts | facebook_reels | all — shapes caption/length now, render presets later
   worldBible: jsonb('world_bible').notNull().default({}),
+  // Visual-language bucket (horror | informational | lifestyle | general) — LLM-derived at creation
+  // (channel.v1), picks which genre module the scene-prompt builder loads. Defaults to 'general' so
+  // pre-existing channels stay neutral; the scene builder keyword-classifies as a secondary fallback.
+  genreCategory: text('genre_category').notNull().default('general'),
   lutConfig: jsonb('lut_config').notNull().default({}),
   captionStyle: jsonb('caption_style').notNull().default({}),  // per-channel burned-in caption look (resolved CaptionStyle)
   voiceMode: text('voice_mode').notNull().default('single'),  // 'single' | 'per_story'

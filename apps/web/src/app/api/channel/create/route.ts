@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { eq } from 'drizzle-orm'
 import { getDb, channels, stories } from '@reels/db'
 import { ToneConfigSchema, WorldBibleSchema, ChannelVoiceSchema, VoiceModeSchema, CaptionStyleSchema, TargetPlatformSchema, PLATFORM_PRESETS, MusicIntensitySchema, MusicModeSchema, AudioMoodSchema, peakFracForType } from '@reels/core'
+import { classifyGenre } from '@reels/core/prompts/scenes.v1'
 import { getSession } from '@/lib/auth'
 
 const InputSchema = z.object({
@@ -22,6 +23,8 @@ const InputSchema = z.object({
   targetSeconds: z.number().int().min(15).max(180).default(75), // per-channel reel length
   captionStyle: CaptionStyleSchema.default({}), // burned-in caption look
   worldBible: WorldBibleSchema,
+  // Visual-language bucket from channel.v1; falls back to keyword classification if absent.
+  genreCategory: z.enum(['horror', 'informational', 'lifestyle', 'general']).optional(),
   voiceMode: VoiceModeSchema,
   voicePool: z.array(ChannelVoiceSchema).max(8), // empty allowed for per_story (chosen at render)
   sampleScript: z.string().trim().max(20000).nullish(), // Step-2 narration → first reference story.
@@ -98,6 +101,8 @@ export async function POST(req: NextRequest) {
     targetSeconds,
     captionStyle: c.captionStyle,
     worldBible: c.worldBible,
+    // Prefer the LLM-derived bucket; fall back to keyword classification so the column is never 'general' by accident.
+    genreCategory: c.genreCategory ?? classifyGenre(c.nicheDescription),
     voiceMode: c.voiceMode,
     voiceSearchKeyword: c.voiceSearchKeyword,
     voicePool, // real ElevenLabs voices selected by the operator

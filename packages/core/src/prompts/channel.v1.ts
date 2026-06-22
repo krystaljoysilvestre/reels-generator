@@ -23,6 +23,7 @@ export const ChannelDerivationSchema = z.object({
   captionPosition: z.enum(['bottom', 'center', 'top']), // on-screen placement
   captionFontScale: z.number().min(0.85).max(1.25), // size multiplier on the preset's base
   worldBible: WorldBibleSchema,
+  genreCategory: z.enum(['horror', 'informational', 'lifestyle', 'general']), // visual-language bucket → picks the scene-prompt genre module
   voiceSearchKeyword: z.string(), // 1–2 word genre/topic tag for matching narrator voices
   audioMood: z.object({
     prompt: z.string(), // text-to-music brief for the channel's signature background bed
@@ -96,6 +97,11 @@ Produce JSON with exactly these fields:
     "canonObjects": ["3–5 recurring evocative objects"],
     "vocabulary": { "term": "how this channel refers to it (2–5 entries)" }
   },
+  "genreCategory": "the channel's VISUAL-LANGUAGE bucket — drives how scenes are composed and lit. Pick the ONE that fits how this channel's videos should LOOK, not just its topic:
+     - horror: horror, thriller, paranormal, true-crime, creepypasta, mystery, scary/eerie storytelling — built for dread, shadow, near-black night
+     - informational: news, explainers, education, tutorials, history, science, finance, tech, documentary, reviews — clear, sharp, neutrally-lit subjects
+     - lifestyle: food/cooking, travel, vlogs, fashion, beauty, fitness, product, DIY — bright, inviting, aspirational
+     - general: anything that doesn't clearly fit the above (comedy, drama, faith, general storytelling) — neutral composition, no genre-specific lighting rules",
   "voiceSearchKeyword": "1–2 word genre/topic tag for finding fitting narrator voices, e.g. 'horror', 'true crime', 'motivation', 'meditation'",
   "audioMood": {
     "prompt": "a text-to-music brief for the channel's SIGNATURE BACKGROUND BED that plays under narration — describe instruments/texture, tempo, and feel; it must be INSTRUMENTAL, loopable, sparse, and non-distracting (no vocals, no strong melody hooks, no heavy percussion that fights speech). Tie it to THIS niche + tone, e.g. horror → 'slow, dread-soaked low drone, distant, sub-bass, sparse, no melody'; finance → 'minimal confident lo-fi beat, soft keys, steady, understated'; wellness → 'warm ambient pads, gentle, airy, calming'",

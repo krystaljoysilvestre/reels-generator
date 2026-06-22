@@ -93,6 +93,7 @@ interface Derived {
     vocabulary: Record<string, string>
   }
   voiceSearchKeyword: string
+  genreCategory: 'horror' | 'informational' | 'lifestyle' | 'general'
   audioMood: AudioMood
 }
 
@@ -173,6 +174,9 @@ export function NewChannelWizard({
   const [showAllVoices, setShowAllVoices] = useState(false)
   const [voiceGender, setVoiceGender] = useState<'any' | 'female' | 'male'>('any')
   const [voiceSearchKeyword, setVoiceSearchKeyword] = useState('')
+  // AI-derived visual-language bucket → picks the scene-prompt genre module. '' until derived; the
+  // create route keyword-classifies the niche as a fallback when this is empty.
+  const [genreCategory, setGenreCategory] = useState<'' | 'horror' | 'informational' | 'lifestyle' | 'general'>('')
   const [tagline, setTagline] = useState('') // AI-derived one-line positioning (persisted on the channel)
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -260,6 +264,7 @@ export function NewChannelWizard({
         if (Array.isArray(d.selectedVoices)) setSelectedVoices(d.selectedVoices)
         if (Array.isArray(d.recommended)) setRecommended(d.recommended)
         if (typeof d.voiceSearchKeyword === 'string') setVoiceSearchKeyword(d.voiceSearchKeyword)
+        if (d.genreCategory === 'horror' || d.genreCategory === 'informational' || d.genreCategory === 'lifestyle' || d.genreCategory === 'general') setGenreCategory(d.genreCategory)
         if (typeof d.tagline === 'string') setTagline(d.tagline)
         if (typeof d.derivedSig === 'string') setDerivedSig(d.derivedSig)
         if (typeof d.sampleScript === 'string') setSampleScript(d.sampleScript)
@@ -295,7 +300,7 @@ export function NewChannelWizard({
     return {
       phase, name, committedName, description, niche, languages, targetPlatform, presetId,
       avatarKey, costCents, tone, style, region, era, locations, objects, vocab,
-      voiceMode, selectedVoices, recommended, voiceSearchKeyword, tagline, derivedSig,
+      voiceMode, selectedVoices, recommended, voiceSearchKeyword, genreCategory, tagline, derivedSig,
       targetSeconds, captionStyle, sampleScript, sampleIsAi, extraSampleScripts,
       audioMood, musicChoice, selectedPresetIds, presetPickedManually, uploadedMusic,
       styleProposals, selectedStyleIdx, uploadedStyleIdx, stylePreviews: previewKeys,
@@ -311,7 +316,7 @@ export function NewChannelWizard({
     } catch {
       /* storage full / unavailable — non-fatal */
     }
-  }, [hydrated, phase, name, committedName, description, niche, languages, targetPlatform, presetId, avatarKey, costCents, tone, targetSeconds, style, region, era, locations, objects, vocab, voiceMode, selectedVoices, recommended, voiceSearchKeyword, tagline, derivedSig, captionStyle, sampleScript, sampleIsAi, extraSampleScripts, audioMood, musicChoice, selectedPresetIds, presetPickedManually, uploadedMusic, styleProposals, selectedStyleIdx, uploadedStyleIdx, stylePreviews, draftChannelId])
+  }, [hydrated, phase, name, committedName, description, niche, languages, targetPlatform, presetId, avatarKey, costCents, tone, targetSeconds, style, region, era, locations, objects, vocab, voiceMode, selectedVoices, recommended, voiceSearchKeyword, genreCategory, tagline, derivedSig, captionStyle, sampleScript, sampleIsAi, extraSampleScripts, audioMood, musicChoice, selectedPresetIds, presetPickedManually, uploadedMusic, styleProposals, selectedStyleIdx, uploadedStyleIdx, stylePreviews, draftChannelId])
 
   // ── Unsaved-progress guard ──────────────────────────────────────────────────
   // The draft autosaves, but leaving mid-flow still deserves a heads-up so the operator
@@ -720,6 +725,7 @@ export function NewChannelWizard({
       setObjects(d.worldBible.canonObjects ?? [])
       setVocab(Object.entries(d.worldBible.vocabulary ?? {}).map(([term, value]) => ({ term, value })))
       setVoiceSearchKeyword(d.voiceSearchKeyword ?? '')
+      setGenreCategory(d.genreCategory ?? '')
       setTagline(d.tagline ?? '')
       setAudioMood(d.audioMood ?? null)
       setCostCents(json.costCents ?? 0)
@@ -831,6 +837,7 @@ export function NewChannelWizard({
           targetPlatform,
           toneConfig: tone,
           voiceSearchKeyword,
+          ...(genreCategory ? { genreCategory } : {}), // omit when not derived → create route keyword-classifies
           targetSeconds,
           captionStyle,
           stylePreset: style.trim(),
