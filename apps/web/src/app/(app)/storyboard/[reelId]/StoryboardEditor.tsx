@@ -1000,29 +1000,27 @@ function SceneInspector({
             setReshootShot(''); setReshootLight(''); setReshootText('')
           }
           return (
-            <div className="flex flex-col gap-3">
+            <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface shadow-xs">
               {/* Image — regenerate this scene's still */}
-              <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-3.5 shadow-xs">
-                <p className="text-xs font-semibold text-ink">Image</p>
-                <div className="grid grid-cols-2 gap-2.5">
-                  <div>
-                    <label className="mb-1 block text-[11px] font-medium text-muted">Shot</label>
-                    <IconSelect ariaLabel={`Scene ${scene.idx} shot change`} value={reshootShot} onChange={setReshootShot} options={SHOT_OPTIONS} />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-[11px] font-medium text-muted">Lighting</label>
-                    <IconSelect ariaLabel={`Scene ${scene.idx} lighting change`} value={reshootLight} onChange={setReshootLight} options={LIGHT_OPTIONS} />
-                  </div>
-                </div>
-                <input
-                  value={reshootText}
-                  onChange={(e) => setReshootText(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' && !regenerating) runReshoot() }}
-                  placeholder="Anything else? (optional)"
-                  aria-label={`Scene ${scene.idx} reshoot note`}
-                  className="input text-xs"
-                />
-                <div className="flex items-center gap-1.5">
+              <div className="flex flex-col gap-2 p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">Image</p>
+                <SettingRow label="Shot">
+                  <IconSelect ariaLabel={`Scene ${scene.idx} shot change`} value={reshootShot} onChange={setReshootShot} options={SHOT_OPTIONS} />
+                </SettingRow>
+                <SettingRow label="Lighting">
+                  <IconSelect ariaLabel={`Scene ${scene.idx} lighting change`} value={reshootLight} onChange={setReshootLight} options={LIGHT_OPTIONS} />
+                </SettingRow>
+                <SettingRow label="Note" alignTop>
+                  <textarea
+                    value={reshootText}
+                    onChange={(e) => setReshootText(e.target.value)}
+                    rows={2}
+                    placeholder="Anything else? (optional)"
+                    aria-label={`Scene ${scene.idx} reshoot note`}
+                    className="input resize-y text-xs leading-relaxed"
+                  />
+                </SettingRow>
+                <div className="flex items-center gap-1.5 pt-0.5">
                   <button type="button" onClick={runReshoot} disabled={regenerating} className="btn-accent btn-sm flex-1 active:scale-[.98] disabled:cursor-wait">
                     {regenerating ? 'Reshooting…' : hasChange ? 'Reshoot' : 'Fresh take'}
                   </button>
@@ -1034,9 +1032,9 @@ function SceneInspector({
               </div>
 
               {/* Motion — animate this scene */}
-              <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-3.5 shadow-xs">
+              <div className="flex flex-col gap-2 p-3">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-semibold text-ink">Motion</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">Motion</p>
                   <div className="flex items-center gap-2">
                     <span className="text-[11px] font-medium text-muted">{isVideo ? 'Video' : 'Still'}</span>
                     <button
@@ -1061,25 +1059,21 @@ function SceneInspector({
                 </div>
                 {isVideo ? (
                   <>
-                    <div className="grid grid-cols-2 gap-2.5">
-                      <div>
-                        <label className="mb-1 block text-[11px] font-medium text-muted">Camera movement</label>
-                        <IconSelect ariaLabel={`Scene ${scene.idx} camera movement`} value={moveKey} onChange={(v) => onSaveMotion(scene.idx, { motionPrompt: composeMotion(v, intensity) })} options={[{ value: '', label: 'Auto', icon: ICON_SPARKLE }, ...CAMERA_MOVES.map((m) => ({ value: m.key, label: m.label, icon: cameraMoveIcon(m.key) }))]} />
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-[11px] font-medium text-muted">Motion level</label>
-                        <IconSelect ariaLabel={`Scene ${scene.idx} motion level`} value={intensity} disabled={!moveKey} onChange={(v) => onSaveMotion(scene.idx, { motionPrompt: composeMotion(moveKey, v as IntensityKey) })} options={INTENSITIES.map((i, n) => ({ value: i.key, label: i.label, icon: intensityIcon(n + 1) }))} />
-                      </div>
-                    </div>
+                    <SettingRow label="Camera">
+                      <IconSelect ariaLabel={`Scene ${scene.idx} camera movement`} value={moveKey} onChange={(v) => onSaveMotion(scene.idx, { motionPrompt: composeMotion(v, intensity) })} options={[{ value: '', label: 'Auto', icon: ICON_SPARKLE }, ...CAMERA_MOVES.map((m) => ({ value: m.key, label: m.label, icon: cameraMoveIcon(m.key) }))]} />
+                    </SettingRow>
+                    <SettingRow label="Level">
+                      <IconSelect ariaLabel={`Scene ${scene.idx} motion level`} value={intensity} disabled={!moveKey} onChange={(v) => onSaveMotion(scene.idx, { motionPrompt: composeMotion(moveKey, v as IntensityKey) })} options={INTENSITIES.map((i, n) => ({ value: i.key, label: i.label, icon: intensityIcon(n + 1) }))} />
+                    </SettingRow>
                     {variations.length === 0 ? (
-                      <div className="flex flex-wrap items-center gap-2">
-                        <button type="button" onClick={() => onPreview(scene.idx)} disabled={animating} className="btn-secondary btn-sm active:scale-[.98] disabled:cursor-wait">
+                      <div className="flex flex-col gap-1 pt-0.5">
+                        <button type="button" onClick={() => onPreview(scene.idx)} disabled={animating} className="btn-secondary btn-sm w-full active:scale-[.98] disabled:cursor-wait">
                           {animating ? (<><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />Animating…</>) : (<><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M7 5v14l11-7L7 5Z" /></svg>Preview motion · ~{costStr}</>)}
                         </button>
                         <span className="text-[11px] text-faint">or it animates when you render</span>
                       </div>
                     ) : (
-                      <p className="flex items-center gap-1.5 text-[11px] text-muted">
+                      <p className="flex items-center gap-1.5 pt-0.5 text-[11px] text-muted">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="text-positive" aria-hidden><path d="M20 6 9 17l-5-5" /></svg>
                         Motion ready — click the scene to watch it.
                       </p>
@@ -1090,23 +1084,21 @@ function SceneInspector({
                 )}
               </div>
 
-              {/* Details — quiet read-only info */}
-              <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 px-1 text-xs">
-                <dt className="text-faint">Mood</dt>
-                <dd className="flex flex-wrap gap-1">
-                  {(scene.mood ?? []).length > 0 ? (scene.mood ?? []).map((m) => (
-                    <span key={m} className="badge bg-subtle text-muted">{m}</span>
-                  )) : <span className="text-faint">—</span>}
-                </dd>
-                <dt className="text-faint">Setting</dt>
-                <dd className="text-muted">{scene.location || '—'}</dd>
+              {/* Details — read-only scene info */}
+              <div className="flex flex-col gap-2 p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">Details</p>
+                <SettingRow label="Mood" alignTop>
+                  <div className="flex flex-wrap gap-1 pt-px">
+                    {(scene.mood ?? []).length > 0 ? (scene.mood ?? []).map((m) => (
+                      <span key={m} className="badge bg-subtle text-muted">{m}</span>
+                    )) : <span className="text-xs text-faint">—</span>}
+                  </div>
+                </SettingRow>
+                <SettingRow label="Setting"><span className="text-xs text-muted">{scene.location || '—'}</span></SettingRow>
                 {showVideo && clipSecs != null && (
-                  <>
-                    <dt className="text-faint">Clip</dt>
-                    <dd className="font-mono text-muted">{fmtSecs(clipSecs)}</dd>
-                  </>
+                  <SettingRow label="Clip"><span className="font-mono text-xs text-muted">{fmtSecs(clipSecs)}</span></SettingRow>
                 )}
-              </dl>
+              </div>
             </div>
           )
         })()}
@@ -1310,6 +1302,16 @@ function IconSelect({ value, options, onChange, disabled, ariaLabel }: {
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+// Figma-style property row: a fixed-width label on the left, the control filling the rest.
+function SettingRow({ label, alignTop, children }: { label: string; alignTop?: boolean; children: React.ReactNode }) {
+  return (
+    <div className={`flex gap-2 ${alignTop ? 'items-start' : 'items-center'}`}>
+      <span className={`w-14 flex-shrink-0 text-[11px] font-medium text-muted ${alignTop ? 'pt-2' : ''}`}>{label}</span>
+      <div className="min-w-0 flex-1">{children}</div>
     </div>
   )
 }
