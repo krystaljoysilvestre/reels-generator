@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.0.1",
   "scripts": {
+    "db:up": "bash scripts/ensure-db.sh",
+    "db:down": "docker compose stop postgres redis",
+    "predev": "bash scripts/ensure-db.sh",
     "dev": "concurrently -n web,worker -c cyan,yellow \"pnpm --filter web dev\" \"pnpm --filter worker dev\"",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
