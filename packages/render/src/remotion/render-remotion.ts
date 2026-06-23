@@ -22,6 +22,7 @@ export interface RemotionRenderInput {
     startMs: number
     endMs: number
     mood: string[]            // ambient/grade hints — drives per-scene atmosphere intensity
+    onScreenText?: string | null // optional title/overlay burned on this scene
   }>
   subtitles: SubtitleChunk[]
   captionStyle: CaptionStyle
@@ -94,6 +95,7 @@ export async function renderReelWithRemotion(input: RemotionRenderInput): Promis
         startFrame,
         durationFrames: Math.max(1, endFrame - startFrame),
         mood: s.mood,
+        onScreenText: s.onScreenText ?? null,
       }
     }),
   )

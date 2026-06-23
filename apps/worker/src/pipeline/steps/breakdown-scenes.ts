@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { getDb, reels, stories, scenes, channels } from '@reels/db'
 import { llmCall, buildInputHash } from '@reels/providers'
-import { ScenesOutputSchema, WorldBibleSchema, reviewSceneBreakdown } from '@reels/core'
+import { ScenesOutputSchema, WorldBibleSchema, reviewSceneBreakdown, cameraMovePrompt } from '@reels/core'
 import { buildScenesPrompt, SCENES_V1_VERSION, buildPeakExtractPrompt, PEAK_EXTRACT_V1_VERSION, PeakExtractSchema } from '../../prompts-bridge.js'
 import { runStep } from '../harness.js'
 
@@ -153,7 +153,7 @@ export async function breakdownScenes(reelId: string): Promise<void> {
         idx: i + 1,
         narrationText: s.narrationText,
         visualPrompt: s.imagePrompt,   // content only; style injected in generate_images
-        motionPrompt: s.motionPrompt,
+        motionPrompt: cameraMovePrompt(s.cameraMove),  // LLM's camera-move pick → animator motion text
         tier: s.tier,
         isHero: s.tier === 'video', // durable hero designation = the LLM's video pick (tier may change later)
         mood: s.mood,
@@ -164,7 +164,7 @@ export async function breakdownScenes(reelId: string): Promise<void> {
         set: {
           narrationText: s.narrationText,
           visualPrompt: s.imagePrompt,
-          motionPrompt: s.motionPrompt,
+          motionPrompt: cameraMovePrompt(s.cameraMove),
           tier: s.tier,
           isHero: s.tier === 'video',
           mood: s.mood,

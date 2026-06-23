@@ -2,8 +2,16 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { getDb, scenes, assets, reels } from '@reels/db'
 import { eq, and } from 'drizzle-orm'
-import { generateVideo, FalEngineSchema } from '@reels/providers'
+import { generateVideo, FalEngineSchema, ContentFilterError, ProviderRateLimitError } from '@reels/providers'
+import { resolveMotionSettings } from '@reels/core'
 import { getSession } from '@/lib/auth'
+
+// Best-effort in-flight guard (B5): a fast double-click would otherwise launch two paid clips before
+// either insert lands, since the have-variation check below only catches already-finished ones. An
+// in-memory set keyed by reel:scene short-circuits a concurrent second request on the same instance —
+// cheap belt-and-suspenders on top of the client's disabled button (not distributed, and that's fine
+// for the double-click it targets).
+const inFlight = new Set<string>()
 
 // On-demand single-scene animation: lets the operator vet motion for a hero (tier:'video') scene
 // from the storyboard, BEFORE committing to a full render. A preview answers a yes/no "is this motion
@@ -42,32 +50,54 @@ export async function POST(req: NextRequest) {
       .map((a) => (a.meta as Record<string, unknown>)['variationIdx']),
   )
 
+  const lockKey = `${reelId}:${sceneIdx}`
+  if (inFlight.has(lockKey)) {
+    return NextResponse.json({ error: 'This scene is already being animated — hang tight.' }, { status: 409 })
+  }
+  inFlight.add(lockKey)
+
   const engine = FalEngineSchema.parse({})
+  const motion = resolveMotionSettings(scene.motionSettings)
   let costAdded = 0
 
-  for (let v = 0; v < VARIATION_COUNT; v++) {
-    if (haveVariation.has(v)) continue
-    const result = await generateVideo({
-      imageStorageKey: imageAsset.storageKey,
-      motionPrompt: scene.motionPrompt ?? 'slow cinematic drift',
-      durationSec: 5,
-      reelId,
-      sceneIdx,
-      variationIdx: v,
-      engine,
-    })
+  try {
+    for (let v = 0; v < VARIATION_COUNT; v++) {
+      if (haveVariation.has(v)) continue
+      const result = await generateVideo({
+        imageStorageKey: imageAsset.storageKey,
+        motionPrompt: scene.motionPrompt ?? 'slow cinematic drift',
+        durationSec: motion.durationSec,
+        budget: motion.quality === 'budget',
+        reelId,
+        sceneIdx,
+        variationIdx: v,
+        engine,
+      })
 
-    await db.insert(assets).values({
-      reelId,
-      channelId: reel.channelId,
-      kind: 'video',
-      storageKey: result.asset.storageKey,
-      provider: 'fal',
-      providerJobId: result.providerJobId ?? null,
-      costCents: result.costCents,
-      meta: { ...result.asset.meta, sceneIdx, variationIdx: v },
-    })
-    costAdded += result.costCents
+      await db.insert(assets).values({
+        reelId,
+        channelId: reel.channelId,
+        kind: 'video',
+        storageKey: result.asset.storageKey,
+        provider: 'fal',
+        providerJobId: result.providerJobId ?? null,
+        costCents: result.costCents,
+        meta: { ...result.asset.meta, sceneIdx, variationIdx: v },
+      })
+      costAdded += result.costCents
+    }
+  } catch (err) {
+    // Map provider failures to actionable statuses instead of an opaque 500: a content-filter rejection
+    // is the operator's to fix, and a rate limit is worth a calm retry (the client backs off on 429).
+    if (err instanceof ContentFilterError) {
+      return NextResponse.json({ error: 'This shot couldn’t be animated — try reshooting it first.' }, { status: 422 })
+    }
+    if (err instanceof ProviderRateLimitError) {
+      return NextResponse.json({ error: 'Busy right now — give it a moment and try again.' }, { status: 429 })
+    }
+    return NextResponse.json({ error: 'That take didn’t come through — try again.' }, { status: 502 })
+  } finally {
+    inFlight.delete(lockKey)
   }
 
   if (costAdded > 0) {

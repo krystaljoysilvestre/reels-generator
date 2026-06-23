@@ -187,7 +187,7 @@ export default async function ChannelDetailsPage({ params }: { params: Promise<{
           <section className="card mt-6 p-5">
             <SectionLabel>Music</SectionLabel>
             <p className="mt-2 text-sm text-muted">
-              <span className="text-ink">AI-generated</span> — a fresh, original instrumental bed is composed for{' '}
+              <span className="text-ink">Original score</span> — a fresh, original instrumental track is composed for{' '}
               <span className="text-ink">each reel</span>, tuned to that story&apos;s mood and your channel&apos;s sound.
               You&apos;ll hear it in the reel preview before publishing.
             </p>

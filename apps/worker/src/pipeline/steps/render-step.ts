@@ -36,6 +36,7 @@ export async function renderStep(reelId: string): Promise<void> {
   const inputHash = buildInputHash('render.remotion.v1', {
     sceneCount: reelScenes.length,
     mixKey: mixAsset.storageKey,
+    onScreen: reelScenes.map((s) => s.onScreenText ?? '').join('|'),
     reelId,
   })
 
@@ -94,6 +95,7 @@ export async function renderStep(reelId: string): Promise<void> {
           startMs: timing.startMs,
           endMs: timing.endMs,
           mood: scene.mood,
+          onScreenText: scene.onScreenText,
         })
       }
 

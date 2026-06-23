@@ -64,7 +64,7 @@ export default async function DashboardPage() {
             <p className="text-base font-semibold tracking-tight text-ink">Build your first channel</p>
             <p className="mt-1.5 max-w-sm text-sm text-muted">
               A channel is one publishing brand — its niche, voice, look, and posting rules.
-              The pipeline turns a niche into publish-ready videos for it.
+              We turn a niche into publish-ready videos for it.
             </p>
             <div className="mt-6">
               <CreateChannelButton />

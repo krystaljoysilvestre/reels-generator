@@ -1,0 +1,1 @@
+ALTER TABLE "scenes" ADD COLUMN "motion_settings" jsonb;

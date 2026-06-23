@@ -29,7 +29,7 @@ const STEP_SUBTITLE: Record<Phase, string> = {
 function friendlyError(e: unknown, fallback: string): string {
   const msg = e instanceof Error ? e.message : fallback
   return /connection|timeout|timed out|network|fetch failed|502|ECONN/i.test(msg)
-    ? 'Couldn’t reach the AI service — please try again.'
+    ? 'Couldn’t connect — please try again.'
     : msg
 }
 
@@ -998,6 +998,11 @@ export function NewChannelWizard({
                 value={language}
                 onChange={(v) => setLanguages([v])}
                 options={SUPPORTED_LANGUAGES}
+                icon={
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="text-muted" aria-hidden>
+                    <circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18" />
+                  </svg>
+                }
               />
             </Field>
 
@@ -1018,11 +1023,11 @@ export function NewChannelWizard({
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin" aria-hidden>
                       <path d="M21 12a9 9 0 1 1-6.22-8.56" />
                     </svg>
-                    Generating…
+                    Working…
                   </>
                 ) : (
                   <>
-                    {hasDerived ? 'Continue' : 'Generate channel profile'}
+                    {hasDerived ? 'Continue' : 'Create profile'}
                     <FwdArrow />
                   </>
                 )}
@@ -1044,7 +1049,7 @@ export function NewChannelWizard({
                   </div>
                   <p className="mt-1 text-xs text-faint">
                     This teaches your channel&apos;s writing voice — every reel is written to match it. Your own
-                    example works best; or generate a draft to start from and edit it.
+                    example works best; or draft one to start from and edit it.
                   </p>
                 </div>
                 <button onClick={handleSampleDraft} disabled={sampleLoading} className="btn-secondary btn-sm flex-shrink-0">
@@ -1055,7 +1060,7 @@ export function NewChannelWizard({
                       </svg>
                       Writing…
                     </>
-                  ) : sampleScript.trim() ? 'Regenerate draft' : 'Generate draft'}
+                  ) : sampleScript.trim() ? 'Rewrite draft' : 'Write draft'}
                 </button>
               </div>
               <textarea
@@ -1098,7 +1103,7 @@ export function NewChannelWizard({
               </button>
               <div className="flex flex-col items-end gap-1">
                 {!sampleScript.trim() && (
-                  <p className="text-xs text-faint">Add an example — or tap Generate draft — to continue.</p>
+                  <p className="text-xs text-faint">Add an example — or tap Write draft — to continue.</p>
                 )}
                 <button onClick={() => setPhase('voice')} disabled={!sampleScript.trim()} className="btn-accent">
                   Next
@@ -1116,7 +1121,7 @@ export function NewChannelWizard({
 
             <div className="card p-5">
               <SectionLabel>Narrator voice</SectionLabel>
-              <p className="mt-1 text-xs text-faint">Real ElevenLabs voices — preview and select. Names &amp; descriptions aren&apos;t editable.</p>
+              <p className="mt-1 text-xs text-faint">Preview and pick a voice. Names and descriptions aren&apos;t editable.</p>
 
               {/* Mode — radio with explanations */}
               <div className="mt-3 flex flex-col gap-2">
@@ -1256,7 +1261,7 @@ export function NewChannelWizard({
               {/* Radio rows — same pattern as Step 3's voice mode, for consistency. */}
               <div className="mt-4 flex flex-col gap-2">
                 {([
-                  { key: 'ai', label: 'AI-generated', sub: 'A fresh, original bed composed for every reel — nothing to pick.', badge: 'Recommended' },
+                  { key: 'ai', label: 'Original score', sub: 'A fresh, original track composed for every reel — nothing to pick.', badge: 'Recommended' },
                   { key: 'preset', label: 'Presets', sub: 'Pick from our library, fitted to your niche.', badge: '' },
                   { key: 'upload', label: 'Upload', sub: 'Use your own tracks.', badge: '' },
                   { key: 'none', label: 'No music', sub: 'Narration only.', badge: '' },
@@ -1293,8 +1298,8 @@ export function NewChannelWizard({
                     if (ranked.length === 0) {
                       return (
                         <p className="rounded-lg border border-border bg-subtle px-3 py-2.5 text-xs leading-relaxed text-muted">
-                          Preset beds are being prepared. For now, pick{' '}
-                          <span className="font-medium text-ink">AI-generated</span> (a fresh bed per reel) or{' '}
+                          Presets are being prepared. For now, pick{' '}
+                          <span className="font-medium text-ink">Original score</span> (a fresh track per reel) or{' '}
                           <span className="font-medium text-ink">No music</span>.
                         </p>
                       )
@@ -1342,7 +1347,7 @@ export function NewChannelWizard({
               {/* AI-generated — the effect (fresh bed per reel) is in the row sub; this adds cost + vetting detail. */}
               {musicChoice === 'ai' && (
                 <p className="mt-3 text-xs leading-relaxed text-muted">
-                  Each reel is scored at render — a few cents per reel — tuned to that story&apos;s mood and your channel&apos;s sound, so no two reels share a backing track. You&apos;ll hear it in the preview before publishing. Prefer no per-reel cost? Pick <span className="font-medium text-ink">Presets</span>.
+                  Every reel gets its own track — a few cents per reel — composed for that story&apos;s mood and your channel&apos;s sound, so no two reels share music. You&apos;ll hear it in the preview before publishing. Prefer no per-reel cost? Pick <span className="font-medium text-ink">Presets</span>.
                 </p>
               )}
 

@@ -1,7 +1,7 @@
 import type { NextRequest} from 'next/server';
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { listVoices, llmCall } from '@reels/providers'
+import { listVoices, llmCall, ProviderRateLimitError } from '@reels/providers'
 import { ToneConfigSchema } from '@reels/core'
 import {
   buildVoiceRecommendPrompt,
@@ -70,7 +70,10 @@ export async function POST(req: NextRequest) {
     const voices = [...recommended, ...rest]
     return NextResponse.json({ voices, costCents: result.costCents })
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Recommendation failed'
-    return NextResponse.json({ error: message }, { status: 502 })
+    // A rate limit is worth a calm retry; otherwise return a generic message (don't leak provider internals).
+    if (err instanceof ProviderRateLimitError) {
+      return NextResponse.json({ error: 'Busy right now — give it a moment and try again.' }, { status: 429 })
+    }
+    return NextResponse.json({ error: 'Could not load voices — try again.' }, { status: 502 })
   }
 }

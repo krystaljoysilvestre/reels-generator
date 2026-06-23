@@ -95,7 +95,7 @@ export function StoryStudio({ reelId, channelId, channelName, mood, initialStatu
         {failed ? (
           <div className="card flex flex-col items-center gap-3 px-6 py-16 text-center">
             <p className="text-base font-semibold text-ink">The story couldn&apos;t be written</p>
-            <p className="max-w-sm text-sm text-muted">Something went wrong while generating. You can try again.</p>
+            <p className="max-w-sm text-sm text-muted">Something went wrong while writing it. You can try again.</p>
             <button onClick={retry} disabled={busy} className="btn-accent mt-1">{busy ? 'Retrying…' : 'Try again'}</button>
           </div>
         ) : generating || !story ? (
@@ -152,7 +152,7 @@ export function StoryStudio({ reelId, channelId, channelName, mood, initialStatu
               <span>so far</span>
             </div>
             <div className="flex gap-3 border-t border-border px-5 py-4">
-              <button onClick={() => setReviewing(true)} disabled={busy} className="btn-secondary flex-1">Generate another</button>
+              <button onClick={() => setReviewing(true)} disabled={busy} className="btn-secondary flex-1">Write another</button>
               <button onClick={approve} disabled={busy} className="btn-accent flex-1">{busy ? 'Saving…' : 'Use this story'}</button>
             </div>
           </div>

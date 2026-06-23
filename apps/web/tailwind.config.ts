@@ -20,10 +20,10 @@ export default {
         ink: '#16161A',         // primary
         muted: '#6B6B76',       // secondary
         faint: '#9B9BA4',       // tertiary / placeholders
-        // Accent (Linear-ish indigo)
-        accent: '#5E6AD2',
-        'accent-hover': '#4E59C0',
-        'accent-soft': '#EEF0FB',
+        // Accent (midnight black — cool/blue undertone so the CTA reads distinct from neutral `ink`)
+        accent: '#1A1A2E',
+        'accent-hover': '#2A2A44',   // lifts slightly lighter on hover (can't darken near-black)
+        'accent-soft': '#ECECF3',
         // Semantic
         positive: '#1A7F52',
         'positive-soft': '#E6F4EC',

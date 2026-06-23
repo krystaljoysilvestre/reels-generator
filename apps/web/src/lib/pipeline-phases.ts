@@ -66,7 +66,7 @@ export function channelMood(tone: { intensity?: number; warmth?: number } | null
 export const MOOD_TINT: Record<ChannelMood, string> = {
   dark: '#c01616',
   warm: '#d98324',
-  neutral: '#5E6AD2',
+  neutral: '#1A1A2E',
 }
 
 const WRITING_TICKERS: Record<ChannelMood, string[]> = {

@@ -11,9 +11,11 @@ export async function POST(req: NextRequest) {
   if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   // `instruction` = an optional plain-language change ("lights off", "show the old house instead"); it's
-  // turned into a proper image prompt by the LLM below, never fed to flux raw. Always a fresh re-roll.
-  const { reelId, sceneIdx, instruction } = (await req.json()) as {
-    reelId: string; sceneIdx: number; instruction?: string
+  // turned into a proper image prompt by the LLM below, never fed to flux raw.
+  // `improve` = keep THIS composition and refine it (image-to-image at low strength from the current image)
+  // rather than a fresh re-roll.
+  const { reelId, sceneIdx, instruction, improve } = (await req.json()) as {
+    reelId: string; sceneIdx: number; instruction?: string; improve?: boolean
   }
   const db = getDb()
 
@@ -52,6 +54,11 @@ export async function POST(req: NextRequest) {
   // Render with the shared scene recipe so a regenerated image matches the rest of the reel exactly.
   const engine = FalEngineSchema.parse({ imageModelId: SCENE_IMAGE_MODEL_ID })
 
+  // "Improve" → image-to-image from the current image at low strength: keep the composition, refine it.
+  const currentImage = improve && scene.imageAssetId
+    ? await db.query.assets.findFirst({ where: eq(assets.id, scene.imageAssetId) })
+    : null
+
   let result
   try {
     result = await generateImage({
@@ -62,6 +69,7 @@ export async function POST(req: NextRequest) {
       engine,
       guidanceScale: SCENE_IMAGE_GUIDANCE,
       numInferenceSteps: SCENE_IMAGE_STEPS,
+      ...(currentImage ? { referenceImageKey: currentImage.storageKey, strength: 0.45 } : {}),
     })
   } catch (err) {
     // Surface a usable message instead of an opaque 500 — a content-filter rejection on the tweak is the

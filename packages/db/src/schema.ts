@@ -203,6 +203,12 @@ export const scenes = pgTable(
     narrationText: text('narration_text').notNull(),
     visualPrompt: text('visual_prompt'),  // content only, style injected server-side
     motionPrompt: text('motion_prompt'),
+    // Optional on-screen text — a title/overlay burned onto this scene at render, separate from the
+    // spoken captions (which come from narrationText). Null/empty = no overlay.
+    onScreenText: text('on_screen_text'),
+    // Per-scene motion quality/length for animation (jsonb: { quality, durationSec }). Null = defaults
+    // (standard model, 5s). Read by the on-demand preview and the render-time animate step.
+    motionSettings: jsonb('motion_settings'),
     tier: text('tier').notNull().default('still'), // 'still' | 'video'
     // Durable "this is a key visual beat" flag, set at breakdown = the LLM's video designation. Unlike
     // `tier` (which the Motion toggle and regen mutate), this stays put so the hero marker persists.

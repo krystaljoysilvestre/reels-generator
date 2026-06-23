@@ -1,0 +1,1 @@
+ALTER TABLE "scenes" ADD COLUMN "on_screen_text" text;

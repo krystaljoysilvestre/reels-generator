@@ -3,6 +3,7 @@ import { and, desc, eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { requireAuth } from '@/lib/auth'
 import { type ChannelVoice, type VoiceSettings, moodToVoiceSettings, ToneConfigSchema } from '@reels/core'
+import { channelMood, MOOD_TINT } from '@/lib/pipeline-phases'
 import { StoryboardEditor } from './StoryboardEditor'
 
 export const dynamic = 'force-dynamic'
@@ -51,9 +52,12 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
 
   // Starting point for the voice-picker's delivery sliders: the reel's saved override if it has one, else
   // the channel's baseline delivery (tone only). Tweaking from here overrides the per-story auto-tuning.
+  const tone = ToneConfigSchema.parse(channel?.toneConfig ?? {})
   const initialVoiceSettings: VoiceSettings =
     (reel.voiceSettings as VoiceSettings | null) ??
-    moodToVoiceSettings([], ToneConfigSchema.parse(channel?.toneConfig ?? {}))
+    moodToVoiceSettings([], tone)
+  // Channel-mood accent (dark=red / warm=amber / neutral=midnight) for the storyboard's ambient touches.
+  const moodTint = MOOD_TINT[channelMood(tone)]
 
   // If the reel hard-failed, surface which step + why (the chain stops at the first failed step).
   let failure: { step: string; error: string } | null = null
@@ -91,6 +95,7 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
       initialVoiceSettings={initialVoiceSettings}
       voiceSettingsOverridden={reel.voiceSettings != null}
       channelName={channel?.name ?? ''}
+      moodTint={moodTint}
       failure={failure}
     />
   )

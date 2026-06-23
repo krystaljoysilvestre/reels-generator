@@ -1,11 +1,13 @@
 'use client'
 import { useState } from 'react'
 import { Sidebar } from './Sidebar'
+import { ToastProvider } from '@/components/Toast'
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false)
 
   return (
+    <ToastProvider>
     <div className="flex h-screen overflow-hidden bg-bg">
       {/* Desktop sidebar — fixed full-height; only <main> scrolls (see h-screen + overflow-hidden above). */}
       <div className="hidden md:flex">
@@ -37,5 +39,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <main className="flex-1 overflow-y-auto [scrollbar-gutter:stable]">{children}</main>
       </div>
     </div>
+    </ToastProvider>
   )
 }

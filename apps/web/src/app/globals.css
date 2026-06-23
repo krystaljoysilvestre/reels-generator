@@ -122,7 +122,7 @@
   /* ── Story-studio / progress loaders (characterful) ──────── */
   /* Flowing accent "thinking" bar (indeterminate). Recolor per channel mood via --think-tint. */
   .animate-think {
-    background-image: linear-gradient(90deg, transparent, var(--think-tint, #5E6AD2), transparent);
+    background-image: linear-gradient(90deg, transparent, var(--think-tint, #1A1A2E), transparent);
     background-size: 200% 100%;
     animation: think-flow 1.5s ease-in-out infinite;
   }
@@ -133,6 +133,19 @@
   /* Blinking caret for the typewriter story reveal. */
   .caret-blink {
     animation: caret-blink 1s step-end infinite;
+  }
+
+  /* Toast entrance — rise + fade in. */
+  .animate-toast-in {
+    animation: toast-in 0.22s ease-out;
+  }
+  /* Soft breathing glow for a "living" key beat (hero). Tint via --glow-tint (defaults to accent). */
+  .animate-glow {
+    animation: glow-breathe 2.8s ease-in-out infinite;
+  }
+  /* One-shot highlight when a live counter (cost / minutes) changes, so updates read as live. */
+  .animate-value-flash {
+    animation: value-flash 0.9s ease-out;
   }
 
   /* ── Misc ──────────────────────────────────────────────── */
@@ -177,6 +190,18 @@
 @keyframes caret-blink {
   0%, 100% { opacity: 1; }
   50% { opacity: 0; }
+}
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes glow-breathe {
+  0%, 100% { box-shadow: 0 0 0 1px var(--glow-tint, #1A1A2E), 0 0 8px -2px var(--glow-tint, #1A1A2E); }
+  50% { box-shadow: 0 0 0 1px var(--glow-tint, #1A1A2E), 0 0 16px 0px var(--glow-tint, #1A1A2E); }
+}
+@keyframes value-flash {
+  0% { color: var(--accent, #1A1A2E); transform: scale(1.08); }
+  100% { color: inherit; transform: scale(1); }
 }
 
 /* Respect users who prefer reduced motion — kill animations + transitions. */

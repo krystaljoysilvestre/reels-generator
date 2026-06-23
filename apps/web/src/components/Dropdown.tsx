@@ -1,7 +1,7 @@
 'use client'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 
-type Option = { value: string; label: string }
+type Option = { value: string; label: string; icon?: ReactNode }
 
 export function Dropdown({
   value,
@@ -10,6 +10,7 @@ export function Dropdown({
   placeholder = 'Select…',
   className = '',
   buttonClassName = '',
+  icon,
 }: {
   value: string
   onChange: (v: string) => void
@@ -17,6 +18,7 @@ export function Dropdown({
   placeholder?: string
   className?: string
   buttonClassName?: string
+  icon?: ReactNode // leading icon on the trigger (used when an option has no icon of its own)
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -46,7 +48,10 @@ export function Dropdown({
         onClick={() => setOpen((o) => !o)}
         className={`input flex items-center justify-between gap-2 text-left ${buttonClassName}`}
       >
-        <span className={current ? 'truncate text-ink' : 'truncate text-faint'}>{current?.label ?? placeholder}</span>
+        <span className={`flex min-w-0 items-center gap-2 ${current ? 'text-ink' : 'text-faint'}`}>
+          {(current?.icon ?? icon) && <span className="flex-shrink-0">{current?.icon ?? icon}</span>}
+          <span className="truncate">{current?.label ?? placeholder}</span>
+        </span>
         <svg
           width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
           strokeLinecap="round" strokeLinejoin="round" aria-hidden
@@ -65,11 +70,12 @@ export function Dropdown({
                 key={o.value}
                 type="button"
                 onClick={() => { onChange(o.value); setOpen(false) }}
-                className={`flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-left text-sm transition-colors ${
+                className={`flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sm transition-colors ${
                   sel ? 'bg-accent-soft text-accent' : 'text-ink hover:bg-subtle'
                 }`}
               >
-                <span className="truncate">{o.label}</span>
+                {o.icon && <span className="flex-shrink-0">{o.icon}</span>}
+                <span className="flex-1 truncate">{o.label}</span>
                 {sel && (
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="flex-shrink-0">
                     <path d="M20 6 9 17l-5-5" />

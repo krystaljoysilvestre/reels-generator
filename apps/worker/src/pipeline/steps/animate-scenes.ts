@@ -1,6 +1,7 @@
 import { eq, and } from 'drizzle-orm'
 import { getDb, reels, scenes, assets } from '@reels/db'
 import { generateVideo, buildInputHash, FalEngineSchema } from '@reels/providers'
+import { resolveMotionSettings } from '@reels/core'
 import { runStep } from '../harness.js'
 
 // animate_scenes — step 8 (docs/02 §4)
@@ -40,11 +41,15 @@ export async function animateScenes(reelId: string): Promise<void> {
         .map((a) => (a.meta as Record<string, unknown>)['variationIdx']),
     )
 
+    const motion = resolveMotionSettings(scene.motionSettings)
+
     for (let v = 0; v < variationCount; v++) {
       if (haveVariation.has(v)) continue
       const inputHash = buildInputHash('animate_scenes.v1', {
         imageKey: imageAsset.storageKey,
         motionPrompt: scene.motionPrompt ?? '',
+        quality: motion.quality,
+        durationSec: motion.durationSec,
         variationIdx: v,
         reelId,
         sceneIdx: scene.idx,
@@ -56,7 +61,8 @@ export async function animateScenes(reelId: string): Promise<void> {
           const result = await generateVideo({
             imageStorageKey: imageAsset.storageKey,
             motionPrompt: scene.motionPrompt ?? 'slow cinematic drift',
-            durationSec: 5,
+            durationSec: motion.durationSec,
+            budget: motion.quality === 'budget',
             reelId,
             sceneIdx: scene.idx,
             variationIdx: v,

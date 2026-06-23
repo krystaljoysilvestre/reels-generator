@@ -137,11 +137,11 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
 
         {/* Generation mode */}
         <section className="card space-y-3 p-5">
-          <SectionLabel>Generation</SectionLabel>
+          <SectionLabel>Creating reels</SectionLabel>
           <div className="flex flex-col gap-2">
             {([
-              { key: 'review', label: 'With reviews', sub: 'Stop to approve the story, edit the storyboard, and check the render on every reel.' },
-              { key: 'auto', label: 'Fully automated', sub: 'Run each reel end-to-end to a finished render — no stops. Publishing stays manual.' },
+              { key: 'review', label: 'With reviews', sub: 'Stop to approve the story, edit the storyboard, and check the cut on every reel.' },
+              { key: 'auto', label: 'Fully automated', sub: 'Take each reel all the way to a finished video — no stops. Publishing stays manual.' },
             ] as const).map((opt) => (
               <label
                 key={opt.key}
@@ -225,8 +225,8 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
 
         {/* Visual style */}
         <section className="card space-y-2 p-5">
-          <SectionLabel>Visual style DNA</SectionLabel>
-          <p className="text-xs text-faint">Comma-separated visual descriptors fed to the image model. Editing the text changes future reels (existing previews aren&apos;t re-rendered).</p>
+          <SectionLabel>Visual style</SectionLabel>
+          <p className="text-xs text-faint">Describe the look you want — mood, colour, lighting, setting. Changes apply to new reels; ones you&apos;ve already made keep their look.</p>
           <textarea value={stylePreset} onChange={(e) => setStylePreset(e.target.value)} rows={4} className="input resize-y" />
         </section>
 

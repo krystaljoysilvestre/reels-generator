@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { CAMERA_MOVE_KEYS } from '../motion/motion.js'
 
 // Mirrors story.v1 output schema (docs/04 §2.1).
 export const StoryOutputSchema = z.object({
@@ -17,7 +18,10 @@ export const SceneOutputSchema = z.object({
   idx: z.number().int().positive(),
   narrationText: z.string().min(1),  // full contiguous substring of narration [M9]
   imagePrompt: z.string().min(1),    // content only; style injected server-side [CLAUDE.md rule 2]
-  motionPrompt: z.string().min(1),
+  // The LLM picks the best-fitting camera move per scene (friendly preset key); we resolve it to the
+  // animator's motion text at breakdown. An invalid value trips the schema's repair loop; cameraMovePrompt
+  // also falls back to a slow drift if anything unexpected slips through.
+  cameraMove: z.enum(CAMERA_MOVE_KEYS),
   tier: z.enum(['still', 'video']),
   mood: z.array(z.string()).min(1).max(3),
   location: z.string().min(1), // canonical place label; same label across scenes = same place (drives i2i continuity)

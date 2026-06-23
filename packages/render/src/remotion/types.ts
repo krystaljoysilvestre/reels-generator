@@ -13,6 +13,7 @@ export interface ReelScene {
   startFrame: number
   durationFrames: number
   mood: string[] // ambient/grade hints from breakdown — drives per-scene atmosphere intensity
+  onScreenText?: string | null // optional title/overlay burned on this scene, separate from captions
 }
 
 // One word within a chunk — drives the word-by-word "karaoke" highlight.

@@ -114,7 +114,7 @@ export function CreateReelButton({
                 <p className="mt-1 text-sm text-muted">You can change this anytime in Settings.</p>
                 <div className="mt-4 flex flex-col gap-2.5">
                   <OptionCard title="With reviews" badge="Recommended" desc="You approve the story, edit the storyboard, and check the render before each reel is done." onClick={() => setStep('byo')} />
-                  <OptionCard title="Fully automated" desc="We run the whole reel end-to-end — story, visuals, voice, music, render — with no stops. You review the finished result before downloading." onClick={() => void create('auto')} />
+                  <OptionCard title="Fully automated" desc="We make the whole reel — story, visuals, voice, and music — start to finish, no stops. You review the finished result before downloading." onClick={() => void create('auto')} />
                 </div>
               </>
             ) : (
@@ -122,7 +122,7 @@ export function CreateReelButton({
                 <h2 className="text-base font-semibold text-ink">Do you have a script for this reel?</h2>
                 <p className="mt-1 text-sm text-muted">Bring your own, or we&apos;ll write one you can review.</p>
                 <div className="mt-4 flex flex-col gap-2.5">
-                  <OptionCard title="Write it for me" badge="Recommended" desc="We draft an original story in your channel's voice — you review it next, and can regenerate if it's not right." onClick={() => void create('review')} />
+                  <OptionCard title="Write it for me" badge="Recommended" desc="We draft an original story in your channel's voice — you review it next, and can rewrite it if it's not right." onClick={() => void create('review')} />
                   {showTextarea ? (
                     <div className="rounded-lg border border-accent bg-accent-soft p-3">
                       <p className="text-sm font-semibold text-ink">Paste your script</p>
@@ -138,7 +138,7 @@ export function CreateReelButton({
                       </button>
                     </div>
                   ) : (
-                    <OptionCard title="I have a script" desc="Paste your own narration — we'll skip generation and take it straight to the storyboard." onClick={() => setShowTextarea(true)} />
+                    <OptionCard title="I have a script" desc="Paste your own narration — we'll take it straight to the storyboard." onClick={() => setShowTextarea(true)} />
                   )}
                 </div>
               </>

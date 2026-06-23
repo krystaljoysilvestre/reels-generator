@@ -62,7 +62,7 @@ export function ReviewCard({ reel, story, remaining, allPendingIds }: ReviewCard
       <div className="card flex flex-col gap-4 p-5">
         <div>
           <p className="text-sm font-semibold text-ink">Why reject?</p>
-          <p className="text-xs text-muted">Pick a reason — it trains the next draft.</p>
+          <p className="text-xs text-muted">Pick a reason — it shapes the next take.</p>
         </div>
         <div className="grid gap-2">
           {REASON_CODES.map((r) => (

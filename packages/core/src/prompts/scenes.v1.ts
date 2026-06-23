@@ -75,7 +75,7 @@ Narration:
 For each scene write:
 - narrationText: the COMPLETE, VERBATIM substring of the narration this scene covers (copy-paste exactly, no "…").
 - imagePrompt: CONTENT ONLY, leading with the key subject (see VISUAL PRIORITY below). THEN, in order: shot size + camera angle; one foreground element for depth; the light source + its direction; a touch of atmosphere. ~30-50 words — enough to pin every element concretely without padding. World-bible nouns, not synonyms. NO style/medium words ("cinematic", "photo", "painting", colour-grade terms) — the system owns the look.
-- motionPrompt: one slow camera/element movement, present tense ("camera pushes in slowly"). No cuts, no fast moves.
+- cameraMove: the ONE camera move that best fits this beat — choose from: drift (slow, subtle), push_in, pull_out, pan_left, pan_right, tilt_up, tilt_down, handheld (uneasy, documentary), locked (almost still). Pick for the moment: push_in to build dread, pull_out for a reveal, locked for stillness, handheld for unease.
 - tier: "video" for the 2–3 most visually DYNAMIC beats — always include the opening; "still" otherwise. At most 3 video.
 - mood: 2–3 words for ambient/grade hints.
 - location: a short canonical label for WHERE this scene is (e.g. "rented bedroom"). Same label for the same place; a new label only when the place actually changes.
@@ -100,7 +100,7 @@ SAFETY (all genres): no gore, no graphic violence, no nudity/sexualization, no m
 OUTPUT (JSON only):
 {
   "scenes": [
-    { "idx": 1, "narrationText": "complete verbatim substring", "imagePrompt": "", "motionPrompt": "", "tier": "still", "mood": ["tense", "quiet"], "location": "rented bedroom" }
+    { "idx": 1, "narrationText": "complete verbatim substring", "imagePrompt": "", "cameraMove": "push_in", "tier": "still", "mood": ["tense", "quiet"], "location": "rented bedroom" }
   ]
 }`
 

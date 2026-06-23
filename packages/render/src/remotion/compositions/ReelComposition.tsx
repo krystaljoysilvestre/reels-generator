@@ -3,6 +3,7 @@ import { AbsoluteFill, Sequence, useVideoConfig } from 'remotion'
 import { SceneClip } from '../components/SceneClip.js'
 import { SubtitleOverlay } from '../components/SubtitleOverlay.js'
 import { GradeOverlay } from '../components/GradeOverlay.js'
+import { OnScreenTextOverlay } from '../components/OnScreenTextOverlay.js'
 import type { ReelCompositionProps } from '../types.js'
 
 export type { ReelCompositionProps } from '../types.js'
@@ -66,6 +67,8 @@ export const ReelComposition: React.FC<ReelCompositionProps> = ({
             />
             {/* Per-scene grade — atmosphere intensity scales with THIS scene's mood + tier */}
             <GradeOverlay grain={grain} vignette={vignette} intensity={moodIntensity(scene.mood, scene.tier)} />
+            {/* Optional per-scene on-screen text (above the grade, below the global captions) */}
+            {scene.onScreenText ? <OnScreenTextOverlay text={scene.onScreenText} /> : null}
           </AbsoluteFill>
         </Sequence>
       ))}

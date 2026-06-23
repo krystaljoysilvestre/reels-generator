@@ -1,0 +1,45 @@
+import type { NextRequest } from 'next/server'
+import { NextResponse } from 'next/server'
+import { getDb, scenes, assets } from '@reels/db'
+import { eq, and, inArray } from 'drizzle-orm'
+import { resolveMotionSettings } from '@reels/core'
+import { getSession } from '@/lib/auth'
+
+// Persist a scene's motion: how it moves (motionPrompt text) and/or its quality + length (motionSettings).
+// Both are used by the on-demand preview and the render-time animation, so editing either changes the
+// clip. When anything actually changes, the cached clip is now stale — delete it so the next preview/
+// render re-animates with the new settings.
+export async function POST(req: NextRequest) {
+  if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { reelId, sceneIdx, motionPrompt, motionSettings } = (await req.json()) as {
+    reelId: string; sceneIdx: number; motionPrompt?: string; motionSettings?: unknown
+  }
+  const db = getDb()
+
+  const scene = await db.query.scenes.findFirst({ where: and(eq(scenes.reelId, reelId), eq(scenes.idx, sceneIdx)) })
+
+  const update: { motionPrompt?: string | null; motionSettings?: unknown } = {}
+  let changed = false
+
+  if (motionPrompt !== undefined) {
+    const next = motionPrompt.trim() || null
+    if ((scene?.motionPrompt ?? null) !== next) { update.motionPrompt = next; changed = true }
+  }
+  if (motionSettings !== undefined) {
+    const next = resolveMotionSettings(motionSettings)
+    const prev = resolveMotionSettings(scene?.motionSettings)
+    if (prev.quality !== next.quality || prev.durationSec !== next.durationSec) { update.motionSettings = next; changed = true }
+  }
+
+  if (Object.keys(update).length > 0) {
+    await db.update(scenes).set(update).where(and(eq(scenes.reelId, reelId), eq(scenes.idx, sceneIdx)))
+  }
+
+  if (changed) {
+    const reelVideos = await db.query.assets.findMany({ where: and(eq(assets.reelId, reelId), eq(assets.kind, 'video')) })
+    const staleIds = reelVideos.filter((a) => (a.meta as Record<string, unknown>)['sceneIdx'] === sceneIdx).map((a) => a.id)
+    if (staleIds.length) await db.delete(assets).where(inArray(assets.id, staleIds))
+  }
+
+  return NextResponse.json({ ok: true, changed })
+}
