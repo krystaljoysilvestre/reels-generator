@@ -1,7 +1,14 @@
 import { eq } from 'drizzle-orm'
 import { getDb, reels, channels } from '@reels/db'
 import { generateMusic, uploadBuffer, buildInputHash } from '@reels/providers'
-import { AudioPacksSchema, ToneConfigSchema, AudioScriptSchema, TimingsSchema } from '@reels/core'
+import {
+  AudioPacksSchema,
+  ToneConfigSchema,
+  AudioScriptSchema,
+  TimingsSchema,
+  buildMusicPrompt,
+  clampMusicLengthMs,
+} from '@reels/core'
 import { runStep } from '../harness.js'
 
 // generate_music — PER-REEL bespoke background bed (musicMode='ai' channels only).
@@ -11,16 +18,12 @@ import { runStep } from '../harness.js'
 // So every reel gets a fresh, on-brand bed that fits its own story (heard in context at spot_check)
 // rather than reusing a fixed channel pool. preset/upload/none channels: no-op — the mixer uses their
 // own track pool (or nothing). Arc-synced *scored* music (timed to peakMoment) builds on this later.
-
-// Same hard constraints as the preset library: no vocals (would fight the narration), steady texture,
-// sits under a speaking voice.
-const CONSTRAINT =
-  ' Instrumental only — no vocals, no singing, no choir, no lyrics, no spoken word.' +
-  ' Consistent texture and steady volume throughout, no jarring hits or big drops.' +
-  ' Sits quietly in the background under a speaking voice.'
-
-const MUSIC_MIN_MS = 10_000
-const MUSIC_MAX_MS = 300_000
+//
+// REUSE: review-mode channels generate + vet this bed at the storyboard (/api/pipeline/preview-music),
+// which sets musicKey/musicLengthMs before render. If that bed is already long enough to cover the
+// final duration, we skip — the operator ships exactly the track they approved. We only (re)compose
+// here when there's no bed yet (auto-mode channels skip the storyboard) or the storyboard estimate
+// came up short (a too-short bed would loop with an audible seam in the mixer).
 
 export async function generateMusicStep(reelId: string): Promise<void> {
   const db = getDb()
@@ -36,21 +39,23 @@ export async function generateMusicStep(reelId: string): Promise<void> {
   const timings = TimingsSchema.parse(reel.timings)
   const audioScript = AudioScriptSchema.parse(reel.audioScript)
 
-  // Base sonic DNA from the channel's derived audioMood; fall back to niche/tone if it's missing.
-  const mood = audioPacks.audioMood
-  const tone = ToneConfigSchema.parse(channel.toneConfig ?? {})
-  const basePrompt =
-    mood?.prompt?.trim() ||
-    `a ${tone.intensity >= 6 ? 'dark, tense' : 'warm, gentle'} cinematic background bed for: ${channel.nicheDescription.slice(0, 160)}`
+  // Reuse a storyboard-vetted bed when it covers the final duration (no loop seam).
+  if (reel.musicKey && reel.musicLengthMs != null && reel.musicLengthMs >= timings.durationMs) {
+    console.log(`[music] ${reelId} reusing storyboard bed (${reel.musicLengthMs}ms ≥ ${timings.durationMs}ms)`)
+    return
+  }
 
+  const tone = ToneConfigSchema.parse(channel.toneConfig ?? {})
   // This reel's mood tilt — from the annotated music brief (derived from the story's mood) — so the
   // bed fits THIS story while staying in the channel's sonic family.
-  const reelMoods = audioScript.music?.moodTags ?? []
-  const tilt = reelMoods.length ? ` Lean ${reelMoods.join(', ')} for this story.` : ''
-
+  const prompt = buildMusicPrompt({
+    audioMood: audioPacks.audioMood,
+    toneIntensity: tone.intensity,
+    nicheDescription: channel.nicheDescription,
+    moodTags: audioScript.music?.moodTags ?? [],
+  })
   // Size the bed to the reel — within Eleven Music's bounds, so no looping/seams.
-  const lengthMs = Math.min(MUSIC_MAX_MS, Math.max(MUSIC_MIN_MS, timings.durationMs))
-  const prompt = basePrompt + tilt + CONSTRAINT
+  const lengthMs = clampMusicLengthMs(timings.durationMs)
   const inputHash = buildInputHash('generate_music.v1', { prompt, lengthMs, reelId })
 
   await runStep(
@@ -59,7 +64,10 @@ export async function generateMusicStep(reelId: string): Promise<void> {
       const { audio, costCents } = await generateMusic({ prompt, lengthMs })
       const storageKey = `audio/reel/${reelId}.mp3`
       await uploadBuffer(storageKey, audio, 'audio/mpeg')
-      await db.update(reels).set({ musicKey: storageKey, updatedAt: new Date() }).where(eq(reels.id, reelId))
+      await db
+        .update(reels)
+        .set({ musicKey: storageKey, musicLengthMs: lengthMs, updatedAt: new Date() })
+        .where(eq(reels.id, reelId))
       return { output: { storageKey }, costCents: costCents ?? 0 }
     },
   )

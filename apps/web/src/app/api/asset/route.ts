@@ -27,7 +27,8 @@ export async function GET(req: NextRequest) {
   // Anything regenerated under the SAME key must be served uncached, or the browser shows a stale
   // copy after a re-gen ("nothing changed"). That's ALL reel assets (scene images/videos + render are
   // re-generated in place via regen-image, re-tier, style edits, re-render) plus preset beds.
-  const regenerable = key.startsWith('reels/') || key.startsWith('audio/presets/')
+  const regenerable =
+    key.startsWith('reels/') || key.startsWith('audio/presets/') || key.startsWith('audio/reel/')
   return new NextResponse(new Uint8Array(buf), {
     headers: {
       'Content-Type': contentType,

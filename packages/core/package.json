@@ -22,6 +22,7 @@
     "./prompts/channel.v1": "./src/prompts/channel.v1.ts",
     "./prompts/channel-sample.v1": "./src/prompts/channel-sample.v1.ts",
     "./prompts/voice-recommend.v1": "./src/prompts/voice-recommend.v1.ts",
+    "./prompts/music-steer.v1": "./src/prompts/music-steer.v1.ts",
     "./prompts/style-options.v1": "./src/prompts/style-options.v1.ts",
     "./prompts/style-ref.v1": "./src/prompts/style-ref.v1.ts"
   },

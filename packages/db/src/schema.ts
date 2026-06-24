@@ -156,6 +156,7 @@ export const reels = pgTable(
     timings: jsonb('timings'),             // ComputeTimingsOutput (docs/08)
     voiceSettings: jsonb('voice_settings'), // per-reel narrator DELIVERY override (ElevenLabs voice_settings); null = auto-derive from the story's mood
     musicKey: text('music_key'),           // R2 key of THIS reel's AI-generated bed (musicMode='ai'); null otherwise
+    musicLengthMs: integer('music_length_ms'), // length of the generated bed; lets render reuse a storyboard-vetted bed when it's long enough to cover the final duration (else regenerate)
     renderUrl: text('render_url'),
     costCents: integer('cost_cents').notNull().default(0),
     operatorMinutes: integer('operator_minutes').notNull().default(0),

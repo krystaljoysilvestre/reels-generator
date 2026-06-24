@@ -148,6 +148,13 @@
       "when": 1782206266409,
       "tag": "0020_tired_inhumans",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1782287235638,
+      "tag": "0021_chilly_next_avengers",
+      "breakpoints": true
     }
   ]
 }

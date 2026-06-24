@@ -2,7 +2,7 @@ import { getDb, reels, scenes, assets, channels, pipelineSteps } from '@reels/db
 import { and, desc, eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { requireAuth } from '@/lib/auth'
-import { type ChannelVoice, type VoiceSettings, moodToVoiceSettings, ToneConfigSchema } from '@reels/core'
+import { type ChannelVoice, type VoiceSettings, moodToVoiceSettings, ToneConfigSchema, AudioPacksSchema } from '@reels/core'
 import { channelMood, MOOD_TINT } from '@/lib/pipeline-phases'
 import { StoryboardEditor } from './StoryboardEditor'
 
@@ -26,6 +26,7 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
     columns: {
       id: true, name: true, voicePool: true,
       nicheDescription: true, toneConfig: true, voiceSearchKeyword: true,
+      audioPacks: true,
     },
   })
 
@@ -49,6 +50,9 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
   const renderUrl = renderAsset ? `/api/asset?key=${encodeURIComponent(renderAsset.storageKey)}&v=${renderAsset.id}` : null
   // This reel's own AI-composed bed (musicMode='ai'), so it can be heard/vetted on the review surface.
   const musicUrl = reel.musicKey ? `/api/asset?key=${encodeURIComponent(reel.musicKey)}` : null
+  // AI-music channels compose + vet the bed at the storyboard (it's auto-requested on load); other
+  // modes source their bed from the channel pool at render, so there's nothing to vet here.
+  const aiMusic = AudioPacksSchema.parse(channel?.audioPacks ?? {}).musicMode === 'ai'
 
   // Starting point for the voice-picker's delivery sliders: the reel's saved override if it has one, else
   // the channel's baseline delivery (tone only). Tweaking from here overrides the per-story auto-tuning.
@@ -92,6 +96,7 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
       sceneVideoVariations={sceneVideoVariations}
       renderUrl={renderUrl}
       musicUrl={musicUrl}
+      aiMusic={aiMusic}
       initialVoiceSettings={initialVoiceSettings}
       voiceSettingsOverridden={reel.voiceSettings != null}
       channelName={channel?.name ?? ''}

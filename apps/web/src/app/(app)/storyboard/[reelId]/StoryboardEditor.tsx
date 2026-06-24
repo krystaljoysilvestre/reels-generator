@@ -33,6 +33,7 @@ interface StoryboardEditorProps {
   sceneVideoVariations: Record<number, string[]>
   renderUrl: string | null
   musicUrl: string | null // this reel's AI-composed bed (musicMode='ai'), for hearing/vetting on review
+  aiMusic: boolean // channel composes its bed per-reel (musicMode='ai') → vet it here, auto-requested on load
   initialVoiceSettings: VoiceSettings // starting point for the delivery sliders
   voiceSettingsOverridden: boolean // reel already has a saved manual override
   channelName: string
@@ -42,7 +43,7 @@ interface StoryboardEditorProps {
 
 export function StoryboardEditor({
   reel, story, scenes: initialScenes, voicePool, voiceRecommend,
-  sceneImages, sceneVideoVariations, renderUrl: initialRenderUrl, musicUrl,
+  sceneImages, sceneVideoVariations, renderUrl: initialRenderUrl, musicUrl: initialMusicUrl, aiMusic,
   initialVoiceSettings, voiceSettingsOverridden,
   channelName, moodTint, failure,
 }: StoryboardEditorProps) {
@@ -70,7 +71,20 @@ export function StoryboardEditor({
   // per-story auto-tuning, so we send it to the render (else generate_tts auto-derives from mood).
   const [voiceSettings, setVoiceSettings] = useState<VoiceSettings>(initialVoiceSettings)
   const [voiceTouched, setVoiceTouched] = useState(voiceSettingsOverridden)
+  const [deliveryOpen, setDeliveryOpen] = useState(false) // footer delivery-settings popover
+  // Edit delivery from the footer pill — same state the picker's sliders use; marks it a manual override.
+  const setDelivery = (patch: Partial<VoiceSettings>) => { setVoiceSettings((s) => ({ ...s, ...patch })); setVoiceTouched(true) }
   const [renderUrl] = useState(initialRenderUrl)
+  // AI-composed background bed: auto-requested on load for musicMode='ai' channels so the operator hears
+  // the mood before rendering; render-time generate_music reuses this exact bed. `force` recomposes it.
+  const [musicUrl, setMusicUrl] = useState(initialMusicUrl)
+  const [musicStatus, setMusicStatus] = useState<'idle' | 'generating' | 'error'>('idle')
+  const [musicError, setMusicError] = useState<string | null>(null)
+  const [musicTweakOpen, setMusicTweakOpen] = useState(false) // Regenerate popover (steer the new take)
+  const [musicTweak, setMusicTweak] = useState('') // the operator's plain-language steer for the bed
+  const [musicSuggestions, setMusicSuggestions] = useState<string[]>([]) // AI steer ideas for the field
+  const [musicSuggestLoading, setMusicSuggestLoading] = useState(false)
+  const musicRequestedRef = useRef(false)
   const [loading, setLoading] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [opMinutes, setOpMinutes] = useState(reel.operatorMinutes)
@@ -278,6 +292,55 @@ export function StoryboardEditor({
     router.push('/dashboard')
   }
 
+  // Compose this reel's background bed on demand. force=false is the auto-request on load (only if there's
+  // no bed yet, server-enforced); force=true recomposes a fresh take from the Regenerate button (a paid
+  // call). `instruction` is an optional plain-language steer the operator typed ("more tense").
+  async function composeMusic(force: boolean, instruction?: string) {
+    setMusicStatus('generating')
+    setMusicError(null)
+    try {
+      const res = await fetch('/api/pipeline/preview-music', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reelId: reel.id, force, ...(instruction?.trim() ? { instruction: instruction.trim() } : {}) }),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error ?? 'Could not compose the music.')
+      // ?t= busts the browser cache so a recomposed bed (same storage key) plays the new take, not the old.
+      if (json?.musicKey) setMusicUrl(`/api/asset?key=${encodeURIComponent(json.musicKey)}&t=${Date.now()}`)
+      setMusicStatus('idle')
+      if (force) router.refresh() // reflect the added cost in the header
+    } catch (e) {
+      setMusicError(e instanceof Error ? e.message : 'Could not compose the music.')
+      setMusicStatus('error')
+    }
+  }
+
+  // Auto-request the bed once on load for AI-music channels that don't have one yet — but only at the
+  // storyboard gate (not while rendering / post-render, where the worker's generate_music owns it).
+  useEffect(() => {
+    if (musicRequestedRef.current || !aiMusic || musicUrl || reel.status !== 'storyboard') return
+    musicRequestedRef.current = true
+    void composeMusic(false)
+  }, [aiMusic, musicUrl, reel.status])
+
+  // AI steer ideas for the Regenerate field — fetched ON DEMAND when the operator clicks the icon (never
+  // automatically). Text-only, cheap; tailored to this story's mood. Tap one to fill the field.
+  async function fetchMusicSuggestions() {
+    setMusicSuggestLoading(true)
+    try {
+      const res = await fetch('/api/pipeline/suggest-music', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reelId: reel.id }),
+      })
+      const json = await res.json().catch(() => null)
+      if (res.ok && Array.isArray(json?.suggestions)) setMusicSuggestions(json.suggestions as string[])
+    } finally {
+      setMusicSuggestLoading(false)
+    }
+  }
+
   // Spot-check gate: operator watches the rendered reel and signs it off.
   async function handleApprove() {
     setLoading('approve')
@@ -396,7 +459,7 @@ export function StoryboardEditor({
     </div>
   )
 
-  // Final render preview + its music bed (only once a render exists)
+  // Final render preview (the music bed lives in its own card below, vettable before render too)
   const preview = renderUrl ? (
     <div id="preview" className="border-t border-border px-4 py-6 sm:px-8">
       <p className="mb-3 text-xs font-medium text-muted">Render preview</p>
@@ -406,19 +469,110 @@ export function StoryboardEditor({
         className="max-h-[28rem] rounded-xl border border-border shadow-sm"
         style={{ aspectRatio: '9/16' }}
       />
+    </div>
+  ) : null
 
-      {/* AI-composed bed for this reel — hear the music on its own to vet it (it's mixed under the
-          narration in the video above). Only present for AI-music channels. */}
-      {musicUrl && (
-        <div className="mt-4 max-w-md rounded-lg border border-border bg-subtle/40 p-3">
-          <p className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-ink">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" />
+  // Compose a fresh bed from the Regenerate popover, optionally steered by what the operator typed.
+  const submitMusicTweak = () => {
+    setMusicTweakOpen(false)
+    void composeMusic(true, musicTweak)
+    setMusicTweak('')
+  }
+
+  // AI-composed bed for this reel — auto-requested on load so the operator hears the mood BEFORE
+  // rendering; render-time generate_music reuses this exact take. Regenerate opens a field to steer the
+  // new take. A compact control in the bottom bar next to the voice picker (AI-music channels only).
+  const musicControl = aiMusic ? (
+    <div
+      className="relative flex items-center gap-2 rounded-lg border border-border bg-subtle/40 px-2.5 py-1.5"
+      title="Background music composed for this reel — mixed under the narration in your reel"
+    >
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 text-muted" aria-hidden>
+        <path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" />
+      </svg>
+      {musicStatus === 'generating' ? (
+        <span className="flex items-center gap-1.5 py-1 pr-1 text-xs text-muted">
+          <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-muted/50 border-t-transparent" />
+          Composing music…
+        </span>
+      ) : musicUrl ? (
+        <>
+          <audio src={musicUrl} controls controlsList="nodownload noplaybackrate" preload="none" className="h-8 w-44 sm:w-56" />
+          <button
+            onClick={() => setMusicTweakOpen((o) => !o)}
+            aria-expanded={musicTweakOpen}
+            className={`flex-shrink-0 hover:text-ink ${musicTweakOpen ? 'text-ink' : 'text-muted'}`}
+            title="Regenerate — steer the new take"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5" />
             </svg>
-            Music · composed for this reel
-          </p>
-          <audio src={musicUrl} controls preload="none" className="h-9 w-full" />
-          <p className="mt-1.5 text-[11px] leading-relaxed text-faint">An original track composed for this story&apos;s mood — heard on its own here, mixed under the narration in the video.</p>
+          </button>
+        </>
+      ) : musicStatus === 'error' ? (
+        <button onClick={() => void composeMusic(true)} className="py-1 pr-1 text-xs font-medium text-accent hover:underline" title={musicError ?? undefined}>
+          Music failed — retry
+        </button>
+      ) : (
+        <span className="py-1 pr-1 text-xs text-muted">Preparing music…</span>
+      )}
+
+      {/* Steer-the-bed popover — opens upward from the footer pill. Type a plain-language change, or
+          leave it blank for a fresh take of the same mood. */}
+      {musicTweakOpen && (
+        <div className="absolute bottom-full right-0 z-50 mb-2 w-80 rounded-xl border border-border-strong bg-surface p-3 shadow-lg">
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Steer the music</p>
+            {/* AI ideas appear only on click — never auto-loaded, so the field stays unbiased. */}
+            <button
+              type="button"
+              onClick={() => void fetchMusicSuggestions()}
+              disabled={musicSuggestLoading}
+              className="flex items-center gap-1 text-[11px] font-medium text-accent hover:underline disabled:opacity-50"
+              title="Suggest ideas with AI"
+            >
+              {musicSuggestLoading ? (
+                <span className="h-3 w-3 animate-spin rounded-full border-2 border-accent/40 border-t-transparent" />
+              ) : (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M12 2l1.9 5.1L19 9l-5.1 1.9L12 16l-1.9-5.1L5 9l5.1-1.9z" /></svg>
+              )}
+              {musicSuggestions.length > 0 ? 'More ideas' : 'Suggest ideas'}
+            </button>
+          </div>
+
+          {/* Tap an idea to fill the field. */}
+          {musicSuggestions.length > 0 && (
+            <div className="mb-2 flex flex-wrap gap-1.5">
+              {musicSuggestions.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setMusicTweak(s)}
+                  className="rounded-full border border-border bg-subtle px-2 py-1 text-left text-[11px] leading-tight text-ink transition-colors hover:border-accent hover:bg-accent-soft"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <textarea
+            value={musicTweak}
+            onChange={(e) => setMusicTweak(e.target.value)}
+            onKeyDown={(e) => {
+              if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') submitMusicTweak()
+              if (e.key === 'Escape') setMusicTweakOpen(false)
+            }}
+            rows={2}
+            autoFocus
+            placeholder="Describe how the music should change…"
+            aria-label="Steer the background music"
+            className="input resize-y text-xs leading-relaxed"
+          />
+          <button type="button" onClick={submitMusicTweak} className="btn-accent btn-sm mt-2 w-full active:scale-[.98]">
+            Compose new take
+          </button>
+          <p className="mt-1.5 text-[11px] leading-relaxed text-faint">Leave blank for a fresh take of the same mood. It replaces the current bed.</p>
         </div>
       )}
     </div>
@@ -544,23 +698,70 @@ export function StoryboardEditor({
       {/* Bottom bar — voice + render (storyboard flow only) */}
       {!isPostRender && (
       <div className="sticky bottom-0 z-40 flex flex-shrink-0 flex-wrap items-center gap-4 border-t border-border bg-bg/80 px-4 py-3 backdrop-blur sm:px-8 sm:py-4">
-        <button onClick={() => setShowVoicePicker(true)} className={`btn-secondary ${!selectedVoice ? 'ring-1 ring-accent' : ''}`}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3ZM19 11a7 7 0 0 1-14 0M12 18v3" />
-          </svg>
-          {currentVoice ? (currentVoice.description ? `${currentVoice.name} · ${currentVoice.description}` : currentVoice.name) : 'Pick voice'}
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-faint" aria-hidden>
-            <path d="m6 9 6 6 6-6" />
-          </svg>
-        </button>
+        {/* Narrator — a pill matching the music control: tap the name to pick a voice, the sliders icon to
+            tweak this reel's delivery. */}
+        <div className={`relative flex items-center rounded-lg border bg-subtle/40 ${!selectedVoice ? 'border-accent ring-1 ring-accent' : 'border-border'}`}>
+          <button
+            onClick={() => setShowVoicePicker(true)}
+            disabled={recsLoading && !currentVoice}
+            className="flex h-11 items-center gap-1.5 rounded-l-lg px-2.5 text-xs font-medium text-ink transition-colors hover:bg-subtle disabled:cursor-wait disabled:text-muted"
+            title="Pick a narrator voice"
+          >
+            {recsLoading && !currentVoice ? (
+              <>
+                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-muted/50 border-t-transparent" />
+                Finding a voice…
+              </>
+            ) : (
+              <>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 text-muted" aria-hidden>
+                  <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3ZM19 11a7 7 0 0 1-14 0M12 18v3" />
+                </svg>
+                <span className="max-w-[11rem] truncate">{currentVoice ? (currentVoice.description ? `${currentVoice.name} · ${currentVoice.description}` : currentVoice.name) : 'Pick voice'}</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 text-faint" aria-hidden>
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </>
+            )}
+          </button>
+          <span className="h-5 w-px flex-shrink-0 bg-border" aria-hidden />
+          <button
+            onClick={() => setDeliveryOpen((o) => !o)}
+            aria-expanded={deliveryOpen}
+            className={`relative flex h-11 flex-shrink-0 items-center rounded-r-lg px-2 transition-colors hover:bg-subtle hover:text-ink ${deliveryOpen ? 'text-ink' : 'text-muted'}`}
+            title="Delivery settings"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" /><line x1="12" y1="21" x2="12" y2="12" /><line x1="12" y1="8" x2="12" y2="3" /><line x1="20" y1="21" x2="20" y2="16" /><line x1="20" y1="12" x2="20" y2="3" /><line x1="1" y1="14" x2="7" y2="14" /><line x1="9" y1="8" x2="15" y2="8" /><line x1="17" y1="16" x2="23" y2="16" />
+            </svg>
+            {voiceTouched && <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-accent" aria-hidden />}
+          </button>
+
+          {/* Delivery popover — opens upward from the pill; same sliders/state as the voice picker. */}
+          {deliveryOpen && (
+            <div className="absolute bottom-full left-0 z-50 mb-2 w-72 rounded-xl border border-border-strong bg-surface p-3 shadow-lg">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Delivery{voiceTouched ? ' · custom' : ''}</p>
+                {voiceTouched && (
+                  <button type="button" onClick={() => { setVoiceSettings(initialVoiceSettings); setVoiceTouched(false) }} className="text-[11px] font-medium text-accent hover:underline">
+                    Reset to auto
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-col gap-3">
+                <DeliverySlider label="Pace" lo="Slower" hi="Faster" min={0.7} max={1.15} step={0.01} value={voiceSettings.speed} onChange={(v) => setDelivery({ speed: v })} />
+                <DeliverySlider label="Expressiveness" lo="Subtle" hi="Dramatic" min={0} max={0.6} step={0.05} value={voiceSettings.style} onChange={(v) => setDelivery({ style: v })} />
+                <DeliverySlider label="Steadiness" lo="Varied" hi="Steady" min={0.2} max={0.85} step={0.05} value={voiceSettings.stability} onChange={(v) => setDelivery({ stability: v })} />
+              </div>
+              <p className="mt-2 text-[11px] leading-relaxed text-faint">Auto-tunes to each story&apos;s mood. Adjust to set it for this reel; preview a voice in the picker to hear it.</p>
+            </div>
+          )}
+        </div>
+        {musicControl}
         {error && <p className="text-sm text-danger">{error}</p>}
-        {isRenderable && !selectedVoice && !error && (
+        {isRenderable && !selectedVoice && !error && !recsLoading && (
           <p className="text-xs text-muted">
-            {recsLoading
-              ? 'Finding a narrator voice for this reel…'
-              : recsError
-                ? 'Could not load voices — open the picker to retry.'
-                : 'Pick a voice to render.'}
+            {recsError ? 'Could not load voices — open the picker to retry.' : 'Pick a voice to render.'}
           </p>
         )}
         <div className="flex-1" />
