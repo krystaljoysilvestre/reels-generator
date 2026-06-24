@@ -8,7 +8,12 @@ import { z } from 'zod'
 
 export const REVISE_SCENE_V1_VERSION = 'revise-scene.v1'
 
-export const ReviseSceneSchema = z.object({ imagePrompt: z.string().min(1) })
+// `intent` lets the system silently pick how to regenerate: a small additive tweak keeps the existing
+// composition (image-to-image refine), a subject/framing swap re-rolls from scratch (text-to-image).
+export const ReviseSceneSchema = z.object({
+  imagePrompt: z.string().min(1),
+  intent: z.enum(['refine', 'replace']),
+})
 
 export function buildReviseScenePrompt(
   currentPrompt: string,
@@ -25,12 +30,12 @@ The operator wants this change:
 """${instruction}"""
 
 Rewrite the FULL image prompt with the change fully applied, then return it. Rules:
-- If the change swaps the subject or framing (e.g. "show the old house instead of the door"), REPLACE the old subject completely — do not keep describing what was removed.
-- If it's an additive tweak (e.g. "more fog", "lights off"), keep the rest of the scene and fold the change in.
+- If the change swaps the subject or framing (e.g. "show the old house instead of the door"), REPLACE the old subject completely — do not keep describing what was removed. Set "intent" to "replace".
+- If it's an additive tweak (e.g. "more fog", "lights off"), keep the rest of the scene and fold the change in. Set "intent" to "refine".
 - Keep anything the operator did not ask to change.
 - Content only, no style words. Lead with the key visible subject. ~30–50 words.
 
-OUTPUT (JSON only): { "imagePrompt": "the rewritten prompt" }`
+OUTPUT (JSON only): { "imagePrompt": "the rewritten prompt", "intent": "refine" | "replace" }`
 
   return { system, userMessage }
 }

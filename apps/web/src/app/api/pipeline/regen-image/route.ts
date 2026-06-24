@@ -11,11 +11,11 @@ export async function POST(req: NextRequest) {
   if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   // `instruction` = an optional plain-language change ("lights off", "show the old house instead"); it's
-  // turned into a proper image prompt by the LLM below, never fed to flux raw.
-  // `improve` = keep THIS composition and refine it (image-to-image at low strength from the current image)
-  // rather than a fresh re-roll.
-  const { reelId, sceneIdx, instruction, improve } = (await req.json()) as {
-    reelId: string; sceneIdx: number; instruction?: string; improve?: boolean
+  // turned into a proper image prompt by the LLM below, never fed to flux raw. The same LLM call also
+  // classifies the change so the system silently picks how to regenerate (see `improve` below) — the
+  // operator never has to choose between "refine" and "fresh take".
+  const { reelId, sceneIdx, instruction } = (await req.json()) as {
+    reelId: string; sceneIdx: number; instruction?: string
   }
   const db = getDb()
 
@@ -35,6 +35,9 @@ export async function POST(req: NextRequest) {
   // gets a well-formed description. The result is persisted as the scene's new description (below).
   const tweak = instruction?.trim()
   let contentPrompt = basePrompt
+  // No instruction → a plain fresh re-roll. With an instruction, the LLM decides: an additive tweak
+  // refines the current image (i2i), a subject/framing swap re-rolls from scratch (t2i).
+  let improve = false
   if (tweak) {
     try {
       const { system, userMessage } = buildReviseScenePrompt(basePrompt, tweak)
@@ -45,6 +48,7 @@ export async function POST(req: NextRequest) {
         messages: [{ role: 'user', content: userMessage }],
       })
       contentPrompt = revised.data.imagePrompt.trim() || basePrompt
+      improve = revised.data.intent === 'refine'
     } catch {
       return NextResponse.json({ error: 'Could not apply your change — try rephrasing it.' }, { status: 502 })
     }
