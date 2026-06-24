@@ -54,6 +54,15 @@ export function StoryboardEditor({
   const markLoaded = (idx: number) => setLoadedMedia((s) => (s.has(idx) ? s : new Set(s).add(idx)))
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null) // master-detail: which scene the inspector shows
   const [timelineView, setTimelineView] = useState<'strip' | 'grid'>('strip') // thumbnail rail layout
+  const shrinkRaf = useRef<number | null>(null) // throttles the scroll→--shrink write to one per frame
+  const scrollRef = useRef<HTMLDivElement>(null) // the single scene scroll container; holds --shrink + --hold for the rail
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    el.scrollTop = 0
+    el.style.setProperty('--shrink', '0')
+    el.style.setProperty('--hold', '0px')
+  }, [timelineView]) // reset rail collapse on view switch
   const tierBusyRef = useRef<Set<number>>(new Set()) // scenes with an in-flight motion toggle (drops rapid flips)
   const [selectedVoice, setSelectedVoice] = useState(reel.voiceId ?? voicePool[0]?.providerId ?? '')
   const [showVoicePicker, setShowVoicePicker] = useState(false)
@@ -353,8 +362,89 @@ export function StoryboardEditor({
       ? { done: scenes.filter((s) => sceneImages[s.idx]).length, total: scenes.length }
       : undefined
 
+  // Ambient "work in progress" bar — mood-tinted, only while the pipeline runs
+  const ambient = showProgress ? (
+    <div className="h-0.5 flex-shrink-0 animate-think" style={{ ['--think-tint' as string]: moodTint }} aria-hidden />
+  ) : null
+
+  // The selected scene's editor (or a fallback) — shared between the strip + grid layouts below
+  const detail = selectedScene ? (
+    <SceneInspector
+      key={selectedScene.idx}
+      scene={selectedScene}
+      imgSrc={sceneImages[selectedScene.idx]}
+      variations={sceneVideoVariations[selectedScene.idx] ?? []}
+      activeVar={activeVar[selectedScene.idx] ?? 0}
+      setActiveVar={setActiveVar}
+      loaded={loadedMedia.has(selectedScene.idx)}
+      markLoaded={markLoaded}
+      loading={loading}
+      moodTint={moodTint}
+      sceneSaving={sceneSaving[selectedScene.idx]}
+      setScenes={setScenes}
+      setSceneSaving={setSceneSaving}
+      onToggleMotion={toggleMotion}
+      onPreview={handlePreview}
+      onReshoot={handleRegenImage}
+      onSaveText={saveSceneText}
+      onSaveMotion={saveSceneMotion}
+      onSaveOnScreen={saveSceneOnScreen}
+    />
+  ) : (
+    <div className="flex min-h-[16rem] flex-col items-center justify-center gap-3 px-8 py-16 text-center text-sm text-muted">
+      <span className="h-2.5 w-2.5 animate-breathe rounded-full" style={{ backgroundColor: moodTint }} />
+      {scenes.length === 0 ? 'Your scenes are being shot…' : 'Pick a scene to start.'}
+    </div>
+  )
+
+  // Final render preview + its music bed (only once a render exists)
+  const preview = renderUrl ? (
+    <div id="preview" className="border-t border-border px-4 py-6 sm:px-8">
+      <p className="mb-3 text-xs font-medium text-muted">Render preview</p>
+      <video
+        src={renderUrl}
+        controls
+        className="max-h-[28rem] rounded-xl border border-border shadow-sm"
+        style={{ aspectRatio: '9/16' }}
+      />
+
+      {/* AI-composed bed for this reel — hear the music on its own to vet it (it's mixed under the
+          narration in the video above). Only present for AI-music channels. */}
+      {musicUrl && (
+        <div className="mt-4 max-w-md rounded-lg border border-border bg-subtle/40 p-3">
+          <p className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-ink">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" />
+            </svg>
+            Music · composed for this reel
+          </p>
+          <audio src={musicUrl} controls preload="none" className="h-9 w-full" />
+          <p className="mt-1.5 text-[11px] leading-relaxed text-faint">An original track composed for this story&apos;s mood — heard on its own here, mixed under the narration in the video.</p>
+        </div>
+      )}
+    </div>
+  ) : null
+
+  // Collapsing-rail scroll model (strip view), all in ONE scroll container, rAF-throttled, written as CSS
+  // vars (no React re-render → tracks scroll 1:1):
+  //   --shrink 0→1 over the first COLLAPSE_PX → the rail shrinks to a filmstrip
+  //   --hold = min(scrollTop, COLLAPSE_PX)px → translateY that PINS the rail+panel in place while it shrinks;
+  //     once past COLLAPSE_PX the hold maxes out, so further scroll carries the whole thing up and away.
+  // Because rail + panel sit in the same translated flow, the panel is always BELOW the rail — never under it.
+  const onCollapseScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget
+    if (shrinkRaf.current != null) return
+    shrinkRaf.current = requestAnimationFrame(() => {
+      shrinkRaf.current = null
+      const COLLAPSE_PX = 200
+      const st = el.scrollTop
+      el.style.setProperty('--shrink', Math.min(1, Math.max(0, st / COLLAPSE_PX)).toFixed(3))
+      el.style.setProperty('--hold', Math.min(st, COLLAPSE_PX).toFixed(1) + 'px')
+    })
+  }
+
   return (
-    <div className="flex min-h-screen flex-col bg-bg">
+    <div className="flex h-full flex-col bg-bg">
       {/* Header */}
       <div className="sticky top-0 z-40 flex flex-shrink-0 items-center justify-between gap-4 border-b border-border bg-bg/80 px-4 py-3 backdrop-blur sm:px-8 sm:py-4">
         <div className="flex min-w-0 items-center gap-3">
@@ -399,59 +489,48 @@ export function StoryboardEditor({
         <PipelinePhaseStepper reelStatus={live?.reelStatus ?? reel.status} steps={live?.steps ?? []} sceneProgress={sceneProgress} />
       )}
 
-      {/* Scene area — a compact thumbnail TIMELINE on top, the selected scene's INSPECTOR below. In grid
-          view the whole area scrolls as one (no nested grid scrollbar); strip view keeps the fixed split. */}
-      <div className={`flex min-h-0 flex-1 flex-col ${timelineView === 'grid' ? 'overflow-y-auto' : 'overflow-hidden'}`}>
-        {/* Ambient "work in progress" bar — mood-tinted, only while the pipeline runs */}
-        {showProgress && (
-          <div className="h-0.5 flex-shrink-0 animate-think" style={{ ['--think-tint' as string]: moodTint }} aria-hidden />
-        )}
-
-        <SceneTimeline
-          scenes={scenes}
-          sceneImages={sceneImages}
-          sceneVideoVariations={sceneVideoVariations}
-          loadedMedia={loadedMedia}
-          markLoaded={markLoaded}
-          loading={loading}
-          selectedIdx={selectedIdx}
-          onSelect={setSelectedIdx}
-          onArrow={selectDelta}
-          moodTint={moodTint}
-          view={timelineView}
-          onViewChange={setTimelineView}
-        />
-
-        <div className={timelineView === 'grid' ? 'flex-shrink-0' : 'min-h-0 flex-1 overflow-y-auto'}>
-          {selectedScene ? (
-            <SceneInspector
-              key={selectedScene.idx}
-              scene={selectedScene}
-              imgSrc={sceneImages[selectedScene.idx]}
-              variations={sceneVideoVariations[selectedScene.idx] ?? []}
-              activeVar={activeVar[selectedScene.idx] ?? 0}
-              setActiveVar={setActiveVar}
-              loaded={loadedMedia.has(selectedScene.idx)}
-              markLoaded={markLoaded}
-              loading={loading}
-              moodTint={moodTint}
-              sceneSaving={sceneSaving[selectedScene.idx]}
-              setScenes={setScenes}
-              setSceneSaving={setSceneSaving}
-              onToggleMotion={toggleMotion}
-              onPreview={handlePreview}
-              onReshoot={handleRegenImage}
-              onSaveText={saveSceneText}
-              onSaveMotion={saveSceneMotion}
-              onSaveOnScreen={saveSceneOnScreen}
-            />
-          ) : (
-            <div className="flex h-full min-h-[16rem] flex-col items-center justify-center gap-3 px-8 text-center text-sm text-muted">
-              <span className="h-2.5 w-2.5 animate-breathe rounded-full" style={{ backgroundColor: moodTint }} />
-              {scenes.length === 0 ? 'Your scenes are being shot…' : 'Pick a scene to start.'}
-            </div>
-          )}
+      {/* Scene area — a compact thumbnail TIMELINE on top, the selected scene's INSPECTOR below. In STRIP
+          view the timeline keeps its own lane at the top while the inspector scrolls in a SEPARATE region
+          below (so its content never tucks under the rail); the rail shrinks as that inspector scrolls. In
+          GRID view the whole area scrolls as one. */}
+      <div
+        ref={scrollRef}
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto [overflow-anchor:none]"
+        onScroll={timelineView === 'strip' ? onCollapseScroll : undefined}
+      >
+        {/* ONE scroll. In STRIP view the rail + selected-scene panel share a single translated wrapper:
+            scrolling first collapses the rail in place (the panel stays glued to its bottom — same flow, so
+            it can never slide under it), then once collapsed the whole wrapper scrolls up together. GRID
+            view just scrolls normally. */}
+        <div
+          className="flex flex-col will-change-transform"
+          style={timelineView === 'strip' ? { transform: 'translateY(var(--hold, 0px))' } : undefined}
+        >
+          {ambient}
+          <SceneTimeline
+            scenes={scenes}
+            sceneImages={sceneImages}
+            sceneVideoVariations={sceneVideoVariations}
+            loadedMedia={loadedMedia}
+            markLoaded={markLoaded}
+            loading={loading}
+            selectedIdx={selectedIdx}
+            onSelect={setSelectedIdx}
+            onArrow={selectDelta}
+            moodTint={moodTint}
+            view={timelineView}
+            onViewChange={setTimelineView}
+          />
+          {detail}
+          {preview}
         </div>
+
+        {/* Strip-only spacer: the first ~200px gives the rail room to collapse-in-place (the "hold"); it then
+            grows with --shrink so the scroll height never DROPS mid-collapse (which would clamp the scroll,
+            re-expand the rail, and shake). */}
+        {timelineView === 'strip' && (
+          <div aria-hidden className="flex-shrink-0" style={{ height: 'calc(200px + 280px * var(--shrink, 0))' }} />
+        )}
       </div>
 
       {/* Bottom bar — voice + render (storyboard flow only) */}
@@ -558,34 +637,6 @@ export function StoryboardEditor({
             </>
           )}
           {error && <p className="w-full text-sm text-danger">{error}</p>}
-        </div>
-      )}
-
-      {/* Render preview */}
-      {renderUrl && (
-        <div id="preview" className="border-t border-border px-4 py-6 sm:px-8">
-          <p className="mb-3 text-xs font-medium text-muted">Render preview</p>
-          <video
-            src={renderUrl}
-            controls
-            className="max-h-[28rem] rounded-xl border border-border shadow-sm"
-            style={{ aspectRatio: '9/16' }}
-          />
-
-          {/* AI-composed bed for this reel — hear the music on its own to vet it (it's mixed under the
-              narration in the video above). Only present for AI-music channels. */}
-          {musicUrl && (
-            <div className="mt-4 max-w-md rounded-lg border border-border bg-subtle/40 p-3">
-              <p className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-ink">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                  <path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" />
-                </svg>
-                Music · composed for this reel
-              </p>
-              <audio src={musicUrl} controls preload="none" className="h-9 w-full" />
-              <p className="mt-1.5 text-[11px] leading-relaxed text-faint">An original track composed for this story&apos;s mood — heard on its own here, mixed under the narration in the video.</p>
-            </div>
-          )}
         </div>
       )}
 
@@ -757,8 +808,12 @@ function SceneTimeline({
 
   return (
     <div className="flex-shrink-0 border-b border-border">
-      {/* Header — scene count + strip/grid view toggle (top-right) */}
-      <div className="flex items-center justify-between gap-2 px-4 pt-3 sm:px-8">
+      {/* Header — scene count + strip/grid view toggle (top-right). In strip view it collapses + fades out
+          as the rail shrinks, so the pinned compact state is just the filmstrip. */}
+      <div
+        className="flex items-center justify-between gap-2 overflow-hidden px-4 pt-3 sm:px-8"
+        style={view === 'strip' ? { maxHeight: 'calc(2.5rem * (1 - var(--shrink, 0)))', paddingTop: 'calc(0.75rem * (1 - var(--shrink, 0)))', opacity: 'calc(1 - var(--shrink, 0))' } : undefined}
+      >
         <span className="text-xs font-medium text-muted">{scenes.length} {scenes.length === 1 ? 'scene' : 'scenes'}</span>
         <div className="inline-flex items-center gap-0.5 rounded-lg bg-subtle p-0.5">
           {([
@@ -782,7 +837,14 @@ function SceneTimeline({
 
       {view === 'strip' ? (
         <div className="overflow-x-auto [scrollbar-width:thin]" role="listbox" aria-label="Scenes" tabIndex={0} onKeyDown={onKeyDown}>
-          <div className="flex min-w-max snap-x snap-mandatory items-start gap-4 px-4 py-6 sm:px-8">{thumbs}</div>
+          <div
+            className="flex min-w-max items-start px-4 sm:px-8"
+            style={{
+              paddingTop: 'calc(1.5rem - 0.95rem * var(--shrink, 0))',
+              paddingBottom: 'calc(1.5rem - 0.95rem * var(--shrink, 0))',
+              gap: 'calc(1rem - 0.4rem * var(--shrink, 0))',
+            }}
+          >{thumbs}</div>
         </div>
       ) : (
         <div role="listbox" aria-label="Scenes" tabIndex={0} onKeyDown={onKeyDown}>
@@ -800,6 +862,7 @@ function SceneThumb({
   regenerating: boolean; animating: boolean; moodTint: string; onSelect: (idx: number) => void; layout: 'strip' | 'grid'
 }) {
   const isGrid = layout === 'grid'
+  const isStrip = layout === 'strip' // strip tiles shrink with the --shrink scroll var; grid tiles are fixed
   const isVideo = scene.tier === 'video'
   // On neutral channels the mood tint IS the brand midnight — identical to the selection accent — so a
   // hero number wash would read as "selected". Swap in a distinct highlight hue there; dark/warm channels
@@ -818,7 +881,8 @@ function SceneThumb({
       aria-selected={selected}
       onClick={() => onSelect(scene.idx)}
       ref={(el) => { if (selected && el) el.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' }) }}
-      className={`group flex flex-col gap-2 text-left focus:outline-none ${isGrid ? 'w-full' : 'w-40 flex-shrink-0 snap-start'}`}
+      className={`group flex flex-col text-left focus:outline-none ${isGrid ? 'w-full gap-2' : 'flex-shrink-0'}`}
+      style={isStrip ? { width: 'calc(10rem - 5rem * var(--shrink, 0))', gap: 'calc(0.5rem - 0.5rem * var(--shrink, 0))' } : undefined}
     >
       <div
         className="rounded-xl"
@@ -845,7 +909,10 @@ function SceneThumb({
           {isVideo && <MotionDurationChip clipKey={videoKey} />}
         </SceneMedia>
       </div>
-      <div className="flex flex-col gap-0.5 px-0.5">
+      <div
+        className="flex flex-col gap-0.5 overflow-hidden px-0.5"
+        style={isStrip ? { maxHeight: 'calc(5rem * (1 - var(--shrink, 0)))', opacity: 'calc(1 - var(--shrink, 0))' } : undefined}
+      >
         {shortDesc && <p className="truncate text-xs font-medium capitalize text-ink">{shortDesc}</p>}
         <p className={`${isGrid ? 'line-clamp-1' : 'line-clamp-2'} text-[11px] leading-snug text-muted`}>{scene.narrationText}</p>
       </div>
