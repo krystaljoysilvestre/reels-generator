@@ -182,10 +182,16 @@ export function StoryboardEditor({
   // just sets the scene's tier (no generation, no spend). Optimistic local update so the tile flips at
   // once. A per-scene in-flight guard drops rapid flips so we don't burst the endpoint. A cached clip is
   // kept when switching off, so flipping back on instantly plays it again.
-  async function toggleMotion(sceneIdx: number, currentlyVideo: boolean) {
+  // Scene type sets how the scene renders + its cost tier, in one action:
+  //   static → a still (zoom/pan only, no AI-video cost)
+  //   motion → AI video at budget quality (cheaper)
+  //   hero   → AI video at premium quality
+  // tier drives the still/video render; quality (motionSettings) drives the cost + provider. Optimistic;
+  // a per-scene in-flight guard drops rapid taps. Changing quality clears the stale clip (saveSceneMotion).
+  async function setSceneType(sceneIdx: number, type: 'static' | 'motion' | 'hero') {
     if (tierBusyRef.current.has(sceneIdx)) return
     tierBusyRef.current.add(sceneIdx)
-    const tier = currentlyVideo ? 'still' : 'video'
+    const tier = type === 'static' ? 'still' : 'video'
     setScenes((prev) => prev.map((s) => (s.idx === sceneIdx ? { ...s, tier } : s)))
     try {
       await fetch('/api/pipeline/set-scene-tier', {
@@ -193,6 +199,9 @@ export function StoryboardEditor({
         body: JSON.stringify({ reelId: reel.id, sceneIdx, tier }),
         headers: { 'Content-Type': 'application/json' },
       })
+      if (tier === 'video') {
+        await saveSceneMotion(sceneIdx, { motionSettings: { quality: type === 'motion' ? 'budget' : 'standard', durationSec: 5 } })
+      }
     } catch { /* optimistic — the next render reconciles tier anyway */ }
     finally { tierBusyRef.current.delete(sceneIdx) }
   }
@@ -384,7 +393,7 @@ export function StoryboardEditor({
       sceneSaving={sceneSaving[selectedScene.idx]}
       setScenes={setScenes}
       setSceneSaving={setSceneSaving}
-      onToggleMotion={toggleMotion}
+      onSetSceneType={setSceneType}
       onPreview={handlePreview}
       onReshoot={handleRegenImage}
       onSaveText={saveSceneText}
@@ -673,12 +682,15 @@ export function StoryboardEditor({
 // layer their own badges/controls via `children`. Timeline tiles pass playVideo={false} so only the
 // inspector autoplays video (no fleet of autoplaying clips).
 function SceneMedia({
-  scene, imgSrc, videoKey, showVideo, playVideo, loaded, onLoaded, onDuration, regenerating, animating, frameClass, adaptAspect, children,
+  scene, imgSrc, videoKey, showVideo, playVideo, loaded, onLoaded, onDuration, regenerating, animating, frameClass, adaptAspect, frameAspect, contain, children,
 }: {
   scene: Scene; imgSrc?: string | undefined; videoKey?: string | undefined; showVideo: boolean; playVideo: boolean
   loaded: boolean; onLoaded: () => void; onDuration?: ((secs: number) => void) | undefined
   regenerating: boolean; animating: boolean
-  frameClass?: string | undefined; adaptAspect?: boolean; children?: React.ReactNode
+  // frameAspect fixes the frame's shape (e.g. '16 / 9' for a landscape, YouTube-style player); contain fits
+  // the media inside it (letterboxed on black) instead of cropping. Without them: adaptAspect → media's own
+  // aspect, else a 9:16 tile.
+  frameClass?: string | undefined; adaptAspect?: boolean; frameAspect?: string | undefined; contain?: boolean; children?: React.ReactNode
 }) {
   const hasMedia = Boolean(videoKey || imgSrc)
   const developClass = `style-develop ${loaded ? 'style-develop-in' : ''}`
@@ -687,8 +699,8 @@ function SceneMedia({
   const [mediaAspect, setMediaAspect] = useState<string | null>(null)
   return (
     <div
-      className={`group relative isolate w-full overflow-hidden rounded-xl border bg-subtle shadow-sm ${frameClass ?? 'border-border'}`}
-      style={{ aspectRatio: adaptAspect && mediaAspect ? mediaAspect : '9 / 16' }}
+      className={`group relative isolate w-full overflow-hidden rounded-xl border shadow-sm ${contain ? 'bg-black' : 'bg-subtle'} ${frameClass ?? 'border-border'}`}
+      style={{ aspectRatio: frameAspect ?? (adaptAspect && mediaAspect ? mediaAspect : '9 / 16') }}
     >
       {/* Shimmer sits behind the media (z-0) — shown while still generating or loading */}
       {(!hasMedia || !loaded) && (
@@ -710,7 +722,7 @@ function SceneMedia({
           // Cached media completes before React attaches the handler, so onLoadedData never fires —
           // catch the already-ready case on mount so the reveal isn't stuck waiting for an event.
           ref={(el) => { if (el && el.readyState >= 2) { onLoaded(); if (el.duration) onDuration?.(el.duration); if (adaptAspect && el.videoWidth) setMediaAspect(`${el.videoWidth} / ${el.videoHeight}`) } }}
-          className={`absolute inset-0 z-10 h-full w-full object-cover ${developClass}`}
+          className={`absolute inset-0 z-10 h-full w-full ${contain ? 'object-contain' : 'object-cover'} ${developClass}`}
         />
       ) : imgSrc ? (
         <img
@@ -719,7 +731,7 @@ function SceneMedia({
           onLoad={(e) => { onLoaded(); if (adaptAspect && e.currentTarget.naturalWidth) setMediaAspect(`${e.currentTarget.naturalWidth} / ${e.currentTarget.naturalHeight}`) }}
           // Same guard for images: a cached image is already `complete` on mount and won't fire onLoad.
           ref={(el) => { if (el?.complete && el.naturalWidth > 0) { onLoaded(); if (adaptAspect) setMediaAspect(`${el.naturalWidth} / ${el.naturalHeight}`) } }}
-          className={`absolute inset-0 z-10 h-full w-full object-cover ${developClass}`}
+          className={`absolute inset-0 z-10 h-full w-full ${contain ? 'object-contain' : 'object-cover'} ${developClass}`}
         />
       ) : null}
       {/* Reshoot overlay */}
@@ -951,7 +963,7 @@ function sceneBeat(idx: number, total: number, twistIdx: number | null): 'Hook' 
 // ── Inspector (detail) ─────────────────────────────────────────────────────────
 function SceneInspector({
   scene, beat, imgSrc, variations, activeVar, setActiveVar, loaded, markLoaded, loading, moodTint,
-  sceneSaving, setScenes, setSceneSaving, onToggleMotion, onPreview, onReshoot, onSaveText, onSaveMotion, onSaveOnScreen,
+  sceneSaving, setScenes, setSceneSaving, onSetSceneType, onPreview, onReshoot, onSaveText, onSaveMotion, onSaveOnScreen,
 }: {
   scene: Scene; beat: 'Hook' | 'Build-up' | 'Twist' | 'Payoff'; imgSrc?: string | undefined; variations: string[]; activeVar: number
   setActiveVar: React.Dispatch<React.SetStateAction<Record<number, number>>>
@@ -959,7 +971,7 @@ function SceneInspector({
   sceneSaving: 'saving' | 'saved' | undefined
   setScenes: React.Dispatch<React.SetStateAction<Scene[]>>
   setSceneSaving: React.Dispatch<React.SetStateAction<Record<number, 'saving' | 'saved'>>>
-  onToggleMotion: (idx: number, currentlyVideo: boolean) => void
+  onSetSceneType: (idx: number, type: 'static' | 'motion' | 'hero') => void
   onPreview: (idx: number) => void
   onReshoot: (idx: number, opts?: { instruction?: string; improve?: boolean }) => void
   onSaveText: (idx: number, text: string) => void
@@ -981,6 +993,7 @@ function SceneInspector({
   const [reshootShot, setReshootShot] = useState('') // reshoot: framing/angle change (empty = keep)
   const [reshootLight, setReshootLight] = useState('') // reshoot: lighting change (empty = keep)
   const [reshootText, setReshootText] = useState('') // reshoot: free-text "anything else"
+  const [showAdvanced, setShowAdvanced] = useState(false) // collapse the technical knobs by default
 
   return (
     <div className="animate-fade-in flex w-full flex-col gap-5 p-4 sm:p-8">
@@ -993,8 +1006,9 @@ function SceneInspector({
         >{beat}</span>
       </div>
       <div className="flex w-full flex-col gap-6 lg:flex-row">
-      {/* Preview — its own stage, far left; the image fills the column */}
-      <div className="order-1 flex w-full flex-shrink-0 flex-col lg:w-56">
+      {/* Preview — its own stage, far left; the frame matches the reel's real aspect (9:16) so the image
+          fills it edge-to-edge instead of sitting tiny inside a wide letterbox. */}
+      <div className="order-1 flex w-full flex-shrink-0 flex-col lg:w-60">
         <div
           onClick={() => imgSrc && (setFullLoaded(false), setLightboxAspect(null), setShowFull(true))}
           title={imgSrc ? 'Open preview' : undefined}
@@ -1040,7 +1054,7 @@ function SceneInspector({
           </SceneMedia>
         </div>
       </div>
-      {/* Narration — middle, wider; the primary edit */}
+      {/* Narration — middle, the primary text edit; takes the flexible space */}
       <div className="order-2 flex min-w-0 flex-1 flex-col">
         <label className="mb-1.5 block text-xs font-medium text-muted">Narration/Voiceover</label>
         <textarea
@@ -1066,54 +1080,102 @@ function SceneInspector({
             )}
           </p>
         )}
-
-        {/* On-screen text — optional title/overlay burned on this scene, separate from the captions */}
-        <div className="mt-4">
-          <label className="mb-1.5 block text-xs font-medium text-muted">On-screen text <span className="font-normal text-faint">(optional)</span></label>
-          <textarea
-            defaultValue={scene.onScreenText ?? ''}
-            key={`ost-${scene.idx}`}
-            onBlur={(e) => onSaveOnScreen(scene.idx, e.target.value)}
-            rows={2}
-            className="input resize-y text-sm leading-relaxed"
-            placeholder="A title or hook shown on screen — leave blank for none"
-            aria-label={`Scene ${scene.idx} on-screen text`}
-          />
-          <p className="mt-1 text-[11px] leading-relaxed text-faint">Burned onto the video as a title (separate from the spoken captions). Re-render to apply.</p>
-        </div>
       </div>
 
-      {/* Scene settings — right */}
+      {/* Settings — right: the Scene Type choice (cost-aware) leads; image direction + advanced knobs follow */}
       <div className="order-3 flex w-full flex-shrink-0 flex-col gap-4 lg:w-72">
-        {/* Scene settings — regenerate the image and set the motion, together in one place */}
         {imgSrc && (() => {
           const { moveKey, intensity } = parseMotion(scene.motionPrompt)
-          const costStr = `$${(motionCostCents(resolveMotionSettings(scene.motionSettings)) / 100).toFixed(2)}`
+          const settings = resolveMotionSettings(scene.motionSettings)
+          const sceneType: 'static' | 'motion' | 'hero' = scene.tier === 'still' ? 'static' : settings.quality === 'budget' ? 'motion' : 'hero'
+          const isVideoType = sceneType !== 'static'
+          const fmtCost = (q: 'budget' | 'standard') => `$${(motionCostCents({ quality: q, durationSec: 5 }) / 100).toFixed(2)}`
+          const previewCost = `$${(motionCostCents(settings) / 100).toFixed(2)}`
           const hasChange = Boolean(reshootShot || reshootLight || reshootText.trim())
           const runReshoot = () => {
             onReshoot(scene.idx, { instruction: [reshootShot, reshootLight, reshootText.trim()].filter(Boolean).join(', ') })
             setReshootShot(''); setReshootLight(''); setReshootText('')
           }
+          const TYPES = [
+            { key: 'static' as const, label: 'Static Image', cost: 'Free', desc: 'Zoom & pan only — no AI video.',
+              icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="3" y="3" width="18" height="18" rx="2.5" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="m21 15-5-5L5 21" /></svg> },
+            { key: 'motion' as const, label: 'Motion Image', cost: `~${fmtCost('budget')}`, desc: 'Subtle AI motion on the still.',
+              icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="2" y="6" width="14" height="12" rx="2" /><path d="m22 8-6 4 6 4V8Z" /></svg> },
+            { key: 'hero' as const, label: 'Hero Video', cost: `~${fmtCost('standard')}`, desc: 'Full AI video — your key beat.',
+              icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M12 2.5l2.6 5.7 6.2.6-4.7 4.1 1.4 6.1L12 16l-5.5 3 1.4-6.1L3.2 8.8l6.2-.6z" /></svg> },
+          ]
           return (
-            <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface shadow-xs">
-              {/* Image — regenerate this scene's still */}
-              <div className="flex flex-col gap-2 p-3">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">Image</p>
-                <SettingRow label="Shot">
-                  <IconSelect ariaLabel={`Scene ${scene.idx} shot change`} value={reshootShot} onChange={setReshootShot} options={SHOT_OPTIONS} />
+            <>
+              {/* Scene type — the primary choice. Cost is shown right on each option. */}
+              <div className="flex flex-col gap-1.5">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">Scene type</p>
+                {TYPES.map((t) => {
+                  const active = sceneType === t.key
+                  return (
+                    <button
+                      key={t.key}
+                      type="button"
+                      disabled={animating}
+                      aria-pressed={active}
+                      onClick={() => onSetSceneType(scene.idx, t.key)}
+                      className={`flex items-start gap-2.5 rounded-xl border p-2.5 text-left transition-colors disabled:cursor-wait ${active ? 'border-accent bg-accent-soft' : 'border-border bg-surface hover:border-border-strong'}`}
+                    >
+                      <span className={`mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border-2 ${active ? 'border-accent' : 'border-border-strong'}`}>
+                        {active && <span className="h-2 w-2 rounded-full bg-accent" />}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center gap-1.5 text-xs font-semibold text-ink">
+                          <span className={active ? 'text-accent' : 'text-muted'}>{t.icon}</span>
+                          {t.label}
+                          <span className={`ml-auto rounded px-1.5 py-px text-[10px] font-semibold ${t.key === 'static' ? 'bg-subtle text-muted' : active ? 'bg-accent/15 text-accent' : 'bg-subtle text-muted'}`}>{t.cost}</span>
+                        </span>
+                        <span className="mt-0.5 block text-[11px] leading-snug text-muted">{t.desc}</span>
+                      </span>
+                    </button>
+                  )
+                })}
+                {isVideoType && <p className="px-0.5 text-[11px] leading-relaxed text-faint">Charged once when this scene’s video is generated (preview or render).</p>}
+              </div>
+
+              {/* Motion controls — only for an AI-video scene */}
+              {isVideoType && (
+                <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-3 shadow-xs">
+                  <SettingRow label="Camera">
+                    <IconSelect ariaLabel={`Scene ${scene.idx} camera movement`} value={moveKey} onChange={(v) => onSaveMotion(scene.idx, { motionPrompt: composeMotion(v, intensity) })} options={[{ value: '', label: 'Auto', icon: ICON_SPARKLE }, ...CAMERA_MOVES.map((m) => ({ value: m.key, label: m.label, icon: cameraMoveIcon(m.key) }))]} />
+                  </SettingRow>
+                  <SettingRow label="Motion">
+                    <IconSelect ariaLabel={`Scene ${scene.idx} motion level`} value={intensity} disabled={!moveKey} onChange={(v) => onSaveMotion(scene.idx, { motionPrompt: composeMotion(moveKey, v as IntensityKey) })} options={INTENSITIES.map((i, n) => ({ value: i.key, label: i.label, icon: intensityIcon(n + 1) }))} />
+                  </SettingRow>
+                  {variations.length === 0 ? (
+                    <div className="flex flex-col gap-1 pt-0.5">
+                      <button type="button" onClick={() => onPreview(scene.idx)} disabled={animating} className="btn-secondary btn-sm w-full active:scale-[.98] disabled:cursor-wait">
+                        {animating ? (<><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />Animating…</>) : (<><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M7 5v14l11-7L7 5Z" /></svg>Generate preview · ~{previewCost}</>)}
+                      </button>
+                      <span className="text-[11px] text-faint">or it animates when you render</span>
+                    </div>
+                  ) : (
+                    <p className="flex items-center gap-1.5 pt-0.5 text-[11px] text-muted">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="text-positive" aria-hidden><path d="M20 6 9 17l-5-5" /></svg>
+                      Motion ready — click the scene to watch it.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Visual direction — the scene's look. Mood + Location are the AI's read (context); Lighting is
+                  editable and feeds the reshoot. */}
+              <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-3 shadow-xs">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">Visual direction</p>
+                <SettingRow label="Mood" alignTop>
+                  <div className="flex flex-wrap gap-1 pt-px">
+                    {(scene.mood ?? []).length > 0 ? (scene.mood ?? []).map((m) => (
+                      <span key={m} className="badge bg-subtle text-muted">{m}</span>
+                    )) : <span className="text-xs text-faint">—</span>}
+                  </div>
                 </SettingRow>
+                <SettingRow label="Location"><span className="text-xs text-muted">{scene.location || '—'}</span></SettingRow>
                 <SettingRow label="Lighting">
                   <IconSelect ariaLabel={`Scene ${scene.idx} lighting change`} value={reshootLight} onChange={setReshootLight} options={LIGHT_OPTIONS} />
-                </SettingRow>
-                <SettingRow label="Note" alignTop>
-                  <textarea
-                    value={reshootText}
-                    onChange={(e) => setReshootText(e.target.value)}
-                    rows={2}
-                    placeholder="Anything else? (optional)"
-                    aria-label={`Scene ${scene.idx} reshoot note`}
-                    className="input resize-y text-xs leading-relaxed"
-                  />
                 </SettingRow>
                 <div className="flex items-center gap-1.5 pt-0.5">
                   <button type="button" onClick={runReshoot} disabled={regenerating} className="btn-accent btn-sm flex-1 active:scale-[.98] disabled:cursor-wait">
@@ -1126,75 +1188,29 @@ function SceneInspector({
                 <p className="text-[11px] leading-relaxed text-faint">Fresh = a new version · Improve = same composition, refined.</p>
               </div>
 
-              {/* Motion — animate this scene */}
-              <div className="flex flex-col gap-2 p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">Motion</p>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-medium text-muted">{isVideo ? 'Video' : 'Still'}</span>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={isVideo}
-                      disabled={animating}
-                      onClick={() => onToggleMotion(scene.idx, isVideo)}
-                      aria-label={isVideo ? 'Motion on — switch off to keep a still' : 'Motion off — switch on to animate'}
-                      title={isVideo ? 'Animates at render — switch off to keep a still' : 'Still image — switch on to animate'}
-                      className={`inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full ring-1 ring-inset transition-colors disabled:cursor-wait ${isVideo ? 'bg-accent ring-white/30' : 'bg-black/20 ring-black/10'}`}
-                    >
-                      <span className={`flex h-4 w-4 items-center justify-center rounded-full bg-white shadow transition-transform ${isVideo ? 'translate-x-[18px]' : 'translate-x-[2px]'}`}>
-                        {isVideo ? (
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-accent" aria-hidden><rect x="2" y="6" width="14" height="12" rx="2" /><path d="m22 8-6 4 6 4V8Z" /></svg>
-                        ) : (
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-faint" aria-hidden><rect x="3" y="3" width="18" height="18" rx="2.5" /><circle cx="9" cy="9" r="1.6" /><path d="m20 16-4.5-4.5L7 20" /></svg>
-                        )}
-                      </span>
-                    </button>
+              {/* Advanced — the technical knobs, hidden by default */}
+              <div className="overflow-hidden rounded-xl border border-border bg-surface shadow-xs">
+                <button type="button" onClick={() => setShowAdvanced((v) => !v)} aria-expanded={showAdvanced} className="flex w-full items-center justify-between gap-2 p-3 text-[11px] font-semibold uppercase tracking-wide text-faint transition-colors hover:text-muted">
+                  Advanced
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform ${showAdvanced ? 'rotate-90' : ''}`} aria-hidden><path d="m9 18 6-6-6-6" /></svg>
+                </button>
+                {showAdvanced && (
+                  <div className="flex flex-col gap-3 border-t border-border p-3">
+                    <SettingRow label="Shot">
+                      <IconSelect ariaLabel={`Scene ${scene.idx} shot change`} value={reshootShot} onChange={setReshootShot} options={SHOT_OPTIONS} />
+                    </SettingRow>
+                    <SettingRow label="Note" alignTop>
+                      <textarea value={reshootText} onChange={(e) => setReshootText(e.target.value)} rows={2} placeholder="Anything else? (optional)" aria-label={`Scene ${scene.idx} reshoot note`} className="input resize-y text-xs leading-relaxed" />
+                    </SettingRow>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[11px] font-medium text-muted">On-screen text <span className="font-normal text-faint">(optional)</span></label>
+                      <textarea defaultValue={scene.onScreenText ?? ''} key={`ost-${scene.idx}`} onBlur={(e) => onSaveOnScreen(scene.idx, e.target.value)} rows={2} className="input resize-y text-xs leading-relaxed" placeholder="A title shown on screen — blank for none" aria-label={`Scene ${scene.idx} on-screen text`} />
+                      <p className="text-[11px] leading-relaxed text-faint">Burned on as a title (separate from captions). Re-render to apply.</p>
+                    </div>
                   </div>
-                </div>
-                {isVideo ? (
-                  <>
-                    <SettingRow label="Camera">
-                      <IconSelect ariaLabel={`Scene ${scene.idx} camera movement`} value={moveKey} onChange={(v) => onSaveMotion(scene.idx, { motionPrompt: composeMotion(v, intensity) })} options={[{ value: '', label: 'Auto', icon: ICON_SPARKLE }, ...CAMERA_MOVES.map((m) => ({ value: m.key, label: m.label, icon: cameraMoveIcon(m.key) }))]} />
-                    </SettingRow>
-                    <SettingRow label="Level">
-                      <IconSelect ariaLabel={`Scene ${scene.idx} motion level`} value={intensity} disabled={!moveKey} onChange={(v) => onSaveMotion(scene.idx, { motionPrompt: composeMotion(moveKey, v as IntensityKey) })} options={INTENSITIES.map((i, n) => ({ value: i.key, label: i.label, icon: intensityIcon(n + 1) }))} />
-                    </SettingRow>
-                    {variations.length === 0 ? (
-                      <div className="flex flex-col gap-1 pt-0.5">
-                        <button type="button" onClick={() => onPreview(scene.idx)} disabled={animating} className="btn-secondary btn-sm w-full active:scale-[.98] disabled:cursor-wait">
-                          {animating ? (<><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />Animating…</>) : (<><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M7 5v14l11-7L7 5Z" /></svg>Preview motion · ~{costStr}</>)}
-                        </button>
-                        <span className="text-[11px] text-faint">or it animates when you render</span>
-                      </div>
-                    ) : (
-                      <p className="flex items-center gap-1.5 pt-0.5 text-[11px] text-muted">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="text-positive" aria-hidden><path d="M20 6 9 17l-5-5" /></svg>
-                        Motion ready — click the scene to watch it.
-                      </p>
-                    )}
-                  </>
-                ) : (
-                  <p className="text-[11px] text-faint">Switch on to animate this scene when you render.</p>
                 )}
               </div>
-
-              {/* Details — read-only scene info */}
-              <div className="flex flex-col gap-2 p-3">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">Details</p>
-                <SettingRow label="Mood" alignTop>
-                  <div className="flex flex-wrap gap-1 pt-px">
-                    {(scene.mood ?? []).length > 0 ? (scene.mood ?? []).map((m) => (
-                      <span key={m} className="badge bg-subtle text-muted">{m}</span>
-                    )) : <span className="text-xs text-faint">—</span>}
-                  </div>
-                </SettingRow>
-                <SettingRow label="Setting"><span className="text-xs text-muted">{scene.location || '—'}</span></SettingRow>
-                {showVideo && clipSecs != null && (
-                  <SettingRow label="Clip"><span className="font-mono text-xs text-muted">{fmtSecs(clipSecs)}</span></SettingRow>
-                )}
-              </div>
-            </div>
+            </>
           )
         })()}
       </div>
