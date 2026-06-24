@@ -367,10 +367,12 @@ export function StoryboardEditor({
   ) : null
 
   // The selected scene's editor (or a fallback) — shared between the strip + grid layouts below
+  const twistIdx = storyTwistIdx(scenes, story?.twistAnchor)
   const detail = selectedScene ? (
     <SceneInspector
       key={selectedScene.idx}
       scene={selectedScene}
+      beat={sceneBeat(selectedScene.idx, scenes.length, twistIdx)}
       imgSrc={sceneImages[selectedScene.idx]}
       variations={sceneVideoVariations[selectedScene.idx] ?? []}
       activeVar={activeVar[selectedScene.idx] ?? 0}
@@ -923,12 +925,35 @@ function SceneThumb({
   )
 }
 
+// Which scene is the story's TWIST (its dramatic peak): the scene matching the story's peak line
+// (twist_anchor), else the last key visual beat (hero), else the final scene.
+function storyTwistIdx(scenes: Scene[], twistAnchor: string | null | undefined): number | null {
+  if (scenes.length === 0) return null
+  const anchor = (twistAnchor ?? '').trim().toLowerCase()
+  if (anchor.length >= 12) {
+    const key = anchor.slice(0, 40)
+    const hit = scenes.find((s) => (s.narrationText ?? '').toLowerCase().includes(key))
+    if (hit) return hit.idx
+  }
+  const heroes = scenes.filter((s) => s.isHero)
+  const last = heroes[heroes.length - 1] ?? scenes[scenes.length - 1]
+  return last ? last.idx : null
+}
+
+// A scene's narrative beat from its place in the arc: Hook (open) → Build-up → Twist (peak) → Payoff (after).
+function sceneBeat(idx: number, total: number, twistIdx: number | null): 'Hook' | 'Build-up' | 'Twist' | 'Payoff' {
+  if (idx === 1) return 'Hook'
+  if (twistIdx == null) return idx === total ? 'Twist' : 'Build-up'
+  if (idx === twistIdx) return 'Twist'
+  return idx < twistIdx ? 'Build-up' : 'Payoff'
+}
+
 // ── Inspector (detail) ─────────────────────────────────────────────────────────
 function SceneInspector({
-  scene, imgSrc, variations, activeVar, setActiveVar, loaded, markLoaded, loading, moodTint,
+  scene, beat, imgSrc, variations, activeVar, setActiveVar, loaded, markLoaded, loading, moodTint,
   sceneSaving, setScenes, setSceneSaving, onToggleMotion, onPreview, onReshoot, onSaveText, onSaveMotion, onSaveOnScreen,
 }: {
-  scene: Scene; imgSrc?: string | undefined; variations: string[]; activeVar: number
+  scene: Scene; beat: 'Hook' | 'Build-up' | 'Twist' | 'Payoff'; imgSrc?: string | undefined; variations: string[]; activeVar: number
   setActiveVar: React.Dispatch<React.SetStateAction<Record<number, number>>>
   loaded: boolean; markLoaded: (idx: number) => void; loading: string | null; moodTint: string
   sceneSaving: 'saving' | 'saved' | undefined
@@ -948,7 +973,7 @@ function SceneInspector({
   const regenerating = loading === `regen-${scene.idx}`
   // Actual clip length, read from the playing preview's metadata (state resets per scene via the key prop).
   const [clipSecs, setClipSecs] = useState<number | null>(null)
-  // Hero badge uses the mood color (distinct indigo on neutral channels, where mood == selection accent).
+  // The Twist beat badge uses the mood color (distinct indigo on neutral channels, where mood == selection accent).
   const heroTint = /^#1a1a2e$/i.test(moodTint) ? '#5E6AD2' : moodTint
   const [showFull, setShowFull] = useState(false) // large preview lightbox
   const [fullLoaded, setFullLoaded] = useState(false) // lightbox media has loaded
@@ -961,11 +986,11 @@ function SceneInspector({
     <div className="animate-fade-in flex w-full flex-col gap-5 p-4 sm:p-8">
       <div className="flex items-center gap-2">
         <h2 className="text-sm font-semibold text-ink">Scene {scene.idx}</h2>
-        {scene.idx === 1 ? (
-          <span className="badge bg-info-soft text-info">Hook</span>
-        ) : scene.isHero ? (
-          <span className="badge" style={{ backgroundColor: `${heroTint}1f`, color: heroTint }}>Hero</span>
-        ) : null}
+        {/* Narrative beat — the Twist (story peak) carries the mood accent; the rest are quietly tinted. */}
+        <span
+          className={`badge ${beat === 'Hook' ? 'bg-info-soft text-info' : beat === 'Twist' ? '' : 'bg-subtle text-muted'}`}
+          style={beat === 'Twist' ? { backgroundColor: `${heroTint}1f`, color: heroTint } : undefined}
+        >{beat}</span>
       </div>
       <div className="flex w-full flex-col gap-6 lg:flex-row">
       {/* Preview — its own stage, far left; the image fills the column */}
