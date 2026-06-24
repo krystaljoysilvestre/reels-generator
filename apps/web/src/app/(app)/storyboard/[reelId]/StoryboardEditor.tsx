@@ -54,8 +54,7 @@ export function StoryboardEditor({
   const markLoaded = (idx: number) => setLoadedMedia((s) => (s.has(idx) ? s : new Set(s).add(idx)))
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null) // master-detail: which scene the inspector shows
   const [timelineView, setTimelineView] = useState<'strip' | 'grid'>('strip') // thumbnail rail layout
-  const shrinkRaf = useRef<number | null>(null) // throttles the scroll→--shrink write to one per frame
-  const scrollRef = useRef<HTMLDivElement>(null) // the single scene scroll container; holds --shrink + --hold for the rail
+  const scrollRef = useRef<HTMLDivElement>(null) // the single scene scroll container; holds the --shrink var for the rail
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
@@ -425,22 +424,19 @@ export function StoryboardEditor({
     </div>
   ) : null
 
-  // Collapsing-rail scroll model (strip view), all in ONE scroll container, rAF-throttled, written as CSS
-  // vars (no React re-render → tracks scroll 1:1):
-  //   --shrink 0→1 over the first COLLAPSE_PX → the rail shrinks to a filmstrip
-  //   --hold = min(scrollTop, COLLAPSE_PX)px → translateY that PINS the rail+panel in place while it shrinks;
-  //     once past COLLAPSE_PX the hold maxes out, so further scroll carries the whole thing up and away.
-  // Because rail + panel sit in the same translated flow, the panel is always BELOW the rail — never under it.
-  const onCollapseScroll = (e: React.UIEvent<HTMLDivElement>) => {
+  // Strip collapsing rail — two scroll-linked CSS vars, written straight in the scroll handler (no rAF, no
+  // React re-render). The rail is position:sticky so the browser pins it natively — rock-steady, no JS-pin
+  // shake.
+  //   --shrink 0→1 over the first COLLAPSE_PX → resizes the rail to a filmstrip
+  //   --hold = min(scrollTop, COLLAPSE_PX)px → a spacer between the rail and panel that hides BEHIND the
+  //     pinned rail; while it grows it keeps the panel glued to the rail's bottom (not under it). Once the
+  //     rail is fully shrunk the hold caps, so further scroll slides the panel under the compact rail.
+  const onShrinkScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget
-    if (shrinkRaf.current != null) return
-    shrinkRaf.current = requestAnimationFrame(() => {
-      shrinkRaf.current = null
-      const COLLAPSE_PX = 200
-      const st = el.scrollTop
-      el.style.setProperty('--shrink', Math.min(1, Math.max(0, st / COLLAPSE_PX)).toFixed(3))
-      el.style.setProperty('--hold', Math.min(st, COLLAPSE_PX).toFixed(1) + 'px')
-    })
+    const COLLAPSE_PX = 200
+    const st = el.scrollTop
+    el.style.setProperty('--shrink', Math.min(1, Math.max(0, st / COLLAPSE_PX)).toFixed(3))
+    el.style.setProperty('--hold', Math.min(st, COLLAPSE_PX).toFixed(1) + 'px')
   }
 
   return (
@@ -496,15 +492,15 @@ export function StoryboardEditor({
       <div
         ref={scrollRef}
         className="flex min-h-0 flex-1 flex-col overflow-y-auto [overflow-anchor:none]"
-        onScroll={timelineView === 'strip' ? onCollapseScroll : undefined}
+        onScroll={timelineView === 'strip' ? onShrinkScroll : undefined}
       >
-        {/* ONE scroll. In STRIP view the rail + selected-scene panel share a single translated wrapper:
-            scrolling first collapses the rail in place (the panel stays glued to its bottom — same flow, so
-            it can never slide under it), then once collapsed the whole wrapper scrolls up together. GRID
-            view just scrolls normally. */}
+        {/* STRIP: the rail pins to the top and shrinks to a slim filmstrip as you scroll; once compact it
+            stays put while the selected-scene panel scrolls underneath it (native sticky → smooth, no shake).
+            Opaque bg + a shadow that deepens with --shrink keep the panel reading as "below/under" the rail.
+            GRID: just scrolls. */}
         <div
-          className="flex flex-col will-change-transform"
-          style={timelineView === 'strip' ? { transform: 'translateY(var(--hold, 0px))' } : undefined}
+          className={timelineView === 'strip' ? 'sticky top-0 z-20 bg-bg' : ''}
+          style={timelineView === 'strip' ? { boxShadow: '0 6px 16px -12px rgba(12,12,24,calc(0.45 * var(--shrink, 0)))' } : undefined}
         >
           {ambient}
           <SceneTimeline
@@ -521,15 +517,22 @@ export function StoryboardEditor({
             view={timelineView}
             onViewChange={setTimelineView}
           />
-          {detail}
-          {preview}
         </div>
 
-        {/* Strip-only spacer: the first ~200px gives the rail room to collapse-in-place (the "hold"); it then
-            grows with --shrink so the scroll height never DROPS mid-collapse (which would clamp the scroll,
-            re-expand the rail, and shake). */}
+        {/* Phase-1 "hold" spacer — sits between the rail and panel and hides BEHIND the sticky rail. While
+            the rail is shrinking it grows with scroll so the panel stays glued to the rail's bottom (never
+            under it); once the rail is fully shrunk it caps, so further scroll slides the panel under it. */}
         {timelineView === 'strip' && (
-          <div aria-hidden className="flex-shrink-0" style={{ height: 'calc(200px + 280px * var(--shrink, 0))' }} />
+          <div aria-hidden className="flex-shrink-0" style={{ height: 'var(--hold, 0px)' }} />
+        )}
+
+        {detail}
+        {preview}
+
+        {/* Strip-only stabiliser — grows as the rail shrinks so the scroll height never DROPS mid-scroll
+            (which would clamp the scroll and shake). */}
+        {timelineView === 'strip' && (
+          <div aria-hidden className="flex-shrink-0" style={{ height: 'calc(280px * var(--shrink, 0))' }} />
         )}
       </div>
 
@@ -882,7 +885,7 @@ function SceneThumb({
       onClick={() => onSelect(scene.idx)}
       ref={(el) => { if (selected && el) el.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' }) }}
       className={`group flex flex-col text-left focus:outline-none ${isGrid ? 'w-full gap-2' : 'flex-shrink-0'}`}
-      style={isStrip ? { width: 'calc(10rem - 5rem * var(--shrink, 0))', gap: 'calc(0.5rem - 0.5rem * var(--shrink, 0))' } : undefined}
+      style={isStrip ? { width: 'calc(10rem - 7rem * var(--shrink, 0))', gap: 'calc(0.5rem - 0.5rem * var(--shrink, 0))' } : undefined}
     >
       <div
         className="rounded-xl"
