@@ -494,7 +494,13 @@ export function StoryboardEditor({
   // the render chain running. Poll while active — the hook refreshes the server so images + status update.
   const imagesReady = scenes.length > 0 && scenes.every((s) => sceneImages[s.idx])
   const showProgress = (reel.status === 'storyboard' && !imagesReady) || reel.status === 'rendering' || reel.status === 'render_qa'
-  const live = usePipelineStatus(reel.id, { enabled: showProgress, scenes: true })
+  // Keep watching for image changes through the WHOLE storyboard editing phase, not just the initial
+  // build: a reshoot or an out-of-band re-render swaps an image after imagesReady is already true, and
+  // without a live watch the operator would have to manually reload to see it. Poll fast while actively
+  // building/rendering, slow (every 6s) once everything's landed — the hook only refreshes when an image
+  // actually changes, so the slow idle poll is cheap.
+  const watching = showProgress || reel.status === 'storyboard'
+  const live = usePipelineStatus(reel.id, { enabled: watching, scenes: true, intervalMs: showProgress ? 2200 : 6000 })
   const sceneProgress = live?.scenes?.length
     ? { done: live.scenes.filter((s) => s.hasImage).length, total: live.scenes.length }
     : scenes.length > 0

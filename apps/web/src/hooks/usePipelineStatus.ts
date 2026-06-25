@@ -9,7 +9,7 @@ export interface PipelineStatus {
   steps: Array<{ stepName: string; status: string }>
   step: { name: string; status: string; attempt: number } | null
   failedStep: string | null
-  scenes?: Array<{ idx: number; hasImage: boolean }>
+  scenes?: Array<{ idx: number; hasImage: boolean; imageAssetId: string | null }>
 }
 
 // Polls /api/pipeline/status while `enabled`. Powers the live story-loading + render-progress UX.
@@ -50,13 +50,16 @@ export function usePipelineStatus(
         if (cancelled) return
         errs = 0
         setStatus(data)
-        // Refresh the server view on ANY progress — top-level status, a step changing state, or a new
-        // scene image landing — not just reelStatus. (During the storyboard build the status stays
-        // 'storyboard' while scenes/images stream in, so a status-only check would never update.)
+        // Refresh the server view on ANY progress — top-level status, a step changing state, a new
+        // scene image landing, OR an existing image being replaced (reshoot / re-render) — not just
+        // reelStatus. (During the storyboard build the status stays 'storyboard' while scenes/images
+        // stream in, so a status-only check would never update.) Keying on each scene's imageAssetId
+        // (not just a hasImage count) is what lets a swapped image auto-appear: the id changes even
+        // though the count doesn't.
         const sig =
           data.reelStatus +
           '|' + data.steps.map((s) => `${s.stepName}:${s.status}`).join(',') +
-          '|' + (data.scenes ? data.scenes.filter((s) => s.hasImage).length : 0)
+          '|' + (data.scenes ? data.scenes.map((s) => `${s.idx}:${s.imageAssetId ?? ''}`).join(',') : '')
         if (sig !== lastSigRef.current) {
           lastSigRef.current = sig
           router.refresh()

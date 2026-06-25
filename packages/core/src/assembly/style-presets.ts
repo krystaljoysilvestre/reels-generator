@@ -13,6 +13,7 @@ export interface StylePreset {
   label: string // short, recognizable look name
   description: string // one plain-English line: what it is / who it suits
   genres: string[] // genreCategory values this look suits best (for ordering); 'all' = universally usable
+  heroFor?: string[] // genreCategory values this look should LEAD (pre-selected default) for — outranks the universal 'all'
   stylePreset: string // visual DNA for the image model
 }
 
@@ -34,6 +35,15 @@ export const STYLE_PRESETS: StylePreset[] = [
     genres: ['all'],
     stylePreset:
       'cinematic photoreal film still, shallow depth of field, natural color grade, soft volumetric light, fine filmic grain, balanced contrast, 35mm look, lifelike textures and skin, restrained palette, tasteful composition',
+  },
+  {
+    id: 'cinematic-horror',
+    label: 'Cinematic Dread',
+    description: 'Photoreal horror film still — deep shadows, cold palette, unsettling stillness. The scary default for horror.',
+    genres: ['horror'],
+    heroFor: ['horror'], // horror channels lead with this, not the neutral universal Cinematic
+    stylePreset:
+      'grainy 35mm horror film still, low-key chiaroscuro lighting, deep crushed shadows that swallow the edges of frame, cold desaturated teal-and-amber palette, slightly underexposed, humid atmospheric haze, shallow depth of field, heavy occupied negative space, unsettling stillness, naturalistic but ominous, analog film grain texture',
   },
   {
     id: 'documentary',
@@ -185,7 +195,10 @@ export function presetsForGenre(genre?: string): StylePreset[] {
 }
 
 function fit(p: StylePreset, genre: string): number {
-  // 'all' (the universal photoreal default) always leads so it's offered to every channel; then the
+  // A look explicitly designated the hero for this genre leads (pre-selected default) — e.g. horror
+  // leads with Cinematic Dread, not the neutral universal Cinematic which fights the genre's mood.
+  if (p.heroFor?.includes(genre)) return 4
+  // Otherwise 'all' (the universal photoreal default) leads so it's offered to every channel; then the
   // genre-specific looks.
   if (p.genres.includes('all')) return 3
   if (p.genres.includes(genre)) return 2

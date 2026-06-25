@@ -44,10 +44,12 @@ export async function GET(req: NextRequest) {
       columns: { idx: true, imageAssetId: true },
     })
     // Per-scene image readiness — the true source for "images develop in" (generate_images writes one
-    // step row but per-scene assets).
+    // step row but per-scene assets). imageAssetId rides along so the client can detect not just a new
+    // image landing but an existing one being REPLACED (reshoot / re-render): the id changes, the count
+    // doesn't — a hasImage-only signal would miss it and the swapped image wouldn't auto-appear.
     out.scenes = sceneRows
       .sort((a, b) => a.idx - b.idx)
-      .map((s) => ({ idx: s.idx, hasImage: !!s.imageAssetId }))
+      .map((s) => ({ idx: s.idx, hasImage: !!s.imageAssetId, imageAssetId: s.imageAssetId }))
   }
 
   return NextResponse.json(out)
