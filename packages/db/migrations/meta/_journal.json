@@ -176,6 +176,13 @@
       "when": 1782362541913,
       "tag": "0024_tiny_azazel",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1782371088057,
+      "tag": "0025_clear_talkback",
+      "breakpoints": true
     }
   ]
 }

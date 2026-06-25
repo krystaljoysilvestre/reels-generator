@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import type { InferSelectModel } from 'drizzle-orm'
 import type { scenes, stories } from '@reels/db'
 import type { ChannelVoice, VoiceSettings, MotionSettings, OperatorCue } from '@reels/core'
-import { resolveMotionSettings, motionCostCents, operatorCueLabel } from '@reels/core'
+import { resolveMotionSettings, motionCostCents, operatorCueLabel, VIDEO_EFFECTS } from '@reels/core'
 import { GenreLoader } from '@/components/GenreLoader'
 import { usePipelineStatus } from '@/hooks/usePipelineStatus'
 import { PipelinePhaseStepper } from '@/components/PipelinePhaseStepper'
@@ -36,6 +36,7 @@ interface StoryboardEditorProps {
   musicUrl: string | null // this reel's AI-composed intro bed (musicMode='ai'), for hearing/vetting on review
   musicUrlB: string | null // the climax bed (two-section scoring)
   aiMusic: boolean // channel composes its bed per-reel (musicMode='ai') → vet it here, auto-requested on load
+  initialVideoEffects: string[] | null // per-reel video effects; null = auto (planned from the story)
   initialSoundNotes: string // auto-drafted reel-level smart audio plan (read-only display)
   initialOperatorSfx: OperatorCue[] // operator-added per-scene manual cues
   initialVoiceSettings: VoiceSettings // starting point for the delivery sliders
@@ -49,7 +50,7 @@ interface StoryboardEditorProps {
 export function StoryboardEditor({
   reel, story, scenes: initialScenes, voicePool, voiceRecommend,
   sceneImages, sceneVideoVariations, renderUrl: initialRenderUrl, musicUrl: initialMusicUrl, musicUrlB: initialMusicUrlB, aiMusic,
-  initialSoundNotes, initialOperatorSfx, initialVoiceSettings, voiceSettingsOverridden,
+  initialVideoEffects, initialSoundNotes, initialOperatorSfx, initialVoiceSettings, voiceSettingsOverridden,
   channelName, genreCategory, moodTint, failure,
 }: StoryboardEditorProps) {
   const router = useRouter()
@@ -94,6 +95,16 @@ export function StoryboardEditor({
   const [musicSection, setMusicSection] = useState<'a' | 'b'>('a') // which bed the preview player plays
   const [musicStatus, setMusicStatus] = useState<'idle' | 'generating' | 'error'>('idle')
   const [musicError, setMusicError] = useState<string | null>(null)
+  // Per-reel video effects — null = auto (planned from the story at render); array = explicit selection.
+  const [videoEffects, setVideoEffects] = useState<string[] | null>(initialVideoEffects)
+  const [effectsOpen, setEffectsOpen] = useState(false)
+  function saveVideoEffects(next: string[] | null) {
+    setVideoEffects(next)
+    void fetch('/api/pipeline/save-video-effects', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reelId: reel.id, effects: next }),
+    }).catch(() => {})
+  }
   const [musicTweakOpen, setMusicTweakOpen] = useState(false) // Regenerate popover (steer the new take)
   const [musicTweak, setMusicTweak] = useState('') // the operator's plain-language steer for the bed
   const [musicSuggestions, setMusicSuggestions] = useState<string[]>([]) // AI steer ideas for the field
@@ -671,6 +682,69 @@ export function StoryboardEditor({
     </div>
   ) : null
 
+  // Per-reel video effects picker — a footer pill + popover. Auto (null) = effects chosen from the story
+  // at render; toggling any effect switches to an explicit selection applied across the reel.
+  const isAuto = videoEffects === null
+  const effectsControl = (
+    <div className="relative flex items-center rounded-lg border border-border bg-subtle/40">
+      <button
+        onClick={() => setEffectsOpen((o) => !o)}
+        aria-expanded={effectsOpen}
+        className={`flex h-11 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition-colors hover:bg-subtle ${effectsOpen ? 'text-ink' : 'text-muted'}`}
+        title="Video effects for this reel"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0" aria-hidden>
+          <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" /><circle cx="12" cy="12" r="3" />
+        </svg>
+        Effects
+        <span className={`rounded-full px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide ${isAuto ? 'bg-accent-soft text-accent' : 'bg-subtle text-muted'}`}>
+          {isAuto ? 'Auto' : videoEffects.length === 0 ? 'Off' : String(videoEffects.length)}
+        </span>
+      </button>
+
+      {effectsOpen && (
+        <div className="absolute bottom-full left-0 z-50 mb-2 w-72 rounded-xl border border-border-strong bg-surface p-3 shadow-lg">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Video effects</p>
+            {!isAuto && (
+              <button type="button" onClick={() => saveVideoEffects(null)} className="text-[11px] font-medium text-accent hover:underline">
+                Back to Auto
+              </button>
+            )}
+          </div>
+          <p className="mb-2 text-[11px] leading-relaxed text-faint">
+            {isAuto ? 'Chosen automatically from the story. Tap an effect to set your own.' : 'Applied across this reel. Re-render to see changes.'}
+          </p>
+          <div className="flex flex-col gap-1.5">
+            {VIDEO_EFFECTS.map((fx) => {
+              const on = !isAuto && videoEffects.includes(fx.id)
+              return (
+                <button
+                  key={fx.id}
+                  type="button"
+                  onClick={() => {
+                    const cur = isAuto ? [] : videoEffects
+                    const next = cur.includes(fx.id) ? cur.filter((x) => x !== fx.id) : [...cur, fx.id]
+                    saveVideoEffects(next)
+                  }}
+                  className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left transition-colors ${on ? 'border-accent bg-accent-soft' : 'border-border hover:bg-subtle'}`}
+                >
+                  <span>
+                    <span className="block text-xs font-medium text-ink">{fx.label}</span>
+                    <span className="block text-[11px] text-faint">{fx.hint}</span>
+                  </span>
+                  <span className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border ${on ? 'border-accent bg-accent text-white' : 'border-border-strong'}`}>
+                    {on && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M20 6 9 17l-5-5" /></svg>}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+
   // Strip collapsing rail — two scroll-linked CSS vars, written straight in the scroll handler (no rAF, no
   // React re-render). The rail is position:sticky so the browser pins it natively — rock-steady, no JS-pin
   // shake.
@@ -851,6 +925,7 @@ export function StoryboardEditor({
           )}
         </div>
         {musicControl}
+        {effectsControl}
         {error && <p className="text-sm text-danger">{error}</p>}
         {isRenderable && !selectedVoice && !error && !recsLoading && (
           <p className="text-xs text-muted">

@@ -1,6 +1,7 @@
 import React from 'react'
 import { AbsoluteFill, Sequence, useVideoConfig } from 'remotion'
 import { SceneClip } from '../components/SceneClip.js'
+import { SceneEffects } from '../components/SceneEffects.js'
 import { SubtitleOverlay } from '../components/SubtitleOverlay.js'
 import { GradeOverlay } from '../components/GradeOverlay.js'
 import { OnScreenTextOverlay } from '../components/OnScreenTextOverlay.js'
@@ -58,13 +59,16 @@ export const ReelComposition: React.FC<ReelCompositionProps> = ({
           durationInFrames={scene.durationFrames}
         >
           <AbsoluteFill>
-            <SceneClip
-              imageSrc={scene.imageSrc}
-              videoSrc={scene.videoSrc}
-              tier={scene.tier}
-              durationFrames={scene.durationFrames}
-              idx={scene.idx}
-            />
+            {/* Per-scene video effects (zoom/shake/glitch/flash/vhs) wrap the clip + add overlays */}
+            <SceneEffects effects={scene.effects} durationFrames={scene.durationFrames}>
+              <SceneClip
+                imageSrc={scene.imageSrc}
+                videoSrc={scene.videoSrc}
+                tier={scene.tier}
+                durationFrames={scene.durationFrames}
+                idx={scene.idx}
+              />
+            </SceneEffects>
             {/* Per-scene grade — atmosphere intensity scales with THIS scene's mood + tier */}
             <GradeOverlay grain={grain} vignette={vignette} intensity={moodIntensity(scene.mood, scene.tier)} />
             {/* Optional per-scene on-screen text (above the grade, below the global captions) */}

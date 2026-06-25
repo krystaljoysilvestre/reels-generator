@@ -5,6 +5,14 @@ import type { CaptionStyle } from '@reels/core'
 
 export type { CaptionStyle }
 
+// Per-scene video effects, chosen by the worker (planSceneEffects) from the scene's mood + channel genre.
+// Rendered at composite time in Remotion (free — no AI/API cost). intensity is 0–1.
+export type SceneEffectType = 'zoom' | 'shake' | 'glitch' | 'flash' | 'vhs'
+export interface SceneEffect {
+  type: SceneEffectType
+  intensity: number
+}
+
 export interface ReelScene {
   idx: number
   imageSrc: string
@@ -14,6 +22,7 @@ export interface ReelScene {
   durationFrames: number
   mood: string[] // ambient/grade hints from breakdown — drives per-scene atmosphere intensity
   onScreenText?: string | null // optional title/overlay burned on this scene, separate from captions
+  effects?: SceneEffect[] // per-scene video effects (zoom/shake/glitch/flash/vhs)
 }
 
 // One word within a chunk — drives the word-by-word "karaoke" highlight.

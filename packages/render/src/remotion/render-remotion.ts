@@ -9,7 +9,7 @@ import { renderMedia, selectComposition, ensureBrowser } from '@remotion/rendere
 import { readFile } from 'node:fs/promises'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { CaptionStyle, ReelCompositionProps, ReelScene, SubtitleChunk } from './types.js'
+import type { CaptionStyle, ReelCompositionProps, ReelScene, SceneEffect, SubtitleChunk } from './types.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -23,6 +23,7 @@ export interface RemotionRenderInput {
     endMs: number
     mood: string[]            // ambient/grade hints — drives per-scene atmosphere intensity
     onScreenText?: string | null // optional title/overlay burned on this scene
+    effects?: SceneEffect[]   // per-scene video effects (zoom/shake/glitch/flash/vhs)
   }>
   subtitles: SubtitleChunk[]
   captionStyle: CaptionStyle
@@ -96,6 +97,7 @@ export async function renderReelWithRemotion(input: RemotionRenderInput): Promis
         durationFrames: Math.max(1, endFrame - startFrame),
         mood: s.mood,
         onScreenText: s.onScreenText ?? null,
+        effects: s.effects ?? [],
       }
     }),
   )

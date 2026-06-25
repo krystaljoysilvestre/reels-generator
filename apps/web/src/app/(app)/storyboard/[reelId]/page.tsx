@@ -99,6 +99,7 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
       musicUrl={musicUrl}
       musicUrlB={musicUrlB}
       aiMusic={aiMusic}
+      initialVideoEffects={Array.isArray(reel.videoEffects) ? (reel.videoEffects as string[]) : null}
       initialSoundNotes={reel.soundNotes ?? ''}
       initialOperatorSfx={OperatorSfxSchema.parse(reel.operatorSfx ?? [])}
       initialVoiceSettings={initialVoiceSettings}

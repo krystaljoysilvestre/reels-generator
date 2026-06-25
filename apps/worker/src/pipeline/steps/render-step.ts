@@ -6,11 +6,34 @@ import { join } from 'node:path'
 import { mkdir, writeFile, readFile } from 'node:fs/promises'
 import { getDb, reels, scenes, assets, channels } from '@reels/db'
 import { downloadBuffer, uploadBuffer, buildInputHash } from '@reels/providers'
-import { TimingsSchema, LutConfigSchema, CaptionStyleSchema, PLATFORM_PRESETS } from '@reels/core'
+import { TimingsSchema, LutConfigSchema, CaptionStyleSchema, PLATFORM_PRESETS, effectsFromSelection } from '@reels/core'
 import { renderReelWithRemotion } from '@reels/render/remotion/render-remotion'
 import { runStep, setReelStatus } from '../harness.js'
 
 const execFileAsync = promisify(execFile)
+
+// Pick per-scene video effects from the scene's (AI-derived) mood + the channel genre. Pure mapping —
+// no API call, so it's free; effects are composited at render time. Kept tasteful: gentle life on every
+// still, and digital unease (glitch/flash/shake) only on tense/shock beats of edgy genres.
+const TENSE_FX_WORDS = [
+  'tense', 'dread', 'fear', 'afraid', 'terror', 'horror', 'panic', 'menac', 'threat', 'ominous',
+  'sinister', 'eerie', 'unsettl', 'creep', 'anxious', 'suspense', 'shock', 'violent', 'forebod', 'haunt',
+]
+function planSceneEffects(
+  mood: string[],
+  tier: 'still' | 'video',
+  genre: string,
+): Array<{ type: 'zoom' | 'shake' | 'glitch' | 'flash' | 'vhs'; intensity: number }> {
+  const fx: Array<{ type: 'zoom' | 'shake' | 'glitch' | 'flash' | 'vhs'; intensity: number }> = []
+  const edgy = genre === 'horror' || genre === 'general'
+  const m = mood.join(' ').toLowerCase()
+  const tense = TENSE_FX_WORDS.some((k) => m.includes(k))
+  const shock = /shock|terror|panic|scream|violent/.test(m)
+  if (tier === 'still') fx.push({ type: 'zoom', intensity: 0.5 }) // slow push-in so stills feel alive
+  if (edgy && tense) fx.push({ type: 'glitch', intensity: shock ? 0.9 : 0.45 })
+  if (edgy && shock) { fx.push({ type: 'flash', intensity: 0.7 }); fx.push({ type: 'shake', intensity: 0.5 }) }
+  return fx
+}
 
 export async function renderStep(reelId: string): Promise<void> {
   const db = getDb()
@@ -96,6 +119,10 @@ export async function renderStep(reelId: string): Promise<void> {
           endMs: timing.endMs,
           mood: scene.mood,
           onScreenText: scene.onScreenText,
+          // Operator's explicit per-reel selection wins; null → auto-plan from mood + genre.
+          effects: Array.isArray(reel.videoEffects)
+            ? effectsFromSelection(reel.videoEffects as string[], scene.tier as 'still' | 'video')
+            : planSceneEffects(scene.mood, scene.tier as 'still' | 'video', channel.genreCategory ?? 'general'),
         })
       }
 

@@ -167,6 +167,9 @@ export const reels = pgTable(
     // short off-screen voice lines, anchored to narration. Merged into the SFX list at compute_timings +
     // generate_sfx. Internal — the operator only ever sees/edits soundNotes.
     operatorSfx: jsonb('operator_sfx').notNull().default([]),
+    // Per-reel video effects: null = auto (planned from the story's mood + genre at render); an array of
+    // effect ids (e.g. ['vhs','glitch']) = the operator's explicit choice, applied across the reel.
+    videoEffects: jsonb('video_effects'),
     renderUrl: text('render_url'),
     costCents: integer('cost_cents').notNull().default(0),
     operatorMinutes: integer('operator_minutes').notNull().default(0),
