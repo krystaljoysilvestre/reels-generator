@@ -28,7 +28,7 @@ export function ChannelAvatar({
   name,
   avatarKey,
   className = '',
-  rounded = 'rounded-lg',
+  rounded = 'rounded-full',
   textClass = 'text-sm',
 }: {
   name: string

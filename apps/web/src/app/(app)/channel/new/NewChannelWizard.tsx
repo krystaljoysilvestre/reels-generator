@@ -706,7 +706,12 @@ export function NewChannelWizard({
         body: JSON.stringify({ name: name.trim(), nicheDescription: niche.trim(), languages, targetPlatform }),
       })
       const json = await res.json()
-      if (!res.ok) throw new Error(json.error ?? 'Generation failed')
+      if (!res.ok) {
+        // Surface the specific field that failed validation instead of a bare "Invalid input".
+        const fieldErrors = json.issues?.fieldErrors as Record<string, string[]> | undefined
+        const detail = fieldErrors && Object.entries(fieldErrors).map(([f, msgs]) => `${f}: ${msgs?.[0]}`).join('; ')
+        throw new Error(detail || json.error || 'Generation failed')
+      }
       const d = json.derived as Derived
       setTone(d.toneConfig)
       if (typeof d.targetSeconds === 'number') setTargetSeconds(d.targetSeconds)
@@ -919,6 +924,7 @@ export function NewChannelWizard({
                     onChange={(e) => setName(e.target.value)}
                     onBlur={() => setCommittedName(name.trim())}
                     placeholder="Your channel name"
+                    maxLength={80}
                     autoFocus
                   />
                 </Field>
@@ -987,9 +993,10 @@ export function NewChannelWizard({
                 className="input h-44 resize-none"
                 value={niche}
                 onChange={(e) => { setNiche(e.target.value); setPresetId(null) }}
+                maxLength={2000}
                 placeholder="e.g. 'true-crime cases cracked by one overlooked detail, calm narration', or 'cozy 2-minute pasta recipes, warm and upbeat', or 'mind-bending space facts told with awe'. Cover the genre, audience, format, tone, and how it's narrated — the more detail, the better; we safely fill in the rest."
               />
-              <p className="mt-1 text-xs text-faint">{niche.trim().length}/20 min characters</p>
+              <p className="mt-1 text-xs text-faint">{niche.trim().length} characters · 20 min, 2000 max</p>
             </Field>
 
             <Field label="Language" hint="Every reel on this channel is narrated in this language. Want another language? Create a separate channel.">
@@ -1645,10 +1652,10 @@ function Recap({ name, description, language, avatarPreview }: {
   return (
     <div className="card flex items-center gap-3 p-4">
       {avatarPreview ? (
-        <img src={avatarPreview} alt="" className="h-10 w-10 flex-shrink-0 rounded-lg object-cover" />
+        <img src={avatarPreview} alt="" className="h-10 w-10 flex-shrink-0 rounded-full object-cover" />
       ) : (
         <div
-          className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg text-sm font-semibold text-white"
+          className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white"
           style={{ background: avatarGradient(name || 'channel') }}
         >
           {avatarInitials(name || '?')}
@@ -1674,7 +1681,7 @@ function AvatarPicker({ committedName, preview, uploading, onPick, onRemove }: {
   return (
     <div className="flex flex-col items-center gap-1">
       <label
-        className={`group relative flex h-16 w-16 cursor-pointer items-center justify-center overflow-hidden rounded-xl border border-border-strong text-base font-semibold shadow-xs transition-all hover:scale-[1.03] ${
+        className={`group relative flex h-16 w-16 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-border-strong text-base font-semibold shadow-xs transition-all hover:scale-[1.03] ${
           hasGradient ? 'text-white' : preview ? '' : 'bg-subtle text-faint'
         }`}
         style={hasGradient ? { background: avatarGradient(committedName) } : undefined}
