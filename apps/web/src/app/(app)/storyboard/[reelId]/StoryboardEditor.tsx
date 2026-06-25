@@ -1051,11 +1051,14 @@ export function StoryboardEditor({
 // layer their own badges/controls via `children`. Timeline tiles pass playVideo={false} so only the
 // inspector autoplays video (no fleet of autoplaying clips).
 function SceneMedia({
-  scene, imgSrc, videoKey, showVideo, playVideo, loaded, onLoaded, onDuration, regenerating, animating, frameClass, frameStyle, adaptAspect, frameAspect, contain, children,
+  scene, imgSrc, videoKey, showVideo, playVideo, loaded, onLoaded, onDuration, regenerating, animating, compactOnShrink, frameClass, frameStyle, adaptAspect, frameAspect, contain, children,
 }: {
   scene: Scene; imgSrc?: string | undefined; videoKey?: string | undefined; showVideo: boolean; playVideo: boolean
   loaded: boolean; onLoaded: () => void; onDuration?: ((secs: number) => void) | undefined
   regenerating: boolean; animating: boolean
+  // In the strip rail the tile collapses to a slim filmstrip (--shrink → 1); when set, the busy-overlay
+  // caption collapses away with it so the tiny tile shows just the spinner, not cramped text.
+  compactOnShrink?: boolean
   // frameAspect fixes the frame's shape (e.g. '16 / 9' for a landscape, YouTube-style player); contain fits
   // the media inside it (letterboxed on black) instead of cropping. Without them: adaptAspect → media's own
   // aspect, else a 9:16 tile. frameStyle merges onto the frame box (e.g. scroll-linked border radius/width).
@@ -1109,15 +1112,25 @@ function SceneMedia({
       {regenerating && (
         <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-2 bg-ink/45 text-xs font-medium text-white backdrop-blur-sm">
           <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/70 border-t-transparent" />
-          Reshooting…
+          {/* Caption collapses out as the rail shrinks — a slim filmstrip tile has no room for it, just the spinner. */}
+          <span
+            className="overflow-hidden"
+            style={compactOnShrink ? { maxHeight: 'calc(1.25rem * (1 - var(--shrink, 0)))', opacity: 'calc(1 - var(--shrink, 0))' } : undefined}
+          >Reshooting…</span>
         </div>
       )}
       {/* Animate overlay — long op, set a gentle expectation */}
       {animating && (
         <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-2 bg-ink/45 px-3 text-center text-xs font-medium text-white backdrop-blur-sm">
           <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/70 border-t-transparent" />
-          Bringing this scene to life…
-          <span className="text-[10px] font-normal text-white/70">takes about a minute</span>
+          {/* Caption + sub-line collapse out as the rail shrinks — a slim filmstrip tile has no room, just the spinner. */}
+          <span
+            className="flex flex-col items-center gap-1 overflow-hidden"
+            style={compactOnShrink ? { maxHeight: 'calc(2.75rem * (1 - var(--shrink, 0)))', opacity: 'calc(1 - var(--shrink, 0))' } : undefined}
+          >
+            Bringing this scene to life…
+            <span className="text-[10px] font-normal text-white/70">takes about a minute</span>
+          </span>
         </div>
       )}
       {children}
@@ -1304,6 +1317,7 @@ function SceneThumb({
           onLoaded={() => markLoaded(scene.idx)}
           regenerating={regenerating}
           animating={animating}
+          compactOnShrink={isStrip}
           frameClass={frameClass}
           // In the rail, the tile's border + corners tighten as it collapses to the compact filmstrip.
           frameStyle={isStrip ? { borderRadius: 'calc(0.75rem - 0.45rem * var(--shrink, 0))', borderWidth: 'calc(1px - 0.5px * var(--shrink, 0))' } : undefined}
