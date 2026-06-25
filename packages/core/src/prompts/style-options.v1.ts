@@ -79,7 +79,11 @@ Rules:
   reserve those for the Cinematic / Photoreal option only.
 - The sample scene is what every style is previewed on, so it must be DEPICTABLE and SAFE for an
   image model: atmospheric and evocative, never graphic — no gore, no violence, no injury, no
-  nudity, no minors in peril. Imply mood through light, place, weather, and objects.`
+  nudity, no minors in peril. Imply mood through light, place, weather, and objects.
+- Pick the single moment that best captures THIS channel's signature feel at its strongest — whatever
+  that feel is for the niche (eerie, cozy, tense, awe-struck, playful…). Lean into the niche's own mood,
+  don't flatten it to a neutral establishing shot; but never tip into the graphic payoff. Be genre-true,
+  not genre-biased.`
 
   const userMessage = `NICHE: ${v.nicheDescription}
 WORLD: ${v.worldJson}
@@ -91,7 +95,7 @@ ${STYLE_PALETTE.map((s) => `- ${s}`).join('\n')}
 
 Return JSON only:
 {
-  "sampleScene": "one depictable, non-graphic scene (content only — what to show; no style words). If sample narration is given, pick one vivid visual moment from it; else invent one true to the niche/world.",
+  "sampleScene": "one depictable, non-graphic scene (content only — what to show; no style words). If sample narration is given, pick the single MOST mood-defining moment from it — the beat that best captures the channel's feel (eerie/cozy/tense/awe…), still safe and non-graphic; else invent one true to the niche/world.",
   "styles": [
     {
       "label": "1–3 word evocative look tuned to THIS niche (e.g. 'Case-File Noir', 'Vintage Engraving', 'Bright Studio', 'Dark Anime', 'Pixar Style', 'Meme Style') — niche-flavored and recognizable, no jargon",

@@ -7,7 +7,7 @@ import { Dropdown } from '@/components/Dropdown'
 import { avatarGradient, avatarInitials } from '@/components/ChannelAvatar'
 import { CaptionPreview } from '@/components/CaptionPreview'
 import { PlatformPicker } from '@/components/PlatformPicker'
-import { type CaptionPreset, type CaptionStyle, type TargetPlatform, type AudioMood, resolveCaptionStyle, CaptionStyleSchema, PLATFORM_PRESETS, PRESET_BEDS, rankPresets } from '@reels/core'
+import { type CaptionPreset, type CaptionStyle, type TargetPlatform, type AudioMood, resolveCaptionStyle, CaptionStyleSchema, PLATFORM_PRESETS, PRESET_BEDS, rankPresets, presetsForGenre, stylePresetThumbKey } from '@reels/core'
 
 // v2: caption persistence changed from preset+highlight to a resolved captionStyle object.
 // Bumping the key drops pre-v2 drafts (which would otherwise fall back to the default
@@ -491,36 +491,26 @@ export function NewChannelWizard({
     }
   }
 
-  async function fetchStyleOptions() {
-    const reqId = ++styleReqRef.current
-    setStyleLoading(true)
-    setStyleError('')
-    const basis = sampleScript.trim()
-    try {
-      const res = await fetch('/api/channel/style-options', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nicheDescription: niche.trim(),
-          toneConfig: tone,
-          worldBible: worldBiblePayload(),
-          sampleScript: basis || undefined,
-        }),
-      })
-      const json = await res.json()
-      if (styleReqRef.current !== reqId) return // a newer request superseded this one
-      if (!res.ok) throw new Error(json.error ?? 'Couldn’t propose styles')
-      const proposals: StyleProposals = { sampleScene: json.sampleScene, styles: json.styles ?? [] }
-      setStyleProposals(proposals)
-      setStylePreviews({})
-      setSelectedStyleIdx(0)
-      if (proposals.styles[0]) setStyle(proposals.styles[0].stylePreset)
-      setCostCents((c) => c + (json.costCents ?? 0))
-    } catch (e) {
-      if (styleReqRef.current === reqId) setStyleError(friendlyError(e, 'Couldn’t propose styles'))
-    } finally {
-      if (styleReqRef.current === reqId) setStyleLoading(false)
+  // Onboarding spends NOTHING on visuals: the gallery is our fixed preset library with thumbnails
+  // pre-rendered once (served from R2). Selecting a preset sets the channel's style DNA; its thumbnail
+  // doubles as the chosen style-sample image. A bespoke, channel-specific look is generated later, opt-in,
+  // via "Customize look" in Settings. (Upload-your-own below still works and is operator-initiated.)
+  function fetchStyleOptions() {
+    styleReqRef.current++
+    const presets = presetsForGenre(genreCategory)
+    const proposals: StyleProposals = {
+      sampleScene: '',
+      styles: presets.map((p) => ({ label: p.label, description: p.description, stylePreset: p.stylePreset })),
     }
+    const previews: Record<number, PreviewState> = {}
+    presets.forEach((p, i) => { previews[i] = { imageKey: stylePresetThumbKey(p.id) } })
+    setStyleProposals(proposals)
+    setStylePreviews(previews)
+    setSelectedStyleIdx(0)
+    setUploadedStyleIdx(null)
+    if (presets[0]) setStyle(presets[0].stylePreset)
+    setStyleLoading(false)
+    setStyleError('')
   }
 
   function selectStyle(idx: number) {
@@ -1414,7 +1404,7 @@ export function NewChannelWizard({
             <div className="card p-5">
               <SectionLabel>Visual style</SectionLabel>
               <p className="mt-1 text-xs text-faint">
-                Pick a look for your channel — or upload your own reference. Each is previewed on a sample scene from your niche.
+                Pick a look for your channel — or upload your own reference. You can generate a custom look tailored to your channel later, in Settings.
               </p>
               <input
                 ref={styleRefInputRef}
