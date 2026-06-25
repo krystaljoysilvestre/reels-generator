@@ -20,6 +20,7 @@ const UpdateSchema = z
     toneConfig: ToneConfigSchema,
     targetSeconds: z.number().int().min(15).max(180),
     stylePreset: z.string().trim().min(1),
+    styleImageKey: z.string().trim().min(1).nullish(), // chosen style-sample image (preset thumb or custom render)
     captionStyle: CaptionStyleSchema,
     worldBible: WorldBibleSchema,
     generationMode: z.enum(['review', 'auto']),

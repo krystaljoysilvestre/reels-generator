@@ -26,6 +26,8 @@ export default async function ChannelSettingsPage({ params }: { params: Promise<
         targetPlatform: (channel.targetPlatform ?? 'all') as 'tiktok' | 'youtube_shorts' | 'facebook_reels' | 'all',
         targetSeconds: channel.targetSeconds ?? 75,
         stylePreset: channel.stylePreset ?? '',
+        styleImageKey: channel.styleImageKey ?? null,
+        genreCategory: channel.genreCategory ?? 'general',
         toneConfig: ToneConfigSchema.parse(channel.toneConfig ?? {}),
         worldBible: WorldBibleSchema.parse(channel.worldBible ?? {}),
         captionStyle: CaptionStyleSchema.parse(channel.captionStyle ?? {}),

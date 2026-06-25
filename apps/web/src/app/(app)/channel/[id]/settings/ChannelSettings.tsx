@@ -14,6 +14,7 @@ import {
 } from '@reels/core'
 import { CaptionPreview } from '@/components/CaptionPreview'
 import { PlatformPicker } from '@/components/PlatformPicker'
+import { VisualStyle } from './VisualStyle'
 
 const TONE_KEYS: Array<keyof ToneConfig> = ['intensity', 'warmth', 'energy', 'pacing', 'humor']
 const CAPTION_ORDER: CaptionPreset[] = [
@@ -30,6 +31,8 @@ interface Initial {
   targetPlatform: TargetPlatform
   targetSeconds: number
   stylePreset: string
+  styleImageKey: string | null
+  genreCategory: string
   toneConfig: ToneConfig
   worldBible: WorldBible
   captionStyle: CaptionStyle
@@ -45,6 +48,7 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
   const [targetPlatform, setTargetPlatform] = useState<TargetPlatform>(initial.targetPlatform)
   const [targetSeconds, setTargetSeconds] = useState(initial.targetSeconds)
   const [stylePreset, setStylePreset] = useState(initial.stylePreset)
+  const [styleImageKey, setStyleImageKey] = useState<string | null>(initial.styleImageKey)
   const [tone, setTone] = useState<ToneConfig>(initial.toneConfig)
   const [captionStyle, setCaptionStyle] = useState<CaptionStyle>(initial.captionStyle)
   const [generationMode, setGenerationMode] = useState<'review' | 'auto'>(initial.generationMode)
@@ -74,6 +78,7 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
       toneConfig: tone,
       targetSeconds,
       stylePreset: stylePreset.trim(),
+      styleImageKey,
       captionStyle,
       generationMode,
       worldBible: {
@@ -223,12 +228,22 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
           </div>
         </section>
 
-        {/* Visual style */}
-        <section className="card space-y-2 p-5">
-          <SectionLabel>Visual style</SectionLabel>
-          <p className="text-xs text-faint">Describe the look you want — mood, colour, lighting, setting. Changes apply to new reels; ones you&apos;ve already made keep their look.</p>
-          <textarea value={stylePreset} onChange={(e) => setStylePreset(e.target.value)} rows={4} className="input resize-y" />
-        </section>
+        {/* Visual style — preset gallery + opt-in custom generation */}
+        <VisualStyle
+          genre={initial.genreCategory}
+          niche={niche}
+          tone={tone}
+          worldBible={{
+            region: region.trim(),
+            era: era.trim(),
+            canonLocations: locations.split('\n').map((s) => s.trim()).filter(Boolean),
+            canonObjects: objects.split('\n').map((s) => s.trim()).filter(Boolean),
+            vocabulary: Object.fromEntries(vocab.filter((v) => v.term.trim()).map((v) => [v.term.trim(), v.value])),
+          }}
+          stylePreset={stylePreset}
+          styleImageKey={styleImageKey}
+          onChange={(sp, sk) => { setStylePreset(sp); setStyleImageKey(sk) }}
+        />
 
         {/* World bible */}
         <section className="card space-y-4 p-5">
