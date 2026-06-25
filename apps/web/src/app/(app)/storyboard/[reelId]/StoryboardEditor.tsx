@@ -1321,6 +1321,8 @@ function SceneInspector({
   const [lightboxAspect, setLightboxAspect] = useState<string | null>(null) // real aspect of the open media
   const [changeText, setChangeText] = useState('') // the creator's plain-language change for this scene
   // Per-scene "Add a sound" (manual cue) — targeted SFX or an off-screen spoken line for THIS scene.
+  // Collapsed by default (sound is automatic; this is an optional extra) — expands on click.
+  const [soundOpen, setSoundOpen] = useState(false)
   const [soundText, setSoundText] = useState('')
   const [addingSound, setAddingSound] = useState(false)
   const [soundError, setSoundError] = useState<string | null>(null)
@@ -1453,27 +1455,42 @@ function SceneInspector({
           )}
         </div>
 
-        {/* Add a sound — an OPTIONAL targeted touch for THIS scene, on top of the automatic sound design.
-            Type plainly for an effect, or put words in quotes for an off-screen line. The helper line makes
-            clear sound is already handled, so this never reads as required. */}
+        {/* Add a sound — an OPTIONAL targeted touch for THIS scene, collapsed by default since sound is
+            automatic. Click to expand: type plainly for an effect, or put words in quotes for an off-screen
+            line. Any sounds already added stay visible below. */}
         <div className="mt-4 flex flex-col gap-2.5 border-t border-border pt-4">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Add a sound to this scene</p>
-          <p className="-mt-1 text-[11px] leading-relaxed text-faint">Sound is added to your reel automatically. Add a specific one here only if you want it — an effect, or words spoken off-screen.</p>
-          <textarea
-            value={soundText}
-            onChange={(e) => setSoundText(e.target.value)}
-            onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') void runAddSound() }}
-            rows={2}
-            disabled={addingSound}
-            placeholder="Describe a sound, or put spoken words in quotes"
-            aria-label={`Scene ${scene.idx} add sound`}
-            className="input resize-y text-xs leading-relaxed disabled:opacity-60"
-          />
-          <button type="button" onClick={() => void runAddSound()} disabled={addingSound || !soundText.trim()}
-            className="btn-secondary btn-sm w-full active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-50">
-            {addingSound ? (<><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />Adding…</>) : 'Add sound'}
-          </button>
-          {soundError && <p className="text-[11px] text-danger">{soundError}</p>}
+          {soundOpen ? (
+            <>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Add specific sound effects to this scene</p>
+              <p className="-mt-1 text-[11px] leading-relaxed text-faint">Sound is added to your reel automatically. Add a specific one here only if you want it — an effect, or words spoken off-screen.</p>
+              <textarea
+                value={soundText}
+                onChange={(e) => setSoundText(e.target.value)}
+                onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') void runAddSound() }}
+                rows={2}
+                autoFocus
+                disabled={addingSound}
+                placeholder="Describe a sound, or put spoken words in quotes"
+                aria-label={`Scene ${scene.idx} add sound`}
+                className="input resize-y text-xs leading-relaxed disabled:opacity-60"
+              />
+              <div className="flex gap-2">
+                <button type="button" onClick={() => void runAddSound()} disabled={addingSound || !soundText.trim()}
+                  className="btn-secondary btn-sm flex-1 active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-50">
+                  {addingSound ? (<><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />Adding…</>) : 'Add sound'}
+                </button>
+                <button type="button" onClick={() => { setSoundOpen(false); setSoundText(''); setSoundError(null) }} disabled={addingSound} className="btn-ghost btn-sm">
+                  Cancel
+                </button>
+              </div>
+              {soundError && <p className="text-[11px] text-danger">{soundError}</p>}
+            </>
+          ) : (
+            <button type="button" onClick={() => setSoundOpen(true)} className="flex items-center gap-1.5 self-start text-xs font-medium text-muted transition-colors hover:text-ink">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 5v14M5 12h14" /></svg>
+              {sounds.length > 0 ? 'Add another sound effect' : 'Add specific sound effects to this scene'}
+            </button>
+          )}
 
           {sounds.length > 0 && (
             <ul className="flex flex-col gap-2 pt-1">
