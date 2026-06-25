@@ -49,9 +49,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'This channel does not use AI-composed music.' }, { status: 400 })
   }
 
-  // Auto-load asks for the bed only if there isn't one yet; the Regenerate button forces a fresh take.
-  if (reel.musicKey && !force) {
-    return NextResponse.json({ ok: true, musicKey: reel.musicKey, costCents: 0 })
+  // Auto-load asks for the beds only if there aren't any yet; the Regenerate button forces a fresh take.
+  if (reel.musicKey && reel.musicKeyB && !force) {
+    return NextResponse.json({ ok: true, musicKey: reel.musicKey, musicKeyB: reel.musicKeyB, costCents: 0 })
   }
 
   const story = await db.query.stories.findFirst({ where: eq(stories.id, reel.storyId) })
@@ -68,29 +68,35 @@ export async function POST(req: NextRequest) {
     // Story-level mood tilt: the annotated audioScript doesn't exist yet at the storyboard, so we tilt
     // with the story's subgenre tags (falling back to the channel's sonic-DNA mood).
     const moodTags = story.subgenreTags.length ? story.subgenreTags : audioPacks.audioMood?.moodTags ?? []
-    const prompt = buildMusicPrompt({
+    const common = {
       audioMood: audioPacks.audioMood,
       toneIntensity: tone.intensity,
       nicheDescription: channel.nicheDescription,
       moodTags,
       instruction,
-    })
+    }
     const lengthMs = estimateMusicLengthMs({ narration: story.body, targetSeconds: channel.targetSeconds })
 
-    const { audio, costCents } = await generateMusic({ prompt, lengthMs })
-    const storageKey = `audio/reel/${reelId}.mp3`
-    await uploadBuffer(storageKey, audio, 'audio/mpeg')
+    // Two-section score: an intro (build) bed + a climax bed, crossfaded at the twist during render.
+    const intro = await generateMusic({ prompt: buildMusicPrompt({ ...common, section: 'intro' }), lengthMs })
+    const climax = await generateMusic({ prompt: buildMusicPrompt({ ...common, section: 'climax' }), lengthMs })
+    const keyA = `audio/reel/${reelId}.mp3`
+    const keyB = `audio/reel/${reelId}-b.mp3`
+    await uploadBuffer(keyA, intro.audio, 'audio/mpeg')
+    await uploadBuffer(keyB, climax.audio, 'audio/mpeg')
+    const costCents = (intro.costCents ?? 0) + (climax.costCents ?? 0)
     await db
       .update(reels)
       .set({
-        musicKey: storageKey,
+        musicKey: keyA,
+        musicKeyB: keyB,
         musicLengthMs: lengthMs,
-        costCents: reel.costCents + (costCents ?? 0),
+        costCents: reel.costCents + costCents,
         updatedAt: new Date(),
       })
       .where(eq(reels.id, reelId))
 
-    return NextResponse.json({ ok: true, musicKey: storageKey, costCents: costCents ?? 0 })
+    return NextResponse.json({ ok: true, musicKey: keyA, musicKeyB: keyB, costCents })
   } catch (err) {
     if (err instanceof ProviderRateLimitError) {
       return NextResponse.json({ error: 'Busy right now — give it a moment and try again.' }, { status: 429 })

@@ -4,8 +4,8 @@ import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import type { InferSelectModel } from 'drizzle-orm'
 import type { scenes, stories } from '@reels/db'
-import type { ChannelVoice, VoiceSettings, MotionSettings } from '@reels/core'
-import { resolveMotionSettings, motionCostCents } from '@reels/core'
+import type { ChannelVoice, VoiceSettings, MotionSettings, OperatorCue } from '@reels/core'
+import { resolveMotionSettings, motionCostCents, operatorCueLabel } from '@reels/core'
 import { usePipelineStatus } from '@/hooks/usePipelineStatus'
 import { PipelinePhaseStepper } from '@/components/PipelinePhaseStepper'
 import { useToast } from '@/components/Toast'
@@ -32,8 +32,11 @@ interface StoryboardEditorProps {
   sceneImages: Record<number, string>
   sceneVideoVariations: Record<number, string[]>
   renderUrl: string | null
-  musicUrl: string | null // this reel's AI-composed bed (musicMode='ai'), for hearing/vetting on review
+  musicUrl: string | null // this reel's AI-composed intro bed (musicMode='ai'), for hearing/vetting on review
+  musicUrlB: string | null // the climax bed (two-section scoring)
   aiMusic: boolean // channel composes its bed per-reel (musicMode='ai') → vet it here, auto-requested on load
+  initialSoundNotes: string // auto-drafted reel-level smart audio plan (read-only display)
+  initialOperatorSfx: OperatorCue[] // operator-added per-scene manual cues
   initialVoiceSettings: VoiceSettings // starting point for the delivery sliders
   voiceSettingsOverridden: boolean // reel already has a saved manual override
   channelName: string
@@ -43,8 +46,8 @@ interface StoryboardEditorProps {
 
 export function StoryboardEditor({
   reel, story, scenes: initialScenes, voicePool, voiceRecommend,
-  sceneImages, sceneVideoVariations, renderUrl: initialRenderUrl, musicUrl: initialMusicUrl, aiMusic,
-  initialVoiceSettings, voiceSettingsOverridden,
+  sceneImages, sceneVideoVariations, renderUrl: initialRenderUrl, musicUrl: initialMusicUrl, musicUrlB: initialMusicUrlB, aiMusic,
+  initialSoundNotes, initialOperatorSfx, initialVoiceSettings, voiceSettingsOverridden,
   channelName, moodTint, failure,
 }: StoryboardEditorProps) {
   const router = useRouter()
@@ -75,9 +78,18 @@ export function StoryboardEditor({
   // Edit delivery from the footer pill — same state the picker's sliders use; marks it a manual override.
   const setDelivery = (patch: Partial<VoiceSettings>) => { setVoiceSettings((s) => ({ ...s, ...patch })); setVoiceTouched(true) }
   const [renderUrl] = useState(initialRenderUrl)
+  // Sound design — the reel-level SMART audio plan, auto-drafted and shown READ-ONLY (the AI owns it).
+  const [soundNotes, setSoundNotes] = useState(initialSoundNotes)
+  const [soundNotesDrafting, setSoundNotesDrafting] = useState(false)
+  const soundEnrichedRef = useRef(false)
+  // Manual per-scene cues (operator-added, e.g. an off-screen line) + their preview clip URLs.
+  const [operatorSfx, setOperatorSfx] = useState<OperatorCue[]>(initialOperatorSfx)
+  const [soundPreviews, setSoundPreviews] = useState<Record<string, string>>({})
   // AI-composed background bed: auto-requested on load for musicMode='ai' channels so the operator hears
   // the mood before rendering; render-time generate_music reuses this exact bed. `force` recomposes it.
   const [musicUrl, setMusicUrl] = useState(initialMusicUrl)
+  const [musicUrlB, setMusicUrlB] = useState(initialMusicUrlB)
+  const [musicSection, setMusicSection] = useState<'a' | 'b'>('a') // which bed the preview player plays
   const [musicStatus, setMusicStatus] = useState<'idle' | 'generating' | 'error'>('idle')
   const [musicError, setMusicError] = useState<string | null>(null)
   const [musicTweakOpen, setMusicTweakOpen] = useState(false) // Regenerate popover (steer the new take)
@@ -307,7 +319,9 @@ export function StoryboardEditor({
       const json = await res.json().catch(() => null)
       if (!res.ok) throw new Error(json?.error ?? 'Could not compose the music.')
       // ?t= busts the browser cache so a recomposed bed (same storage key) plays the new take, not the old.
-      if (json?.musicKey) setMusicUrl(`/api/asset?key=${encodeURIComponent(json.musicKey)}&t=${Date.now()}`)
+      const bust = Date.now()
+      if (json?.musicKey) setMusicUrl(`/api/asset?key=${encodeURIComponent(json.musicKey)}&t=${bust}`)
+      if (json?.musicKeyB) setMusicUrlB(`/api/asset?key=${encodeURIComponent(json.musicKeyB)}&t=${bust}`)
       setMusicStatus('idle')
       if (force) router.refresh() // reflect the added cost in the header
     } catch (e) {
@@ -339,6 +353,64 @@ export function StoryboardEditor({
     } finally {
       setMusicSuggestLoading(false)
     }
+  }
+
+  // ── Sound design (smart, read-only) ─────────────────────────────────────────
+  // Draft (or re-draft) the reel-level audio-direction notes. force=true re-drafts a fresh set.
+  async function draftSoundNotes(force: boolean) {
+    setSoundNotesDrafting(true)
+    try {
+      const res = await fetch('/api/pipeline/enrich-audio', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reelId: reel.id, force }),
+      })
+      const json = await res.json().catch(() => null)
+      if (res.ok && typeof json?.notes === 'string') setSoundNotes(json.notes)
+    } finally {
+      setSoundNotesDrafting(false)
+    }
+  }
+
+  // Auto-draft once on load when empty (only at the storyboard gate).
+  useEffect(() => {
+    if (soundEnrichedRef.current || soundNotes.trim() || reel.status !== 'storyboard') return
+    soundEnrichedRef.current = true
+    void draftSoundNotes(false)
+  }, [soundNotes, reel.status])
+
+  // ── Manual per-scene cues ───────────────────────────────────────────────────
+  // Add ONE targeted sound to a scene (e.g. an off-screen line), then auto-preview it.
+  async function addSound(sceneIdx: number, instruction: string): Promise<string | null> {
+    const res = await fetch('/api/pipeline/add-sound', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reelId: reel.id, sceneIdx, instruction }),
+    })
+    const json = await res.json().catch(() => null)
+    if (!res.ok || !json?.cue) return (json?.error as string) ?? 'Could not add that sound.'
+    const cue = json.cue as OperatorCue
+    setOperatorSfx((prev) => [...prev, cue])
+    void previewSound(cue.id)
+    return null
+  }
+
+  async function previewSound(cueId: string): Promise<void> {
+    const res = await fetch('/api/pipeline/preview-sound', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reelId: reel.id, cueId }),
+    })
+    const json = await res.json().catch(() => null)
+    if (res.ok && json?.url) {
+      setSoundPreviews((prev) => ({ ...prev, [cueId]: `${json.url}&t=${Date.now()}` }))
+      router.refresh()
+    }
+  }
+
+  async function removeSound(cueId: string): Promise<void> {
+    setOperatorSfx((prev) => prev.filter((c) => c.id !== cueId))
+    await fetch('/api/pipeline/remove-sound', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reelId: reel.id, cueId }),
+    }).catch(() => null)
   }
 
   // Spot-check gate: operator watches the rendered reel and signs it off.
@@ -451,6 +523,11 @@ export function StoryboardEditor({
       onPreview={handlePreview}
       onReshoot={handleRegenImage}
       onSaveText={saveSceneText}
+      sounds={operatorSfx.filter((c) => c.source === 'manual' && selectedScene.narrationText.includes(c.anchor))}
+      soundPreviews={soundPreviews}
+      onAddSound={addSound}
+      onPreviewSound={previewSound}
+      onRemoveSound={removeSound}
     />
   ) : (
     <div className="flex min-h-[16rem] flex-col items-center justify-center gap-3 px-8 py-16 text-center text-sm text-muted">
@@ -479,6 +556,55 @@ export function StoryboardEditor({
     setMusicTweak('')
   }
 
+  // Sound design — the reel-level SMART audio plan. Auto-drafted from the script, shown READ-ONLY (the AI
+  // owns it; the operator adds their own touches per-scene below the narration). Realized at render.
+  const soundLines = soundNotes.split('\n').map((l) => l.trim()).filter(Boolean)
+  const soundCard = (
+    <div className="border-t border-border px-4 py-6 sm:px-8">
+      <div className="max-w-xl rounded-xl border border-border bg-subtle/30 p-4">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <p className="flex items-center gap-1.5 text-xs font-medium text-ink">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M11 5 6 9H2v6h4l5 4zM15.5 8.5a5 5 0 0 1 0 7M19 5a9 9 0 0 1 0 14" /></svg>
+            Smart sound design
+            <span className="rounded-full bg-accent-soft px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-accent">Auto</span>
+          </p>
+          <button
+            type="button"
+            onClick={() => void draftSoundNotes(true)}
+            disabled={soundNotesDrafting}
+            className="flex items-center gap-1 text-[11px] font-medium text-accent hover:underline disabled:opacity-50"
+            title="Regenerate the smart sound design"
+          >
+            {soundNotesDrafting ? (
+              <span className="h-3 w-3 animate-spin rounded-full border-2 border-accent/40 border-t-transparent" />
+            ) : (
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M12 2l1.9 5.1L19 9l-5.1 1.9L12 16l-1.9-5.1L5 9l5.1-1.9z" /></svg>
+            )}
+            Regenerate
+          </button>
+        </div>
+        {soundNotesDrafting && soundLines.length === 0 ? (
+          <p className="flex items-center gap-2 py-2 text-xs text-muted">
+            <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-muted/50 border-t-transparent" />
+            Listening to your script…
+          </p>
+        ) : soundLines.length > 0 ? (
+          <ul className="flex flex-col gap-1.5">
+            {soundLines.map((line, i) => (
+              <li key={i} className="flex items-start gap-2 text-xs leading-relaxed text-ink">
+                <span className="mt-1.5 h-1 w-1 flex-shrink-0 rounded-full bg-muted" aria-hidden />
+                {line}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="py-1 text-xs text-muted">No extra sound design for this one.</p>
+        )}
+        <p className="mt-2.5 border-t border-border pt-2 text-[11px] leading-relaxed text-faint">Chosen automatically from your script — ambience, effects, and off-screen voices, placed under the narration at render. To add a specific sound to one scene, use “Add a sound” under that scene’s script.</p>
+      </div>
+    </div>
+  )
+
   // AI-composed bed for this reel — auto-requested on load so the operator hears the mood BEFORE
   // rendering; render-time generate_music reuses this exact take. Regenerate opens a field to steer the
   // new take. A compact control in the bottom bar next to the voice picker (AI-music channels only).
@@ -497,7 +623,20 @@ export function StoryboardEditor({
         </span>
       ) : musicUrl ? (
         <>
-          <audio src={musicUrl} controls controlsList="nodownload noplaybackrate" preload="none" className="h-8 w-44 sm:w-56" />
+          {/* Two-section score: toggle which bed the player previews (intro build vs climax). They
+              crossfade at the twist in the final mix. Single bed (legacy) → no toggle. */}
+          {musicUrlB && (
+            <div className="flex flex-shrink-0 overflow-hidden rounded-md border border-border text-[10px] font-medium">
+              <button onClick={() => setMusicSection('a')} className={`px-1.5 py-0.5 ${musicSection === 'a' ? 'bg-accent text-white' : 'text-muted hover:text-ink'}`}>Intro</button>
+              <button onClick={() => setMusicSection('b')} className={`px-1.5 py-0.5 ${musicSection === 'b' ? 'bg-accent text-white' : 'text-muted hover:text-ink'}`}>Climax</button>
+            </div>
+          )}
+          <audio
+            key={musicSection}
+            src={(musicSection === 'b' ? musicUrlB : musicUrl) ?? musicUrl}
+            controls controlsList="nodownload noplaybackrate" preload="none"
+            className="h-8 w-40 sm:w-48"
+          />
           <button
             onClick={() => setMusicTweakOpen((o) => !o)}
             aria-expanded={musicTweakOpen}
@@ -686,6 +825,7 @@ export function StoryboardEditor({
         )}
 
         {detail}
+        {soundCard}
         {preview}
 
         {/* Strip-only stabiliser — grows as the rail shrinks so the scroll height never DROPS mid-scroll
@@ -1207,6 +1347,7 @@ function sceneBeat(idx: number, total: number, twistIdx: number | null): 'Hook' 
 function SceneInspector({
   scene, beat, imgSrc, variations, activeVar, setActiveVar, loaded, markLoaded, loading, moodTint,
   sceneSaving, setScenes, setSceneSaving, onSetSceneType, onPreview, onReshoot, onSaveText,
+  sounds, soundPreviews, onAddSound, onPreviewSound, onRemoveSound,
 }: {
   scene: Scene; beat: 'Hook' | 'Build-up' | 'Twist' | 'Payoff'; imgSrc?: string | undefined; variations: string[]; activeVar: number
   setActiveVar: React.Dispatch<React.SetStateAction<Record<number, number>>>
@@ -1218,6 +1359,11 @@ function SceneInspector({
   onPreview: (idx: number) => void
   onReshoot: (idx: number, opts?: { instruction?: string }) => void
   onSaveText: (idx: number, text: string) => void
+  sounds: OperatorCue[]
+  soundPreviews: Record<string, string>
+  onAddSound: (idx: number, instruction: string) => Promise<string | null>
+  onPreviewSound: (cueId: string) => Promise<void>
+  onRemoveSound: (cueId: string) => Promise<void>
 }) {
   const isVideo = scene.tier === 'video'
   const videoKey = variations[activeVar]
@@ -1232,6 +1378,20 @@ function SceneInspector({
   const [fullLoaded, setFullLoaded] = useState(false) // lightbox media has loaded
   const [lightboxAspect, setLightboxAspect] = useState<string | null>(null) // real aspect of the open media
   const [changeText, setChangeText] = useState('') // the creator's plain-language change for this scene
+  // Per-scene "Add a sound" (manual cue) — targeted SFX or an off-screen spoken line for THIS scene.
+  const [soundText, setSoundText] = useState('')
+  const [addingSound, setAddingSound] = useState(false)
+  const [soundError, setSoundError] = useState<string | null>(null)
+  const [previewingId, setPreviewingId] = useState<string | null>(null)
+  const runAddSound = async () => {
+    const instruction = soundText.trim()
+    if (!instruction || addingSound) return
+    setAddingSound(true); setSoundError(null)
+    const err = await onAddSound(scene.idx, instruction)
+    setAddingSound(false)
+    if (err) setSoundError(err); else setSoundText('')
+  }
+  const runPreviewSound = async (id: string) => { setPreviewingId(id); await onPreviewSound(id); setPreviewingId(null) }
 
   return (
     <div className="animate-fade-in flex w-full flex-col gap-5 p-4 sm:p-8">
@@ -1348,6 +1508,65 @@ function SceneInspector({
                 <span key={m} className="rounded-full bg-subtle px-2 py-0.5 text-[11px] capitalize">{m}</span>
               ))}
             </span>
+          )}
+        </div>
+
+        {/* Add a sound — a targeted touch for THIS scene, on top of the reel's smart sound design. Type
+            plainly for an effect, or put words in quotes for an off-screen line (e.g. an old woman:
+            "Buti gising ka pa"). */}
+        <div className="mt-4 flex flex-col gap-2.5 border-t border-border pt-4">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Add a sound to this scene</p>
+          <textarea
+            value={soundText}
+            onChange={(e) => setSoundText(e.target.value)}
+            onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') void runAddSound() }}
+            rows={2}
+            disabled={addingSound}
+            placeholder="Describe a sound, or put spoken words in quotes"
+            aria-label={`Scene ${scene.idx} add sound`}
+            className="input resize-y text-xs leading-relaxed disabled:opacity-60"
+          />
+          <button type="button" onClick={() => void runAddSound()} disabled={addingSound || !soundText.trim()}
+            className="btn-secondary btn-sm w-full active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-50">
+            {addingSound ? (<><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />Adding…</>) : 'Add sound'}
+          </button>
+          {soundError && <p className="text-[11px] text-danger">{soundError}</p>}
+
+          {sounds.length > 0 && (
+            <ul className="flex flex-col gap-2 pt-1">
+              {sounds.map((cue) => (
+                <li key={cue.id} className="flex flex-col gap-1 rounded-lg bg-subtle/50 p-2">
+                  <div className="flex items-start gap-2">
+                    <span className="flex-shrink-0 text-faint" title={cue.kind === 'speech' ? 'Spoken line' : 'Sound effect'}>
+                      {cue.kind === 'speech' ? (
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3ZM19 11a7 7 0 0 1-14 0M12 18v3" /></svg>
+                      ) : (
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M11 5 6 9H2v6h4l5 4zM15.5 8.5a5 5 0 0 1 0 7M19 5a9 9 0 0 1 0 14" /></svg>
+                      )}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-medium text-ink">{operatorCueLabel(cue)}</p>
+                      <p className="truncate text-[11px] text-faint">plays on “{cue.anchor}”</p>
+                    </div>
+                    <button type="button" onClick={() => void onRemoveSound(cue.id)} title="Remove" className="flex-shrink-0 text-faint hover:text-danger">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M18 6 6 18M6 6l12 12" /></svg>
+                    </button>
+                  </div>
+                  {soundPreviews[cue.id] ? (
+                    <audio src={soundPreviews[cue.id]} controls controlsList="nodownload noplaybackrate" preload="none" className="h-8 w-full" />
+                  ) : (
+                    <button type="button" onClick={() => void runPreviewSound(cue.id)} disabled={previewingId === cue.id}
+                      className="flex items-center gap-1.5 self-start text-[11px] font-medium text-accent hover:underline disabled:opacity-50">
+                      {previewingId === cue.id ? (
+                        <><span className="h-3 w-3 animate-spin rounded-full border-2 border-accent/40 border-t-transparent" />Generating…</>
+                      ) : (
+                        <><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M8 5v14l11-7z" /></svg>Preview</>
+                      )}
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       </div>

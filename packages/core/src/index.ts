@@ -1,6 +1,7 @@
 export * from './types/index.js'
 export * from './audio/preset-beds.js'
 export * from './audio/music-prompt.js'
+export * from './audio/operator-sfx.js'
 export * from './state-machine/index.js'
 export * from './timings/index.js'
 export * from './assembly/imageprompt.js'

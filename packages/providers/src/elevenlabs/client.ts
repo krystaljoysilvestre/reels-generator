@@ -214,6 +214,37 @@ export async function generateSfx(params: {
   }
 }
 
+// ── Speech overlay (a SECOND voice for operator "spoken sound" cues) ───────────
+// A short spoken/whispered line laid over the narration (e.g. an old woman whispering "come closer").
+// Unlike the narrator's synthesize() — which writes the fixed voiceover key and needs alignment — this
+// writes a CALLER-CHOSEN key (so it never clobbers the voiceover) and only needs the clip + its length.
+export async function generateSpeechClip(params: {
+  text: string
+  voiceId: string
+  storageKey: string
+  voiceSettings?: VoiceSettings
+}): Promise<{ audioStorageKey: string; durationMs: number; costCents: number }> {
+  const client = getClient()
+  try {
+    const response = await client.textToSpeech.convertWithTimestamps(params.voiceId, {
+      text: params.text,
+      model_id: 'eleven_multilingual_v2',
+      output_format: 'mp3_44100_128',
+      ...(params.voiceSettings ? { voice_settings: params.voiceSettings } : {}),
+    }, TTS_OPTS)
+    const audioBuffer = Buffer.from(response.audio_base64, 'base64')
+    const ends = response.alignment?.character_end_times_seconds
+    const durationMs = ends && ends.length ? Math.ceil(ends[ends.length - 1]! * 1000) : 0
+    await uploadBuffer(params.storageKey, audioBuffer, 'audio/mpeg')
+    const costCents = Math.ceil((params.text.length / 1000) * TTS_COST_CENTS_PER_1K_CHARS)
+    return { audioStorageKey: params.storageKey, durationMs, costCents }
+  } catch (err) {
+    if (err instanceof ProviderError) throw err
+    if (Number((err as Record<string, unknown>)['statusCode']) === 429) throw new ProviderRateLimitError('elevenlabs')
+    throw new ProviderError('elevenlabs', String(err))
+  }
+}
+
 // ── Music generation (Eleven Music) ───────────────────────────────────────────
 // The installed `elevenlabs` SDK (v1) exposes no music resource, so call the REST
 // endpoint directly (verified: POST /v1/music, xi-api-key, {prompt, music_length_ms}

@@ -23,6 +23,9 @@
     "./prompts/channel-sample.v1": "./src/prompts/channel-sample.v1.ts",
     "./prompts/voice-recommend.v1": "./src/prompts/voice-recommend.v1.ts",
     "./prompts/music-steer.v1": "./src/prompts/music-steer.v1.ts",
+    "./prompts/add-sound.v1": "./src/prompts/add-sound.v1.ts",
+    "./prompts/audio-enrich.v1": "./src/prompts/audio-enrich.v1.ts",
+    "./prompts/interpret-sounds.v1": "./src/prompts/interpret-sounds.v1.ts",
     "./prompts/style-options.v1": "./src/prompts/style-options.v1.ts",
     "./prompts/style-ref.v1": "./src/prompts/style-ref.v1.ts"
   },

@@ -27,13 +27,22 @@ export function buildMusicPrompt(params: {
   nicheDescription: string
   moodTags: string[]
   instruction?: string | undefined
+  // Two-section scoring: 'intro' = the restrained build; 'climax' = the intense peak. Same sonic family,
+  // crossfaded at the twist. Omit for a single bed.
+  section?: 'intro' | 'climax' | undefined
 }): string {
   const base =
     params.audioMood?.prompt?.trim() ||
     `a ${params.toneIntensity >= 6 ? 'dark, tense' : 'warm, gentle'} cinematic background bed for: ${params.nicheDescription.slice(0, 160)}`
   const tilt = params.moodTags.length ? ` Lean ${params.moodTags.join(', ')} for this story.` : ''
+  const section =
+    params.section === 'intro'
+      ? ' Restrained and slow-building — sparse, quiet, holding tension back.'
+      : params.section === 'climax'
+        ? ' The climax — fuller, more intense and dread-soaked, the emotional peak.'
+        : ''
   const steer = params.instruction?.trim() ? ` ${params.instruction.trim()}` : ''
-  return base + tilt + steer + MUSIC_CONSTRAINT
+  return base + tilt + section + steer + MUSIC_CONSTRAINT
 }
 
 export function clampMusicLengthMs(lengthMs: number): number {

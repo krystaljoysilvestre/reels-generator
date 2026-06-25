@@ -115,27 +115,45 @@ export async function mixAudioStep(reelId: string): Promise<void> {
       //  • AI-music channels → the reel's OWN generated bed (generate_music), tailored to its story.
       //  • preset/upload     → mood-match a bed from the channel's track pool.
       //  • none / AI-bed-missing → empty pool, the mixer renders without music.
+      // Source THIS reel's bed:
+      //  • AI two-section → the reel's OWN intro + climax beds, crossfaded at the twist.
+      //  • AI single-bed  → the reel's one generated bed.
+      //  • preset/upload  → mood-match a bed from the channel's track pool.
+      //  • none / missing  → empty pool, the mixer renders without music.
       const reelMoods = audioScript.music?.moodTags ?? []
-      const pool =
-        audioPacks.musicMode === 'ai'
-          ? reel.musicKey
-            ? [{
-                id: 'reel',
-                path: reel.musicKey,
-                type: audioScript.music?.type ?? 'low_drone',
-                peakFrac: peakFracForType(audioScript.music?.type ?? 'low_drone'),
-                moodTags: reelMoods,
-              }]
-            : []
-          : audioPacks.musicPack
-      let localMusicPack = pool
-      if (pool.length > 0) {
-        const picked = pickBedForMood(pool, reelMoods, reelId)
-        console.log(`[mix] ${reelId} music mode=${audioPacks.musicMode} bed=${picked.id} mood=[${picked.moodTags.join(',')}] (reel mood=[${reelMoods.join(',')}])`)
-        const ext = picked.path.split('.').pop() || 'mp3'
-        const musicLocalPath = join(tmp, `music.${ext}`)
-        await writeFile(musicLocalPath, await downloadBuffer(picked.path))
-        localMusicPack = [{ ...picked, path: musicLocalPath }]
+      const twoSection = audioPacks.musicMode === 'ai' && !!reel.musicKey && !!reel.musicKeyB
+      let bedAPath: string | undefined
+      let bedBPath: string | undefined
+      let localMusicPack: typeof audioPacks.musicPack = []
+
+      if (twoSection) {
+        bedAPath = join(tmp, 'musicA.mp3')
+        bedBPath = join(tmp, 'musicB.mp3')
+        await writeFile(bedAPath, await downloadBuffer(reel.musicKey!))
+        await writeFile(bedBPath, await downloadBuffer(reel.musicKeyB!))
+        console.log(`[mix] ${reelId} two-section AI score (intro + climax)`)
+      } else {
+        const pool =
+          audioPacks.musicMode === 'ai'
+            ? reel.musicKey
+              ? [{
+                  id: 'reel',
+                  path: reel.musicKey,
+                  type: audioScript.music?.type ?? 'low_drone',
+                  peakFrac: peakFracForType(audioScript.music?.type ?? 'low_drone'),
+                  moodTags: reelMoods,
+                }]
+              : []
+            : audioPacks.musicPack
+        localMusicPack = pool
+        if (pool.length > 0) {
+          const picked = pickBedForMood(pool, reelMoods, reelId)
+          console.log(`[mix] ${reelId} music mode=${audioPacks.musicMode} bed=${picked.id} mood=[${picked.moodTags.join(',')}] (reel mood=[${reelMoods.join(',')}])`)
+          const ext = picked.path.split('.').pop() || 'mp3'
+          const musicLocalPath = join(tmp, `music.${ext}`)
+          await writeFile(musicLocalPath, await downloadBuffer(picked.path))
+          localMusicPack = [{ ...picked, path: musicLocalPath }]
+        }
       }
 
       // Full mix — music loudness follows the channel's intensity setting (Sound step).
@@ -152,6 +170,7 @@ export async function mixAudioStep(reelId: string): Promise<void> {
         musicMoodTags: audioScript.music?.moodTags ?? [],
         bedDb,
         peakDb,
+        ...(twoSection ? { musicBedAPath: bedAPath, musicBedBPath: bedBPath } : {}),
       })
 
       // Upload result

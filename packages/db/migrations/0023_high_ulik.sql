@@ -1,0 +1,1 @@
+ALTER TABLE "reels" ADD COLUMN "sound_notes" text DEFAULT '' NOT NULL;

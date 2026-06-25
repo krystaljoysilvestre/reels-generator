@@ -1,7 +1,18 @@
 import { eq, and } from 'drizzle-orm'
 import { getDb, reels, stories, assets } from '@reels/db'
-import { generateSfx as elGenerateSfx, buildInputHash } from '@reels/providers'
-import { AudioScriptSchema, AudioPacksSchema } from '@reels/core'
+import { generateSfx as elGenerateSfx, generateSpeechClip, buildInputHash } from '@reels/providers'
+import {
+  AudioScriptSchema,
+  AudioPacksSchema,
+  OperatorSfxSchema,
+  ToneConfigSchema,
+  usableOperatorCues,
+  operatorCueLabel,
+  cueDurationSec,
+  deliveryToVoiceSettings,
+  moodToVoiceSettings,
+  type VoiceSettings,
+} from '@reels/core'
 import { runStep } from '../harness.js'
 
 // generate_sfx — step 7 (docs/02 §4)
@@ -44,9 +55,16 @@ export async function generateSfx(reelId: string): Promise<void> {
       .onConflictDoNothing()
   }
 
+  // Operator-authored cues (storyboard "Add a sound"), resolved against the current narration. They take
+  // precedence over an LLM cue on the same anchor, so filter those out of the LLM set below.
+  const story = reel.storyId ? await db.query.stories.findFirst({ where: eq(stories.id, reel.storyId) }) : null
+  const operatorCues = story ? usableOperatorCues(OperatorSfxSchema.parse(reel.operatorSfx ?? []), story.body) : []
+  const opAnchors = new Set(operatorCues.map((c) => c.anchor))
+
   // ── Generate all SFX cues via ElevenLabs in one idempotent step ─────────
-  // "Smart sound effects" toggle (Sound step): when off, generate no SFX for this channel.
-  const sfxCues = audioPacks.sfxEnabled ? audioScript.sfx : []
+  // "Smart sound effects" toggle (Sound step): when off, generate no SFX for this channel. (Operator cues
+  // are explicit user requests, so they generate regardless of the channel toggle — handled separately.)
+  const sfxCues = (audioPacks.sfxEnabled ? audioScript.sfx : []).filter((c) => !opAnchors.has(c.anchor))
   const sfxAnchors = sfxCues.map((c) => c.anchor).sort().join('|')
   const inputHash = buildInputHash('sfx.elevenlabs.v1', { sfxAnchors, reelId, sfxEnabled: audioPacks.sfxEnabled })
 
@@ -78,4 +96,49 @@ export async function generateSfx(reelId: string): Promise<void> {
       return { output: { sfxCount: sfxCues.length }, costCents: totalCost }
     },
   )
+
+  // ── Operator cues: SFX one-shots + spoken (second-voice) overlays ───────
+  // Each renders to a deterministic per-cue key, so a storyboard Preview is reused here (cost 0). One
+  // asset row per cue (delete-then-insert) keeps the mixer's anchor→asset match unambiguous on re-runs.
+  if (operatorCues.length > 0) {
+    const tone = ToneConfigSchema.parse(channel.toneConfig ?? {})
+    const base = (reel.voiceSettings as VoiceSettings | null) ?? moodToVoiceSettings([], tone)
+
+    for (const cue of operatorCues) {
+      const storageKey = `reels/${reelId}/sfx/op-${cue.id}.mp3`
+      const inputHash = buildInputHash('operator_sfx.v1', {
+        id: cue.id, anchor: cue.anchor, kind: cue.kind,
+        cached: cue.assetKey ? '1' : '0',
+        prompt: cue.prompt ?? '', words: cue.words ?? '', voiceId: cue.voiceId ?? '', delivery: cue.delivery ?? '',
+      })
+
+      await runStep(
+        { reelId, stepName: 'generate_sfx', inputHash: `${inputHash}:op-${cue.id}` as never },
+        async () => {
+          let cost = 0
+          // Reuse the storyboard Preview clip if present; otherwise synthesize now.
+          if (!cue.assetKey) {
+            if (cue.kind === 'speech' && cue.voiceId && cue.words) {
+              const res = await generateSpeechClip({ text: cue.words, voiceId: cue.voiceId, storageKey, voiceSettings: deliveryToVoiceSettings(cue.delivery, base) })
+              cost = res.costCents
+            } else {
+              const res = await elGenerateSfx({ prompt: cue.prompt ?? operatorCueLabel(cue), reelId, anchorLabel: `op-${cue.id}`, durationSec: cueDurationSec(cue.kind) })
+              cost = res.costCents
+            }
+          }
+          await db.delete(assets).where(and(eq(assets.reelId, reelId), eq(assets.storageKey, storageKey)))
+          await db.insert(assets).values({
+            reelId,
+            channelId: reel.channelId,
+            kind: 'sfx',
+            storageKey,
+            provider: 'elevenlabs',
+            costCents: cost,
+            meta: { anchor: cue.anchor, prompt: operatorCueLabel(cue), operator: true },
+          })
+          return { output: { anchor: cue.anchor }, costCents: cost }
+        },
+      )
+    }
+  }
 }

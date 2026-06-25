@@ -155,8 +155,18 @@ export const reels = pgTable(
     audioScript: jsonb('audio_script'),   // annotated audio script (docs/04 §3)
     timings: jsonb('timings'),             // ComputeTimingsOutput (docs/08)
     voiceSettings: jsonb('voice_settings'), // per-reel narrator DELIVERY override (ElevenLabs voice_settings); null = auto-derive from the story's mood
-    musicKey: text('music_key'),           // R2 key of THIS reel's AI-generated bed (musicMode='ai'); null otherwise
-    musicLengthMs: integer('music_length_ms'), // length of the generated bed; lets render reuse a storyboard-vetted bed when it's long enough to cover the final duration (else regenerate)
+    musicKey: text('music_key'),           // R2 key of THIS reel's AI bed — the INTRO/build section (musicMode='ai'); null otherwise
+    musicKeyB: text('music_key_b'),         // second AI bed — the CLIMAX section; crossfaded in at the twist (two-section scoring). null = single-bed
+    musicLengthMs: integer('music_length_ms'), // length both beds were generated at; the mixer loops to cover the reel
+    // Audio direction notes — free-text, one cue per line (e.g. "Door opens softly.", "Female voice from
+    // a nearby stall repeats the narrator's line."). Auto-drafted by the enrichment pass after the script
+    // is written, fully operator-editable. The narration is never touched. At render the interpreter turns
+    // these notes into placed audio (operatorSfx below).
+    soundNotes: text('sound_notes').notNull().default(''),
+    // Realized cues (OperatorCue[]) — the interpreter's structured output from soundNotes: SFX one-shots and
+    // short off-screen voice lines, anchored to narration. Merged into the SFX list at compute_timings +
+    // generate_sfx. Internal — the operator only ever sees/edits soundNotes.
+    operatorSfx: jsonb('operator_sfx').notNull().default([]),
     renderUrl: text('render_url'),
     costCents: integer('cost_cents').notNull().default(0),
     operatorMinutes: integer('operator_minutes').notNull().default(0),
