@@ -78,9 +78,9 @@ export function StoryboardEditor({
   // Edit delivery from the footer pill — same state the picker's sliders use; marks it a manual override.
   const setDelivery = (patch: Partial<VoiceSettings>) => { setVoiceSettings((s) => ({ ...s, ...patch })); setVoiceTouched(true) }
   const [renderUrl] = useState(initialRenderUrl)
-  // Sound design — the reel-level SMART audio plan, auto-drafted and shown READ-ONLY (the AI owns it).
+  // Smart sound design — the reel-level audio plan. Auto-drafted in the BACKGROUND (not shown in the UI);
+  // realized into placed audio at render. The narration is never touched.
   const [soundNotes, setSoundNotes] = useState(initialSoundNotes)
-  const [soundNotesDrafting, setSoundNotesDrafting] = useState(false)
   const soundEnrichedRef = useRef(false)
   // Manual per-scene cues (operator-added, e.g. an off-screen line) + their preview clip URLs.
   const [operatorSfx, setOperatorSfx] = useState<OperatorCue[]>(initialOperatorSfx)
@@ -355,27 +355,19 @@ export function StoryboardEditor({
     }
   }
 
-  // ── Sound design (smart, read-only) ─────────────────────────────────────────
-  // Draft (or re-draft) the reel-level audio-direction notes. force=true re-drafts a fresh set.
-  async function draftSoundNotes(force: boolean) {
-    setSoundNotesDrafting(true)
-    try {
-      const res = await fetch('/api/pipeline/enrich-audio', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reelId: reel.id, force }),
-      })
-      const json = await res.json().catch(() => null)
-      if (res.ok && typeof json?.notes === 'string') setSoundNotes(json.notes)
-    } finally {
-      setSoundNotesDrafting(false)
-    }
-  }
-
-  // Auto-draft once on load when empty (only at the storyboard gate).
+  // ── Smart sound design (background) ─────────────────────────────────────────
+  // Silently draft the reel-level audio-direction notes once on load so they're ready for the render-time
+  // interpreter. Not surfaced in the UI; the operator's per-scene cues are the visible control.
   useEffect(() => {
     if (soundEnrichedRef.current || soundNotes.trim() || reel.status !== 'storyboard') return
     soundEnrichedRef.current = true
-    void draftSoundNotes(false)
+    void fetch('/api/pipeline/enrich-audio', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reelId: reel.id, force: false }),
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => { if (json && typeof json.notes === 'string') setSoundNotes(json.notes) })
+      .catch(() => {})
   }, [soundNotes, reel.status])
 
   // ── Manual per-scene cues ───────────────────────────────────────────────────
@@ -555,55 +547,6 @@ export function StoryboardEditor({
     void composeMusic(true, musicTweak)
     setMusicTweak('')
   }
-
-  // Sound design — the reel-level SMART audio plan. Auto-drafted from the script, shown READ-ONLY (the AI
-  // owns it; the operator adds their own touches per-scene below the narration). Realized at render.
-  const soundLines = soundNotes.split('\n').map((l) => l.trim()).filter(Boolean)
-  const soundCard = (
-    <div className="border-t border-border px-4 py-6 sm:px-8">
-      <div className="max-w-xl rounded-xl border border-border bg-subtle/30 p-4">
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <p className="flex items-center gap-1.5 text-xs font-medium text-ink">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M11 5 6 9H2v6h4l5 4zM15.5 8.5a5 5 0 0 1 0 7M19 5a9 9 0 0 1 0 14" /></svg>
-            Smart sound design
-            <span className="rounded-full bg-accent-soft px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-accent">Auto</span>
-          </p>
-          <button
-            type="button"
-            onClick={() => void draftSoundNotes(true)}
-            disabled={soundNotesDrafting}
-            className="flex items-center gap-1 text-[11px] font-medium text-accent hover:underline disabled:opacity-50"
-            title="Regenerate the smart sound design"
-          >
-            {soundNotesDrafting ? (
-              <span className="h-3 w-3 animate-spin rounded-full border-2 border-accent/40 border-t-transparent" />
-            ) : (
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M12 2l1.9 5.1L19 9l-5.1 1.9L12 16l-1.9-5.1L5 9l5.1-1.9z" /></svg>
-            )}
-            Regenerate
-          </button>
-        </div>
-        {soundNotesDrafting && soundLines.length === 0 ? (
-          <p className="flex items-center gap-2 py-2 text-xs text-muted">
-            <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-muted/50 border-t-transparent" />
-            Listening to your script…
-          </p>
-        ) : soundLines.length > 0 ? (
-          <ul className="flex flex-col gap-1.5">
-            {soundLines.map((line, i) => (
-              <li key={i} className="flex items-start gap-2 text-xs leading-relaxed text-ink">
-                <span className="mt-1.5 h-1 w-1 flex-shrink-0 rounded-full bg-muted" aria-hidden />
-                {line}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="py-1 text-xs text-muted">No extra sound design for this one.</p>
-        )}
-        <p className="mt-2.5 border-t border-border pt-2 text-[11px] leading-relaxed text-faint">Chosen automatically from your script — ambience, effects, and off-screen voices, placed under the narration at render. To add a specific sound to one scene, use “Add a sound” under that scene’s script.</p>
-      </div>
-    </div>
-  )
 
   // AI-composed bed for this reel — auto-requested on load so the operator hears the mood BEFORE
   // rendering; render-time generate_music reuses this exact take. Regenerate opens a field to steer the
@@ -825,7 +768,6 @@ export function StoryboardEditor({
         )}
 
         {detail}
-        {soundCard}
         {preview}
 
         {/* Strip-only stabiliser — grows as the rail shrinks so the scroll height never DROPS mid-scroll
@@ -1511,11 +1453,12 @@ function SceneInspector({
           )}
         </div>
 
-        {/* Add a sound — a targeted touch for THIS scene, on top of the reel's smart sound design. Type
-            plainly for an effect, or put words in quotes for an off-screen line (e.g. an old woman:
-            "Buti gising ka pa"). */}
+        {/* Add a sound — an OPTIONAL targeted touch for THIS scene, on top of the automatic sound design.
+            Type plainly for an effect, or put words in quotes for an off-screen line. The helper line makes
+            clear sound is already handled, so this never reads as required. */}
         <div className="mt-4 flex flex-col gap-2.5 border-t border-border pt-4">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Add a sound to this scene</p>
+          <p className="-mt-1 text-[11px] leading-relaxed text-faint">Sound is added to your reel automatically. Add a specific one here only if you want it — an effect, or words spoken off-screen.</p>
           <textarea
             value={soundText}
             onChange={(e) => setSoundText(e.target.value)}
