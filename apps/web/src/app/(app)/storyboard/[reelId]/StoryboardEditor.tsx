@@ -6,6 +6,7 @@ import type { InferSelectModel } from 'drizzle-orm'
 import type { scenes, stories } from '@reels/db'
 import type { ChannelVoice, VoiceSettings, MotionSettings, OperatorCue } from '@reels/core'
 import { resolveMotionSettings, motionCostCents, operatorCueLabel } from '@reels/core'
+import { GenreLoader } from '@/components/GenreLoader'
 import { usePipelineStatus } from '@/hooks/usePipelineStatus'
 import { PipelinePhaseStepper } from '@/components/PipelinePhaseStepper'
 import { useToast } from '@/components/Toast'
@@ -40,6 +41,7 @@ interface StoryboardEditorProps {
   initialVoiceSettings: VoiceSettings // starting point for the delivery sliders
   voiceSettingsOverridden: boolean // reel already has a saved manual override
   channelName: string
+  genreCategory: string // horror | informational | lifestyle | general — picks the loader glyph
   moodTint: string // channel-mood accent (dark=red / warm=amber / neutral=midnight) for ambient touches
   failure: { step: string; error: string } | null
 }
@@ -48,7 +50,7 @@ export function StoryboardEditor({
   reel, story, scenes: initialScenes, voicePool, voiceRecommend,
   sceneImages, sceneVideoVariations, renderUrl: initialRenderUrl, musicUrl: initialMusicUrl, musicUrlB: initialMusicUrlB, aiMusic,
   initialSoundNotes, initialOperatorSfx, initialVoiceSettings, voiceSettingsOverridden,
-  channelName, moodTint, failure,
+  channelName, genreCategory, moodTint, failure,
 }: StoryboardEditorProps) {
   const router = useRouter()
   const { toast } = useToast()
@@ -522,9 +524,18 @@ export function StoryboardEditor({
       onRemoveSound={removeSound}
     />
   ) : (
-    <div className="flex min-h-[16rem] flex-col items-center justify-center gap-3 px-8 py-16 text-center text-sm text-muted">
-      <span className="h-2.5 w-2.5 animate-breathe rounded-full" style={{ backgroundColor: moodTint }} />
-      {scenes.length === 0 ? 'Your scenes are being shot…' : 'Pick a scene to start.'}
+    <div className="flex min-h-[16rem] flex-col items-center justify-center gap-4 px-8 py-16 text-center text-sm text-muted">
+      {scenes.length === 0 ? (
+        <>
+          <GenreLoader genre={genreCategory} tint={moodTint} size={52} />
+          Your scenes are being shot…
+        </>
+      ) : (
+        <>
+          <span className="h-2.5 w-2.5 animate-breathe rounded-full" style={{ backgroundColor: moodTint }} />
+          Pick a scene to start.
+        </>
+      )}
     </div>
   )
 

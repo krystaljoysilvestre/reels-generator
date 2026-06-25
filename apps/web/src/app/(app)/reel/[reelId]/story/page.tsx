@@ -21,7 +21,7 @@ export default async function ReelStoryPage({ params }: { params: Promise<{ reel
 
   const channel = await db.query.channels.findFirst({
     where: eq(channels.id, reel.channelId),
-    columns: { name: true, toneConfig: true },
+    columns: { name: true, toneConfig: true, genreCategory: true },
   })
   const mood = channelMood(ToneConfigSchema.parse(channel?.toneConfig ?? {}))
 
@@ -31,6 +31,7 @@ export default async function ReelStoryPage({ params }: { params: Promise<{ reel
       channelId={reel.channelId}
       channelName={channel?.name ?? ''}
       mood={mood}
+      genre={channel?.genreCategory ?? 'general'}
       initialStatus={reel.status}
       initialCostCents={reel.costCents}
       story={

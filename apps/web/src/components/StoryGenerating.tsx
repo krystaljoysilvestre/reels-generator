@@ -1,6 +1,7 @@
 'use client'
 import type { CSSProperties } from 'react'
 import { MOOD_TINT, type ChannelMood } from '@/lib/pipeline-phases'
+import { GenreLoader } from './GenreLoader'
 import { StatusTicker } from './StatusTicker'
 
 // Characterful, channel-themed story-loading view. A breathing tinted glow + flowing "thinking" bar +
@@ -8,12 +9,14 @@ import { StatusTicker } from './StatusTicker'
 // channel). All motion degrades cleanly under the global prefers-reduced-motion guard.
 export function StoryGenerating({
   mood,
+  genre,
   lines,
   draft = 0,
   costCents = 0,
   headline = 'Writing your story',
 }: {
   mood: ChannelMood
+  genre?: string | undefined
   lines: string[]
   draft?: number
   costCents?: number
@@ -25,19 +28,8 @@ export function StoryGenerating({
       className="card flex flex-col items-center gap-5 px-6 py-16 text-center"
       style={{ ['--think-tint']: tint } as CSSProperties}
     >
-      {/* Breathing tinted centerpiece */}
-      <div className="relative flex h-16 w-16 items-center justify-center">
-        <span className="animate-breathe absolute inset-0 rounded-full" style={{ background: tint, opacity: 0.16, filter: 'blur(10px)' }} />
-        <span
-          className="animate-breathe relative flex h-12 w-12 items-center justify-center rounded-full"
-          style={{ background: `${tint}1a`, border: `1px solid ${tint}55` }}
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={tint} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <path d="M12 20h9" />
-            <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
-          </svg>
-        </span>
-      </div>
+      {/* Genre-themed centerpiece (ghost for horror, etc.) tinted by the channel mood */}
+      <GenreLoader genre={genre} tint={tint} size={64} />
 
       <div>
         <p className="text-base font-semibold tracking-tight text-ink">

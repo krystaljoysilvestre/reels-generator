@@ -148,6 +148,76 @@
     animation: value-flash 0.9s ease-out;
   }
 
+  /* ── Genre loader (characterful, per-channel-genre) ──────── */
+  /* A glyph whose SHAPE varies by genre and COLOR by the channel mood tint (--gl-tint). Used by
+     <GenreLoader>. Aura is the shared soft halo; each glyph gets its own signature motion. */
+  .gl {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--gl-tint, #1a1a2e);
+    flex-shrink: 0;
+  }
+  .gl__aura {
+    position: absolute;
+    inset: 0;
+    border-radius: 9999px;
+    background: var(--gl-tint, #1a1a2e);
+    animation: gl-aura 2.8s ease-in-out infinite;
+  }
+  .gl__glyph {
+    position: relative;
+    width: 64%;
+    height: 64%;
+  }
+  /* horror — a slow bob + sway, like a ghost drifting */
+  .gl-float {
+    transform-origin: center;
+    animation: gl-float 3s ease-in-out infinite;
+  }
+  /* lifestyle — a rotating, scaling twinkle */
+  .gl-twinkle {
+    transform-origin: center;
+    animation: gl-twinkle 2.4s ease-in-out infinite;
+  }
+  /* general — a breathing orb */
+  .gl__orb {
+    position: relative;
+    width: 46%;
+    height: 46%;
+    border-radius: 9999px;
+    background: var(--gl-tint, #1a1a2e);
+    animation: gl-pulse 2.2s ease-in-out infinite;
+  }
+  /* informational — a broadcast pulse: a steady dot with two rings expanding out */
+  .gl__signal {
+    position: relative;
+    display: flex;
+    width: 64%;
+    height: 64%;
+    align-items: center;
+    justify-content: center;
+  }
+  .gl__dot {
+    width: 28%;
+    height: 28%;
+    border-radius: 9999px;
+    background: var(--gl-tint, #1a1a2e);
+    animation: gl-pulse 2s ease-in-out infinite;
+  }
+  .gl__ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 9999px;
+    border: 1.5px solid var(--gl-tint, #1a1a2e);
+    opacity: 0;
+    animation: gl-ring 2s ease-out infinite;
+  }
+  .gl__ring--2 {
+    animation-delay: 1s;
+  }
+
   /* ── Misc ──────────────────────────────────────────────── */
   .nav-link {
     @apply flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm font-medium text-muted
@@ -202,6 +272,27 @@
 @keyframes value-flash {
   0% { color: var(--accent, #1A1A2E); transform: scale(1.08); }
   100% { color: inherit; transform: scale(1); }
+}
+/* Genre-loader motions */
+@keyframes gl-aura {
+  0%, 100% { transform: scale(0.82); opacity: 0.14; }
+  50% { transform: scale(1.2); opacity: 0.34; }
+}
+@keyframes gl-float {
+  0%, 100% { transform: translateY(6%) rotate(-3deg); }
+  50% { transform: translateY(-8%) rotate(3deg); }
+}
+@keyframes gl-twinkle {
+  0%, 100% { transform: rotate(0deg) scale(0.9); opacity: 0.85; }
+  50% { transform: rotate(45deg) scale(1.12); opacity: 1; }
+}
+@keyframes gl-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.9; }
+  50% { transform: scale(1.14); opacity: 1; }
+}
+@keyframes gl-ring {
+  0% { transform: scale(0.4); opacity: 0.55; }
+  100% { transform: scale(1.45); opacity: 0; }
 }
 
 /* Respect users who prefer reduced motion — kill animations + transitions. */

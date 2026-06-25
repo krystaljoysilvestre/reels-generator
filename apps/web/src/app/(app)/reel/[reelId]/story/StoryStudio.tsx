@@ -13,12 +13,13 @@ interface StoryStudioProps {
   channelId: string
   channelName: string
   mood: ChannelMood
+  genre?: string | undefined
   initialStatus: string
   initialCostCents: number
   story: { title: string; body: string; logline: string | null; subgenreTags: string[]; language: string } | null
 }
 
-export function StoryStudio({ reelId, channelId, channelName, mood, initialStatus, initialCostCents, story }: StoryStudioProps) {
+export function StoryStudio({ reelId, channelId, channelName, mood, genre, initialStatus, initialCostCents, story }: StoryStudioProps) {
   const router = useRouter()
   const [generating, setGenerating] = useState(initialStatus === 'drafting' || initialStatus === 'rejected')
   const [draft, setDraft] = useState(0)
@@ -99,7 +100,7 @@ export function StoryStudio({ reelId, channelId, channelName, mood, initialStatu
             <button onClick={retry} disabled={busy} className="btn-accent mt-1">{busy ? 'Retrying…' : 'Try again'}</button>
           </div>
         ) : generating || !story ? (
-          <StoryGenerating mood={mood} lines={phaseTicker('writing', mood)} draft={draft} costCents={costCents} />
+          <StoryGenerating mood={mood} genre={genre} lines={phaseTicker('writing', mood)} draft={draft} costCents={costCents} />
         ) : reviewing ? (
           <div className="card flex flex-col gap-4 p-5">
             <div>

@@ -26,7 +26,7 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
     columns: {
       id: true, name: true, voicePool: true,
       nicheDescription: true, toneConfig: true, voiceSearchKeyword: true,
-      audioPacks: true,
+      audioPacks: true, genreCategory: true,
     },
   })
 
@@ -104,6 +104,7 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
       initialVoiceSettings={initialVoiceSettings}
       voiceSettingsOverridden={reel.voiceSettings != null}
       channelName={channel?.name ?? ''}
+      genreCategory={channel?.genreCategory ?? 'general'}
       moodTint={moodTint}
       failure={failure}
     />
