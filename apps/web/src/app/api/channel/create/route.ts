@@ -12,7 +12,7 @@ const InputSchema = z.object({
   name: z.string().trim().min(1).max(80),
   avatarKey: z.string().trim().min(1).nullish(),
   description: z.string().trim().max(140).nullish(),
-  nicheDescription: z.string().trim().min(1).max(2000),
+  nicheDescription: z.string().trim().min(1).max(8000),
   tagline: z.string().trim().max(200).default(''), // AI-derived one-line positioning
   languages: z.array(z.string().trim().min(1)).min(1).max(6),
   targetPlatform: TargetPlatformSchema.default('all'), // shapes caption/length + render presets

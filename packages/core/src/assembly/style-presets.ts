@@ -4,9 +4,15 @@
 // assets, so onboarding spends nothing on visuals. A bespoke, channel-specific look is generated later,
 // opt-in, via "Customize look" in Settings.
 //
-// Each `stylePreset` is the visual DNA fed to the image model (same contract as the LLM-derived styles):
-// it starts with an explicit medium phrase and avoids fixing a time of day / light level, so every scene
-// sets its own lighting. Non-photographic styles include "illustration, not a photograph".
+// Each `stylePreset` is the visual DNA fed to the image model (same contract as the LLM-derived styles).
+// Three rules keep the gallery clean and the renders predictable:
+//   1. Lead with the bare MEDIUM (photograph / watercolor / oil painting / charcoal drawing / ink drawing
+//      / woodcut print), then the style/optics/texture. Non-photographic styles add "illustration not a
+//      photograph" right after the medium.
+//   2. Describe only OBSERVABLE attributes — medium, composition, lighting, texture, color, optics,
+//      materials. No emotional or narrative words ("ominous", "haunting", "inviting"): the mood must
+//      emerge from the generated scene, not be baked into the style.
+//   3. Never fix a time of day / light level, so every scene sets its own lighting.
 
 export interface StylePreset {
   id: string
@@ -34,16 +40,24 @@ export const STYLE_PRESETS: StylePreset[] = [
     description: 'Photoreal, film-still look — versatile and grounded. Works for almost any channel.',
     genres: ['all'],
     stylePreset:
-      'cinematic photoreal film still, shallow depth of field, natural color grade, soft volumetric light, fine filmic grain, balanced contrast, 35mm look, lifelike textures and skin, restrained palette, tasteful composition',
+      'photograph, cinematic 35mm film still, natural lens imperfections, soft volumetric light, shallow depth of field, balanced color grade, fine film grain, lifelike skin and textures, restrained palette',
   },
   {
     id: 'cinematic-horror',
     label: 'Cinematic Dread',
-    description: 'Photoreal horror film still — deep shadows, cold palette, unsettling stillness. The scary default for horror.',
+    description: 'Photoreal horror film still — deep shadows, cold palette, heavy stillness. The scary default for horror.',
     genres: ['horror'],
     heroFor: ['horror'], // horror channels lead with this, not the neutral universal Cinematic
     stylePreset:
-      'grainy 35mm horror film still, low-key chiaroscuro lighting, deep crushed shadows that swallow the edges of frame, cold desaturated teal-and-amber palette, slightly underexposed, humid atmospheric haze, shallow depth of field, heavy occupied negative space, unsettling stillness, naturalistic but ominous, analog film grain texture',
+      'photograph, grainy 35mm horror film still, low-key chiaroscuro lighting with the key subject clearly exposed, deep shadows pooling at the edges and background, cold desaturated teal-and-amber palette, humid atmospheric haze, shallow depth of field, large areas of shadowed negative space, analog film grain texture',
+  },
+  {
+    id: 'analog-film',
+    label: 'Analog Film',
+    description: 'Warm 35mm film look — soft grain and lifted blacks. The nostalgic Instagram/TikTok aesthetic.',
+    genres: ['lifestyle', 'informational', 'general'],
+    stylePreset:
+      'photograph, Kodak Portra film look, soft pastel highlights, fine film grain, slightly lifted blacks, warm natural skin tones, subtle halation, vintage lens rendering, shallow depth of field',
   },
   {
     id: 'documentary',
@@ -51,7 +65,7 @@ export const STYLE_PRESETS: StylePreset[] = [
     description: 'Gritty reportage realism — candid and true-to-life. Strong for true-crime and explainers.',
     genres: ['informational', 'horror', 'general'],
     stylePreset:
-      'gritty photoreal documentary still, natural available light, candid reportage framing, slight handheld imperfection, true-to-life color, fine grain, journalistic realism, unposed authenticity',
+      'photograph, gritty documentary still, natural available light, candid reportage framing, slight handheld imperfection, natural color reproduction, fine grain, unposed framing',
   },
   {
     id: 'bright-studio',
@@ -59,7 +73,7 @@ export const STYLE_PRESETS: StylePreset[] = [
     description: 'Clean, bright product-shot look — crisp and appealing. Great for food and lifestyle.',
     genres: ['lifestyle', 'informational'],
     stylePreset:
-      'clean bright photoreal studio shot, soft diffused lighting, crisp sharp focus, vivid true color, minimal seamless background, polished commercial product look, high clarity, appetizing and inviting',
+      'photograph, clean bright studio product shot, soft diffused lighting, crisp sharp focus, vivid accurate color, minimal seamless background, high clarity, polished commercial look',
   },
   {
     id: 'found-footage',
@@ -67,7 +81,7 @@ export const STYLE_PRESETS: StylePreset[] = [
     description: 'Degraded handheld video — raw, unsettling, real. Great for horror and mystery.',
     genres: ['horror', 'general'],
     stylePreset:
-      'degraded handheld camcorder video still, VHS analog artifacts, chromatic aberration, heavy noise and scan lines, slight motion blur, washed muted colors, vignetting, amateur footage feel, imperfect framing',
+      'video still, degraded handheld camcorder footage, VHS analog artifacts, chromatic aberration, heavy noise and scan lines, slight motion blur, washed muted colors, heavy vignetting, imperfect handheld framing',
   },
   {
     id: 'retro-sepia',
@@ -75,7 +89,7 @@ export const STYLE_PRESETS: StylePreset[] = [
     description: 'Aged archival photo — nostalgic and warm. Suits history and period stories.',
     genres: ['informational', 'horror', 'general'],
     stylePreset:
-      'vintage sepia-toned archival photograph, aged paper texture, faded warm tones, soft focus, subtle scratches and vignetting, nostalgic early-century feel, timeworn print quality',
+      'photograph, vintage sepia-toned archival print, aged paper texture, faded warm tones, soft focus, subtle scratches and vignetting, timeworn print quality',
   },
   // ── Anime / illustration ──
   {
@@ -84,7 +98,7 @@ export const STYLE_PRESETS: StylePreset[] = [
     description: 'Moody cel-shaded animation — expressive and stylized. Suits horror, drama, sci-fi.',
     genres: ['horror', 'general'],
     stylePreset:
-      'flat cel-shaded anime illustration, illustration not a photograph, bold clean linework, dramatic flat shadows, desaturated moody palette with one accent color, painterly background, expressive atmosphere, high contrast',
+      'illustration not a photograph, Japanese cel animation, bold clean line art, 2D cel shading, dramatic flat shadows, desaturated palette with one accent color, painted background, limited gradients, high contrast',
   },
   {
     id: 'anime-bright',
@@ -92,7 +106,7 @@ export const STYLE_PRESETS: StylePreset[] = [
     description: 'Clean, bright cel animation — lively and crisp. Versatile for lighter niches.',
     genres: ['lifestyle', 'informational', 'general'],
     stylePreset:
-      'flat cel-shaded anime illustration, illustration not a photograph, clean crisp linework, bright cheerful palette, soft gradient shading, expressive characters, detailed vibrant background',
+      'illustration not a photograph, Japanese cel animation, clean crisp line art, 2D cel shading, bright saturated palette, soft gradient shading, detailed painted background',
   },
   {
     id: 'ink-noir',
@@ -100,7 +114,7 @@ export const STYLE_PRESETS: StylePreset[] = [
     description: 'High-contrast black-and-white ink — graphic and tense. Strong for true-crime and horror.',
     genres: ['horror', 'informational', 'general'],
     stylePreset:
-      'high-contrast black-and-white ink illustration, illustration not a photograph, bold brush strokes, deep blacks, halftone texture, stark negative space, graphic-novel inking, dramatic chiaroscuro, limited or no color',
+      'ink drawing, illustration not a photograph, high-contrast black and white, bold brush strokes, deep blacks, halftone texture, stark negative space, graphic-novel inking, dramatic chiaroscuro, limited or no color',
   },
   {
     id: 'comic-book',
@@ -108,7 +122,7 @@ export const STYLE_PRESETS: StylePreset[] = [
     description: 'Bold inked panels with halftone — punchy and graphic. Fun for action and stories.',
     genres: ['horror', 'informational', 'general'],
     stylePreset:
-      'inked comic-book panel, illustration not a photograph, bold black outlines, halftone dot shading, dynamic saturated colors, screen-tone texture, graphic-novel energy, strong dramatic composition',
+      'illustration not a photograph, inked comic-book panel, bold black outlines, halftone dot shading, dynamic saturated colors, screen-tone texture, strong dramatic composition',
   },
   {
     id: 'charcoal',
@@ -116,7 +130,7 @@ export const STYLE_PRESETS: StylePreset[] = [
     description: 'Smudged graphite and charcoal — raw and haunting. A moody hand-drawn look.',
     genres: ['horror', 'general'],
     stylePreset:
-      'charcoal and graphite sketch, illustration not a photograph, smudged tonal shading, rough paper texture, expressive hatching, monochrome grayscale, raw hand-drawn intensity',
+      'charcoal drawing, illustration not a photograph, smudged graphite and charcoal, soft tonal shading, rough paper texture, expressive hatching, monochrome grayscale',
   },
   {
     id: 'woodcut',
@@ -124,7 +138,7 @@ export const STYLE_PRESETS: StylePreset[] = [
     description: 'Bold carved relief print — folk and striking. Distinctive for myth and history.',
     genres: ['horror', 'informational', 'general'],
     stylePreset:
-      'traditional woodcut relief print, illustration not a photograph, bold carved linework, high-contrast ink, limited two-tone palette, textured hand-printed look, folk-print quality',
+      'woodcut print, illustration not a photograph, traditional relief carving, bold carved linework, high-contrast ink, limited two-tone palette, textured hand-printed look',
   },
   // ── Soft / friendly ──
   {
@@ -133,7 +147,7 @@ export const STYLE_PRESETS: StylePreset[] = [
     description: 'Classical oil-painting texture — rich and timeless. Lovely for drama and lifestyle.',
     genres: ['lifestyle', 'general'],
     stylePreset:
-      'classical oil painting, illustration not a photograph, thick impasto brushwork, visible canvas texture, warm layered glazes, soft edges, rich saturated palette, painterly light, gallery-quality composition',
+      'oil painting, illustration not a photograph, classical style, thick impasto brushwork, visible canvas texture, warm layered glazes, soft edges, rich saturated palette, painterly light',
   },
   {
     id: 'storybook',
@@ -141,7 +155,7 @@ export const STYLE_PRESETS: StylePreset[] = [
     description: 'Soft hand-painted watercolor — warm and gentle. Best for lifestyle and explainers.',
     genres: ['lifestyle', 'informational', 'general'],
     stylePreset:
-      'soft hand-painted watercolor storybook illustration, illustration not a photograph, gentle washes, visible paper grain, loose organic edges, warm pastel palette, cozy inviting mood, light linework',
+      'watercolor, illustration not a photograph, hand-painted storybook style, cold-press paper texture, visible pigment blooms, gentle washes, soft pencil linework, loose brush edges, warm pastel palette',
   },
   {
     id: 'pastel-minimal',
@@ -149,7 +163,7 @@ export const STYLE_PRESETS: StylePreset[] = [
     description: 'Soft flat shapes in muted pastels — calm and clean. Nice for wellness and how-tos.',
     genres: ['lifestyle', 'informational'],
     stylePreset:
-      'soft flat pastel illustration, illustration not a photograph, minimal shapes, muted pastel palette, gentle gradients, generous negative space, calm editorial simplicity',
+      'illustration not a photograph, soft flat pastel shapes, minimal composition, muted pastel palette, gentle gradients, generous negative space, editorial simplicity',
   },
   {
     id: 'animated-3d',
@@ -157,7 +171,7 @@ export const STYLE_PRESETS: StylePreset[] = [
     description: 'Glossy Pixar-style render — bright and friendly. Great for explainers and lighter niches.',
     genres: ['informational', 'lifestyle', 'general'],
     stylePreset:
-      'glossy 3D animated render, illustration not a photograph, smooth subsurface-scattered materials, soft global illumination, rounded stylized forms, vibrant saturated palette, cinematic but friendly, polished Pixar/DreamWorks look',
+      'illustration not a photograph, stylized 3D animated render, rounded proportions, smooth subsurface-scattered materials, soft global illumination, vibrant saturated materials, glossy surfaces, cinematic composition',
   },
   {
     id: 'claymation',
@@ -165,7 +179,7 @@ export const STYLE_PRESETS: StylePreset[] = [
     description: 'Tactile stop-motion clay — handmade and charming. Playful for quirky niches.',
     genres: ['lifestyle', 'informational', 'general'],
     stylePreset:
-      'tactile claymation stop-motion look, illustration not a photograph, sculpted plasticine forms, visible fingerprints and seams, soft studio lighting, handmade charm, shallow miniature set',
+      'illustration not a photograph, claymation stop-motion still, sculpted plasticine forms, visible fingerprints and seams, soft studio lighting, shallow miniature set, handmade imperfections',
   },
   {
     id: 'flat-vector',
@@ -173,7 +187,7 @@ export const STYLE_PRESETS: StylePreset[] = [
     description: 'Clean modern flat illustration — crisp and clear. Ideal for informational channels.',
     genres: ['informational', 'general'],
     stylePreset:
-      'clean modern flat vector illustration, illustration not a photograph, bold simple shapes, limited flat color palette, minimal gradients, crisp geometric composition, clear iconography, uncluttered editorial look',
+      'illustration not a photograph, clean flat vector graphic, bold simple shapes, limited flat color palette, minimal gradients, crisp geometric composition, clear iconography, uncluttered editorial look',
   },
   {
     id: 'neon-glow',
@@ -181,7 +195,7 @@ export const STYLE_PRESETS: StylePreset[] = [
     description: 'Vibrant synthwave neon — sleek and electric. Eye-catching for music and tech.',
     genres: ['lifestyle', 'general'],
     stylePreset:
-      'vibrant neon-lit synthwave illustration, illustration not a photograph, glowing magenta and cyan, high saturation, soft bloom, retro-futuristic atmosphere, sleek gradients',
+      'illustration not a photograph, neon-lit synthwave graphic, glowing magenta and cyan, high saturation, soft bloom, retro-futuristic palette, sleek gradients',
   },
 ]
 

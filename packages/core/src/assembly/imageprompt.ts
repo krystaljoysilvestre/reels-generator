@@ -50,8 +50,11 @@ export function assembleNegativePrompt(
   // Keep the list SHORT and intentional: a long avoid-list dilutes the real prompt and can ironically
   // surface the negated nouns. We drop the whole flux-era artifact/anatomy/quality-floor/double-door
   // catalog (those were flux failure modes; gpt-image-1 doesn't make them) and keep only what genuinely
-  // helps: an on-image-text guard plus the content guards.
-  const defaults = ['text', 'watermark', 'caption', 'subtitles']
+  // helps: a watermark guard plus the content guards.
+  // NOTE: we intentionally do NOT suppress 'text'/'caption'/'subtitles' here. That guard kept stray
+  // captions out of scene art, but it also blocked INTENTIONAL diegetic text — a phone message, a sign,
+  // a note — which some scenes need rendered in-frame. Leaving text un-suppressed lets those render.
+  const defaults = ['watermark']
   // Content guards. Suppressing gore/violence/nudity is right for most niches, but on a HORROR channel the
   // gore/violence guards fight the genre — they neuter exactly the dread/menace the look is built for, so
   // every reshoot comes back tame. Horror channels drop those two. 'nudity' STAYS for everyone: it adds

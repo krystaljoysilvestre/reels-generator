@@ -13,7 +13,7 @@ import { getSession } from '@/lib/auth'
 // Proposes a content-safe sample scene + 4 distinct visual "looks" for a channel.
 // Text-only LLM call (cheap/fast); the wizard falls back to the single derived stylePreset on failure.
 const InputSchema = z.object({
-  nicheDescription: z.string().trim().min(1).max(2000),
+  nicheDescription: z.string().trim().min(1).max(8000),
   toneConfig: ToneConfigSchema,
   worldBible: WorldBibleSchema,
   sampleScript: z.string().trim().max(4000).optional(),

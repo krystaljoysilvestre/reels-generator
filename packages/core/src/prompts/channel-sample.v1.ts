@@ -23,6 +23,7 @@ export interface ChannelSampleVars {
   targetSeconds: number // the channel's reel length — the sample should match it
   voiceStyle?: string // delivery style of the lead narrator, if any
   hookHint?: string // target-platform hook convention (shapes the opening line)
+  promptHint?: string // optional operator steer for what THIS sample should be about
 }
 
 export function buildChannelSamplePrompt(v: ChannelSampleVars): {
@@ -50,7 +51,7 @@ Fictionalize specific real places and people. No anatomical gore.
 This is a SAMPLE that demonstrates the channel's voice — make it self-contained and complete.`
 
   const userMessage = `Write ONE complete sample narration for a ~${v.targetSeconds}-second reel (≈${targetWords} words at natural narration pace). Make it feel like a real reel on this channel — natural length, never padded or cut short.
-${v.hookHint ? `\nHOOK STYLE (tailor the opening line to the target platform): ${v.hookHint}\n` : ''}
+${v.promptHint ? `\nOPERATOR'S DIRECTION FOR THIS ONE: ${v.promptHint}\nHonor whatever they specified — topic, characters, tone, structure, setting, ending — and freely invent everything they left out. A few words is a seed, not a limit; don't pad a sparse idea with filler, and don't treat a detailed brief as optional. Always keep the channel's niche, tone, and world.\n` : ''}${v.hookHint ? `\nHOOK STYLE (tailor the opening line to the target platform): ${v.hookHint}\n` : ''}
 Shape it to the niche — do NOT force a fiction twist onto a channel that isn't narrative:
 - Story / narrative niches: open on a hook (never setting description or a greeting), build with grounded, specific, sensory detail, escalate, and land on an ending that RECONTEXTUALIZES an earlier line (re-heard differently) — not a flat stop.
 - Informational niches: open on a hook, deliver 2–4 vivid concrete points, end on a satisfying payoff.

@@ -35,7 +35,9 @@ This is a HORROR channel. When the change asks for something frightening, uncann
       : ''
   const system = `You are a storyboard director for vertical (9:16) narrated reels. You revise ONE scene's image prompt.
 
-An image prompt is CONTENT ONLY — it describes WHAT IS SEEN. Never include style or medium words ("cinematic", "photo", "painting", colour-grade or lens terms); the system owns the look. Lead with the key VISIBLE subject, then shot size + camera angle, one foreground element for depth, the light source + its direction, a touch of atmosphere. Use concrete nouns and a plain present-tense description of the frame — never meta-instructions like "show", "change", "instead", "make it". ~30–50 words.${horrorClause}`
+An image prompt is CONTENT ONLY — it describes WHAT IS SEEN. Never include style or medium words ("cinematic", "photo", "painting", colour-grade or lens terms); the system owns the look. Lead with the key VISIBLE subject, then shot size + camera angle, one foreground element for depth, the light source + its direction, a touch of atmosphere. Use concrete nouns and a plain present-tense description of the frame — never meta-instructions like "show", "change", "instead", "make it". ~30–50 words.
+
+DESCRIBE PRESENCE, NOT ABSENCE. Only ever state what IS in the frame, never what is missing. The image model reads "no sink", "without a mirror" or "strictly no X" as a cue to DRAW that very thing — so when the operator asks to remove or keep out something, never echo it as a negation. Instead describe what fills that space so there is no room left for the unwanted thing (e.g. "no sink, just the stall walls" → "tight tiled partition walls press in close on the left and right, boxing in the narrow cubicle"). Your output must contain no "no", "not", "without", "avoid" or "remove".${horrorClause}`
 
   const userMessage = `Current image prompt:
 """${currentPrompt}"""

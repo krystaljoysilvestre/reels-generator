@@ -14,7 +14,7 @@ const UpdateSchema = z
   .object({
     name: z.string().trim().min(1).max(80),
     description: z.string().trim().max(140).nullish(),
-    nicheDescription: z.string().trim().min(1).max(2000),
+    nicheDescription: z.string().trim().min(1).max(8000),
     tagline: z.string().trim().max(200),
     targetPlatform: TargetPlatformSchema,
     toneConfig: ToneConfigSchema,

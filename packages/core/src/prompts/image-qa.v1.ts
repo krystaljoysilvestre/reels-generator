@@ -29,8 +29,9 @@ Look at the image and decide whether it faithfully delivers the brief's KEY, che
 - NAMED OBJECT STATE: if the brief specifies an object's state (e.g. a door "closed" / "shut" / "flush", or "open"), the image must match it — a closed door must read as closed, not open or a black gap.
 - WHAT IS / ISN'T SHOWN: if the brief implies a presence WITHOUT showing it (shadow, sound, "just out of view"), no literal figure/body should be depicted; conversely a named subject must appear.
 - LIGHTING / TIME: day vs night and the named light source roughly match the brief (don't nitpick exact exposure).
+- READABLE SUBJECT: the key subject must be VISIBLE — discernible at a glance even in a dark/low-key shot. A moody, shadow-heavy frame is fine; FAIL only when the subject (or the frame as a whole) is so underexposed it reads as a near-black image where you genuinely can't make out the focal action.
 
-Ignore: color grade, film-stock look, minor composition, overall mood, small detail accuracy. Those are not failures.
+Ignore: color grade, film-stock look, minor composition, overall mood, artistic darkness (so long as the subject still reads), small detail accuracy. Those are not failures.
 
 Return JSON only. Always include "issues": { "pass": true, "issues": [] } if it matches, or { "pass": false, "issues": ["short concrete mismatch", ...] } listing only the clear contradictions.`
 

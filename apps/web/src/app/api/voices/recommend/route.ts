@@ -11,7 +11,7 @@ import {
 import { getSession } from '@/lib/auth'
 
 const InputSchema = z.object({
-  nicheDescription: z.string().trim().min(1).max(2000),
+  nicheDescription: z.string().trim().min(1).max(8000),
   language: z.string().trim().min(1),
   toneConfig: ToneConfigSchema,
   searchKeyword: z.string().trim().max(40).optional(),

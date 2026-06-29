@@ -12,7 +12,7 @@ import { getSession } from '@/lib/auth'
 const InputSchema = z.object({
   draftChannelId: z.string().uuid().nullish(), // present → update that draft; absent → create one
   name: z.string().trim().max(80).default(''),
-  nicheDescription: z.string().trim().max(2000).default(''),
+  nicheDescription: z.string().trim().max(8000).default(''),
   draftState: z.record(z.unknown()), // opaque wizard-state blob (validated on hydrate, not here)
 })
 

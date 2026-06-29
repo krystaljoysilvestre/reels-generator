@@ -12,13 +12,14 @@ import { getSession } from '@/lib/auth'
 
 const InputSchema = z.object({
   name: z.string().trim().min(1).max(80),
-  nicheDescription: z.string().trim().min(1).max(2000),
+  nicheDescription: z.string().trim().min(1).max(8000),
   languages: z.array(z.string().trim().min(1)).min(1).max(6),
   toneConfig: ToneConfigSchema,
   worldBible: WorldBibleSchema,
   targetSeconds: z.number().int().min(15).max(180).default(75),
   voiceStyle: z.string().trim().optional(),
   targetPlatform: TargetPlatformSchema.default('all'),
+  promptHint: z.string().trim().max(8000).optional(), // optional operator steer — can be a long, detailed brief
 })
 
 export async function POST(req: NextRequest) {
@@ -39,6 +40,7 @@ export async function POST(req: NextRequest) {
     targetSeconds: c.targetSeconds,
     hookHint: PLATFORM_PRESETS[c.targetPlatform].hookHint,
     ...(c.voiceStyle ? { voiceStyle: c.voiceStyle } : {}),
+    ...(c.promptHint ? { promptHint: c.promptHint } : {}),
   })
 
   try {

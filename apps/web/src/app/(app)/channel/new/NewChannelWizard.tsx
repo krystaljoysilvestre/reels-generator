@@ -183,11 +183,16 @@ export function NewChannelWizard({
 
   const language = languages[0] ?? 'English'
 
-  // ── sample script (step 2, optional) — manual preferred; "Generate draft" seeds it ──
+  // ── sample script (step 2, optional) — manual preferred; "Write one for me" seeds it ──
+  // A draft can target the main script ('main') or one of the extra references (its index).
   const [sampleScript, setSampleScript] = useState('')
   const [sampleIsAi, setSampleIsAi] = useState(false)
   const [extraSampleScripts, setExtraSampleScripts] = useState<string[]>([]) // optional additional references (max 2)
-  const [sampleLoading, setSampleLoading] = useState(false)
+  const [sampleMode, setSampleMode] = useState<'forme' | 'own'>('forme') // primary example: written for them vs. their own
+  const [mainSteer, setMainSteer] = useState('') // optional steer for the primary "write one for me" path
+  const [composeTarget, setComposeTarget] = useState<'main' | number | null>(null) // which extra's "write for me" box is open
+  const [composePrompt, setComposePrompt] = useState('') // optional steer the operator types before we write an extra
+  const [draftingTarget, setDraftingTarget] = useState<'main' | number | null>(null) // which field is being written right now
   const [sampleError, setSampleError] = useState('')
 
   // ── sound (step 4) — background music ──
@@ -210,6 +215,7 @@ export function NewChannelWizard({
   const [styleError, setStyleError] = useState('')
   const styleReqRef = useRef(0) // guards against a superseded fetch clobbering newer state
   const autoPreviewedGenRef = useRef(-1) // which proposals "generation" already auto-rendered (dedupes StrictMode + resolves)
+  const deriveAbortRef = useRef<AbortController | null>(null) // aborts an in-flight step-1 derive on unmount / re-fire
   // Operator-uploaded reference image → vision-derived style, added as a pickable tile.
   const [uploadingRef, setUploadingRef] = useState(false)
   const [refError, setRefError] = useState('')
@@ -330,6 +336,10 @@ export function NewChannelWizard({
   // No `beforeunload` confirm on reload / tab-close: the draft autosaves to localStorage on every
   // change and restores on return, so reloading or closing loses nothing — the native prompt would
   // just nag about a non-problem. (Browser Back still routes through our own in-app modal below.)
+
+  // Abort an in-flight step-1 derive if the wizard unmounts (e.g. the operator confirms leaving) so
+  // the dropped request doesn't keep the model running for a result no one will receive.
+  useEffect(() => () => deriveAbortRef.current?.abort(), [])
 
   // Browser Back (SPA history) → trap it once and route the decision through our modal.
   useEffect(() => {
@@ -687,6 +697,10 @@ export function NewChannelWizard({
   }
 
   async function handleGenerate() {
+    // Cancel any prior in-flight derive before starting a new one.
+    deriveAbortRef.current?.abort()
+    const controller = new AbortController()
+    deriveAbortRef.current = controller
     setLoading(true)
     setError('')
     try {
@@ -694,6 +708,7 @@ export function NewChannelWizard({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: name.trim(), nicheDescription: niche.trim(), languages, targetPlatform }),
+        signal: controller.signal,
       })
       const json = await res.json()
       if (!res.ok) {
@@ -740,14 +755,22 @@ export function NewChannelWizard({
       setRefError('')
       setPhase('script')
     } catch (e) {
+      // Aborted (unmount / re-fire) is intentional — not an error to show, and any newer call owns the UI now.
+      if (e instanceof DOMException && e.name === 'AbortError') return
       setError(friendlyError(e, 'Generation failed'))
     } finally {
-      setLoading(false)
+      // Only the latest derive clears the spinner, so a superseded one can't flip it off mid-flight.
+      if (deriveAbortRef.current === controller) {
+        deriveAbortRef.current = null
+        setLoading(false)
+      }
     }
   }
 
-  async function handleSampleDraft() {
-    setSampleLoading(true)
+  // Write a story for the operator. `target` is 'main' (the primary script) or an extra-reference index.
+  // `promptHint` is an optional steer they typed; blank means "come up with one for me".
+  async function handleSampleDraft(target: 'main' | number, promptHint: string) {
+    setDraftingTarget(target)
     setSampleError('')
     try {
       const res = await fetch('/api/channel/sample-script', {
@@ -762,19 +785,86 @@ export function NewChannelWizard({
           targetPlatform,
           worldBible: worldBiblePayload(),
           voiceStyle: selectedVoices[0]?.description,
+          ...(promptHint.trim() ? { promptHint: promptHint.trim() } : {}),
         }),
       })
       const json = await res.json()
-      if (!res.ok) throw new Error(json.error ?? 'Draft failed')
+      if (!res.ok) {
+        // Surface the specific field that failed (e.g. a too-long steer) instead of a bare "Invalid input".
+        const fieldErrors = json.issues?.fieldErrors as Record<string, string[]> | undefined
+        const detail = fieldErrors && Object.entries(fieldErrors).map(([f, msgs]) => `${f}: ${msgs?.[0]}`).join('; ')
+        throw new Error(detail || json.error || 'Draft failed')
+      }
       const s = json.sample as { title: string; hook: string; script: string }
-      setSampleScript(s.script?.trim() || s.hook || '')
-      setSampleIsAi(true)
+      const text = s.script?.trim() || s.hook || ''
+      if (target === 'main') {
+        setSampleScript(text)
+        setSampleIsAi(true)
+      } else {
+        setExtraSampleScripts((prev) => prev.map((v, j) => (j === target ? text : v)))
+      }
       setCostCents((c) => c + (json.costCents ?? 0))
+      setComposeTarget(null)
+      setComposePrompt('')
     } catch (e) {
       setSampleError(friendlyError(e, 'Draft failed'))
     } finally {
-      setSampleLoading(false)
+      setDraftingTarget(null)
     }
+  }
+
+  // Corner "write for me" icon for an extra-reference field. Toggling it reveals composeBox(target) below.
+  function draftButton(target: 'main' | number, hasContent: boolean) {
+    const busy = draftingTarget === target
+    const open = composeTarget === target
+    const label = hasContent ? 'Write a new one' : 'Write one for me'
+    return (
+      <button
+        type="button"
+        onClick={() => { setComposeTarget(open ? null : target); setComposePrompt('') }}
+        disabled={draftingTarget !== null}
+        title={busy ? 'Writing…' : label}
+        aria-label={label}
+        className={`rounded-md p-1.5 transition-colors disabled:opacity-50 ${open ? 'bg-subtle text-ink' : 'text-faint hover:bg-subtle hover:text-ink'}`}
+      >
+        {busy ? (
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="animate-spin" aria-hidden>
+            <path d="M21 12a9 9 0 1 1-6.22-8.56" />
+          </svg>
+        ) : (
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M9.94 15.5A2 2 0 0 0 8.5 14.06l-6.14-1.58a.5.5 0 0 1 0-.96L8.5 9.94A2 2 0 0 0 9.94 8.5l1.58-6.14a.5.5 0 0 1 .96 0L14.06 8.5A2 2 0 0 0 15.5 9.94l6.14 1.58a.5.5 0 0 1 0 .96L15.5 14.06a2 2 0 0 0-1.44 1.44l-1.58 6.14a.5.5 0 0 1-.96 0z" />
+            <path d="M20 3v4M22 5h-4M4 17v2M5 18H3" />
+          </svg>
+        )}
+      </button>
+    )
+  }
+
+  // Optional-steer box: lets the operator type what the story should be about, or leave it blank.
+  function composeBox(target: 'main' | number) {
+    if (composeTarget !== target) return null
+    const busy = draftingTarget === target
+    return (
+      <div className="mt-3 rounded-lg border border-border bg-subtle p-3">
+        <p className="text-xs text-faint">As much or as little as you like. Leave it empty and we&apos;ll come up with one.</p>
+        <textarea
+          className="input mt-2 h-24 resize-none leading-relaxed"
+          value={composePrompt}
+          onChange={(e) => setComposePrompt(e.target.value)}
+          placeholder="Optional — a topic, or details like the characters, tone, setting, or how it ends"
+          autoFocus
+        />
+        <div className="mt-2 flex items-center gap-2">
+          <button type="button" onClick={() => handleSampleDraft(target, composePrompt)} disabled={busy} className="btn-accent btn-sm">
+            {busy ? 'Writing…' : 'Write it'}
+          </button>
+          <button type="button" onClick={() => { setComposeTarget(null); setComposePrompt('') }} disabled={busy} className="btn-ghost btn-sm">
+            Cancel
+          </button>
+        </div>
+      </div>
+    )
   }
 
   // Upload one or more background tracks (Sound step). Appended to the pool; previewed like presets.
@@ -983,7 +1073,7 @@ export function NewChannelWizard({
                 className="input h-44 resize-none"
                 value={niche}
                 onChange={(e) => { setNiche(e.target.value); setPresetId(null) }}
-                maxLength={2000}
+                maxLength={8000}
                 placeholder="e.g. 'true-crime cases cracked by one overlooked detail, calm narration', or 'cozy 2-minute pasta recipes, warm and upbeat', or 'mind-bending space facts told with awe'. Cover the genre, audience, format, tone, and how it's narrated — the more detail, the better; we safely fill in the rest."
               />
               <p className="mt-1 text-xs text-faint">{niche.trim().length} characters · 20 min, 2000 max</p>
@@ -1039,58 +1129,116 @@ export function NewChannelWizard({
             <Recap name={name} description={description} language={language} avatarPreview={avatarPreview} />
 
             <div className="card p-5">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <SectionLabel>Sample script</SectionLabel>
-                  </div>
-                  <p className="mt-1 text-xs text-faint">
-                    This teaches your channel&apos;s writing voice — every reel is written to match it. Your own
-                    example works best; or draft one to start from and edit it.
-                  </p>
-                </div>
-                <button onClick={handleSampleDraft} disabled={sampleLoading} className="btn-secondary btn-sm flex-shrink-0">
-                  {sampleLoading ? (
-                    <>
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="animate-spin" aria-hidden>
-                        <path d="M21 12a9 9 0 1 1-6.22-8.56" />
-                      </svg>
-                      Writing…
-                    </>
-                  ) : sampleScript.trim() ? 'Rewrite draft' : 'Write draft'}
-                </button>
-              </div>
-              <textarea
-                className="input mt-3 h-64 resize-none leading-relaxed"
-                value={sampleScript}
-                onChange={(e) => { setSampleScript(e.target.value); setSampleIsAi(false) }}
-                placeholder="Write or paste a real opening in your channel's voice — the first lines exactly as you'd want them narrated, in any niche and any language. This is what every reel will sound like, so the closer to your real voice, the better."
-              />
-              {sampleError && <p className="mt-2 text-xs text-danger">{sampleError}</p>}
+              <SectionLabel>Your channel&apos;s voice</SectionLabel>
+              <p className="mt-1 text-xs text-faint">
+                One example reel in your voice — every reel is written to match it.
+              </p>
 
-              {/* Optional extra references — few-shot is stronger with 2–3 examples */}
-              {extraSampleScripts.map((s, i) => (
-                <div key={i} className="mt-3 flex gap-2">
+              {/* Two clear paths: have it written, or write your own. */}
+              <div className="mt-3 inline-flex rounded-lg border border-border bg-subtle p-0.5">
+                {([
+                  ['forme', 'Write one for me'],
+                  ['own', "I'll write my own"],
+                ] as const).map(([mode, label]) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setSampleMode(mode)}
+                    className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                      sampleMode === mode ? 'bg-surface text-ink shadow-xs' : 'text-muted hover:text-ink'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {sampleMode === 'forme' ? (
+                <div className="mt-4">
+                  <p className="text-xs text-faint">
+                    Tell us as much or as little as you like — a quick idea, or full direction. Leave it empty and
+                    we&apos;ll come up with one.
+                  </p>
                   <textarea
-                    className="input h-28 flex-1 resize-none leading-relaxed"
-                    value={s}
-                    onChange={(e) => setExtraSampleScripts((prev) => prev.map((v, j) => (j === i ? e.target.value : v)))}
-                    placeholder="Another example in your channel's voice (optional)"
+                    className="input mt-2 h-24 resize-none leading-relaxed"
+                    value={mainSteer}
+                    onChange={(e) => setMainSteer(e.target.value)}
+                    placeholder="Optional — a topic, or details like the characters, tone, setting, or how it ends"
                   />
                   <button
                     type="button"
-                    onClick={() => setExtraSampleScripts((prev) => prev.filter((_, j) => j !== i))}
-                    className="btn-ghost btn-sm self-start"
-                    title="Remove this reference"
+                    onClick={() => handleSampleDraft('main', mainSteer)}
+                    disabled={draftingTarget !== null}
+                    className="btn-accent btn-sm mt-2"
                   >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M18 6 6 18M6 6l12 12" /></svg>
+                    {draftingTarget === 'main' ? (
+                      <>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="animate-spin" aria-hidden>
+                          <path d="M21 12a9 9 0 1 1-6.22-8.56" />
+                        </svg>
+                        Writing…
+                      </>
+                    ) : sampleScript.trim() ? 'Write a new one' : 'Write it'}
                   </button>
+                  {sampleScript.trim() && (
+                    <>
+                      <p className="mt-4 text-xs text-faint">Your example — edit it freely.</p>
+                      <textarea
+                        className="input mt-2 h-64 resize-none leading-relaxed"
+                        value={sampleScript}
+                        onChange={(e) => { setSampleScript(e.target.value); setSampleIsAi(false) }}
+                      />
+                    </>
+                  )}
                 </div>
-              ))}
-              {extraSampleScripts.length < 2 && (
-                <button type="button" onClick={() => setExtraSampleScripts((prev) => [...prev, ''])} className="btn-ghost btn-sm mt-3">
-                  + Add another reference
-                </button>
+              ) : (
+                <textarea
+                  className="input mt-4 h-64 resize-none leading-relaxed"
+                  value={sampleScript}
+                  onChange={(e) => { setSampleScript(e.target.value); setSampleIsAi(false) }}
+                  placeholder="Write or paste a real opening in your channel's voice — the first lines exactly as you'd want them narrated, in any niche and any language. This is what every reel will sound like, so the closer to your real voice, the better."
+                />
+              )}
+              {sampleError && <p className="mt-2 text-xs text-danger">{sampleError}</p>}
+
+              {/* More examples — few-shot is stronger with 2–3. Offered only once a first example exists. */}
+              {(sampleScript.trim() || extraSampleScripts.length > 0) && (
+              <div className="mt-5 border-t border-border pt-4">
+                <p className="text-xs text-faint">More examples sharpen the match — add up to two more (optional).</p>
+                  {extraSampleScripts.map((s, i) => (
+                    <div key={i} className="mt-3">
+                      <div className="relative">
+                        <textarea
+                          className="input h-28 w-full resize-none pl-3 pr-16 leading-relaxed"
+                          value={s}
+                          onChange={(e) => setExtraSampleScripts((prev) => prev.map((v, j) => (j === i ? e.target.value : v)))}
+                          placeholder="Another example in your channel's voice"
+                        />
+                        <div className="absolute right-1.5 top-1.5 flex items-center gap-0.5">
+                          {draftButton(i, !!s.trim())}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setExtraSampleScripts((prev) => prev.filter((_, j) => j !== i))
+                              setComposeTarget(null)
+                            }}
+                            className="rounded-md p-1.5 text-faint transition-colors hover:bg-subtle hover:text-danger"
+                            title="Remove this example"
+                            aria-label="Remove this example"
+                          >
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M18 6 6 18M6 6l12 12" /></svg>
+                          </button>
+                        </div>
+                      </div>
+                      {composeBox(i)}
+                    </div>
+                  ))}
+                  {extraSampleScripts.length < 2 && (
+                    <button type="button" onClick={() => setExtraSampleScripts((prev) => [...prev, ''])} className="btn-ghost btn-sm mt-3">
+                      + Add another example
+                    </button>
+                  )}
+              </div>
               )}
             </div>
 
@@ -1100,7 +1248,7 @@ export function NewChannelWizard({
               </button>
               <div className="flex flex-col items-end gap-1">
                 {!sampleScript.trim() && (
-                  <p className="text-xs text-faint">Add an example — or tap Write draft — to continue.</p>
+                  <p className="text-xs text-faint">Add an example — or have one written for you — to continue.</p>
                 )}
                 <button onClick={() => setPhase('voice')} disabled={!sampleScript.trim()} className="btn-accent">
                   Next

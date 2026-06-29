@@ -43,6 +43,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ notes })
   } catch (err) {
     if (err instanceof ProviderRateLimitError) return NextResponse.json({ error: 'Busy right now — try again shortly.' }, { status: 429 })
+    // Log the underlying cause — without this the 502 is a black box (the LLM call is usually fine, so a
+    // failure here is almost always a transient provider blip worth seeing in the logs).
+    console.error('[enrich-audio] draft failed', { reelId, err: err instanceof Error ? err.message : err })
     return NextResponse.json({ error: 'Could not draft sound notes — try again.' }, { status: 502 })
   }
 }

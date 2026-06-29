@@ -56,6 +56,20 @@ export function StoryboardEditor({
   const router = useRouter()
   const { toast } = useToast()
   const [scenes, setScenes] = useState(initialScenes)
+  // Re-sync the scene LIST from the server when its identity set changes — scenes created after we
+  // mounted mid-build (you land here while breakdown_scenes is still running, so initialScenes is empty),
+  // or a scene added/removed later. Without this the useState above stays frozen at its first value, so
+  // router.refresh() can't surface the new scenes and the page sits on "Storyboarding" until a hard
+  // reload. Keyed on the id set (not every poll) so it fires only on real list changes; we merge prev
+  // over server for scenes that already existed, preserving unsaved local field edits (text/tier). Images
+  // don't flow through this state (they come from the sceneImages prop), so prev-wins is safe.
+  const sceneIdSig = initialScenes.map((s) => s.id).join(',')
+  useEffect(() => {
+    setScenes((prev) => {
+      const prevById = new Map(prev.map((s) => [s.id, s]))
+      return initialScenes.map((s) => ({ ...s, ...prevById.get(s.id) }))
+    })
+  }, [sceneIdSig])
   const [sceneSaving, setSceneSaving] = useState<Record<number, 'saving' | 'saved'>>({}) // per-scene script-edit status
   const [activeVar, setActiveVar] = useState<Record<number, number>>({}) // which video variation plays per scene tile
   const [loadedMedia, setLoadedMedia] = useState<Set<number>>(new Set()) // scenes whose image/video has loaded (for develop-in)
@@ -382,13 +396,23 @@ export function StoryboardEditor({
   useEffect(() => {
     if (soundEnrichedRef.current || soundNotes.trim() || reel.status !== 'storyboard') return
     soundEnrichedRef.current = true
-    void fetch('/api/pipeline/enrich-audio', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ reelId: reel.id, force: false }),
-    })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((json) => { if (json && typeof json.notes === 'string') setSoundNotes(json.notes) })
-      .catch(() => {})
+    let retried = false
+    const draft = () =>
+      fetch('/api/pipeline/enrich-audio', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reelId: reel.id, force: false }),
+      })
+        .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
+        .then((json) => { if (json && typeof json.notes === 'string') setSoundNotes(json.notes) })
+        .catch(() => {
+          // The draft is a background nicety, but a single transient 502 used to leave the field empty
+          // for the whole session (the ref above blocks re-runs). Retry once after a short delay so a
+          // blip self-heals; if it still fails, the field just fills on the next storyboard open.
+          if (retried) return
+          retried = true
+          setTimeout(draft, 4000)
+        })
+    void draft()
   }, [soundNotes, reel.status])
 
   // ── Manual per-scene cues ───────────────────────────────────────────────────

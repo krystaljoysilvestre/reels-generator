@@ -165,7 +165,7 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
         {/* Niche */}
         <section className="card space-y-4 p-5">
           <SectionLabel>Niche</SectionLabel>
-          <textarea value={niche} onChange={(e) => setNiche(e.target.value)} rows={4} maxLength={2000} className="input resize-y" />
+          <textarea value={niche} onChange={(e) => setNiche(e.target.value)} rows={4} maxLength={8000} className="input resize-y" />
         </section>
 
         {/* Tone */}

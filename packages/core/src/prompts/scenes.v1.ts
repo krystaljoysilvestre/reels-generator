@@ -112,6 +112,8 @@ LIGHTING & TIME: match the narration's time of day (incl. Tagalog cues) by namin
 
 SHOW ONLY WHAT IS SEEN: depict what the narrator actually sees. If something is only HEARD (a voice, a knock) or FELT and never said to be SEEN, do NOT render its source — render the visible reaction and the space around it, not an invented source. Only depict people, objects, or events the narration explicitly says are visible.
 
+DESCRIBE PRESENCE, NOT ABSENCE: each imagePrompt must state only what IS in the frame, never what is absent. The image model reads "no sink", "without a mirror" or "strictly no X" as a cue to DRAW that very thing — so to keep something OUT, describe what fills that space instead, leaving no room for the unwanted element (e.g. to exclude a sink from a toilet-stall POV: "tight partition walls press in close on both sides", not "no sink"). Never write "no", "without" or "strictly no" in an imagePrompt.
+
 PERSPECTIVE: ${perspectiveRule}
 
 PROGRESSION & VARIETY: the reel is a sequence, not similar stills. Each scene must ADVANCE the reel with new visual information — never restate the previous shot as the same moment from a slightly different angle unless the narration genuinely lingers there. Don't repeat the same shot size / distance / focal point on consecutive scenes; vary framing (wide, medium, close, low/high). BUT when consecutive scenes are about the SAME subject, keep that subject the recognizable focus — don't cut to an unrelated environment shot.
