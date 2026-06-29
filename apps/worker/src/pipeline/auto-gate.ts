@@ -24,9 +24,9 @@ export async function autoCrossGate(stepName: string, reelId: string): Promise<v
 
   if (stepName === 'generate_story') {
     if (reel.status !== 'story_review') return // already crossed
-    // = approve-story: story_review → storyboard, run scene breakdown + image generation.
+    // = approve-story: story_review → storyboard, build Story Bible → scene breakdown → image generation.
     await setReelStatus(reelId, 'storyboard')
-    await enqueueStep({ reelId, stepName: 'breakdown_scenes' })
+    await enqueueStep({ reelId, stepName: 'analyze_story' })
     console.log(`[auto] ${reelId.slice(0, 8)} story → storyboard`)
   } else if (stepName === 'generate_images') {
     if (reel.status !== 'storyboard') return

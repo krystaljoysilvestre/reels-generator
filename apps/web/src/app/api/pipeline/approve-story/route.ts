@@ -25,9 +25,9 @@ export async function POST(req: NextRequest) {
     })
     .where(eq(reels.id, reelId))
 
-  // Run scene breakdown → image generation; the chain STOPS at the storyboard gate so the operator
-  // can edit scenes, pick a voice, and trigger the render.
-  await enqueueStep({ reelId, stepName: 'breakdown_scenes' })
+  // Build the Story Bible → scene breakdown → image generation; the chain STOPS at the storyboard gate
+  // so the operator can edit scenes, pick a voice, and trigger the render.
+  await enqueueStep({ reelId, stepName: 'analyze_story' })
 
   return NextResponse.json({ ok: true })
 }

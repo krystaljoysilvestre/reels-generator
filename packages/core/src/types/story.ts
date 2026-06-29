@@ -25,6 +25,14 @@ export const SceneOutputSchema = z.object({
   tier: z.enum(['still', 'video']),
   mood: z.array(z.string()).min(1).max(3),
   location: z.string().min(1), // canonical place label; same label across scenes = same place (drives i2i continuity)
+  // Story Bible references (see specs/story-bible.md). The image assembler expands these into the bible's
+  // frozen canonical descriptions so recurring elements don't paraphrase-drift across scenes.
+  // primaryEntity = the ONE bible id the shot leads with (null when the subject is an un-canonical detail,
+  // e.g. a shadow); supportingEntities = the other bible ids in frame; sceneIntent = what the audience
+  // should notice first. These default empty so an empty/absent bible degrades to inline description.
+  primaryEntity: z.string().nullable().default(null),
+  supportingEntities: z.array(z.string()).default([]),
+  sceneIntent: z.string().default(''),
 })
 export type SceneOutput = z.infer<typeof SceneOutputSchema>
 

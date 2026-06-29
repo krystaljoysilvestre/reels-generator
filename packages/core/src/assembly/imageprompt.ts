@@ -1,13 +1,46 @@
-// Server-side style suffix injection. The LLM writes content; the system owns style.
-// The LLM never sees or modifies the style preset.
+// Server-side prompt assembly. The LLM writes content; the system owns style and the canonical look
+// of recurring entities. The LLM never sees or modifies the style preset, and never re-describes a
+// bible entity — those are spliced here, byte-identically, so they can't paraphrase-drift across the
+// independently-generated scene images (see specs/story-bible.md).
+
+import type { StoryBible } from '../types/story-bible.js'
+import { resolveEntities, slug } from './story-bible.js'
+
+// Story-bible expansion for a single scene: the scene's entity references resolved against the reel's
+// frozen bible. Optional — when absent, assembleImagePrompt behaves exactly as before (style + content).
+export interface EntityExpansion {
+  bible: StoryBible
+  primaryEntity: string | null
+  supportingEntities: string[]
+}
 
 export function assembleImagePrompt(
   contentPrompt: string,
   stylePreset: string,
+  expansion?: EntityExpansion,
 ): string {
-  // Lead with the style DNA so the medium/look frames how the scene is read, then the scene content.
-  // (Aspect is set by the image API, so no orientation suffix is needed.)
-  return `${stylePreset.trim()}, ${contentPrompt.trim()}`
+  const style = stylePreset.trim()
+  const content = contentPrompt.trim()
+
+  // No bible → unchanged: lead with style DNA, then the scene content (legacy callers, previews, etc.).
+  if (!expansion) return `${style}, ${content}`
+
+  const { bible, primaryEntity, supportingEntities } = expansion
+  const { narratorPerspective, narratorEntityId } = bible.continuity
+  const { resolved } = resolveEntities(bible, { primaryEntity, supportingEntities })
+
+  const specs = resolved
+    // Perspective-aware narrator suppression: in a first-person reel the narrator is never rendered as
+    // a separate figure (a hard scenes.v1 rule; image-QA rejects full-body POV), so we do NOT splice
+    // their canonical full description — the scene's action prose carries the POV.
+    .filter((e) => !(narratorPerspective === 'first_person' && narratorEntityId && slug(e.id) === slug(narratorEntityId)))
+    .map((e) => e.description)
+
+  // Style first (convention: style DNA frames how the scene reads), then the frozen entity specs in
+  // role order (primary leads → satisfies VISUAL PRIORITY mechanically), then the scene's action prose.
+  // Sentence-level join only — no grammar weaving; each canonical string stays a verbatim clause.
+  const parts = [style, ...specs, content].map((p) => p.trim().replace(/[.,\s]+$/, '')).filter(Boolean)
+  return parts.join('. ')
 }
 
 export function assembleNegativePrompt(

@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { getDb, scenes, assets, channels, reels } from '@reels/db'
 import { eq, and, inArray } from 'drizzle-orm'
 import { generateImage, ContentFilterError, ProviderRateLimitError, llmCall, SCENE_IMAGE_QUALITY } from '@reels/providers'
-import { assembleImagePrompt, assembleNegativePrompt } from '@reels/core'
+import { assembleImagePrompt, assembleNegativePrompt, StoryBibleSchema } from '@reels/core'
 import { buildReviseScenePrompt, REVISE_SCENE_V1_VERSION, ReviseSceneSchema } from '@reels/core/prompts/revise-scene.v1'
 import { getSession } from '@/lib/auth'
 
@@ -52,8 +52,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Could not apply your change — try rephrasing it.' }, { status: 502 })
     }
   }
-  // The style preset always leads (system owns style); the content (LLM-revised or operator-edited) follows.
-  const finalPrompt = assembleImagePrompt(contentPrompt, channel.stylePreset)
+  // The style preset always leads (system owns style); then the scene's bible entities expanded to their
+  // frozen descriptions (so a single-scene regen stays visually consistent with the rest of the reel),
+  // then the content. null bible → plain style+content (pre-bible behavior).
+  const storyBible = reel?.storyBible ? StoryBibleSchema.parse(reel.storyBible) : null
+  const expansion = storyBible
+    ? { bible: storyBible, primaryEntity: scene.primaryEntity, supportingEntities: scene.supportingEntities }
+    : undefined
+  const finalPrompt = assembleImagePrompt(contentPrompt, channel.stylePreset, expansion)
 
   // "Improve" → edit FROM the current image: anchor the scene's composition/location while letting the
   // operator's tweak land. A subject/framing swap re-rolls from scratch (the "replace" path's job) instead.

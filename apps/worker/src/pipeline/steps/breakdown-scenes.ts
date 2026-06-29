@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { getDb, reels, stories, scenes, channels } from '@reels/db'
 import { llmCall, buildInputHash } from '@reels/providers'
-import { ScenesOutputSchema, WorldBibleSchema, reviewSceneBreakdown, cameraMovePrompt } from '@reels/core'
+import { ScenesOutputSchema, WorldBibleSchema, StoryBibleSchema, EMPTY_STORY_BIBLE, resolveEntities, reviewSceneBreakdown, cameraMovePrompt } from '@reels/core'
 import { buildScenesPrompt, SCENES_V1_VERSION, buildPeakExtractPrompt, PEAK_EXTRACT_V1_VERSION, PeakExtractSchema } from '../../prompts-bridge.js'
 import { runStep } from '../harness.js'
 
@@ -40,6 +40,11 @@ export async function breakdownScenes(reelId: string): Promise<void> {
 
   const worldBible = WorldBibleSchema.parse(channel.worldBible)
 
+  // Story Bible (from analyze_story). null = not analyzed → fail-soft: the director describes entities
+  // inline (pre-bible behavior) and we skip the perspective override + unresolved-ref QA.
+  const analyzed = reel.storyBible ? StoryBibleSchema.parse(reel.storyBible) : null
+  const storyBible = analyzed ?? EMPTY_STORY_BIBLE
+
   // Scene count is BEAT-driven, not clock-driven: give the director a length-scaled range
   // (~1 scene / 9-16s) and let the story's dramatic beats decide the exact number within it.
   // The peak line (story.twistAnchor = the LLM's peakMoment) is passed so the climax always
@@ -72,7 +77,10 @@ export async function breakdownScenes(reelId: string): Promise<void> {
   }
 
   const { system, userMessage } = buildScenesPrompt({
-    worldBibleJson: JSON.stringify(worldBible, null, 2),
+    bibleEntitiesJson: JSON.stringify(storyBible.entities, null, 2),
+    // Authoritative perspective only when analysis actually ran; else let the director detect it.
+    narratorPerspective: analyzed ? analyzed.continuity.narratorPerspective : undefined,
+    directorNotes: storyBible.constraints.directorNotes,
     era: worldBible.era,
     regionDescriptor: worldBible.region,
     nicheDescription: channel.nicheDescription ?? '',
@@ -83,7 +91,8 @@ export async function breakdownScenes(reelId: string): Promise<void> {
     peakMoment,
   })
 
-  const inputHash = buildInputHash(SCENES_V1_VERSION, { narration: story.body, channelId: channel.id, minScenes, maxScenes, peakMoment })
+  // Bible folded into the hash: editing the bible (or re-analysis) re-triggers the breakdown.
+  const inputHash = buildInputHash(SCENES_V1_VERSION, { narration: story.body, channelId: channel.id, minScenes, maxScenes, peakMoment, storyBible })
 
   const result = await runStep(
     { reelId, stepName: 'breakdown_scenes', inputHash },
@@ -132,7 +141,17 @@ export async function breakdownScenes(reelId: string): Promise<void> {
       // Log residual notes (post-repair) so real failures accumulate without blocking the render.
       const residualTiling = validateSceneTiling(story.body, final.scenes.map((s) => s.narrationText))
       const finalQa = reviewSceneBreakdown(qaInput(final.scenes))
-      const notes = [...(residualTiling ? [residualTiling] : []), ...finalQa.errors, ...finalQa.warnings]
+      // Continuity observability: a scene that references a bible id the assembler can't resolve loses its
+      // splice SILENTLY (the prompt still renders). Surface those misses as a note rather than a silent drop.
+      const unresolvedRefs = analyzed
+        ? [...new Set(final.scenes.flatMap((s) => resolveEntities(storyBible, { primaryEntity: s.primaryEntity ?? null, supportingEntities: s.supportingEntities ?? [] }).unresolved))]
+        : []
+      const notes = [
+        ...(residualTiling ? [residualTiling] : []),
+        ...finalQa.errors,
+        ...finalQa.warnings,
+        ...(unresolvedRefs.length ? [`unresolved bible refs: ${unresolvedRefs.join(', ')}`] : []),
+      ]
       if (notes.length > 0) {
         console.warn(`[scene-qa] ${reelId.slice(0, 8)} ${notes.length} note(s):\n  - ${notes.join('\n  - ')}`)
       }
@@ -152,12 +171,15 @@ export async function breakdownScenes(reelId: string): Promise<void> {
         reelId,
         idx: i + 1,
         narrationText: s.narrationText,
-        visualPrompt: s.imagePrompt,   // content only; style injected in generate_images
+        visualPrompt: s.imagePrompt,   // content only; style + bible entities injected in generate_images
         motionPrompt: cameraMovePrompt(s.cameraMove),  // LLM's camera-move pick → animator motion text
         tier: s.tier,
         isHero: s.tier === 'video', // durable hero designation = the LLM's video pick (tier may change later)
         mood: s.mood,
         location: s.location,
+        primaryEntity: s.primaryEntity ?? null,        // bible refs → expanded by assembleImagePrompt (generate_images)
+        supportingEntities: s.supportingEntities ?? [],
+        sceneIntent: s.sceneIntent ?? null,
       })
       .onConflictDoUpdate({
         target: [scenes.reelId, scenes.idx],
@@ -169,6 +191,9 @@ export async function breakdownScenes(reelId: string): Promise<void> {
           isHero: s.tier === 'video',
           mood: s.mood,
           location: s.location,
+          primaryEntity: s.primaryEntity ?? null,
+          supportingEntities: s.supportingEntities ?? [],
+          sceneIntent: s.sceneIntent ?? null,
         },
       })
   }

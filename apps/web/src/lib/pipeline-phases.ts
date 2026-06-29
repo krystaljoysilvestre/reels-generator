@@ -1,4 +1,4 @@
-// Maps the 14 canonical PIPELINE_STEPS into 5 human-readable phases for progress UI, plus channel-themed
+// Maps the canonical PIPELINE_STEPS into 5 human-readable phases for progress UI, plus channel-themed
 // "what's happening" ticker copy for the loaders. reelStatus is authoritative for the high-level phase;
 // per-step rows refine which phase is actively running. A missing step row counts as pending.
 
@@ -6,7 +6,7 @@ export type PhaseKey = 'writing' | 'storyboarding' | 'filming' | 'scoring' | 'fi
 
 export const PHASES: Array<{ key: PhaseKey; label: string; steps: string[] }> = [
   { key: 'writing', label: 'Writing', steps: ['generate_story', 'review_story'] },
-  { key: 'storyboarding', label: 'Storyboarding', steps: ['breakdown_scenes'] },
+  { key: 'storyboarding', label: 'Storyboarding', steps: ['analyze_story', 'breakdown_scenes'] },
   { key: 'filming', label: 'Filming', steps: ['generate_images', 'generate_tts', 'compute_timings', 'generate_sfx', 'animate_scenes'] },
   { key: 'scoring', label: 'Scoring', steps: ['generate_music', 'mix_audio'] },
   { key: 'finishing', label: 'Finishing', steps: ['render', 'render_qa', 'spot_check'] },

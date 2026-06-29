@@ -7,6 +7,7 @@ export function stepLabel(name: PipelineStepName | string): string {
     generate_story:       'Story',
     review_story:         'Review',
     annotate_audio_script:'Audio script',
+    analyze_story:        'Story bible',
     breakdown_scenes:     'Scenes',
     generate_images:      'Images',
     generate_tts:         'Voiceover',

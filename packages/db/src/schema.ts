@@ -153,6 +153,10 @@ export const reels = pgTable(
     language: text('language').notNull().default('tagalog'),
     voiceId: text('voice_id'),
     audioScript: jsonb('audio_script'),   // annotated audio script (docs/04 §3)
+    // Per-reel Story Bible (StoryBible) — the symbol table of recurring entities the scene breakdown
+    // references and the assembler splices for visual continuity (see specs/story-bible.md). Written by
+    // analyze_story; null = not yet analyzed (the pipeline degrades to invent-inline, never fails).
+    storyBible: jsonb('story_bible'),
     timings: jsonb('timings'),             // ComputeTimingsOutput (docs/08)
     voiceSettings: jsonb('voice_settings'), // per-reel narrator DELIVERY override (ElevenLabs voice_settings); null = auto-derive from the story's mood
     musicKey: text('music_key'),           // R2 key of THIS reel's AI bed — the INTRO/build section (musicMode='ai'); null otherwise
@@ -235,6 +239,11 @@ export const scenes = pgTable(
     // Canonical place label (e.g. "rented bedroom"). Scenes sharing a location are kept visually
     // continuous: the location's first scene is the anchor, the rest are image-to-image'd from it.
     location: text('location'),
+    // Story Bible references (see specs/story-bible.md). The breakdown emits entity IDS; the image
+    // assembler splices their frozen canonical descriptions so recurring elements don't drift.
+    primaryEntity: text('primary_entity'),                                  // the bible id the shot leads with; null = un-canonical subject
+    supportingEntities: text('supporting_entities').array().notNull().default([]), // other bible ids in frame
+    sceneIntent: text('scene_intent'),                                       // "what the audience should notice first"
   },
   (t) => ({
     idxReel: index('idx_scenes_reel').on(t.reelId),

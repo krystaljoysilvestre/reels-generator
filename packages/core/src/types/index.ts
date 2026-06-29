@@ -1,4 +1,5 @@
 export * from './channel.js'
+export * from './story-bible.js'
 export * from './audio-script.js'
 export * from './timings.js'
 export * from './story.js'

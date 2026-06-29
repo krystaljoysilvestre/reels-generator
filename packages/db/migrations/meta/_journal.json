@@ -183,6 +183,20 @@
       "when": 1782371088057,
       "tag": "0025_clear_talkback",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1782716930993,
+      "tag": "0026_moaning_daredevil",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1782717970248,
+      "tag": "0027_salty_expediter",
+      "breakpoints": true
     }
   ]
 }

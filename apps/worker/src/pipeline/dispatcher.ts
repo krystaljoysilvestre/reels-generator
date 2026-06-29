@@ -11,6 +11,7 @@ import { autoCrossGate } from './auto-gate.js'
 import {
   generateStory,
   annotateAudioScript,
+  analyzeStory,
   breakdownScenes,
   generateTts,
   runComputeTimings,
@@ -42,6 +43,9 @@ export async function dispatchPipelineJob(job: Job<PipelineJobData>): Promise<vo
         break
       case 'annotate_audio_script':
         await annotateAudioScript(reelId)
+        break
+      case 'analyze_story':
+        await analyzeStory(reelId)
         break
       case 'breakdown_scenes':
         await breakdownScenes(reelId)

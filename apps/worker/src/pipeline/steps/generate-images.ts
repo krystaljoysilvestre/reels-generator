@@ -1,7 +1,7 @@
 import { eq, and } from 'drizzle-orm'
 import { getDb, reels, scenes, assets, channels, stories } from '@reels/db'
 import { generateImage, buildInputHash, ContentFilterError, llmCall, downloadBuffer, SCENE_IMAGE_MODEL, SCENE_IMAGE_QUALITY } from '@reels/providers'
-import { assembleImagePrompt, assembleNegativePrompt, PLATFORM_PRESETS } from '@reels/core'
+import { assembleImagePrompt, assembleNegativePrompt, PLATFORM_PRESETS, StoryBibleSchema } from '@reels/core'
 import { z } from 'zod'
 import { buildRephrasePrompt, REPHRASE_V1_VERSION, buildImageQAPrompt, IMAGE_QA_V1_VERSION, ImageQASchema } from '../../prompts-bridge.js'
 import { runStep } from '../harness.js'
@@ -72,6 +72,11 @@ export async function generateImages(reelId: string): Promise<void> {
   ])
   if (!channel) throw new Error(`Channel not found: ${reel.channelId}`)
 
+  // Story Bible (from analyze_story). null = not analyzed → assembleImagePrompt falls back to the plain
+  // style+content form (pre-bible behavior). When present, each scene's entity refs expand to the bible's
+  // frozen canonical descriptions, spliced identically across scenes (see specs/story-bible.md).
+  const storyBible = reel.storyBible ? StoryBibleSchema.parse(reel.storyBible) : null
+
   // Generate at the channel's platform aspect (reels are 9:16) so scene images fill the frame.
   const aspect = (PLATFORM_PRESETS[(channel.targetPlatform ?? 'all') as keyof typeof PLATFORM_PRESETS] ?? PLATFORM_PRESETS.all).aspect
 
@@ -83,8 +88,12 @@ export async function generateImages(reelId: string): Promise<void> {
   const isQATarget = (s: (typeof pending)[number]) => s.tier === 'video' || (peak !== '' && s.narrationText.includes(peak))
 
   const processScene = async (scene: (typeof pending)[number]) => {
-    // Server-side style suffix injection — the LLM never sees this
-    const finalPrompt = assembleImagePrompt(scene.visualPrompt!, channel.stylePreset)
+    // Server-side assembly — the LLM never sees this. Style suffix + (when analyzed) the scene's bible
+    // entities expanded to their frozen canonical descriptions, so recurring elements don't drift.
+    const expansion = storyBible
+      ? { bible: storyBible, primaryEntity: scene.primaryEntity, supportingEntities: scene.supportingEntities }
+      : undefined
+    const finalPrompt = assembleImagePrompt(scene.visualPrompt!, channel.stylePreset, expansion)
     const negativePrompt = assembleNegativePrompt({ genreCategory: channel.genreCategory })
 
     const inputHash = buildInputHash('generate_images.v1', {
