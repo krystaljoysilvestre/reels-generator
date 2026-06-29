@@ -1,6 +1,7 @@
 import { fal } from '@fal-ai/client'
 import { z } from 'zod'
 import { uploadBuffer, downloadBuffer } from '../shared/storage.js'
+import { withProviderLimit } from '../shared/limiter.js'
 import {
   ContentFilterError,
   ProviderError,
@@ -83,13 +84,13 @@ export async function generateVideo(params: VideoGenParams): Promise<ProviderRes
     const imgBuf = await downloadBuffer(params.imageStorageKey)
     const imgBase64 = `data:image/webp;base64,${imgBuf.toString('base64')}`
 
-    const result = await fal.subscribe(modelId, {
+    const result = await withProviderLimit('fal', () => fal.subscribe(modelId, {
       input: {
         image_url: imgBase64,
         prompt: params.motionPrompt,
         duration: durationSec,
       },
-    })
+    }))
 
     const parsed = FalVideoOutputSchema.safeParse(result.data)
     if (!parsed.success) {

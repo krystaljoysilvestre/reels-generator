@@ -2,6 +2,7 @@ import { ElevenLabsClient } from 'elevenlabs'
 import type { Readable } from 'node:stream'
 import { uploadBuffer } from '../shared/storage.js'
 import { ProviderError, ProviderRateLimitError } from '../shared/types.js'
+import { withProviderLimit } from '../shared/limiter.js'
 import type { AlignedChar, SfxResult, TtsProvider, TtsResult } from './types.js'
 import type { VoiceSettings } from '@reels/core'
 
@@ -139,13 +140,13 @@ export class ElevenLabsTtsProvider implements TtsProvider {
     try {
       // convertWithTimestamps returns AudioWithTimestampsResponse (not a stream)
       // narration submitted verbatim — no pre-processing [M10]
-      const response = await client.textToSpeech.convertWithTimestamps(params.voiceId, {
+      const response = await withProviderLimit('elevenlabs', () => client.textToSpeech.convertWithTimestamps(params.voiceId, {
         text: params.narration,
         model_id: 'eleven_multilingual_v2',
         output_format: 'mp3_44100_128',
         // Per-reel delivery derived from the story's mood (omitted → ElevenLabs defaults).
         ...(params.voiceSettings ? { voice_settings: params.voiceSettings } : {}),
-      }, TTS_OPTS)
+      }, TTS_OPTS))
 
       const { audio_base64, alignment } = response
 
@@ -192,11 +193,11 @@ export async function generateSfx(params: {
 
   try {
     // textToSoundEffects.convert returns a Readable stream
-    const stream = (await client.textToSoundEffects.convert({
+    const stream = (await withProviderLimit('elevenlabs', () => client.textToSoundEffects.convert({
       text: params.prompt,
       duration_seconds: params.durationSec ?? 2,
       prompt_influence: 0.3,
-    }, SFX_OPTS)) as Readable
+    }, SFX_OPTS))) as Readable
 
     const audioBuffer = await readableToBuffer(stream)
     const slug = params.anchorLabel.toLowerCase().replace(/\s+/g, '-').slice(0, 40)
@@ -226,12 +227,12 @@ export async function generateSpeechClip(params: {
 }): Promise<{ audioStorageKey: string; durationMs: number; costCents: number }> {
   const client = getClient()
   try {
-    const response = await client.textToSpeech.convertWithTimestamps(params.voiceId, {
+    const response = await withProviderLimit('elevenlabs', () => client.textToSpeech.convertWithTimestamps(params.voiceId, {
       text: params.text,
       model_id: 'eleven_multilingual_v2',
       output_format: 'mp3_44100_128',
       ...(params.voiceSettings ? { voice_settings: params.voiceSettings } : {}),
-    }, TTS_OPTS)
+    }, TTS_OPTS))
     const audioBuffer = Buffer.from(response.audio_base64, 'base64')
     const ends = response.alignment?.character_end_times_seconds
     const durationMs = ends && ends.length ? Math.ceil(ends[ends.length - 1]! * 1000) : 0
@@ -272,7 +273,7 @@ export async function generateMusic(params: {
   const musicLengthMs = Math.min(MUSIC_MAX_MS, Math.max(MUSIC_MIN_MS, Math.round(params.lengthMs)))
 
   try {
-    const res = await fetch('https://api.elevenlabs.io/v1/music', {
+    const res = await withProviderLimit('elevenlabs', () => fetch('https://api.elevenlabs.io/v1/music', {
       method: 'POST',
       headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json' },
       // force_instrumental GUARANTEES no vocals (prompt text alone doesn't reliably suppress them).
@@ -282,7 +283,7 @@ export async function generateMusic(params: {
         force_instrumental: params.forceInstrumental ?? true,
       }),
       signal: AbortSignal.timeout(180_000),
-    })
+    }))
     if (res.status === 429) throw new ProviderRateLimitError('elevenlabs')
     if (!res.ok) {
       const body = await res.text().catch(() => '')

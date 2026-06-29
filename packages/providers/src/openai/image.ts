@@ -1,5 +1,6 @@
 import OpenAI, { toFile } from 'openai'
 import { uploadBuffer, downloadBuffer } from '../shared/storage.js'
+import { withProviderLimit } from '../shared/limiter.js'
 import {
   ContentFilterError,
   ProviderError,
@@ -59,7 +60,7 @@ export async function generateImage(params: ImageGenParams): Promise<ProviderRes
       // Edit from the reference image: keep its room/door/light + framing, render THIS scene's action.
       const refBuf = await downloadBuffer(params.referenceImageKey)
       const refFile = await toFile(refBuf, 'reference.webp', { type: 'image/webp' })
-      const res = await client.images.edit({
+      const res = await withProviderLimit('openai', () => client.images.edit({
         model: SCENE_IMAGE_MODEL,
         image: refFile,
         prompt,
@@ -67,17 +68,17 @@ export async function generateImage(params: ImageGenParams): Promise<ProviderRes
         quality,
         n: 1,
         output_format: 'webp',
-      })
+      }))
       b64 = res.data?.[0]?.b64_json
     } else {
-      const res = await client.images.generate({
+      const res = await withProviderLimit('openai', () => client.images.generate({
         model: SCENE_IMAGE_MODEL,
         prompt,
         size,
         quality,
         n: 1,
         output_format: 'webp',
-      })
+      }))
       b64 = res.data?.[0]?.b64_json
     }
 

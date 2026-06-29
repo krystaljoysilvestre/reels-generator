@@ -48,11 +48,7 @@ export async function runComputeTimings(reelId: string): Promise<void> {
   reelScenes.sort((a, b) => a.idx - b.idx)
   if (reelScenes.length === 0) throw new Error(`No scenes for reel: ${reelId}`)
 
-  // Load alignment from the voiceover asset meta
-  const voiceoverAsset = await db.query.assets.findFirst({
-    where: eq(assets.reelId, reelId),
-  })
-  // Find the voiceover asset (kind = 'voiceover')
+  // Load alignment (the master clock) from the voiceover asset meta
   const allAssets = await db.query.assets.findMany({ where: eq(assets.reelId, reelId) })
   const voiceover = allAssets.find((a) => a.kind === 'voiceover')
   if (!voiceover) throw new Error(`No voiceover asset for reel: ${reelId}`)

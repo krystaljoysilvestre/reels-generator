@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import OpenAI from 'openai'
 import type { z } from 'zod'
 import { ProviderError } from '../shared/types.js'
+import { withProviderLimit } from '../shared/limiter.js'
 import { buildInputHash } from './input-hash.js'
 
 // Provider-neutral LLM client. Generation runs on OpenAI by default; QA passes opt into
@@ -160,9 +161,12 @@ async function callOpenAI(model: string, system: string, messages: LlmMessage[],
 }
 
 async function transport(provider: LlmProvider, model: string, system: string, messages: LlmMessage[], maxTokens: number): Promise<TransportResult> {
-  return provider === 'anthropic'
-    ? callAnthropic(model, system, messages, maxTokens)
-    : callOpenAI(model, system, messages, maxTokens)
+  // Per-provider concurrency cap (the real throttle — see shared/limiter.ts).
+  return withProviderLimit(provider === 'anthropic' ? 'anthropic' : 'openai', () =>
+    provider === 'anthropic'
+      ? callAnthropic(model, system, messages, maxTokens)
+      : callOpenAI(model, system, messages, maxTokens),
+  )
 }
 
 export async function llmCall<T>(opts: LlmCallOptions<T>): Promise<LlmResult<T>> {

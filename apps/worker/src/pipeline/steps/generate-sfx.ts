@@ -71,8 +71,14 @@ export async function generateSfx(reelId: string): Promise<void> {
   await runStep(
     { reelId, stepName: 'generate_sfx', inputHash },
     async () => {
+      // Per-cue idempotency: if this batch threw partway on a prior attempt, the cues that DID complete
+      // already have an asset row. Skip those so a retry doesn't re-call (re-pay) ElevenLabs for them.
+      const existingSfx = await db.query.assets.findMany({ where: and(eq(assets.reelId, reelId), eq(assets.kind, 'sfx')) })
+      const doneAnchors = new Set(existingSfx.map((a) => (a.meta as { anchor?: string }).anchor).filter(Boolean))
+
       let totalCost = 0
       for (const cue of sfxCues) {
+        if (doneAnchors.has(cue.anchor)) continue // already generated on a prior attempt — don't re-pay
         const sfxResult = await elGenerateSfx({
           prompt: cue.prompt,
           reelId,

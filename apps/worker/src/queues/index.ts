@@ -7,7 +7,11 @@ import { QUEUE, getConnection, type QueueName } from '@reels/queue'
 export { QUEUE, makeQueue, getConnection, enqueueStep, resolveNextStep, PIPELINE_CHAIN } from '@reels/queue'
 export type { QueueName, PipelineJobData } from '@reels/queue'
 
-// Rate-limit configs per provider (E2.5).
+// BullMQ per-QUEUE limiters. NOTE: only the PIPELINE worker is instantiated (see worker/index.ts), and
+// provider calls run in-process inside pipeline steps — they are never enqueued to the per-provider
+// queues below, so those limiters are inert. The REAL per-provider throttle is the concurrency semaphore
+// in @reels/providers (shared/limiter.ts). The PIPELINE entry below does bound how many pipeline jobs
+// start per minute. Keep the provider entries only if/when those queues get their own workers.
 const RATE_LIMITS: Record<QueueName, RateLimiterOptions> = {
   [QUEUE.PIPELINE]:        { max: 50, duration: 60_000 },
   [QUEUE.LLM]:             { max: 40, duration: 60_000 },
