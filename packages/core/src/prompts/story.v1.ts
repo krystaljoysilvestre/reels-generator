@@ -26,12 +26,13 @@ Niche: ${v.nicheDescription}
 Tone calibration (0–10 scales): ${v.toneConfig}
 Language for this story: ${v.language}${
     v.language.toLowerCase() === 'taglish'
-      ? `\nTAGLISH — write the way a real ${v.audienceDescriptor} actually talks, not a textbook:
-- Tagalog is the SPINE — its grammar and particles carry the sentence (na, naman, kasi, talaga, parang, yung, eh, pala, ba). English slips in only where people genuinely switch: modern things (phone, text, signal, parking, CR), quick emphasis, and casual interjections (grabe, omg).
-- Conversational and SPOKEN — never the deep, literary Tagalog of a news anchor or a school essay.
-- NEVER translate English idioms or sentence patterns word-for-word into Tagalog.
-- Natural: "Grabe, parang may nakatingin sa'kin sa dilim." / "Hindi ako makagalaw, na-freeze ako." / "Tumunog yung phone ko, 3 AM, walang caller ID."
-- Avoid (stilted / over-translated): "Labis akong natakot sapagkat mayroong nilalang na nakamasid sa akin." / "Hindi ako makakilos sa aking kinatatayuan."`
+      ? `\nTAGLISH — sound like a real ${v.audienceDescriptor} talking to a close friend, not a textbook or a news anchor. Don't "write Taglish" as a rule — just say it the way this person would actually say it out loud.
+- Use whatever mix of Tagalog and English is natural for this narrator and moment, and NEVER force either. Some lines come out almost pure Tagalog, some mostly English, most a natural mix — let it fall where it falls; don't balance it sentence by sentence.
+- Modern things stay in English the way people really say them (phone, text, CR, parking, signal, Messenger, screenshot).
+- Don't reach for an English word when the Tagalog one is what someone would actually say, and don't translate a phrase just because it's English. Nobody says "labis akong natakot," "may something sa likod," or "walang trace" — they say "grabe, kinabahan ako," "may kakaiba sa likod," "walang bakas."
+- Write for the EAR, not the page: short lines, hesitations, self-corrections, a thought that trails off.
+Good: "Akala ko hangin lang." / "Paglingon ko, wala naman." / "Ewan ko ba, pero simula nun…" / "Nag-text yung kapatid ko nung mismong narinig ko 'yun." / "Promise, wala akong iniinom."
+Avoid: deep/literary Tagalog ("Hindi ako makakilos sa aking kinatatayuan"); forced English inserts ("gusto magstay," "this summer"); perfectly balanced code-switching in every line.`
       : ''
   }
 

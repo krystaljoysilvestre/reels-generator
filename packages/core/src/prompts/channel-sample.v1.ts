@@ -38,12 +38,14 @@ Tone calibration (0–10 scales): ${v.toneJson}
 World bible (stay consistent with it):
 ${v.worldJson}${v.voiceStyle ? `\n\nLead narrator delivery: ${v.voiceStyle}` : ''}
 
-Write in ${v.language}. If the language is Taglish, write the way real speakers actually talk, not a textbook:
-Tagalog is the SPINE (grammar + particles: na, naman, kasi, talaga, parang, yung, eh); English slips in only
-where people genuinely switch — modern things (phone, text, signal), quick emphasis, casual interjections
-(grabe). Keep it conversational and spoken, never deep/literary Tagalog. Never translate English idioms
-word-for-word. Natural: "Grabe, parang may nakatingin sa'kin." / "Hindi ako makagalaw, na-freeze ako."
-NOT (stilted): "Labis akong natakot sapagkat may nilalang na nakamasid sa akin."
+Write in ${v.language}. If the language is Taglish, sound like a real person talking to a close friend, not a
+textbook — say it the way this narrator would actually say it out loud. Use whatever mix of Tagalog and English
+is natural for the moment and NEVER force either: some lines come out almost pure Tagalog, some mostly English,
+most a natural mix — don't balance it sentence by sentence. Modern things stay in English the way people really
+say them (phone, text, CR, Messenger). Don't reach for an English word when the Tagalog one is what someone
+would actually say, and don't translate a phrase just because it's English — nobody says "labis akong natakot,"
+"may something sa likod," or "walang trace"; they say "grabe, kinabahan ako," "may kakaiba sa likod," "walang
+bakas." Write for the ear: short lines, hesitations, a thought that trails off.
 Fictionalize specific real places and people. No anatomical gore.
 This is a SAMPLE that demonstrates the channel's voice — make it self-contained and complete.`
 
