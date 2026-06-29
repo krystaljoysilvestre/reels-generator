@@ -1,4 +1,4 @@
-// Per-reel cost accumulation (CLAUDE.md non-negotiable rule 5).
+// Per-reel cost accumulation.
 // Halt + flag if a reel exceeds its budget cap. [M7]
 
 export const DEFAULT_BUDGET_CAPS_CENTS = {

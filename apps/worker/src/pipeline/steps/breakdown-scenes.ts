@@ -7,7 +7,7 @@ import { runStep } from '../harness.js'
 
 // breakdown_scenes — step 3 (docs/02 §4)
 // Scenes emit full contiguous narration substrings [M9].
-// Style suffix is NOT in the prompt — injected server-side in generate_images [CLAUDE.md rule 2].
+// Style suffix is NOT in the prompt — injected server-side in generate_images (the system owns the look).
 
 function validateSceneTiling(narration: string, sceneTexts: string[]): string | null {
   // Verify scenes tile the narration gaplessly (same check as compute_timings will do)

@@ -34,7 +34,7 @@ export interface SceneQAResult {
 
 const MAX_VIDEO_TIERS = 3
 
-// Style/medium words the image prompt must NOT contain — the system owns the look [CLAUDE.md rule 2].
+// Style/medium words the image prompt must NOT contain — the system owns the look.
 // Kept tight + word-boundary matched to avoid false hits (e.g. "render" inside "tenderness").
 const STYLE_LEAK_WORDS = [
   'cinematic', 'photograph', 'photorealistic', 'photo-realistic', 'hyperrealistic', 'hyper-realistic',

@@ -1,4 +1,4 @@
-// Reel state machine (docs/02 §4, CLAUDE.md non-negotiable rule).
+// Reel state machine.
 // Illegal transitions throw — never silently accept bad state.
 
 export type ReelStatus =

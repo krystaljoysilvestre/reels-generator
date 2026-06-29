@@ -252,7 +252,7 @@ export const assets = pgTable(
     channelId: uuid('channel_id').references(() => channels.id, { onDelete: 'cascade' }),
     kind: assetKindEnum('kind').notNull(),
     storageKey: text('storage_key').notNull(),
-    provider: text('provider').notNull(), // 'elevenlabs' | 'fal' | 'anthropic' | 'local'
+    provider: text('provider').notNull(), // 'openai' | 'elevenlabs' | 'fal' | 'anthropic' | 'local'
     providerJobId: text('provider_job_id'),
     costCents: integer('cost_cents').notNull().default(0),
     meta: jsonb('meta').notNull().default({}), // word timestamps, durations, etc.

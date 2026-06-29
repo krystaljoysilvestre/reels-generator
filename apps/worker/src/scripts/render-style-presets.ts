@@ -17,12 +17,10 @@ const CONCURRENCY = 4
 async function main() {
   // Dynamic import AFTER env is loaded, so provider clients see the keys.
   const {
-    generateImage, assembleImagePrompt, assembleNegativePrompt, FalEngineSchema,
-    SCENE_IMAGE_MODEL_ID, SCENE_IMAGE_GUIDANCE, SCENE_IMAGE_STEPS,
+    generateImage, assembleImagePrompt, assembleNegativePrompt, SCENE_IMAGE_QUALITY,
   } = await import('@reels/providers')
   const { STYLE_PRESETS, stylePresetThumbKey } = await import('@reels/core')
 
-  const engine = FalEngineSchema.parse({ imageModelId: SCENE_IMAGE_MODEL_ID })
   let totalCents = 0
   let ok = 0
 
@@ -34,9 +32,7 @@ async function main() {
         storageKey: stylePresetThumbKey(p.id),
         reelId: 'style-presets',
         sceneIdx: 0,
-        engine,
-        guidanceScale: SCENE_IMAGE_GUIDANCE,
-        numInferenceSteps: SCENE_IMAGE_STEPS,
+        quality: SCENE_IMAGE_QUALITY,
       })
       totalCents += r.costCents ?? 0
       ok++

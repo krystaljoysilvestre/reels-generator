@@ -118,7 +118,7 @@ export async function GET(req: NextRequest) {
     hashtags,
   ].join('\n')
 
-  // AI disclosure note (required by platform policies — CLAUDE.md rule 7)
+  // AI disclosure note (required by platform policies)
   const disclosure = [
     'AI DISCLOSURE',
     '─────────────',

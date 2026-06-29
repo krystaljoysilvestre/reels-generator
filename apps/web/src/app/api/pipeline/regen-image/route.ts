@@ -2,7 +2,7 @@ import type { NextRequest} from 'next/server';
 import { NextResponse } from 'next/server'
 import { getDb, scenes, assets, channels, reels } from '@reels/db'
 import { eq, and, inArray } from 'drizzle-orm'
-import { generateImage, FalEngineSchema, ContentFilterError, ProviderRateLimitError, llmCall, SCENE_IMAGE_MODEL_ID, SCENE_IMAGE_GUIDANCE, SCENE_IMAGE_STEPS } from '@reels/providers'
+import { generateImage, ContentFilterError, ProviderRateLimitError, llmCall, SCENE_IMAGE_QUALITY } from '@reels/providers'
 import { assembleImagePrompt, assembleNegativePrompt } from '@reels/core'
 import { buildReviseScenePrompt, REVISE_SCENE_V1_VERSION, ReviseSceneSchema } from '@reels/core/prompts/revise-scene.v1'
 import { getSession } from '@/lib/auth'
@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
   if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   // `instruction` = an optional plain-language change ("lights off", "show the old house instead"); it's
-  // turned into a proper image prompt by the LLM below, never fed to flux raw. The same LLM call also
+  // turned into a proper image prompt by the LLM below, never fed to the image model raw. The same LLM call also
   // classifies the change so the system silently picks how to regenerate (see `improve` below) — the
   // operator never has to choose between "refine" and "fresh take".
   const { reelId, sceneIdx, instruction } = (await req.json()) as {
@@ -29,10 +29,9 @@ export async function POST(req: NextRequest) {
   const basePrompt = (scene.visualPrompt || '').trim()
   if (!basePrompt) return NextResponse.json({ error: 'No visual prompt' }, { status: 400 })
 
-  // A plain-language change goes through the LLM, NOT straight into flux. flux can't follow instructions —
-  // feeding it "show the old house instead" as tokens produces muddy, confused images. So the LLM bakes the
-  // change into a proper, content-only image prompt (same conventions scenes.v1 produces); flux then always
-  // gets a well-formed description. The result is persisted as the scene's new description (below).
+  // A plain-language change goes through the LLM first, NOT straight into the image model. The LLM bakes the
+  // change into a proper, content-only image prompt (same conventions scenes.v1 produces) so the image model
+  // always gets a well-formed description. The result is persisted as the scene's new description (below).
   const tweak = instruction?.trim()
   let contentPrompt = basePrompt
   // No instruction → a plain fresh re-roll. With an instruction, the LLM decides: an additive tweak
@@ -40,7 +39,7 @@ export async function POST(req: NextRequest) {
   let improve = false
   if (tweak) {
     try {
-      const { system, userMessage } = buildReviseScenePrompt(basePrompt, tweak)
+      const { system, userMessage } = buildReviseScenePrompt(basePrompt, tweak, { genreCategory: channel.genreCategory })
       const revised = await llmCall({
         templateVersion: REVISE_SCENE_V1_VERSION,
         schema: ReviseSceneSchema,
@@ -55,10 +54,9 @@ export async function POST(req: NextRequest) {
   }
   // The style preset always leads (system owns style); the content (LLM-revised or operator-edited) follows.
   const finalPrompt = assembleImagePrompt(contentPrompt, channel.stylePreset)
-  // Render with the shared scene recipe so a regenerated image matches the rest of the reel exactly.
-  const engine = FalEngineSchema.parse({ imageModelId: SCENE_IMAGE_MODEL_ID })
 
-  // "Improve" → image-to-image from the current image at low strength: keep the composition, refine it.
+  // "Improve" → edit FROM the current image: anchor the scene's composition/location while letting the
+  // operator's tweak land. A subject/framing swap re-rolls from scratch (the "replace" path's job) instead.
   const currentImage = improve && scene.imageAssetId
     ? await db.query.assets.findFirst({ where: eq(assets.id, scene.imageAssetId) })
     : null
@@ -67,13 +65,11 @@ export async function POST(req: NextRequest) {
   try {
     result = await generateImage({
       prompt: finalPrompt,
-      negativePrompt: assembleNegativePrompt(),
+      negativePrompt: assembleNegativePrompt({ genreCategory: channel.genreCategory }),
       reelId,
       sceneIdx,
-      engine,
-      guidanceScale: SCENE_IMAGE_GUIDANCE,
-      numInferenceSteps: SCENE_IMAGE_STEPS,
-      ...(currentImage ? { referenceImageKey: currentImage.storageKey, strength: 0.45 } : {}),
+      quality: SCENE_IMAGE_QUALITY,
+      ...(currentImage ? { referenceImageKey: currentImage.storageKey } : {}),
     })
   } catch (err) {
     // Surface a usable message instead of an opaque 500 — a content-filter rejection on the tweak is the
@@ -92,7 +88,7 @@ export async function POST(req: NextRequest) {
     channelId: channel.id,
     kind: 'image',
     storageKey: result.asset.storageKey,
-    provider: 'fal',
+    provider: 'openai',
     costCents: result.costCents,
     meta: result.asset.meta,
   }).returning()

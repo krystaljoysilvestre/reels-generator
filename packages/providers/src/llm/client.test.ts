@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { buildInputHash } from './input-hash.js'
 
 // Unit tests for parsing/validation logic — no network calls.
-// Integration tests (real Anthropic API) are env-flagged and live elsewhere.
+// Integration tests (real provider APIs) are env-flagged and live elsewhere.
 
 describe('input-hash', () => {
   it('produces a deterministic 16-char hex hash', () => {

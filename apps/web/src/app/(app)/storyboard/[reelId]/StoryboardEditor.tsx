@@ -60,6 +60,12 @@ export function StoryboardEditor({
   const [activeVar, setActiveVar] = useState<Record<number, number>>({}) // which video variation plays per scene tile
   const [loadedMedia, setLoadedMedia] = useState<Set<number>>(new Set()) // scenes whose image/video has loaded (for develop-in)
   const markLoaded = (idx: number) => setLoadedMedia((s) => (s.has(idx) ? s : new Set(s).add(idx)))
+  // Per-scene cache-bust token, bumped on every successful reshoot. Each regen OVERWRITES the same scene
+  // storage key, so the only thing that forces the <img> to re-fetch is a changing URL. Relying on
+  // router.refresh() to deliver a new asset-id ?v= is unreliable (stale client router cache → src never
+  // changes → browser keeps the already-loaded image → "nothing changed"). Stamping our own token the
+  // instant the regen returns guarantees the src changes and the fresh image loads.
+  const [imageBust, setImageBust] = useState<Record<number, number>>({})
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null) // master-detail: which scene the inspector shows
   const [timelineView, setTimelineView] = useState<'strip' | 'grid'>('strip') // thumbnail rail layout
   const scrollRef = useRef<HTMLDivElement>(null) // the single scene scroll container; holds the --shrink var for the rail
@@ -209,10 +215,12 @@ export function StoryboardEditor({
       toast(await failMessage(res, 'Could not reshoot this scene.'), res.status === 429 ? 'info' : 'error')
       return
     }
-    // The regenerated image gets a NEW asset id → a new URL (page.tsx cache-busts on it), so the tile
-    // swaps once it lands. Clear this scene's loaded flag so the develop-in reveal plays for the fresh
-    // image instead of holding the stale one. A new image also invalidates any motion (the clip was
-    // animated off the old image): the route reset the scene to a still, so reflect that locally too.
+    // Force the <img> to re-fetch the (overwritten) scene image NOW — independent of whether
+    // router.refresh() manages to push a fresh asset-id ?v= through the client router cache. Clear this
+    // scene's loaded flag so the develop-in reveal plays for the fresh image instead of holding the stale
+    // one. A new image also invalidates any motion (the clip was animated off the old image): the route
+    // reset the scene to a still, so reflect that locally too.
+    setImageBust((b) => ({ ...b, [sceneIdx]: (b[sceneIdx] ?? 0) + 1 }))
     setLoadedMedia((s) => { const n = new Set(s); n.delete(sceneIdx); return n })
     setScenes((prev) => prev.map((s) => (s.idx === sceneIdx ? { ...s, tier: 'still' } : s)))
     setLoading(null)
@@ -512,6 +520,14 @@ export function StoryboardEditor({
     <div className="h-0.5 flex-shrink-0 animate-think" style={{ ['--think-tint' as string]: moodTint }} aria-hidden />
   ) : null
 
+  // Scene image URLs with the per-scene reshoot cache-bust folded in, so a just-regenerated image reloads
+  // immediately (see imageBust). Falls back to the server URL untouched when a scene hasn't been reshot.
+  const bustedImages: Record<number, string> = {}
+  for (const [k, url] of Object.entries(sceneImages)) {
+    const idx = Number(k)
+    bustedImages[idx] = imageBust[idx] ? `${url}&b=${imageBust[idx]}` : url
+  }
+
   // The selected scene's editor (or a fallback) — shared between the strip + grid layouts below
   const twistIdx = storyTwistIdx(scenes, story?.twistAnchor)
   const detail = selectedScene ? (
@@ -519,7 +535,7 @@ export function StoryboardEditor({
       key={selectedScene.idx}
       scene={selectedScene}
       beat={sceneBeat(selectedScene.idx, scenes.length, twistIdx)}
-      imgSrc={sceneImages[selectedScene.idx]}
+      imgSrc={bustedImages[selectedScene.idx]}
       variations={sceneVideoVariations[selectedScene.idx] ?? []}
       activeVar={activeVar[selectedScene.idx] ?? 0}
       setActiveVar={setActiveVar}
@@ -836,7 +852,7 @@ export function StoryboardEditor({
           {ambient}
           <SceneTimeline
             scenes={scenes}
-            sceneImages={sceneImages}
+            sceneImages={bustedImages}
             sceneVideoVariations={sceneVideoVariations}
             loadedMedia={loadedMedia}
             markLoaded={markLoaded}

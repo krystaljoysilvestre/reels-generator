@@ -1,5 +1,5 @@
 // channel.v1 — channel-bible derivation template.
-// Given a name + niche description + languages, Claude designs the channel's
+// Given a name + niche description + languages, the model designs the channel's
 // creative profile (tone, visual style DNA, world bible). Voices are NOT derived.
 // Versioned source code. Never edit after a channel ships on this version — bump to v2.
 

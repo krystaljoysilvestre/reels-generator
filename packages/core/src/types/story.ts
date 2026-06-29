@@ -17,7 +17,7 @@ export type StoryOutput = z.infer<typeof StoryOutputSchema>
 export const SceneOutputSchema = z.object({
   idx: z.number().int().positive(),
   narrationText: z.string().min(1),  // full contiguous substring of narration [M9]
-  imagePrompt: z.string().min(1),    // content only; style injected server-side [CLAUDE.md rule 2]
+  imagePrompt: z.string().min(1),    // content only; style injected server-side
   // The LLM picks the best-fitting camera move per scene (friendly preset key); we resolve it to the
   // animator's motion text at breakdown. An invalid value trips the schema's repair loop; cameraMovePrompt
   // also falls back to a slow drift if anything unexpected slips through.

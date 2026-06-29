@@ -1,4 +1,4 @@
-// Languages the pipeline can handle: Claude writes the story in them, and ElevenLabs TTS narrates
+// Languages the pipeline can handle: the model writes the story in them, and ElevenLabs TTS narrates
 // them. "Taglish" is a Tagalog↔English code-switch. A fixed list (no free text) so we never store a
 // language we can't produce. Default is English (set in the wizard); the rest are alphabetical, so the
 // picker reads as niche/region-neutral. (TTS voice coverage varies by language — verify per language

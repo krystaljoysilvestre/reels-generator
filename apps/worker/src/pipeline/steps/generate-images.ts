@@ -1,48 +1,35 @@
 import { eq, and } from 'drizzle-orm'
 import { getDb, reels, scenes, assets, channels, stories } from '@reels/db'
-import { generateImage, buildInputHash, ContentFilterError, FalEngineSchema, llmCall, downloadBuffer, SCENE_IMAGE_MODEL_ID, SCENE_IMAGE_GUIDANCE, SCENE_IMAGE_STEPS } from '@reels/providers'
+import { generateImage, buildInputHash, ContentFilterError, llmCall, downloadBuffer, SCENE_IMAGE_MODEL, SCENE_IMAGE_QUALITY } from '@reels/providers'
 import { assembleImagePrompt, assembleNegativePrompt, PLATFORM_PRESETS } from '@reels/core'
 import { z } from 'zod'
 import { buildRephrasePrompt, REPHRASE_V1_VERSION, buildImageQAPrompt, IMAGE_QA_V1_VERSION, ImageQASchema } from '../../prompts-bridge.js'
 import { runStep } from '../harness.js'
 
-// generate_images — step 4 (docs/02 §4)
-// One image per scene (text-to-image). Style preset injected server-side [CLAUDE.md rule 2].
-// Continuity: same-`location` scenes share a generation SEED (and the director describes the place
-// consistently via the SETTING rule), so the room reads as the same place across shots — WITHOUT the
-// framing/lighting flattening that image-to-image chaining causes (close-ups stay close, day stays day).
-// (img2img is still available in the fal client for true same-shot continuity, just not the default.)
+// generate_images — step 4
+// One image per scene (text-to-image via OpenAI gpt-image-1). Style preset injected server-side — the
+// system owns the look, the LLM only writes scene content. Same-`location` continuity is prompt-driven
+// (the director describes the place consistently via the SETTING rule); gpt-image-1 has no seed control.
 // Content-filter rejection → rephrase.v1 retry (max 3) → mood-only downgrade.
-// HERO (tier:'video') + PEAK scenes additionally get a vision QA pass that re-rolls (fresh seed) when the
-// render clearly contradicts the brief (open door, third-person instead of POV, a figure shown when it
-// should be implied). QA improves rather than gates — a reel is never failed on a verdict.
+// HERO (tier:'video') + PEAK scenes additionally get a vision QA pass that re-rolls when the render clearly
+// contradicts the brief (open door, third-person instead of POV, a figure shown when it should be implied).
+// QA improves rather than gates — a reel is never failed on a verdict.
 
 const MAX_REPHRASE_ATTEMPTS = 3
 
-// Scene-image render recipe (model + guidance + steps) is the shared SCENE_IMAGE_* recipe from
-// @reels/providers, so scene generation, in-editor regenerate, and the onboarding style previews all
-// render identically — what the operator approves at creation is what their scenes look like.
+// Scene-image render recipe (model + quality) is the shared SCENE_IMAGE_* recipe from @reels/providers, so
+// scene generation, in-editor regenerate, and the onboarding style previews all render identically — what
+// the operator approves at creation is what their scenes look like.
 const IMAGE_CONCURRENCY = 4
-const IMAGE_QA_MODEL = 'claude-haiku-4-5-20251001' // vision QA — cheap + sees images
+const IMAGE_QA_MODEL = 'claude-haiku-4-5-20251001' // vision QA runs on Claude (the QA provider) — cheap + sees images
 // hero/peak scenes get ONE extra attempt on a QA fail — a cheap hedge against a transient miss (an
-// occasional open door, a one-off bad roll). Verified empirically: re-rolling a *systematic* flux limit
-// (POV-with-figure, shadow-under-closed-door) never converges, so more attempts just burn cost. When QA
+// occasional open door, a one-off bad roll). Verified empirically: re-rolling a *systematic* image-model
+// limit (POV-with-figure, shadow-under-closed-door) never converges, so more attempts just burn cost. When QA
 // still fails, the image is kept and the verdict is flagged on meta.qaIssues for the operator to act on.
 const MAX_QA_REROLLS = 1
 
-// Stable seed from a string (FNV-1a). Same location string → same seed → flux nudges the room toward
-// a consistent layout/palette across that location's scenes.
-function seedFromString(s: string): number {
-  let h = 2166136261
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i)
-    h = Math.imul(h, 16777619)
-  }
-  return (h >>> 0) % 2_000_000_000
-}
-
-// Anthropic vision needs the real media_type; sniff it from magic bytes rather than trusting the
-// stored extension (fal's output format isn't guaranteed to match the .webp key).
+// Claude vision (QA) needs the real media_type; sniff it from magic bytes rather than trusting the
+// stored extension (the generated format isn't guaranteed to match the .webp key).
 function sniffMediaType(buf: Buffer): 'image/webp' | 'image/jpeg' | 'image/png' {
   if (buf.length >= 12 && buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP') return 'image/webp'
   if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'image/jpeg'
@@ -85,8 +72,6 @@ export async function generateImages(reelId: string): Promise<void> {
   ])
   if (!channel) throw new Error(`Channel not found: ${reel.channelId}`)
 
-  // Engine config — scene images on flux/dev for palette + detail fidelity (see SCENE_IMAGE_MODEL_ID).
-  const engine = FalEngineSchema.parse({ imageModelId: SCENE_IMAGE_MODEL_ID })
   // Generate at the channel's platform aspect (reels are 9:16) so scene images fill the frame.
   const aspect = (PLATFORM_PRESETS[(channel.targetPlatform ?? 'all') as keyof typeof PLATFORM_PRESETS] ?? PLATFORM_PRESETS.all).aspect
 
@@ -98,19 +83,16 @@ export async function generateImages(reelId: string): Promise<void> {
   const isQATarget = (s: (typeof pending)[number]) => s.tier === 'video' || (peak !== '' && s.narrationText.includes(peak))
 
   const processScene = async (scene: (typeof pending)[number]) => {
-    // Server-side style suffix injection [CLAUDE.md rule 2 — LLM never sees this]
+    // Server-side style suffix injection — the LLM never sees this
     const finalPrompt = assembleImagePrompt(scene.visualPrompt!, channel.stylePreset)
-    const negativePrompt = assembleNegativePrompt()
-    // Same-location scenes share a seed → consistent room. Untagged scenes get their own (idx-based) seed.
-    const baseSeed = seedFromString(`${reelId}:${scene.location ?? `solo_${scene.idx}`}`)
+    const negativePrompt = assembleNegativePrompt({ genreCategory: channel.genreCategory })
 
     const inputHash = buildInputHash('generate_images.v1', {
       finalPrompt,
       sceneIdx: scene.idx,
       reelId,
-      model: engine.imageModelId,
-      seed: baseSeed,
-      guidance: SCENE_IMAGE_GUIDANCE, // in the hash so a guidance change busts the cache + regenerates
+      model: SCENE_IMAGE_MODEL,
+      quality: SCENE_IMAGE_QUALITY, // in the hash so a recipe change busts the cache + regenerates
     })
 
     await runStep(
@@ -119,23 +101,22 @@ export async function generateImages(reelId: string): Promise<void> {
         const qa = isQATarget(scene)
         let totalCost = 0
         let chosen: Awaited<ReturnType<typeof generateImageWithRetry>> | undefined
-        let extraNeg = '' // targeted negatives added across re-rolls to push flux off the flagged failure
+        let extraNeg = '' // targeted negatives added across re-rolls to push the model off the flagged failure
         let lastIssues: string[] = [] // QA verdict of the kept image ([] = passed / not QA'd)
 
-        // attempt 0 uses the canonical per-location seed; re-rolls bump it so QA gets a genuinely
-        // different render. Each attempt overwrites the same storage key, so stopping at the first pass
-        // leaves the passing image in place. Non-QA scenes generate exactly once.
+        // Each attempt re-generates (gpt-image-1 is non-deterministic, so a re-roll is a genuinely
+        // different render) and overwrites the same storage key, so stopping at the first pass leaves the
+        // passing image in place. Non-QA scenes generate exactly once.
         for (let attempt = 0; attempt <= (qa ? MAX_QA_REROLLS : 0); attempt++) {
           const result = await generateImageWithRetry({
             prompt: finalPrompt,
             negativePrompt: extraNeg ? `${negativePrompt}, ${extraNeg}` : negativePrompt,
             reelId,
             sceneIdx: scene.idx,
-            engine,
             aspect,
             mood: scene.mood,
             stylePreset: channel.stylePreset,
-            seed: baseSeed + attempt,
+            genreCategory: channel.genreCategory,
           })
           totalCost += result.costCents
           chosen = result
@@ -150,9 +131,9 @@ export async function generateImages(reelId: string): Promise<void> {
             if (attempt > 0) console.log(`[image-qa] ${reelId.slice(0, 8)} scene${scene.idx} passed on re-roll ${attempt}`)
             break
           }
-          // Targeted re-roll: the dominant failure is flux rendering a full figure / third-person when
+          // Targeted re-roll: the dominant failure is the model rendering a full figure / third-person when
           // the brief wants POV. When QA flags that, add anti-third-person negatives so the re-roll has a
-          // real shot at the viewpoint (blind re-seeding alone rarely fixes a systematic viewpoint miss).
+          // real shot at the viewpoint (a blind re-roll alone rarely fixes a systematic viewpoint miss).
           if (/third.person|full body|\bfigure\b|perspective|\bpov\b|eye.?line|looking down/i.test(verdict.issues.join(' '))) {
             extraNeg = 'third person, full body shot, visible person, figure in frame, camera looking down at a person'
           }
@@ -174,7 +155,7 @@ export async function generateImages(reelId: string): Promise<void> {
             channelId: reel.channelId,
             kind: 'image',
             storageKey: chosen!.asset.storageKey,
-            provider: 'fal',
+            provider: 'openai',
             costCents: totalCost,
             meta,
           })
@@ -202,13 +183,14 @@ async function imageQA(storageKey: string, visualPrompt: string): Promise<{ verd
   const r = await llmCall({
     templateVersion: IMAGE_QA_V1_VERSION,
     schema: ImageQASchema,
+    provider: 'anthropic', // QA runs on Claude
     model: IMAGE_QA_MODEL,
     system,
     messages: [
       {
         role: 'user',
         content: [
-          { type: 'image', source: { type: 'base64', media_type: sniffMediaType(buf), data: buf.toString('base64') } },
+          { type: 'image', mediaType: sniffMediaType(buf), base64: buf.toString('base64') },
           { type: 'text', text: userMessage },
         ],
       },
@@ -222,11 +204,10 @@ interface ImageGenAttemptParams {
   negativePrompt: string
   reelId: string
   sceneIdx: number
-  engine: ReturnType<typeof FalEngineSchema.parse>
   aspect: string
   mood: string[]
   stylePreset: string
-  seed?: number
+  genreCategory: string
 }
 
 async function generateImageWithRetry(params: ImageGenAttemptParams) {
@@ -240,18 +221,15 @@ async function generateImageWithRetry(params: ImageGenAttemptParams) {
         negativePrompt: params.negativePrompt,
         reelId: params.reelId,
         sceneIdx: params.sceneIdx,
-        engine: params.engine,
         aspect: params.aspect,
-        guidanceScale: SCENE_IMAGE_GUIDANCE,
-        numInferenceSteps: SCENE_IMAGE_STEPS,
-        ...(params.seed != null ? { seed: params.seed } : {}),
+        quality: SCENE_IMAGE_QUALITY,
       })
       return { ...result, costCents: result.costCents + totalCost }
     } catch (err) {
       if (!(err instanceof ContentFilterError)) throw err
 
       // rephrase.v1 retry [docs/04 §4.3]
-      const { system, userMessage } = buildRephrasePrompt(currentPrompt)
+      const { system, userMessage } = buildRephrasePrompt(currentPrompt, { genreCategory: params.genreCategory })
       const rephrase = await llmCall({
         templateVersion: REPHRASE_V1_VERSION,
         schema: z.string(),

@@ -6,16 +6,13 @@ import {
   generateImage,
   assembleImagePrompt,
   assembleNegativePrompt,
-  FalEngineSchema,
   ContentFilterError,
-  SCENE_IMAGE_MODEL_ID,
-  SCENE_IMAGE_GUIDANCE,
-  SCENE_IMAGE_STEPS,
+  SCENE_IMAGE_QUALITY,
 } from '@reels/providers'
 import { getSession } from '@/lib/auth'
 
-// On-demand preview for ONE style option (~4¢ fal). Called only when the operator
-// clicks "Preview" on a card. Not auto-retried — Retry on the card is the manual path.
+// On-demand preview for ONE style option. Called only when the operator clicks "Preview" on a card.
+// Not auto-retried — Retry on the card is the manual path.
 const InputSchema = z.object({
   stylePreset: z.string().trim().min(1),
   sampleScene: z.string().trim().min(1).max(2000),
@@ -39,12 +36,9 @@ export async function POST(req: NextRequest) {
       storageKey,
       reelId: 'style-options',
       sceneIdx: 0,
-      // Render the preview with the EXACT scene recipe (model + guidance + steps) so the look the operator
-      // approves here is the look their scenes actually get. Previously this ran hotter (guidance 4.5) and
-      // oversold the stylization vs the 3.5 scenes. Shared constants keep the two from drifting again.
-      engine: FalEngineSchema.parse({ imageModelId: SCENE_IMAGE_MODEL_ID }),
-      guidanceScale: SCENE_IMAGE_GUIDANCE,
-      numInferenceSteps: SCENE_IMAGE_STEPS,
+      // Render the preview with the EXACT shared scene recipe (model + quality) so the look the operator
+      // approves here is the look their scenes actually get.
+      quality: SCENE_IMAGE_QUALITY,
     })
     return NextResponse.json({ imageKey: result.asset.storageKey, costCents: result.costCents })
   } catch (err) {

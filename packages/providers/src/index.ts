@@ -7,6 +7,8 @@ export * from './llm/client.js'
 export * from './llm/input-hash.js'
 export * from './fal/client.js'
 export * from './fal/config.js'
+export * from './openai/image.js'
+export * from './openai/config.js'
 export * from './elevenlabs/client.js'
 export * from './elevenlabs/types.js'
 // Assembly helpers re-exported from core for convenience

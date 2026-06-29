@@ -23,8 +23,18 @@ async function main() {
     return `bucket "${process.env['R2_BUCKET_NAME']}" read+write OK`
   })
 
-  // ── Anthropic: real 1-token call with the exact model the pipeline uses ──
-  await check('Anthropic (Claude)', async () => {
+  // ── OpenAI: auth probe (gen — channel/story/scenes/images) ──
+  await check('OpenAI', async () => {
+    const res = await fetch('https://api.openai.com/v1/models', {
+      headers: { Authorization: `Bearer ${process.env['OPENAI_API_KEY'] ?? ''}` },
+    })
+    if (res.status === 401) throw new Error('401 — bad OPENAI_API_KEY')
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${(await res.text()).slice(0, 120)}`)
+    return 'auth OK'
+  })
+
+  // ── Anthropic: real 1-token call with the exact model QA uses ──
+  await check('Anthropic (Claude — QA)', async () => {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -56,11 +66,11 @@ async function main() {
     throw new Error(`HTTP ${voices.status} — ${body}`)
   })
 
-  // ── fal.ai: auth probe ──
-  await check('fal.ai', async () => {
+  // ── fal.ai: auth probe (video — image→video only) ──
+  await check('fal.ai (video)', async () => {
     const key = process.env['FAL_KEY'] ?? ''
     if (!key.includes(':')) throw new Error('FAL_KEY missing id:secret format')
-    const res = await fetch('https://queue.fal.run/fal-ai/flux/schnell', {
+    const res = await fetch('https://queue.fal.run/fal-ai/kling-video/v1.6/standard/image-to-video', {
       method: 'POST',
       headers: { Authorization: `Key ${key}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt: 'test' }),

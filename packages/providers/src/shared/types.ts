@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 // Every provider call returns this shape and writes nothing.
-// Workers are responsible for persisting to DB + R2. (CLAUDE.md non-negotiable rule)
+// Workers are responsible for persisting to DB + R2.
 
 export const AssetPayloadSchema = z.object({
   storageKey: z.string().min(1),

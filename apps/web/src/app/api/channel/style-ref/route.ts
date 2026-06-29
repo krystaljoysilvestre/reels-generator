@@ -13,8 +13,8 @@ import { getSession } from '@/lib/auth'
 // Operator uploads 1–3 reference images; a vision pass distills their shared visual
 // STYLE into the channel's stylePreset DNA (so the text-to-image pipeline can apply it
 // to new scenes). The first image is kept in R2 as the channel's visual reference.
-type AnthropicMedia = 'image/png' | 'image/jpeg' | 'image/webp'
-const EXT: Record<AnthropicMedia, 'png' | 'jpg' | 'webp'> = {
+type ImageMedia = 'image/png' | 'image/jpeg' | 'image/webp'
+const EXT: Record<ImageMedia, 'png' | 'jpg' | 'webp'> = {
   'image/png': 'png',
   'image/jpeg': 'jpg',
   'image/webp': 'webp',
@@ -23,8 +23,8 @@ const MAX_BYTES = 2 * 1024 * 1024 // 2 MB per image
 const MAX_FILES = 3
 
 // Detect the REAL image type from magic bytes — don't trust the declared MIME (it can
-// be wrong, and Anthropic rejects a mismatched media_type).
-function sniffMime(buf: Buffer): AnthropicMedia | null {
+// be wrong, and the vision model rejects a mismatched media type).
+function sniffMime(buf: Buffer): ImageMedia | null {
   if (buf.length >= 4 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return 'image/png'
   if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'image/jpeg'
   if (buf.length >= 12 && buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP') return 'image/webp'
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
   const toneParsed = ToneConfigSchema.safeParse(JSON.parse((form.get('toneConfig') as string) || '{}'))
   const toneJson = JSON.stringify(toneParsed.success ? toneParsed.data : {})
 
-  const prepared: Array<{ media: AnthropicMedia; b64: string; buf: Buffer }> = []
+  const prepared: Array<{ media: ImageMedia; b64: string; buf: Buffer }> = []
   for (const file of files) {
     if (file.size > MAX_BYTES) return NextResponse.json({ error: 'Each image must be ≤ 2 MB' }, { status: 400 })
     const buf = Buffer.from(await file.arrayBuffer())
@@ -63,7 +63,8 @@ export async function POST(req: NextRequest) {
   const content = [
     ...prepared.map((p) => ({
       type: 'image' as const,
-      source: { type: 'base64' as const, media_type: p.media, data: p.b64 },
+      mediaType: p.media,
+      base64: p.b64,
     })),
     { type: 'text' as const, text: userMessage },
   ]
