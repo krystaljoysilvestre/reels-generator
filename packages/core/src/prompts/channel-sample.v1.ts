@@ -38,8 +38,12 @@ Tone calibration (0–10 scales): ${v.toneJson}
 World bible (stay consistent with it):
 ${v.worldJson}${v.voiceStyle ? `\n\nLead narrator delivery: ${v.voiceStyle}` : ''}
 
-Write in ${v.language}. If the language is Taglish, code-switch the way real speakers actually talk —
-Tagalog as the emotional base, English for emphasis and modern objects; never translate idioms literally.
+Write in ${v.language}. If the language is Taglish, write the way real speakers actually talk, not a textbook:
+Tagalog is the SPINE (grammar + particles: na, naman, kasi, talaga, parang, yung, eh); English slips in only
+where people genuinely switch — modern things (phone, text, signal), quick emphasis, casual interjections
+(grabe). Keep it conversational and spoken, never deep/literary Tagalog. Never translate English idioms
+word-for-word. Natural: "Grabe, parang may nakatingin sa'kin." / "Hindi ako makagalaw, na-freeze ako."
+NOT (stilted): "Labis akong natakot sapagkat may nilalang na nakamasid sa akin."
 Fictionalize specific real places and people. No anatomical gore.
 This is a SAMPLE that demonstrates the channel's voice — make it self-contained and complete.`
 

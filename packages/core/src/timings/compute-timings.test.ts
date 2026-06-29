@@ -372,3 +372,44 @@ describe('AnchorResolutionError', () => {
     ).toThrow(AnchorResolutionError)
   })
 })
+
+// ── Punctuation-tolerant matching (gpt-4o swaps quote/dash/whitespace variants when copying) ──────────
+describe('punctuation-tolerant anchor + scene matching', () => {
+  it('resolves an SFX anchor whose apostrophe is curly when the narration has a straight one', () => {
+    const narration = "Tapos biglang nag-ring 'yung phone ko."   // straight apostrophe
+    const alignment = syntheticAlignment(narration, 6000)
+    const result = computeTimings({
+      narration,
+      alignment,
+      durationMs: 6000,
+      scenes: singleScene(narration),
+      audioScript: {
+        ...silentAudioScript(),
+        sfx: [{ anchor: '’yung phone', offsetMs: 0, prompt: 'ring', volumeDb: -8 }], // curly ’
+      },
+      twistAnchor: '',
+    })
+    expect(result.sfxEvents).toHaveLength(1)
+    const straightIdx = narration.indexOf("'yung phone")
+    expect(result.sfxEvents[0]!.atMs).toBe(alignment[straightIdx]!.startMs)
+  })
+
+  it('tiles scenes when scene text uses an en-dash where the narration has a hyphen', () => {
+    const narration = 'Umuwi ako, nag-ring yung phone, tahimik lahat.'  // hyphen
+    const alignment = syntheticAlignment(narration, 6000)
+    const result = computeTimings({
+      narration,
+      alignment,
+      durationMs: 6000,
+      scenes: [
+        { idx: 1, narrationText: 'Umuwi ako, nag–ring yung phone,', tier: 'video' }, // en-dash –
+        { idx: 2, narrationText: 'tahimik lahat.', tier: 'still' },
+      ],
+      audioScript: silentAudioScript(),
+      twistAnchor: '',
+    })
+    expect(result.scenes).toHaveLength(2)
+    expect(result.scenes[0]!.startMs).toBe(0)
+    expect(result.scenes[0]!.endMs).toBe(result.scenes[1]!.startMs)
+  })
+})

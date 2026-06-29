@@ -26,7 +26,12 @@ Niche: ${v.nicheDescription}
 Tone calibration (0–10 scales): ${v.toneConfig}
 Language for this story: ${v.language}${
     v.language.toLowerCase() === 'taglish'
-      ? `\nIf taglish: code-switch the way a real ${v.audienceDescriptor} speaks — Tagalog as the emotional base, English for emphasis and modern objects. Never translate idioms literally; use them natively.`
+      ? `\nTAGLISH — write the way a real ${v.audienceDescriptor} actually talks, not a textbook:
+- Tagalog is the SPINE — its grammar and particles carry the sentence (na, naman, kasi, talaga, parang, yung, eh, pala, ba). English slips in only where people genuinely switch: modern things (phone, text, signal, parking, CR), quick emphasis, and casual interjections (grabe, omg).
+- Conversational and SPOKEN — never the deep, literary Tagalog of a news anchor or a school essay.
+- NEVER translate English idioms or sentence patterns word-for-word into Tagalog.
+- Natural: "Grabe, parang may nakatingin sa'kin sa dilim." / "Hindi ako makagalaw, na-freeze ako." / "Tumunog yung phone ko, 3 AM, walang caller ID."
+- Avoid (stilted / over-translated): "Labis akong natakot sapagkat mayroong nilalang na nakamasid sa akin." / "Hindi ako makakilos sa aking kinatatayuan."`
       : ''
   }
 

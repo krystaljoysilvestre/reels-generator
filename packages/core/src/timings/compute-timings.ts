@@ -78,7 +78,51 @@ export interface ComputeTimingsInput {
   config?: Partial<TimingConfig>
 }
 
-// ── Core primitive: anchor → ms ───────────────────────────────────────────────
+// ── Anchor / substring matching (with a punctuation-tolerant fallback) ─────────
+// The narration submitted to TTS is canonical; anchors and scene texts produced by the LLM must be
+// EXACT substrings of it, because the alignment timestamps map 1:1 to the narration's code points.
+// gpt-4o (unlike Claude) tends to silently "tidy" text when copying — swapping straight quotes for
+// curly ones, hyphens for en/em dashes, or newlines for spaces — which broke the exact match and threw.
+// So when the exact match fails we retry on a LENGTH-PRESERVING normalized view: each char is folded to
+// a canonical equivalent (quotes→', dashes→-, any whitespace→space) WITHOUT changing the array length,
+// so a normalized hit still maps back to the original code-point indices (and thus the right timestamps).
+
+const SINGLE_QUOTES = new Set(["'", '‘', '’', '‚', '‛', '`', '´'])
+const DOUBLE_QUOTES = new Set(['"', '“', '”', '„', '‟'])
+const DASHES = new Set(['-', '‐', '‑', '‒', '–', '—', '―', '−'])
+
+function normalizeChar(cp: string): string {
+  if (SINGLE_QUOTES.has(cp)) return "'"
+  if (DOUBLE_QUOTES.has(cp)) return '"'
+  if (DASHES.has(cp)) return '-'
+  if (/\s/.test(cp)) return ' '
+  return cp
+}
+
+// All start indices where `pat` occurs in `hay` (code-point arrays). Tries an exact pass first; if that
+// finds nothing, retries comparing through normalizeChar (same indices — both arrays are equal length).
+function findOccurrences(hay: string[], pat: string[]): number[] {
+  const len = pat.length
+  const exact: number[] = []
+  for (let i = 0; i <= hay.length - len; i++) {
+    let match = true
+    for (let j = 0; j < len; j++) {
+      if (hay[i + j] !== pat[j]) { match = false; break }
+    }
+    if (match) exact.push(i)
+  }
+  if (exact.length > 0) return exact
+
+  const fuzzy: number[] = []
+  for (let i = 0; i <= hay.length - len; i++) {
+    let match = true
+    for (let j = 0; j < len; j++) {
+      if (normalizeChar(hay[i + j]!) !== normalizeChar(pat[j]!)) { match = false; break }
+    }
+    if (match) fuzzy.push(i)
+  }
+  return fuzzy
+}
 
 interface ResolvedAnchor {
   startMs: number
@@ -93,16 +137,7 @@ function resolveAnchor(
 ): ResolvedAnchor | null {
   if (!anchor) return null
   const anchorCps = Array.from(anchor)
-  const len = anchorCps.length
-  const occurrences: number[] = []
-
-  for (let i = 0; i <= cps.length - len; i++) {
-    let match = true
-    for (let j = 0; j < len; j++) {
-      if (cps[i + j] !== anchorCps[j]) { match = false; break }
-    }
-    if (match) occurrences.push(i)
-  }
+  const occurrences = findOccurrences(cps, anchorCps)
 
   if (occurrences.length === 0) {
     if (soft) return null
@@ -114,7 +149,7 @@ function resolveAnchor(
   }
 
   const start = occurrences[0]!
-  const end = start + len - 1
+  const end = start + anchorCps.length - 1
   return {
     startMs: alignment[start]!.startMs,
     endMs: alignment[end]!.endMs,
@@ -149,10 +184,13 @@ export function computeTimings(input: ComputeTimingsInput): Timings {
     // between spoken beats, so scene boundaries land on '\n' as often as ' '.
     while (cursor < cps.length && /\s/.test(cps[cursor]!)) cursor++
 
-    // Match scene text at cursor position
+    // Match scene text at cursor (exact, falling back to a punctuation-tolerant compare — gpt-4o may
+    // swap quote/dash/whitespace variants when copying the span; the fallback preserves length/indices).
     let matched = true
     for (let j = 0; j < sceneCps.length; j++) {
-      if (cps[cursor + j] !== sceneCps[j]) { matched = false; break }
+      const a = cps[cursor + j]
+      const b = sceneCps[j]!
+      if (a !== b && (a === undefined || normalizeChar(a) !== normalizeChar(b))) { matched = false; break }
     }
 
     if (!matched) {

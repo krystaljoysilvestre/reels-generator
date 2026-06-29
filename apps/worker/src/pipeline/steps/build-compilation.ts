@@ -50,12 +50,15 @@ export async function buildCompilation(compilationId: string): Promise<void> {
   // ── Step 1: Generate connective tissue ──────────────────────────────────
   const { system, userMessage } = buildCompilationPrompt({
     channelName: channel.name,
+    nicheDescription: channel.nicheDescription,
+    genreCategory: channel.genreCategory,
+    language: channel.languages[0] ?? 'English',
     storyEntries: orderedReels.map((r) => ({
       title: r.story?.title ?? 'Untitled',
       logline: r.story?.logline ?? '',
       subgenreTags: r.story?.subgenreTags ?? [],
     })),
-    theme: compilation.theme ?? 'horror encounters',
+    theme: compilation.theme ?? 'a themed collection',
   })
 
   const inputHash = buildInputHash(COMPILATION_V1_VERSION, {
