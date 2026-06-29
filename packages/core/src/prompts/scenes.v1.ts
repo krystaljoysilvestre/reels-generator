@@ -55,7 +55,7 @@ CHANNEL GENRE / NICHE: ${v.nicheDescription}
 Compose every shot in the visual language of THIS genre — show what it shows, imply what it implies. Do NOT import conventions from other genres. Match the genre.
 
 WORLD BIBLE: ${v.worldBibleJson}
-Visual canon: use canonical names for recurring places/objects so they render consistently.
+Visual canon: keep each recurring place/object visually consistent across scenes (same defining traits every time). The image prompt is read by an image model, so describe these in concrete, depictable terms — if a canon name is in another language, render its plain visual description, not the word alone (e.g. "gasera" → "a small kerosene gas lamp", "lumang bahay na kahoy" → "an old wooden house"). The narration keeps the canon name; the image prompt shows the thing.
 Era: ${v.era}. Region look: ${v.regionDescriptor}.`
 
   const peakBlock = v.peakMoment.trim()
@@ -74,8 +74,8 @@ Narration:
 
 For each scene write:
 - narrationText: the COMPLETE, VERBATIM substring of the narration this scene covers (copy-paste exactly, no "…").
-- imagePrompt: CONTENT ONLY, leading with the key subject (see VISUAL PRIORITY below). THEN, in order: shot size + camera angle; one foreground element for depth; the light source + its direction; a touch of atmosphere. ~30-50 words — enough to pin every element concretely without padding. World-bible nouns, not synonyms. NO style/medium words ("cinematic", "photo", "painting", colour-grade terms) — the system owns the look.
-- cameraMove: the ONE camera move that best fits this beat — choose from: drift (slow, subtle), push_in, pull_out, pan_left, pan_right, tilt_up, tilt_down, handheld (uneasy, documentary), locked (almost still). Pick for the moment: push_in to build dread, pull_out for a reveal, locked for stillness, handheld for unease.
+- imagePrompt: CONTENT ONLY, leading with the key subject (see VISUAL PRIORITY below). THEN, in order: shot size + camera angle; one foreground element for depth; the light source + its direction; a touch of atmosphere. ~30-50 words — enough to pin every element concretely without padding. World-bible nouns, not synonyms. Describe only what's in the frame — no style, medium, or colour-grade words (the system owns the look).
+- cameraMove: the ONE camera move that best fits this beat — choose from: drift (slow, subtle), push_in, pull_out, pan_left, pan_right, tilt_up, tilt_down, handheld (loose, immediate), locked (almost still). Match it to the beat: push_in for emphasis, pull_out for a reveal, locked for observation/stillness, drift for atmosphere, handheld for immediacy, pan/tilt to follow or discover.
 - tier: "video" for the 2–3 most visually DYNAMIC beats — always include the opening; "still" otherwise. At most 3 video.
 - mood: 2–3 words for ambient/grade hints.
 - location: a short canonical label for WHERE this scene is (e.g. "rented bedroom"). Same label for the same place; a new label only when the place actually changes.
@@ -89,11 +89,11 @@ CONTINUITY (people, places, objects): each image is generated independently, so 
 
 LIGHTING & TIME: match the narration's time of day (incl. Tagalog cues) by naming the ACTUAL light sources present in THIS place — not a label, and not a default. Night / gabi / madaling-araw / 3 AM → light only by what genuinely exists there: a lamp or candle in a rural bedroom, but stall lights and neon in a night market, streetlights and signage on a city road, a screen, a fire. Do NOT assume night means a dark room — a brightly lit night scene is correct when the place has light. Day / umaga / tanghali = daylight; dusk/dawn = low ambient. (How DARK a night gets, and whether windows go black, is a genre decision — see the genre module if one applies.)
 
-SHOW ONLY WHAT IS SEEN: depict what the narrator actually sees. If something is only HEARD (a voice, a knock) or FELT (a presence) and never said to be SEEN, do NOT render its source — render the narrator sensing it and the charged, empty space around them. Only show a presence when the narration says it was seen.
+SHOW ONLY WHAT IS SEEN: depict what the narrator actually sees. If something is only HEARD (a voice, a knock) or FELT and never said to be SEEN, do NOT render its source — render the visible reaction and the space around it, not an invented source. Only show a presence/subject when the narration says it was seen.
 
 PERSPECTIVE: detect the narration's voice and apply ONE perspective to the whole reel. FIRST-PERSON ("ako", "ko", "nakita ko", "I", "my") → POV: the camera IS the narrator's eyes; every shot is what THEY see (never the narrator as a separate full figure; their hands/feet/shoulder may edge the frame). THIRD-PERSON → observer framing: show the character(s).
 
-PROGRESSION & VARIETY: the reel is a sequence, not similar stills. Don't repeat the same shot size / distance / focal point on consecutive scenes unless the narration lingers; vary framing (wide, medium, close, low/high). BUT when consecutive scenes are about the SAME subject, keep that subject the recognizable focus — don't cut to an unrelated environment shot.
+PROGRESSION & VARIETY: the reel is a sequence, not similar stills. Each scene must ADVANCE the reel with new visual information — never restate the previous shot as the same moment from a slightly different angle unless the narration genuinely lingers there. Don't repeat the same shot size / distance / focal point on consecutive scenes; vary framing (wide, medium, close, low/high). BUT when consecutive scenes are about the SAME subject, keep that subject the recognizable focus — don't cut to an unrelated environment shot.
 
 SAFETY (all genres): no gore, no graphic violence, no nudity/sexualization, no minors in harmful or sexual contexts.${moduleBlock}
 

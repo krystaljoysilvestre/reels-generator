@@ -91,11 +91,17 @@ Produce JSON with exactly these fields:
   "captionPosition": "where captions sit: 'bottom' (safe default, most niches), 'center' (bold, cinematic, hook-driven, face-cam), or 'top' (when the key action/subject usually sits low in frame)",
   "captionFontScale": "size multiplier 0.85–1.25 on the preset's base size — go >1 for loud/high-energy/kids/hype niches, <1 for calm/elegant/text-dense niches; stay near 1.0 unless there's a clear reason",
   "worldBible": {
+    // Write canonLocations, canonObjects, and vocabulary in the channel's PRIMARY narration language (the
+    // first language listed above) — the everyday name a local would actually SAY, because the narrator
+    // reuses these names verbatim in the script. For a Tagalog/Taglish channel that means natural Filipino
+    // names ("lumang bahay na kahoy", "gasera", "kalsada sa barangay"), NOT English labels ("wooden
+    // ancestral house", "gas lamp"). Keep each name short, concrete, and depictable. (region + era may stay
+    // in plain English — they're metadata, not spoken in the narration.)
     "region": "a real-but-fictionalized region/setting",
     "era": "time period the channel lives in",
-    "canonLocations": ["3–5 recurring named places"],
-    "canonObjects": ["3–5 recurring evocative objects"],
-    "vocabulary": { "term": "how this channel refers to it (2–5 entries)" }
+    "canonLocations": ["3–5 recurring named places, in the narration language"],
+    "canonObjects": ["3–5 recurring evocative objects, in the narration language"],
+    "vocabulary": { "term": "how this channel refers to it, in the narration language (2–5 entries)" }
   },
   "genreCategory": "the channel's VISUAL-LANGUAGE bucket — drives how scenes are composed and lit. Pick the ONE that fits how this channel's videos should LOOK, not just its topic:
      - horror: horror, thriller, paranormal, true-crime, creepypasta, mystery, scary/eerie storytelling — built for dread, shadow, near-black night
