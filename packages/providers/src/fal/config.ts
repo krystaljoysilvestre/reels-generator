@@ -4,18 +4,18 @@ import { z } from 'zod'
 // Engine is chosen by config, not code — swap is data, not a code change. Re-verify model IDs + pricing at build.
 
 export const FalEngineSchema = z.object({
-  // Kling i2v, standard tier (720p, ~10c/s). The bare `.../v1.6/image-to-video` path 404s on fal now —
-  // the tier segment (`/standard/`) is required. Both this and the wan fallback verified working
-  // 2026-06-20: on a photoreal scene each holds the style and gives a clean camera push-in (no warping).
-  // Output is 720x1280 → upscaled to the 1080x1920 frame at render (objectFit cover). For native 1080p use
-  // the `/pro/` tier (higher cost). i2v is only invoked for `tier:'video'` hero beats.
-  videoModelId: z.string().default('fal-ai/kling-video/v1.6/standard/image-to-video'),
+  // Kling i2v, v2.5 Turbo Pro. Benchmarked 2026-07-01 against v1.6/standard on an identical horror still +
+  // motion prompt: v2.5-turbo/pro is NATIVE 1080x1920 (no render-time upscale needed), ~3x faster (59s vs
+  // 188s), CHEAPER (7c/s vs 10c/s), and holds the scare's one lit detail (the glowing grin) crisp through
+  // the push-in where v1.6 washed it out. duration is a STRING enum ("5"/"10") and it takes aspect_ratio —
+  // see ./client.ts. i2v is only invoked for `tier:'video'` hero beats.
+  videoModelId: z.string().default('fal-ai/kling-video/v2.5-turbo/pro/image-to-video'),
   videoFallbackModelId: z.string().default('fal-ai/wan-i2v'), // Budget Wan i2v (~5c/s, 720p) — verified working
 })
 export type FalEngine = z.infer<typeof FalEngineSchema>
 
 // Cost estimates (USD) — re-verify at build
-export const FAL_VIDEO_COST_CENTS_PER_SEC = 10 // ~$0.10/sec, Kling
+export const FAL_VIDEO_COST_CENTS_PER_SEC = 7 // ~$0.07/sec, Kling v2.5 Turbo Pro ($0.35/5s)
 export const FAL_VIDEO_COST_CENTS_PER_SEC_BUDGET = 5 // ~$0.05/sec, Wan
 
 // ── Still images (Gemini 2.5 Flash Image, aka "nano-banana") ──────────────────

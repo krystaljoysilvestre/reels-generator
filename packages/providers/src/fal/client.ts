@@ -84,13 +84,13 @@ export async function generateVideo(params: VideoGenParams): Promise<ProviderRes
     const imgBuf = await downloadBuffer(params.imageStorageKey)
     const imgBase64 = `data:image/webp;base64,${imgBuf.toString('base64')}`
 
-    const result = await withProviderLimit('fal', () => fal.subscribe(modelId, {
-      input: {
-        image_url: imgBase64,
-        prompt: params.motionPrompt,
-        duration: durationSec,
-      },
-    }))
+    // Kling v2.5 takes duration as a STRING enum ("5"/"10") + an aspect_ratio; Wan (budget) keeps the
+    // original numeric-duration shape it was verified against.
+    const input = params.budget
+      ? { image_url: imgBase64, prompt: params.motionPrompt, duration: durationSec }
+      : { image_url: imgBase64, prompt: params.motionPrompt, duration: String(durationSec), aspect_ratio: '9:16' }
+
+    const result = await withProviderLimit('fal', () => fal.subscribe(modelId, { input }))
 
     const parsed = FalVideoOutputSchema.safeParse(result.data)
     if (!parsed.success) {
