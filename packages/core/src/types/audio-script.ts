@@ -7,6 +7,10 @@ export const SfxCueSchema = z.object({
   offsetMs: z.number().int().default(0),
   prompt: z.string().min(1),
   volumeDb: z.number().default(-8),
+  // true = the sound BUILDS to its hit (riser/swell/crescendo), so the mixer places it to land its
+  // impact ON the anchor word (shifted earlier by its own length). false = instant one-shot (knock,
+  // slam) that fires on the anchor. Keeps a build-to-hit climax cue in sync with the twist beat.
+  impactAtEnd: z.boolean().default(false),
 })
 export type SfxCue = z.infer<typeof SfxCueSchema>
 

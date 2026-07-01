@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { getDb, reels, stories } from '@reels/db'
 import { llmCall, listVoices, buildInputHash } from '@reels/providers'
-import { AudioScriptSchema, AudioPacksSchema, OperatorSfxSchema, cueVolumeDb, type AudioScript, type OperatorCue } from '@reels/core'
+import { AudioScriptSchema, AudioPacksSchema, OperatorSfxSchema, cueVolumeDb, resolveMusicMood, MusicMoodSchema, type AudioScript, type OperatorCue } from '@reels/core'
 import { buildInterpretSoundsPrompt, InterpretSoundsSchema, INTERPRET_SOUNDS_V1_VERSION } from '@reels/core/prompts/interpret-sounds.v1'
 import { buildAudioScriptPrompt, AUDIOSCRIPT_V1_VERSION } from '../../prompts-bridge.js'
 import { runStep } from '../harness.js'
@@ -120,28 +120,39 @@ export async function annotateAudioScript(reelId: string): Promise<void> {
     },
   )
 
-  // Every reel should have background music (Sound step). If this reel's script proposed none, inject
-  // an intent — empty anchors let compute-timings pick the start (0) and peak (twist/0.8×duration).
-  //  • AI-music channels have no pool (each reel's bed is generated downstream by generate_music), so
-  //    seed the intent from the channel's derived audioMood.
-  //  • preset/upload channels seed from their first pool bed; selectMusicTrack matches it by type.
+  // Every reel should have background music (Sound step). The bed's ARC (type) + mood TAGS come from the
+  // operator's mood preset — reel override → channel default → the channel's derived audioMood (fallback).
+  //  • AI-music channels: the preset ALWAYS wins over any type/tags the LLM guessed (operator's choice);
+  //    we keep the LLM's start/peak anchors (its timing), empty when it proposed no music.
+  //  • preset/upload channels: unchanged — seed from the first pool bed; selectMusicTrack matches by type.
   const audioScript = result.output as AudioScript
-  if (!audioScript.music) {
+  {
     const { channels } = await import('@reels/db')
     const channel = await db.query.channels.findFirst({ where: eq(channels.id, reel.channelId) })
     const audioPacks = channel ? AudioPacksSchema.parse(channel.audioPacks) : undefined
     if (audioPacks?.musicMode === 'ai') {
+      const reelMood = MusicMoodSchema.safeParse(reel.musicMood)
+      const { type, moodTags } = resolveMusicMood(
+        reelMood.success ? reelMood.data : null,
+        audioPacks.musicMood,
+        audioPacks.audioMood,
+      )
       audioScript.music = {
-        type: audioPacks.audioMood?.type ?? 'low_drone',
-        startAnchor: '',
-        peakAnchor: '',
-        moodTags: audioPacks.audioMood?.moodTags ?? [],
+        type,
+        startAnchor: audioScript.music?.startAnchor ?? '',
+        peakAnchor: audioScript.music?.peakAnchor ?? '',
+        moodTags,
       }
-    } else {
+    } else if (!audioScript.music) {
       const bed = audioPacks?.musicPack[0]
       if (bed) {
         audioScript.music = { type: bed.type, startAnchor: '', peakAnchor: '', moodTags: bed.moodTags }
       }
+    }
+    // An operator-uploaded bed plays on ANY channel mode (even 'none'/empty pool) — make sure a music
+    // intent exists so compute_timings produces the envelope timing and the mixer doesn't skip music.
+    if (reel.musicUploadKey && !audioScript.music) {
+      audioScript.music = { type: 'low_drone', startAnchor: '', peakAnchor: '', moodTags: [] }
     }
   }
 

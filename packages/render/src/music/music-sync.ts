@@ -90,45 +90,6 @@ export function buildGainExpr(p: GainEnvelopeParams): string {
   return `if(between(t,${s.toFixed(3)},${en.toFixed(3)}),0,${piecewise})`
 }
 
-// ── §2.3  Two-section crossfade (intro bed → climax bed at the twist) ─────────
-// Two beds of the same sonic family crossfade around peakAnchorMs: the intro (restrained) fades OUT as
-// the climax (intense) fades IN, completing by the peak so the climax bed carries the twist. Returned as
-// a pair of FFmpeg volume expressions (eval=frame), mirroring buildGainExpr.
-
-const CROSSFADE_SEC = 2.0
-
-function withSilence(expr: string, silence?: GainEnvelopeParams['silenceDropMs']): string {
-  if (!silence) return expr
-  const s = silence.atMs / 1000
-  const en = (silence.atMs + silence.durationMs) / 1000
-  return `if(between(t,${s.toFixed(3)},${en.toFixed(3)}),0,${expr})`
-}
-
-export function buildTwoSectionGains(p: GainEnvelopeParams): { intro: string; climax: string } {
-  const db = (x: number) => `pow(10,(${x.toFixed(3)})/20)`
-  const fadeIn = 2.0
-  const a = p.startAnchorMs / 1000
-  const pk = p.peakAnchorMs / 1000
-  // Crossfade window ends AT the peak so the climax bed is full when the twist lands.
-  const cf = Math.max(a, pk - CROSSFADE_SEC)
-  const denom = Math.max(0.001, pk - cf)
-
-  // Intro: fade in to bed level, hold, then fade to silence across the crossfade; gone after the peak.
-  const intro =
-    `if(lt(t,${fadeIn}),(t/${fadeIn})*${db(p.bedDb)},` +
-      `if(lt(t,${cf.toFixed(3)}),${db(p.bedDb)},` +
-        `if(lt(t,${pk.toFixed(3)}),${db(p.bedDb)}*((${pk.toFixed(3)}-t)/${denom.toFixed(3)}),` +
-          `0)))`
-
-  // Climax: silent until the crossfade, rise to peak level across it, then hold the peak to the end.
-  const climax =
-    `if(lt(t,${cf.toFixed(3)}),0,` +
-      `if(lt(t,${pk.toFixed(3)}),${db(p.peakDb)}*((t-${cf.toFixed(3)})/${denom.toFixed(3)}),` +
-        `${db(p.peakDb)}))`
-
-  return { intro: withSilence(intro, p.silenceDropMs), climax: withSilence(climax, p.silenceDropMs) }
-}
-
 // ── Convenience: validate gain at a point (used in unit tests) ────────────────
 
 /** Evaluate the linear gain at a given time by running the expression as a tiny numeric parser. */

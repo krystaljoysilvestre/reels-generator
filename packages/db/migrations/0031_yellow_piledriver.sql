@@ -1,0 +1,1 @@
+ALTER TABLE "reels" ADD COLUMN "music_upload_key" text;

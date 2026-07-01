@@ -43,7 +43,7 @@ describe('F1 — Taglish code-switch SFX placement', () => {
     const alignment = syntheticAlignment(narration, 6000)
     const audioScript: AudioScript = {
       ...silentAudioScript(),
-      sfx: [{ anchor: 'phone', offsetMs: 0, prompt: 'phone ringing', volumeDb: -8 }],
+      sfx: [{ anchor: 'phone', offsetMs: 0, prompt: 'phone ringing', volumeDb: -8, impactAtEnd: false }],
     }
     const input: ComputeTimingsInput = {
       narration,
@@ -266,7 +266,7 @@ describe('F6 — code-point safety', () => {
       scenes: singleScene(narration),
       audioScript: {
         ...silentAudioScript(),
-        sfx: [{ anchor: 'Doña', offsetMs: 0, prompt: 'footsteps', volumeDb: -10 }],
+        sfx: [{ anchor: 'Doña', offsetMs: 0, prompt: 'footsteps', volumeDb: -10, impactAtEnd: false }],
       },
       twistAnchor: '',
     }
@@ -290,7 +290,7 @@ describe('F7 — negative offset clamp', () => {
       scenes: singleScene(narration),
       audioScript: {
         ...silentAudioScript(),
-        sfx: [{ anchor: 'Nagsimula', offsetMs: -400, prompt: 'thud', volumeDb: -6 }],
+        sfx: [{ anchor: 'Nagsimula', offsetMs: -400, prompt: 'thud', volumeDb: -6, impactAtEnd: false }],
       },
       twistAnchor: '',
     }
@@ -348,7 +348,7 @@ describe('AnchorResolutionError', () => {
         scenes: singleScene(narration),
         audioScript: {
           ...silentAudioScript(),
-          sfx: [{ anchor: 'WALANG_GANITO', offsetMs: 0, prompt: 'x', volumeDb: 0 }],
+          sfx: [{ anchor: 'WALANG_GANITO', offsetMs: 0, prompt: 'x', volumeDb: 0, impactAtEnd: false }],
         },
         twistAnchor: '',
       }),
@@ -365,7 +365,7 @@ describe('AnchorResolutionError', () => {
         scenes: singleScene(narration),
         audioScript: {
           ...silentAudioScript(),
-          sfx: [{ anchor: 'oo', offsetMs: 0, prompt: 'x', volumeDb: 0 }],
+          sfx: [{ anchor: 'oo', offsetMs: 0, prompt: 'x', volumeDb: 0, impactAtEnd: false }],
         },
         twistAnchor: '',
       }),
@@ -385,7 +385,7 @@ describe('punctuation-tolerant anchor + scene matching', () => {
       scenes: singleScene(narration),
       audioScript: {
         ...silentAudioScript(),
-        sfx: [{ anchor: '’yung phone', offsetMs: 0, prompt: 'ring', volumeDb: -8 }], // curly ’
+        sfx: [{ anchor: '’yung phone', offsetMs: 0, prompt: 'ring', volumeDb: -8, impactAtEnd: false }], // curly ’
       },
       twistAnchor: '',
     })

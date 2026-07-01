@@ -27,7 +27,13 @@ export async function POST(req: NextRequest) {
   const channel = reel ? await db.query.channels.findFirst({ where: eq(channels.id, reel.channelId) }) : null
   if (!scene || !channel || !reel) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const basePrompt = (scene.visualPrompt || '').trim()
+  // 'fresh' re-rolls the shot as first written, so it starts from the pristine scenes-generation prompt
+  // (visualPromptBase) — NOT the visualPrompt that "vary + instruction" regens have been accumulating into.
+  // 'vary' keeps building on the current (possibly-revised) prompt. Fall back to visualPrompt for pre-migration
+  // scenes that have no frozen base.
+  const basePrompt = (
+    (mode === 'fresh' ? scene.visualPromptBase || scene.visualPrompt : scene.visualPrompt) || ''
+  ).trim()
   if (!basePrompt) return NextResponse.json({ error: 'No visual prompt' }, { status: 400 })
 
   // A plain-language change goes through the LLM first, NOT straight into the image model — it bakes the

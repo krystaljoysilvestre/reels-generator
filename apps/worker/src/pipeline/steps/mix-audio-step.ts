@@ -94,13 +94,16 @@ export async function mixAudioStep(reelId: string): Promise<void> {
       // Pre-mix SFX
       const sfxEvents: { storageKey: string; atMs: number; volumeDb: number }[] = []
       for (const sfxAsset of sfxAssets) {
-        const meta = sfxAsset.meta as { anchor?: string; durationMs?: number }
+        const meta = sfxAsset.meta as { anchor?: string; durationMs?: number; impactAtEnd?: boolean }
         const event = timings.sfxEvents.find((e) => e.anchor === meta.anchor)
         if (event) {
           const buf = await downloadBuffer(sfxAsset.storageKey)
           const localPath = join(tmp, `sfx_${sfxAsset.id}.mp3`)
           await writeFile(localPath, buf)
-          sfxEvents.push({ storageKey: localPath, atMs: event.atMs, volumeDb: event.volumeDb })
+          // A build-to-hit cue (riser/swell) must land its IMPACT on the anchor, not its start — so start
+          // it earlier by its own length. Instant one-shots fire on the anchor. adelay clamps at 0.
+          const startMs = meta.impactAtEnd ? Math.max(0, event.atMs - (meta.durationMs ?? 2000)) : event.atMs
+          sfxEvents.push({ storageKey: localPath, atMs: startMs, volumeDb: event.volumeDb })
         }
       }
       const sfxPremixPath = join(tmp, 'sfx_premix.aac')
@@ -111,27 +114,20 @@ export async function mixAudioStep(reelId: string): Promise<void> {
         tmpDir: tmp,
       })
 
-      // Source THIS reel's bed:
+      // Source THIS reel's bed (one coherent bed; the mixer's envelope swells it toward the twist):
+      //  • operator-UPLOADED bed → overrides everything (any channel mode), rights are the operator's.
       //  • AI-music channels → the reel's OWN generated bed (generate_music), tailored to its story.
       //  • preset/upload     → mood-match a bed from the channel's track pool.
       //  • none / AI-bed-missing → empty pool, the mixer renders without music.
-      // Source THIS reel's bed:
-      //  • AI two-section → the reel's OWN intro + climax beds, crossfaded at the twist.
-      //  • AI single-bed  → the reel's one generated bed.
-      //  • preset/upload  → mood-match a bed from the channel's track pool.
-      //  • none / missing  → empty pool, the mixer renders without music.
       const reelMoods = audioScript.music?.moodTags ?? []
-      const twoSection = audioPacks.musicMode === 'ai' && !!reel.musicKey && !!reel.musicKeyB
-      let bedAPath: string | undefined
-      let bedBPath: string | undefined
       let localMusicPack: typeof audioPacks.musicPack = []
 
-      if (twoSection) {
-        bedAPath = join(tmp, 'musicA.mp3')
-        bedBPath = join(tmp, 'musicB.mp3')
-        await writeFile(bedAPath, await downloadBuffer(reel.musicKey!))
-        await writeFile(bedBPath, await downloadBuffer(reel.musicKeyB!))
-        console.log(`[mix] ${reelId} two-section AI score (intro + climax)`)
+      if (reel.musicUploadKey) {
+        console.log(`[mix] ${reelId} using operator-uploaded bed`)
+        const ext = reel.musicUploadKey.split('.').pop() || 'mp3'
+        const musicLocalPath = join(tmp, `music-upload.${ext}`)
+        await writeFile(musicLocalPath, await downloadBuffer(reel.musicUploadKey))
+        localMusicPack = [{ id: 'upload', path: musicLocalPath, type: audioScript.music?.type ?? 'low_drone', peakFrac: 0, moodTags: [] }]
       } else {
         const pool =
           audioPacks.musicMode === 'ai'
@@ -170,7 +166,6 @@ export async function mixAudioStep(reelId: string): Promise<void> {
         musicMoodTags: audioScript.music?.moodTags ?? [],
         bedDb,
         peakDb,
-        ...(twoSection ? { musicBedAPath: bedAPath, musicBedBPath: bedBPath } : {}),
       })
 
       // Upload result

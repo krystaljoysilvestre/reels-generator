@@ -8,8 +8,11 @@ import {
   type CaptionStyle,
   type CaptionPreset,
   type TargetPlatform,
+  type MusicMood,
+  type MusicMode,
   CAPTION_PRESETS,
   PLATFORM_PRESETS,
+  MUSIC_MOOD_OPTIONS,
   resolveCaptionStyle,
 } from '@reels/core'
 import { CaptionPreview } from '@/components/CaptionPreview'
@@ -37,6 +40,8 @@ interface Initial {
   worldBible: WorldBible
   captionStyle: CaptionStyle
   generationMode: 'review' | 'auto'
+  musicMood: MusicMood | null // channel-default background-music mood; null = auto (from audioMood)
+  musicMode: MusicMode // only AI-music channels expose a mood control
 }
 
 export function ChannelSettings({ id, initial }: { id: string; initial: Initial }) {
@@ -52,6 +57,7 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
   const [tone, setTone] = useState<ToneConfig>(initial.toneConfig)
   const [captionStyle, setCaptionStyle] = useState<CaptionStyle>(initial.captionStyle)
   const [generationMode, setGenerationMode] = useState<'review' | 'auto'>(initial.generationMode)
+  const [musicMood, setMusicMood] = useState<MusicMood | null>(initial.musicMood)
   const [region, setRegion] = useState(initial.worldBible.region ?? '')
   const [era, setEra] = useState(initial.worldBible.era ?? '')
   const [locations, setLocations] = useState((initial.worldBible.canonLocations ?? []).join('\n'))
@@ -81,6 +87,7 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
       styleImageKey,
       captionStyle,
       generationMode,
+      musicMood,
       worldBible: {
         region: region.trim(),
         era: era.trim(),
@@ -183,6 +190,24 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
             </div>
           ))}
         </section>
+
+        {/* Background music — AI-music channels only. Sets the default bed mood; each reel can override it. */}
+        {initial.musicMode === 'ai' && (
+          <section className="card space-y-3 p-5">
+            <SectionLabel>Background music</SectionLabel>
+            <p className="text-xs text-muted">The default mood for every reel&rsquo;s bed. Any reel can override it on its storyboard.</p>
+            <select
+              value={musicMood ?? ''}
+              onChange={(e) => setMusicMood(e.target.value === '' ? null : (e.target.value as MusicMood))}
+              className="input"
+            >
+              <option value="">Auto — from the channel&rsquo;s sound</option>
+              {MUSIC_MOOD_OPTIONS.map((m) => (
+                <option key={m.value} value={m.value}>{m.label} — {m.hint}</option>
+              ))}
+            </select>
+          </section>
+        )}
 
         {/* Target platform */}
         <section className="card space-y-3 p-5">

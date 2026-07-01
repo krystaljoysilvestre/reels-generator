@@ -8,7 +8,7 @@ import { promisify } from 'node:util'
 import { rename } from 'node:fs/promises'
 import type { MusicTrack } from '@reels/core'
 import type { Timings } from '@reels/core'
-import { buildGainExpr, buildTwoSectionGains } from '../music/music-sync.js'
+import { buildGainExpr } from '../music/music-sync.js'
 import { selectMusicTrack } from '../music/music-selection.js'
 
 const execFileAsync = promisify(execFile)
@@ -25,10 +25,6 @@ export interface MixAudioParams {
   musicMoodTags: string[]
   bedDb?: number              // default -22
   peakDb?: number             // default -12
-  // Two-section AI scoring: when BOTH are set, the intro bed crossfades into the climax bed at the twist
-  // (bypasses musicPack selection). Local file paths the caller already downloaded.
-  musicBedAPath?: string | undefined
-  musicBedBPath?: string | undefined
 }
 
 const DEFAULT_BED_DB = -22
@@ -102,12 +98,6 @@ async function encodeWithLoudnorm(inputs: string[], pre: string[], durationSec: 
 }
 
 export async function mixAudio(params: MixAudioParams): Promise<void> {
-  // Two-section AI scoring: intro bed → climax bed, crossfaded at the twist.
-  if (params.musicBedAPath && params.musicBedBPath && params.timings.music) {
-    await mixTwoSection(params, params.musicBedAPath, params.musicBedBPath)
-    return
-  }
-
   // No music path — skip entirely (silence + ambience is valid). docs/07 §6 rule 1
   if (!params.musicType || !params.timings.music) {
     await mixNoMusic(params)
@@ -162,47 +152,6 @@ export async function mixAudio(params: MixAudioParams): Promise<void> {
     `[vox][amb]amix=inputs=2:normalize=0[base]`,
     `[base][musduck]amix=inputs=2:normalize=0[withmus]`,
     `[withmus][3]amix=inputs=2:normalize=0[premaster]`,
-  ]
-  await encodeWithLoudnorm(inputs, pre, params.timings.durationMs / 1000, params.outputPath)
-}
-
-// Two-section mix: intro bed (input 2) crossfades into climax bed (input 3) at the twist; both loop to
-// cover the reel, both duck under the voiceover. Layer order matches mixAudio: vox → ambient → music → SFX.
-async function mixTwoSection(params: MixAudioParams, bedAPath: string, bedBPath: string): Promise<void> {
-  const bedDb = params.bedDb ?? DEFAULT_BED_DB
-  const peakDb = params.peakDb ?? DEFAULT_PEAK_DB
-  const { startAnchorMs, peakAnchorMs } = params.timings.music!
-
-  const gp: Parameters<typeof buildTwoSectionGains>[0] = {
-    startAnchorMs,
-    peakAnchorMs,
-    bedDb,
-    peakDb,
-    durationMs: params.timings.durationMs,
-  }
-  if (params.timings.silenceDrop) gp.silenceDropMs = params.timings.silenceDrop
-  const { intro, climax } = buildTwoSectionGains(gp)
-
-  const inputs = [
-    '-i', params.voiceoverPath,   // 0
-    '-i', params.ambientPath,     // 1
-    '-i', bedAPath,               // 2 — intro
-    '-i', bedBPath,               // 3 — climax
-    '-i', params.sfxPremixedPath, // 4
-  ]
-  const pre = [
-    `[1]volume=${bedDb}dB,aloop=loop=-1:size=2e9[amb]`,
-    // intro + climax beds: loop, apply crossfade envelopes, sum into one music stream
-    `[2]aloop=loop=-1:size=2e9,volume='${intro}':eval=frame[musA]`,
-    `[3]aloop=loop=-1:size=2e9,volume='${climax}':eval=frame[musB]`,
-    `[musA][musB]amix=inputs=2:normalize=0[musfull]`,
-    // sidechain duck the music under the voiceover
-    `[0]asplit=2[vox][voxkey]`,
-    `[musfull][voxkey]sidechaincompress=threshold=0.04:ratio=6:attack=20:release=400[musduck]`,
-    // mix layers
-    `[vox][amb]amix=inputs=2:normalize=0[base]`,
-    `[base][musduck]amix=inputs=2:normalize=0[withmus]`,
-    `[withmus][4]amix=inputs=2:normalize=0[premaster]`,
   ]
   await encodeWithLoudnorm(inputs, pre, params.timings.durationMs / 1000, params.outputPath)
 }

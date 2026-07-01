@@ -79,11 +79,12 @@ export async function generateSfx(reelId: string): Promise<void> {
       let totalCost = 0
       for (const cue of sfxCues) {
         if (doneAnchors.has(cue.anchor)) continue // already generated on a prior attempt — don't re-pay
+        // Build-to-hit cues get extra runway to swell; the mixer shifts them so the hit lands on the anchor.
         const sfxResult = await elGenerateSfx({
           prompt: cue.prompt,
           reelId,
           anchorLabel: cue.anchor,
-          durationSec: 2,
+          durationSec: cue.impactAtEnd ? 3 : 2,
         })
         totalCost += sfxResult.costCents
         await db
@@ -95,7 +96,7 @@ export async function generateSfx(reelId: string): Promise<void> {
             storageKey: sfxResult.audioStorageKey,
             provider: 'elevenlabs',
             costCents: sfxResult.costCents,
-            meta: { anchor: cue.anchor, prompt: cue.prompt, durationMs: sfxResult.durationMs },
+            meta: { anchor: cue.anchor, prompt: cue.prompt, durationMs: sfxResult.durationMs, impactAtEnd: cue.impactAtEnd },
           })
           .onConflictDoNothing()
       }

@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { eq } from 'drizzle-orm'
 import { getDb, channels } from '@reels/db'
-import { ToneConfigSchema, WorldBibleSchema, CaptionStyleSchema, TargetPlatformSchema, PLATFORM_PRESETS } from '@reels/core'
+import { ToneConfigSchema, WorldBibleSchema, CaptionStyleSchema, TargetPlatformSchema, PLATFORM_PRESETS, AudioPacksSchema, MusicMoodSchema } from '@reels/core'
 import { getSession } from '@/lib/auth'
 
 // Edit a channel's creative bible after creation. Only the fields below are editable here;
@@ -24,6 +24,7 @@ const UpdateSchema = z
     captionStyle: CaptionStyleSchema,
     worldBible: WorldBibleSchema,
     generationMode: z.enum(['review', 'auto']),
+    musicMood: MusicMoodSchema.nullable(), // channel-default background-music mood; null = auto (fall back to audioMood). Lives in audioPacks jsonb.
   })
   .partial()
   .strict()
@@ -42,11 +43,21 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   // `description` may be explicitly null (cleared); everything else only updates if present.
+  // `musicMood` isn't a column — it lives inside the audioPacks jsonb, merged in below.
   const patch = parsed.data
   const updates: Record<string, unknown> = { updatedAt: new Date() }
   for (const [k, v] of Object.entries(patch)) {
+    if (k === 'musicMood') continue
     if (k === 'description') updates[k] = v ?? null
     else if (v !== undefined) updates[k] = v
+  }
+
+  // Channel-default music mood → merge into audioPacks (null clears it → reels fall back to audioMood).
+  if (patch.musicMood !== undefined) {
+    const packs = AudioPacksSchema.parse(existing.audioPacks ?? {})
+    if (patch.musicMood === null) delete packs.musicMood
+    else packs.musicMood = patch.musicMood
+    updates['audioPacks'] = packs
   }
 
   // Keep length within the (possibly newly-chosen) platform's hard cap.

@@ -2,7 +2,7 @@ import { getDb, channels } from '@reels/db'
 import { eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { requireAuth } from '@/lib/auth'
-import { ToneConfigSchema, WorldBibleSchema, CaptionStyleSchema } from '@reels/core'
+import { ToneConfigSchema, WorldBibleSchema, CaptionStyleSchema, AudioPacksSchema } from '@reels/core'
 import { ChannelSettings } from './ChannelSettings'
 
 export const dynamic = 'force-dynamic'
@@ -32,6 +32,8 @@ export default async function ChannelSettingsPage({ params }: { params: Promise<
         worldBible: WorldBibleSchema.parse(channel.worldBible ?? {}),
         captionStyle: CaptionStyleSchema.parse(channel.captionStyle ?? {}),
         generationMode: (channel.generationMode === 'auto' ? 'auto' : 'review'),
+        musicMood: AudioPacksSchema.parse(channel.audioPacks ?? {}).musicMood ?? null,
+        musicMode: AudioPacksSchema.parse(channel.audioPacks ?? {}).musicMode,
       }}
     />
   )

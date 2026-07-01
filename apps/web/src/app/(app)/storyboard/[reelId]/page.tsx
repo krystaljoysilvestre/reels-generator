@@ -2,7 +2,7 @@ import { getDb, reels, scenes, assets, channels, pipelineSteps } from '@reels/db
 import { and, desc, eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { requireAuth } from '@/lib/auth'
-import { type ChannelVoice, type VoiceSettings, moodToVoiceSettings, ToneConfigSchema, AudioPacksSchema, OperatorSfxSchema } from '@reels/core'
+import { type ChannelVoice, type VoiceSettings, moodToVoiceSettings, ToneConfigSchema, AudioPacksSchema, OperatorSfxSchema, PRESET_BEDS } from '@reels/core'
 import { channelMood, MOOD_TINT } from '@/lib/pipeline-phases'
 import { StoryboardEditor } from './StoryboardEditor'
 
@@ -67,12 +67,20 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
   // browser cache with the reel's updatedAt (an edit bumps it) — there's no per-plate asset id to use.
   const renderAsset = reelAssets.find((a) => a.kind === 'render')
   const renderUrl = renderAsset ? `/api/asset?key=${encodeURIComponent(renderAsset.storageKey)}&v=${renderAsset.id}` : null
-  // This reel's own AI-composed beds (musicMode='ai') — intro + climax — heard/vetted on the review surface.
-  const musicUrl = reel.musicKey ? `/api/asset?key=${encodeURIComponent(reel.musicKey)}` : null
-  const musicUrlB = reel.musicKeyB ? `/api/asset?key=${encodeURIComponent(reel.musicKeyB)}` : null
-  // AI-music channels compose + vet the bed at the storyboard (it's auto-requested on load); other
-  // modes source their bed from the channel pool at render, so there's nothing to vet here.
-  const aiMusic = AudioPacksSchema.parse(channel?.audioPacks ?? {}).musicMode === 'ai'
+  // Background music reflects the channel's chosen mode (Sound step): AI → a per-reel mood dropdown (steers
+  // the bed generated at render); preset/upload → the actual chosen track(s), shown read-only with a preview;
+  // none → silent. For preset/upload we resolve a friendly label + a playable URL for each pool track.
+  const channelAudioPacks = AudioPacksSchema.parse(channel?.audioPacks ?? {})
+  const musicMode = channelAudioPacks.musicMode
+  const aiMusic = musicMode === 'ai'
+  const channelMusicMood = channelAudioPacks.musicMood ?? null
+  const channelMusicTracks = channelAudioPacks.musicPack.map((t) => {
+    const preset = PRESET_BEDS.find((b) => b.id === t.id)
+    const label = preset ? `${preset.niche} · ${preset.mood}` : musicMode === 'upload' ? 'Uploaded track' : t.id
+    return { label, url: `/api/asset?key=${encodeURIComponent(t.path)}` }
+  })
+  // Per-reel operator-uploaded bed (overrides the channel's music at render); null if none.
+  const musicUploadUrl = reel.musicUploadKey ? `/api/asset?key=${encodeURIComponent(reel.musicUploadKey)}` : null
 
   // Starting point for the voice-picker's delivery sliders: the reel's saved override if it has one, else
   // the channel's baseline delivery (tone only). Tweaking from here overrides the per-story auto-tuning.
@@ -116,9 +124,12 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
       sceneImageHistory={sceneImageHistory}
       sceneVideoVariations={sceneVideoVariations}
       renderUrl={renderUrl}
-      musicUrl={musicUrl}
-      musicUrlB={musicUrlB}
+      musicMood={reel.musicMood}
+      channelMusicMood={channelMusicMood}
       aiMusic={aiMusic}
+      musicMode={musicMode}
+      channelMusicTracks={channelMusicTracks}
+      musicUploadUrl={musicUploadUrl}
       initialVideoEffects={Array.isArray(reel.videoEffects) ? (reel.videoEffects as string[]) : null}
       initialSoundNotes={reel.soundNotes ?? ''}
       initialOperatorSfx={OperatorSfxSchema.parse(reel.operatorSfx ?? [])}

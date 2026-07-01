@@ -160,9 +160,11 @@ export const reels = pgTable(
     storyBible: jsonb('story_bible'),
     timings: jsonb('timings'),             // ComputeTimingsOutput (docs/08)
     voiceSettings: jsonb('voice_settings'), // per-reel narrator DELIVERY override (ElevenLabs voice_settings); null = auto-derive from the story's mood
-    musicKey: text('music_key'),           // R2 key of THIS reel's AI bed — the INTRO/build section (musicMode='ai'); null otherwise
-    musicKeyB: text('music_key_b'),         // second AI bed — the CLIMAX section; crossfaded in at the twist (two-section scoring). null = single-bed
-    musicLengthMs: integer('music_length_ms'), // length both beds were generated at; the mixer loops to cover the reel
+    musicKey: text('music_key'),           // R2 key of THIS reel's single AI bed (musicMode='ai'); null otherwise
+    musicKeyB: text('music_key_b'),         // DORMANT — legacy climax bed from the old two-section score; no longer written or read (single-bed now). Safe to drop in a dedicated migration.
+    musicMood: text('music_mood'),          // per-reel background-music mood override (MusicMood enum); null = inherit the channel default
+    musicUploadKey: text('music_upload_key'), // per-reel operator-UPLOADED bed (R2 key); when set it overrides AI gen / preset pool at render. Rights are the operator's — we don't clear them.
+    musicLengthMs: integer('music_length_ms'), // length the bed was generated at; the mixer loops to cover the reel
     // Audio direction notes — free-text, one cue per line (e.g. "Door opens softly.", "Female voice from
     // a nearby stall repeats the narrator's line."). Auto-drafted by the enrichment pass after the script
     // is written, fully operator-editable. The narration is never touched. At render the interpreter turns
@@ -221,6 +223,10 @@ export const scenes = pgTable(
     // Full contiguous narration substring (docs/08 [M9] — not a "start…end" marker)
     narrationText: text('narration_text').notNull(),
     visualPrompt: text('visual_prompt'),  // content only, style injected server-side
+    // The pristine scenes-generation prompt, frozen at breakdown and never touched by regens. `visualPrompt`
+    // accumulates "vary + instruction" revisions; this preserves the original so "Fresh take" can re-roll
+    // from the scene as first written. Null on pre-migration scenes → callers fall back to `visualPrompt`.
+    visualPromptBase: text('visual_prompt_base'),
     motionPrompt: text('motion_prompt'),
     // Optional on-screen text — a title/overlay burned onto this scene at render, separate from the
     // spoken captions (which come from narrationText). Null/empty = no overlay.

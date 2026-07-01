@@ -204,6 +204,27 @@
       "when": 1782798413784,
       "tag": "0028_friendly_doctor_strange",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1782877404351,
+      "tag": "0029_blue_mystique",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1782883977791,
+      "tag": "0030_slimy_patch",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1782887715797,
+      "tag": "0031_yellow_piledriver",
+      "breakpoints": true
     }
   ]
 }

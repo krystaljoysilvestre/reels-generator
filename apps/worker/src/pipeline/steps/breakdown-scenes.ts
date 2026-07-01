@@ -190,6 +190,7 @@ export async function breakdownScenes(reelId: string): Promise<void> {
         idx: i + 1,
         narrationText: s.narrationText,
         visualPrompt: s.imagePrompt,   // content only; style + bible entities injected in generate_images
+        visualPromptBase: s.imagePrompt,  // frozen original → "Fresh take" always re-rolls from this
         motionPrompt: cameraMovePrompt(s.cameraMove),  // LLM's camera-move pick → animator motion text
         tier: s.tier,
         isHero: s.tier === 'video', // durable hero designation = the LLM's video pick (tier may change later)
@@ -204,6 +205,7 @@ export async function breakdownScenes(reelId: string): Promise<void> {
         set: {
           narrationText: s.narrationText,
           visualPrompt: s.imagePrompt,
+          visualPromptBase: s.imagePrompt,
           motionPrompt: cameraMovePrompt(s.cameraMove),
           tier: s.tier,
           isHero: s.tier === 'video',

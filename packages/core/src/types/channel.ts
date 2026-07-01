@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { MusicMoodSchema } from '../audio/music-mood.js'
 
 // Genre-neutral tone axes (work for any niche, not just horror):
 //   intensity — light/easygoing → heavy/serious
@@ -382,6 +383,8 @@ export const AudioPacksSchema = z.object({
   // channels created before the Sound step valid (SFX on, balanced).
   sfxEnabled: z.boolean().default(true),
   musicIntensity: MusicIntensitySchema.default('balanced'),
+  // Channel-default background-music mood (operator dropdown). Unset → falls back to audioMood's arc+tags.
+  musicMood: MusicMoodSchema.optional(),
   audioMood: AudioMoodSchema.optional(),
 })
 export type AudioPacks = z.infer<typeof AudioPacksSchema>

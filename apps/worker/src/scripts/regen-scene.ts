@@ -34,7 +34,9 @@ async function main() {
   const engine = imageEngineForGenre(channel.genreCategory)
   const aspect = (PLATFORM_PRESETS[(channel.targetPlatform ?? 'all') as keyof typeof PLATFORM_PRESETS] ?? PLATFORM_PRESETS.all).aspect
   const lighting = storyBible ? reelLightingDirective(channel.genreCategory, storyBible.continuity.timeline) : undefined
-  const finalPrompt = assembleImagePrompt((scene.visualPrompt || '').trim(), channel.stylePreset, expansion, lighting)
+  // 'fresh' re-rolls from the pristine scenes-generation prompt; 'vary' builds on the current (revised) one.
+  const basePrompt = mode === 'fresh' ? scene.visualPromptBase || scene.visualPrompt : scene.visualPrompt
+  const finalPrompt = assembleImagePrompt((basePrompt || '').trim(), channel.stylePreset, expansion, lighting)
   const negativePrompt = assembleNegativePrompt({ genreCategory: channel.genreCategory })
 
   const entityPlateKeys = storyBible
