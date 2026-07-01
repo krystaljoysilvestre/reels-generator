@@ -11,7 +11,6 @@ import {
 import {
   FAL_CONTENT_FILTER_CODES,
   FAL_VIDEO_COST_CENTS_PER_SEC,
-  FAL_VIDEO_COST_CENTS_PER_SEC_BUDGET,
   type FalEngine,
 } from './config.js'
 
@@ -66,29 +65,21 @@ export interface VideoGenParams {
   sceneIdx: number
   variationIdx: number
   engine: FalEngine
-  budget?: boolean
 }
 
 export async function generateVideo(params: VideoGenParams): Promise<ProviderResult> {
   initFal()
 
-  const modelId = params.budget
-    ? params.engine.videoFallbackModelId
-    : params.engine.videoModelId
+  const modelId = params.engine.videoModelId
   const durationSec = params.durationSec ?? 5
-  const costPerSec = params.budget
-    ? FAL_VIDEO_COST_CENTS_PER_SEC_BUDGET
-    : FAL_VIDEO_COST_CENTS_PER_SEC
+  const costPerSec = FAL_VIDEO_COST_CENTS_PER_SEC
 
   try {
     const imgBuf = await downloadBuffer(params.imageStorageKey)
     const imgBase64 = `data:image/webp;base64,${imgBuf.toString('base64')}`
 
-    // Kling v2.5 takes duration as a STRING enum ("5"/"10") + an aspect_ratio; Wan (budget) keeps the
-    // original numeric-duration shape it was verified against.
-    const input = params.budget
-      ? { image_url: imgBase64, prompt: params.motionPrompt, duration: durationSec }
-      : { image_url: imgBase64, prompt: params.motionPrompt, duration: String(durationSec), aspect_ratio: '9:16' }
+    // Kling v2.5 takes duration as a STRING enum ("5"/"10") + an aspect_ratio.
+    const input = { image_url: imgBase64, prompt: params.motionPrompt, duration: String(durationSec), aspect_ratio: '9:16' }
 
     const result = await withProviderLimit('fal', () => fal.subscribe(modelId, { input }))
 

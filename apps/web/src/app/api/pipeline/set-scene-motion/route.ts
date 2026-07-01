@@ -5,7 +5,7 @@ import { eq, and, inArray } from 'drizzle-orm'
 import { resolveMotionSettings } from '@reels/core'
 import { getSession } from '@/lib/auth'
 
-// Persist a scene's motion: how it moves (motionPrompt text) and/or its quality + length (motionSettings).
+// Persist a scene's motion: how it moves (motionPrompt text) and/or its clip length (motionSettings).
 // Both are used by the on-demand preview and the render-time animation, so editing either changes the
 // clip. When anything actually changes, the cached clip is now stale — delete it so the next preview/
 // render re-animates with the new settings.
@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
   if (motionSettings !== undefined) {
     const next = resolveMotionSettings(motionSettings)
     const prev = resolveMotionSettings(scene?.motionSettings)
-    if (prev.quality !== next.quality || prev.durationSec !== next.durationSec) { update.motionSettings = next; changed = true }
+    if (prev.durationSec !== next.durationSec) { update.motionSettings = next; changed = true }
   }
 
   if (Object.keys(update).length > 0) {

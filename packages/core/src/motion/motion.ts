@@ -45,25 +45,23 @@ export function composeMotion(moveKey: string, intensity: IntensityKey): string 
   return base + (INTENSITIES.find((i) => i.key === intensity)?.suffix ?? '')
 }
 
-// ── Motion settings (quality + length) ─────────────────────────────────────────
+// ── Motion settings (clip length) ──────────────────────────────────────────────
 // Stored as jsonb on a scene; read by both the on-demand preview and the render-time animate step.
-// 'budget' uses the cheaper/faster fallback model (~half the cost). Kling supports 5s or 10s; the budget
-// model is 5s only — callers should clamp accordingly.
+// Kling v2.5 supports 5s or 10s clips.
 export const MotionSettingsSchema = z.object({
-  quality: z.enum(['standard', 'budget']).default('standard'),
   durationSec: z.union([z.literal(5), z.literal(10)]).default(5),
 })
 export type MotionSettings = z.infer<typeof MotionSettingsSchema>
-export const DEFAULT_MOTION_SETTINGS: MotionSettings = { quality: 'standard', durationSec: 5 }
+export const DEFAULT_MOTION_SETTINGS: MotionSettings = { durationSec: 5 }
 
-// Tolerant resolver for the jsonb column (null/unknown → defaults). Budget model is 5s only.
+// Tolerant resolver for the jsonb column (null/unknown → defaults).
 export function resolveMotionSettings(raw: unknown): MotionSettings {
   const parsed = MotionSettingsSchema.safeParse(raw ?? {})
-  const s = parsed.success ? parsed.data : DEFAULT_MOTION_SETTINGS
-  return s.quality === 'budget' ? { ...s, durationSec: 5 } : s
+  return parsed.success ? parsed.data : DEFAULT_MOTION_SETTINGS
 }
 
-// Per-second cost in cents, mirroring the provider's tiers (Kling 10¢/s, budget 5¢/s).
+// Per-second cost in cents (Kling v2.5 Turbo Pro, ~7¢/s). Keep in sync with
+// FAL_VIDEO_COST_CENTS_PER_SEC in @reels/providers (core can't import providers).
 export function motionCostCents(s: MotionSettings): number {
-  return (s.quality === 'budget' ? 5 : 10) * s.durationSec
+  return 7 * s.durationSec
 }

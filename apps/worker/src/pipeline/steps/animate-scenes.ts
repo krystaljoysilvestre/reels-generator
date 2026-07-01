@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { mkdir, writeFile, readFile } from 'node:fs/promises'
 import { getDb, reels, scenes, assets } from '@reels/db'
 import { generateVideo, buildInputHash, FalEngineSchema, downloadBuffer, llmCall } from '@reels/providers'
-import { resolveMotionSettings, TimingsSchema } from '@reels/core'
+import { TimingsSchema } from '@reels/core'
 import { buildVideoQAPrompt, VIDEO_QA_V1_VERSION, VideoQASchema } from '../../prompts-bridge.js'
 import { runStep } from '../harness.js'
 
@@ -14,7 +14,7 @@ import { runStep } from '../harness.js'
 // tier=video scenes only. One clip per scene (render composites variationIdx 0). Model audio stripped
 // at render.
 // CLIP LENGTH: Kling supports 5s or 10s; we pick by the scene's narration SPAN (from timings) so a hero
-//   line longer than 5s gets a 10s clip instead of freezing/looping at render. Budget (Wan) is 5s only.
+//   line longer than 5s gets a 10s clip instead of freezing/looping at render.
 // VIDEO QA: i2v is where faces melt / hands warp / identities morph — and the opening is always animated,
 //   so the most-watched shot is the most at risk. We sample two frames (mid + last) and vision-check them;
 //   a fail re-rolls ONCE (i2v is stochastic). Improves rather than gates — a reel is never failed on it.
@@ -108,18 +108,16 @@ export async function animateScenes(reelId: string): Promise<void> {
         .map((a) => (a.meta as Record<string, unknown>)['variationIdx']),
     )
 
-    const motion = resolveMotionSettings(scene.motionSettings)
     // Clip length from the scene's narration span: a beat longer than ~5s gets a 10s clip so it isn't
-    // stretched thin at render. Budget tier (Wan) is 5s only, so resolveMotionSettings already clamps it.
+    // stretched thin at render.
     const spanSec = spanSecByIdx.get(scene.idx) ?? 0
-    const durationSec = motion.quality === 'budget' ? 5 : spanSec > 5.5 ? 10 : 5
+    const durationSec = spanSec > 5.5 ? 10 : 5
 
     for (let v = 0; v < variationCount; v++) {
       if (haveVariation.has(v)) continue
       const inputHash = buildInputHash('animate_scenes.v1', {
         imageKey: imageAsset.storageKey,
         motionPrompt: scene.motionPrompt ?? '',
-        quality: motion.quality,
         durationSec,
         variationIdx: v,
         reelId,
@@ -140,7 +138,6 @@ export async function animateScenes(reelId: string): Promise<void> {
               imageStorageKey: imageAsset.storageKey,
               motionPrompt: scene.motionPrompt ?? 'slow cinematic drift',
               durationSec,
-              budget: motion.quality === 'budget',
               reelId,
               sceneIdx: scene.idx,
               variationIdx: v,

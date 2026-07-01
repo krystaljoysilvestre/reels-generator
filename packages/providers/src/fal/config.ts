@@ -10,13 +10,11 @@ export const FalEngineSchema = z.object({
   // the push-in where v1.6 washed it out. duration is a STRING enum ("5"/"10") and it takes aspect_ratio —
   // see ./client.ts. i2v is only invoked for `tier:'video'` hero beats.
   videoModelId: z.string().default('fal-ai/kling-video/v2.5-turbo/pro/image-to-video'),
-  videoFallbackModelId: z.string().default('fal-ai/wan-i2v'), // Budget Wan i2v (~5c/s, 720p) — verified working
 })
 export type FalEngine = z.infer<typeof FalEngineSchema>
 
 // Cost estimates (USD) — re-verify at build
 export const FAL_VIDEO_COST_CENTS_PER_SEC = 7 // ~$0.07/sec, Kling v2.5 Turbo Pro ($0.35/5s)
-export const FAL_VIDEO_COST_CENTS_PER_SEC_BUDGET = 5 // ~$0.05/sec, Wan
 
 // ── Still images (Gemini 2.5 Flash Image, aka "nano-banana") ──────────────────
 // Reference-conditioned image generation for cross-scene entity continuity. The edit endpoint takes

@@ -67,7 +67,6 @@ export async function POST(req: NextRequest) {
         imageStorageKey: imageAsset.storageKey,
         motionPrompt: scene.motionPrompt ?? 'slow cinematic drift',
         durationSec: motion.durationSec,
-        budget: motion.quality === 'budget',
         reelId,
         sceneIdx,
         variationIdx: v,

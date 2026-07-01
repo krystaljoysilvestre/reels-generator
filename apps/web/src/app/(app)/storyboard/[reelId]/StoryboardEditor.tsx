@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import type { InferSelectModel } from 'drizzle-orm'
 import type { scenes, stories } from '@reels/db'
-import type { ChannelVoice, VoiceSettings, MotionSettings, OperatorCue } from '@reels/core'
+import type { ChannelVoice, VoiceSettings, OperatorCue } from '@reels/core'
 import { resolveMotionSettings, motionCostCents, operatorCueLabel, VIDEO_EFFECTS, MUSIC_MOODS, MUSIC_MOOD_OPTIONS, type MusicMood, DELIVERY_PRESETS, DELIVERY_PRESET_OPTIONS, applyDeliveryPreset, matchDeliveryPreset, type DeliveryPreset } from '@reels/core'
 import { GenreLoader } from '@/components/GenreLoader'
 import { usePipelineStatus } from '@/hooks/usePipelineStatus'
@@ -368,13 +368,10 @@ export function StoryboardEditor({
   // just sets the scene's tier (no generation, no spend). Optimistic local update so the tile flips at
   // once. A per-scene in-flight guard drops rapid flips so we don't burst the endpoint. A cached clip is
   // kept when switching off, so flipping back on instantly plays it again.
-  // Scene type sets how the scene renders + its cost tier, in one action:
+  // Scene type sets how the scene renders, in one action:
   //   static → a still (zoom/pan only, no AI-video cost)
-  //   motion → AI video at budget quality (cheaper)
-  //   hero   → AI video at premium quality
-  // tier drives the still/video render; quality (motionSettings) drives the cost + provider. Optimistic;
-  // a per-scene in-flight guard drops rapid taps. Changing quality clears the stale clip (saveSceneMotion).
-  async function setSceneType(sceneIdx: number, type: 'static' | 'motion' | 'hero') {
+  //   video  → AI video (Kling i2v). Optimistic; a per-scene in-flight guard drops rapid taps.
+  async function setSceneType(sceneIdx: number, type: 'static' | 'video') {
     if (tierBusyRef.current.has(sceneIdx)) return
     tierBusyRef.current.add(sceneIdx)
     const tier = type === 'static' ? 'still' : 'video'
@@ -385,9 +382,6 @@ export function StoryboardEditor({
         body: JSON.stringify({ reelId: reel.id, sceneIdx, tier }),
         headers: { 'Content-Type': 'application/json' },
       })
-      if (tier === 'video') {
-        await saveSceneMotion(sceneIdx, { motionSettings: { quality: type === 'motion' ? 'budget' : 'standard', durationSec: 5 } })
-      }
     } catch { /* optimistic — the next render reconciles tier anyway */ }
     finally { tierBusyRef.current.delete(sceneIdx) }
   }
@@ -410,23 +404,6 @@ export function StoryboardEditor({
     }
     toast('This scene’s moving now.', 'success')
     router.refresh() // pull in the new video asset so the tile starts playing it
-  }
-
-  // Persist a scene's motion — how it moves (motionPrompt) and/or quality + length (motionSettings).
-  // Applies to both the on-demand preview and the render-time animation. Optimistic local update; any
-  // change clears the stale clip server-side, so we refresh + drop the loaded flag to re-animate.
-  async function saveSceneMotion(sceneIdx: number, payload: { motionPrompt?: string; motionSettings?: MotionSettings }) {
-    setScenes((prev) => prev.map((s) => (s.idx === sceneIdx ? { ...s, ...payload } : s)))
-    const res = await fetch('/api/pipeline/set-scene-motion', {
-      method: 'POST',
-      body: JSON.stringify({ reelId: reel.id, sceneIdx, ...payload }),
-      headers: { 'Content-Type': 'application/json' },
-    }).catch(() => null)
-    const j = res && res.ok ? await res.json().catch(() => null) : null
-    if (j?.changed) {
-      setLoadedMedia((s) => { const n = new Set(s); n.delete(sceneIdx); return n })
-      router.refresh()
-    }
   }
 
   // Persist an edited scene's narration (on blur). The route rebuilds story.body from all scenes so the
@@ -1653,7 +1630,7 @@ function SceneInspector({
   sceneSaving: 'saving' | 'saved' | undefined
   setScenes: React.Dispatch<React.SetStateAction<Scene[]>>
   setSceneSaving: React.Dispatch<React.SetStateAction<Record<number, 'saving' | 'saved'>>>
-  onSetSceneType: (idx: number, type: 'static' | 'motion' | 'hero') => void
+  onSetSceneType: (idx: number, type: 'static' | 'video') => void
   onPreview: (idx: number) => void
   onReshoot: (idx: number, opts?: { instruction?: string; mode?: 'vary' | 'fresh' }) => void
   history: { assetId: string; url: string }[] // this scene's images oldest→newest (for Undo/Redo)
@@ -1900,8 +1877,7 @@ function SceneInspector({
       <div className="order-2 flex w-full flex-shrink-0 flex-col gap-6 lg:w-72">
         {imgSrc && (() => {
           const settings = resolveMotionSettings(scene.motionSettings)
-          const sceneType: 'static' | 'motion' | 'hero' = scene.tier === 'still' ? 'static' : settings.quality === 'budget' ? 'motion' : 'hero'
-          const isVideoType = sceneType !== 'static'
+          const isVideoType = scene.tier === 'video'
           const previewCost = `$${(motionCostCents(settings) / 100).toFixed(2)}`
           const runChange = () => {
             const instruction = changeText.trim()
@@ -1912,9 +1888,7 @@ function SceneInspector({
           }
           return (
             <>
-              {/* Format — two selectable rows. The Video row expands IN PLACE to reveal its quality choice
-                  and preview, and the cost shown in its header tracks the chosen quality, so price lives in
-                  one spot and the nesting is obvious. */}
+              {/* Format — two selectable rows. The Video row expands IN PLACE to reveal its preview. */}
               <div className="flex flex-col gap-2">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">Format</p>
 
@@ -1939,7 +1913,7 @@ function SceneInspector({
                     type="button"
                     disabled={animating}
                     aria-pressed={isVideoType}
-                    onClick={() => { if (!isVideoType) onSetSceneType(scene.idx, 'hero') }}
+                    onClick={() => { if (!isVideoType) onSetSceneType(scene.idx, 'video') }}
                     className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left transition-colors disabled:cursor-wait"
                   >
                     <span className="flex items-center gap-2 text-xs font-semibold text-ink">
@@ -1950,28 +1924,6 @@ function SceneInspector({
                   </button>
                   {isVideoType && (
                     <div className="flex flex-col gap-3 border-t border-accent/20 px-3 py-3">
-                      {/* Quality — segmented; the header cost above reflects the pick */}
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[11px] font-medium text-muted">Quality</span>
-                        <div className="inline-flex rounded-lg bg-subtle p-0.5" role="group" aria-label={`Scene ${scene.idx} video quality`}>
-                          {([
-                            { key: 'motion' as const, label: 'Basic' },
-                            { key: 'hero' as const, label: 'Best' },
-                          ]).map((q) => {
-                            const active = sceneType === q.key
-                            return (
-                              <button
-                                key={q.key}
-                                type="button"
-                                disabled={animating}
-                                aria-pressed={active}
-                                onClick={() => onSetSceneType(scene.idx, q.key)}
-                                className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition-colors disabled:cursor-wait ${active ? 'bg-surface text-accent shadow-xs' : 'text-muted hover:text-ink'}`}
-                              >{q.label}</button>
-                            )
-                          })}
-                        </div>
-                      </div>
                       {/* Preview — optional; the scene becomes video at render either way. */}
                       {variations.length === 0 ? (
                         <div className="flex flex-col gap-1">
