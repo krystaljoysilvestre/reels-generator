@@ -31,6 +31,17 @@ export function cameraMovePrompt(key: string | null | undefined): string {
   return CAMERA_MOVES.find((m) => m.key === key)?.prompt ?? CAMERA_MOVES[0].prompt
 }
 
+// Compose the animator's motion prompt from the director's picks. The SUBJECT's own motion (if any — a
+// horror scare/reveal where the threat itself moves, e.g. a grin stretching wider) LEADS, the CAMERA move
+// FOLLOWS, so i2v animates the threat and not just the frame. Empty subjectMotion → just the camera phrase
+// (unchanged behavior — this is the common case and every still). Video beats only; a still's stored prompt
+// stays a bare camera phrase so render-time parseMotion() can still recover its Ken Burns move.
+export function animatorMotionPrompt(cameraMoveKey: string | null | undefined, subjectMotion?: string | null): string {
+  const camera = cameraMovePrompt(cameraMoveKey)
+  const subject = (subjectMotion ?? '').trim()
+  return subject ? `${subject}; ${camera}` : camera
+}
+
 // Camera move + intensity round-trip through the single motionPrompt text: the move is the prefix, the
 // intensity an optional suffix. An empty result = Auto (the animator uses its own default).
 export function parseMotion(text: string | null | undefined): { moveKey: string; intensity: IntensityKey } {

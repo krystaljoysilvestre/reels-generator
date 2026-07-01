@@ -22,6 +22,11 @@ export const SceneOutputSchema = z.object({
   // animator's motion text at breakdown. An invalid value trips the schema's repair loop; cameraMovePrompt
   // also falls back to a slow drift if anything unexpected slips through.
   cameraMove: z.enum(CAMERA_MOVE_KEYS),
+  // Optional SUBJECT motion for a VIDEO beat: what the subject/threat itself DOES in the shot (a horror
+  // scare/reveal — the grin stretching wider, the figure looming closer, the head tilting). Empty for beats
+  // where only the CAMERA moves (and for stills). Composed AHEAD of the camera move into the animator's
+  // motion prompt at breakdown (see animatorMotionPrompt) — so the payoff animates the threat instead of freezing.
+  subjectMotion: z.string().default(''),
   tier: z.enum(['still', 'video']),
   mood: z.array(z.string()).min(1).max(3),
   location: z.string().min(1), // canonical place label; same label across scenes = same place (drives i2i continuity)

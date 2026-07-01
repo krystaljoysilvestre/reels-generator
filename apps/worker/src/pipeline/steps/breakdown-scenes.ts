@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { getDb, reels, stories, scenes, channels } from '@reels/db'
 import { llmCall, buildInputHash } from '@reels/providers'
-import { ScenesOutputSchema, WorldBibleSchema, StoryBibleSchema, EMPTY_STORY_BIBLE, resolveEntities, reviewSceneBreakdown, cameraMovePrompt, slug } from '@reels/core'
+import { ScenesOutputSchema, WorldBibleSchema, StoryBibleSchema, EMPTY_STORY_BIBLE, resolveEntities, reviewSceneBreakdown, cameraMovePrompt, animatorMotionPrompt, slug } from '@reels/core'
 import { buildScenesPrompt, SCENES_V1_VERSION, buildPeakExtractPrompt, PEAK_EXTRACT_V1_VERSION, PeakExtractSchema } from '../../prompts-bridge.js'
 import { runStep } from '../harness.js'
 
@@ -183,6 +183,11 @@ export async function breakdownScenes(reelId: string): Promise<void> {
   // silently overwrite a scene. Post-tiling the array is already in narration order, so i+1 is canonical.
   for (let i = 0; i < result.output.scenes.length; i++) {
     const s = result.output.scenes[i]!
+    // Video beats fold in the director's SUBJECT motion (scare/reveal = the threat moves) ahead of the
+    // camera move; stills keep a bare camera phrase so render-time parseMotion() recovers their Ken Burns move.
+    const motionPrompt = s.tier === 'video'
+      ? animatorMotionPrompt(s.cameraMove, s.subjectMotion)
+      : cameraMovePrompt(s.cameraMove)
     await db
       .insert(scenes)
       .values({
@@ -191,7 +196,7 @@ export async function breakdownScenes(reelId: string): Promise<void> {
         narrationText: s.narrationText,
         visualPrompt: s.imagePrompt,   // content only; style + bible entities injected in generate_images
         visualPromptBase: s.imagePrompt,  // frozen original → "Fresh take" always re-rolls from this
-        motionPrompt: cameraMovePrompt(s.cameraMove),  // LLM's camera-move pick → animator motion text
+        motionPrompt,
         tier: s.tier,
         isHero: s.tier === 'video', // durable hero designation = the LLM's video pick (tier may change later)
         mood: s.mood,
@@ -206,7 +211,7 @@ export async function breakdownScenes(reelId: string): Promise<void> {
           narrationText: s.narrationText,
           visualPrompt: s.imagePrompt,
           visualPromptBase: s.imagePrompt,
-          motionPrompt: cameraMovePrompt(s.cameraMove),
+          motionPrompt,
           tier: s.tier,
           isHero: s.tier === 'video',
           mood: s.mood,
