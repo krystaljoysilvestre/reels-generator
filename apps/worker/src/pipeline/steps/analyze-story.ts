@@ -1,9 +1,22 @@
 import { eq } from 'drizzle-orm'
 import { getDb, reels, stories, channels } from '@reels/db'
 import { llmCall, buildInputHash } from '@reels/providers'
-import { WorldBibleSchema, StoryBibleSchema, EMPTY_STORY_BIBLE, normalizeCanon, mergeBible, type StoryBible } from '@reels/core'
+import {
+  WorldBibleSchema,
+  StoryBibleSchema,
+  EMPTY_STORY_BIBLE,
+  normalizeCanon,
+  mergeBible,
+  preserveLockedEntities,
+  type StoryBible,
+} from '@reels/core'
 import { buildStoryAnalyzerPrompt, STORY_ANALYZER_V1_VERSION } from '../../prompts-bridge.js'
 import { runStep } from '../harness.js'
+
+// analyze_story produces a TEXT-ONLY bible — no images. Reference plates used to be minted here for every
+// entity, but that paid for plates on entities the story never uses (channel-canon noise) and before the
+// operator had reviewed the cast at all. Plates are now minted lazily in generate_images, only for entities
+// the SCENES actually reference (see generate-images.ts) — so the bible_review gate is free + text-only.
 
 // analyze_story — builds the per-reel Story Bible (symbol table of recurring entities) BEFORE the scene
 // breakdown, so the breakdown references entities and the assembler splices their frozen descriptions
@@ -28,6 +41,10 @@ export async function analyzeStory(reelId: string): Promise<void> {
   const worldBible = WorldBibleSchema.parse(channel.worldBible)
   const channelCanon = normalizeCanon(worldBible)
 
+  // Operator-locked entities from a prior derive are HUMAN TRUTH — carried forward so a re-run can't
+  // overwrite a correction (and their already-minted plates are reused, not re-paid).
+  const priorBible = reel.storyBible ? StoryBibleSchema.parse(reel.storyBible) : null
+
   const { system, userMessage } = buildStoryAnalyzerPrompt({
     narration: story.body,
     channelCanon,
@@ -42,6 +59,8 @@ export async function analyzeStory(reelId: string): Promise<void> {
   const result = await runStep(
     { reelId, stepName: 'analyze_story', inputHash },
     async () => {
+      let bible: StoryBible
+      let cost = 0
       try {
         const llm = await llmCall({
           templateVersion: STORY_ANALYZER_V1_VERSION,
@@ -53,11 +72,15 @@ export async function analyzeStory(reelId: string): Promise<void> {
         // because of the schema defaults, so the generic on llmCall infers the optional-fields shape.
         const analyzed: StoryBible = StoryBibleSchema.parse(llm.data)
         // Resolve the final bible: channel canon + this story's extraction (analyzer wins on shared ids).
-        return { output: mergeBible(channelCanon, analyzed), costCents: llm.costCents }
+        bible = mergeBible(channelCanon, analyzed)
+        cost = llm.costCents
       } catch (err) {
         console.warn(`[analyze-story] ${reelId.slice(0, 8)} analysis failed, persisting canon-only bible: ${err instanceof Error ? err.message : String(err)}`)
-        return { output: mergeBible(channelCanon, EMPTY_STORY_BIBLE), costCents: 0 }
+        bible = mergeBible(channelCanon, EMPTY_STORY_BIBLE)
       }
+      // Carry forward any operator-locked entities (and their plates) so a re-derive can't clobber edits.
+      bible = preserveLockedEntities(bible, priorBible)
+      return { output: bible, costCents: cost }
     },
   )
 

@@ -35,6 +35,10 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
   // Map scene idx → image URL (R2 public URL or storage key)
   const sceneImages: Record<number, string> = {}
   const sceneVideoVariations: Record<number, string[]> = {}
+  // Per-scene image history for Undo/Redo: every image ever generated for the scene, oldest→newest. Each regen
+  // writes a UNIQUE storage key (see regen-image route) so old images survive and can be re-pointed to for free.
+  // A scene's images are identified by the `/scenes/<idx>/` segment in the storage key.
+  const sceneImageHistory: Record<number, { assetId: string; url: string }[]> = {}
   for (const scene of reel.scenes) {
     const imgAsset = reelAssets.find((a) => a.id === scene.imageAssetId)
     // ?v=<assetId> busts the browser cache: a regenerated scene gets a NEW asset id → a new URL, so the
@@ -44,8 +48,23 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
       (a) => a.kind === 'video' && (a.meta as Record<string, unknown>)['sceneIdx'] === scene.idx,
     )
     if (videos.length) sceneVideoVariations[scene.idx] = videos.map((v) => v.storageKey)
+
+    const sceneImgAssets = reelAssets
+      .filter((a) => a.kind === 'image' && a.storageKey.includes(`/scenes/${scene.idx}/`))
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+    // Collapse assets that share a storage key: older regens OVERWROTE one key (image.webp) so only the
+    // newest row for each key still has live bytes — the rest resolve to the same image. Keep one entry per
+    // distinct key (newest wins in asc order) so Undo/Redo only steps between images that truly differ.
+    const byKey = new Map<string, (typeof sceneImgAssets)[number]>()
+    for (const a of sceneImgAssets) byKey.set(a.storageKey, a)
+    sceneImageHistory[scene.idx] = [...byKey.values()]
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+      .map((a) => ({ assetId: a.id, url: `/api/asset?key=${encodeURIComponent(a.storageKey)}&v=${a.id}` }))
   }
 
+  // Story Bible → "Cast & Places" editor data. Each entity carries its reference-plate thumbnail (the look
+  // every scene featuring it is anchored to). Plates overwrite the same R2 key on re-mint, so bust the
+  // browser cache with the reel's updatedAt (an edit bumps it) — there's no per-plate asset id to use.
   const renderAsset = reelAssets.find((a) => a.kind === 'render')
   const renderUrl = renderAsset ? `/api/asset?key=${encodeURIComponent(renderAsset.storageKey)}&v=${renderAsset.id}` : null
   // This reel's own AI-composed beds (musicMode='ai') — intro + climax — heard/vetted on the review surface.
@@ -94,6 +113,7 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
         searchKeyword: channel?.voiceSearchKeyword ?? '',
       }}
       sceneImages={sceneImages}
+      sceneImageHistory={sceneImageHistory}
       sceneVideoVariations={sceneVideoVariations}
       renderUrl={renderUrl}
       musicUrl={musicUrl}

@@ -4,6 +4,7 @@
 export type ReelStatus =
   | 'drafting'
   | 'story_review'
+  | 'bible_review'
   | 'storyboard'
   | 'rendering'
   | 'render_qa'
@@ -18,6 +19,7 @@ export type ReelStatus =
 const TRANSITIONS: Record<ReelStatus, ReadonlyArray<ReelStatus>> = {
   drafting:     ['story_review', 'failed'],
   story_review: ['storyboard', 'rejected', 'failed'],
+  bible_review: ['storyboard', 'story_review', 'failed'],  // dormant: gate removed, enum value retained (PG can't drop it)
   storyboard:   ['rendering', 'story_review', 'failed'],  // can send back for re-review
   rendering:    ['render_qa', 'failed'],
   render_qa:    ['spot_check', 'failed'],

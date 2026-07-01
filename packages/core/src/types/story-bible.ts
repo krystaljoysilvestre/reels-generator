@@ -14,6 +14,17 @@ export const BibleEntitySchema = z.object({
   // (a window, a bare bulb, a gasera, "no electricity") — they are facts of the place; WHICH source is
   // active + the time of day are per-scene decisions.
   description: z.string().min(1),
+  // R2 key of this entity's canonical reference plate — a single image generated once from `description`
+  // (see analyze_story). The scene-image step conditions on it so the entity keeps its pixel-level identity
+  // across scenes, not just its prose. NOT authored by the analyzer LLM (it's populated post-analysis and
+  // overwritten if present); the assembler/resolver treat it as optional, so a missing plate degrades the
+  // scene to text-only — never a failure. Absent on channel-canon entities until they're given a plate.
+  referenceImageKey: z.string().optional(),
+  // Operator override marker. true = a human edited this entity's description (the analyzer's guess was
+  // wrong/under-specified). Locked entities are HUMAN TRUTH: re-deriving the bible (analyze_story) must
+  // carry them forward verbatim instead of overwriting them with a fresh machine guess. Not set by the
+  // analyzer LLM. Dormant since the cast-review UI was removed; preserveLockedEntities still honours it.
+  locked: z.boolean().optional(),
 })
 export type BibleEntity = z.infer<typeof BibleEntitySchema>
 

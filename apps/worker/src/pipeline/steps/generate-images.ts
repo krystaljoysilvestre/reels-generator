@@ -1,15 +1,19 @@
 import { eq, and } from 'drizzle-orm'
 import { getDb, reels, scenes, assets, channels, stories } from '@reels/db'
-import { generateImage, buildInputHash, ContentFilterError, llmCall, downloadBuffer, SCENE_IMAGE_MODEL, SCENE_IMAGE_QUALITY } from '@reels/providers'
-import { assembleImagePrompt, assembleNegativePrompt, PLATFORM_PRESETS, StoryBibleSchema } from '@reels/core'
+import { generateImage, generateImageFal, imageEngineForGenre, buildInputHash, ContentFilterError, llmCall, downloadBuffer, SCENE_IMAGE_MODEL, SCENE_IMAGE_QUALITY, type ImageEngine } from '@reels/providers'
+import { assembleImagePrompt, assembleNegativePrompt, assembleReferencePrompt, reelLightingDirective, sceneEntities, slug, PLATFORM_PRESETS, StoryBibleSchema } from '@reels/core'
 import { z } from 'zod'
 import { buildRephrasePrompt, REPHRASE_V1_VERSION, buildImageQAPrompt, IMAGE_QA_V1_VERSION, ImageQASchema } from '../../prompts-bridge.js'
 import { runStep } from '../harness.js'
 
 // generate_images — step 4
-// One image per scene (text-to-image via OpenAI gpt-image-1). Style preset injected server-side — the
-// system owns the look, the LLM only writes scene content. Same-`location` continuity is prompt-driven
-// (the director describes the place consistently via the SETTING rule); gpt-image-1 has no seed control.
+// One image per scene. Style preset injected server-side — the system owns the look, the LLM only writes
+// scene content. Two render paths:
+//  • Scenes that feature a bible entity WITH a reference plate → reference-conditioned edit on fal
+//    (Gemini 2.5 Flash Image): the entity's plate(s) are passed as image_urls so the recurring ghost/house
+//    keeps its pixel-level identity across scenes (the visual half of the continuity guarantee).
+//  • Every other scene (no bible, or no plate for its entities) → text-to-image via OpenAI gpt-image-1,
+//    exactly as before. Same-`location` continuity there stays prompt-driven (the SETTING rule).
 // Content-filter rejection → rephrase.v1 retry (max 3) → mood-only downgrade.
 // HERO (tier:'video') + PEAK scenes additionally get a vision QA pass that re-rolls when the render clearly
 // contradicts the brief (open door, third-person instead of POV, a figure shown when it should be implied).
@@ -59,6 +63,39 @@ async function runPool<T>(items: T[], concurrency: number, worker: (item: T) => 
   }
 }
 
+// Render one image on the chosen engine — gpt-image-1 (openai) via ../../providers generateImage, or a fal
+// model (gemini/flux) via generateImageFal. Both take/return the same shape, so callers stay engine-agnostic.
+async function renderImage(
+  engine: ImageEngine,
+  params: { prompt: string; negativePrompt: string; reelId: string; sceneIdx?: number; storageKey?: string; aspect: string; referenceImageKeys?: string[] },
+): Promise<Awaited<ReturnType<typeof generateImageFal>>> {
+  if (engine.family === 'openai') {
+    // TEXT-TO-IMAGE ONLY for gpt-image-1. Its edit/reference conditioning proved unreliable — it ignored
+    // wardrobe and FLIPPED gender (girl plates → boy renders). Plain text-to-image with the frozen bible
+    // descriptions spliced into the prompt gives the right gender/traits + the look the owner prefers;
+    // cross-scene face consistency is description-driven, not pixel-locked (gpt-image-1 can't do the latter).
+    return generateImage({
+      prompt: params.prompt,
+      negativePrompt: params.negativePrompt,
+      reelId: params.reelId,
+      sceneIdx: params.sceneIdx ?? 0, // storageKey override is set for plates, so sceneIdx is unused there
+      quality: SCENE_IMAGE_QUALITY,
+      aspect: params.aspect,
+      ...(params.storageKey ? { storageKey: params.storageKey } : {}),
+    })
+  }
+  return generateImageFal({
+    prompt: params.prompt,
+    negativePrompt: params.negativePrompt,
+    reelId: params.reelId,
+    aspect: params.aspect,
+    engine,
+    ...(params.sceneIdx !== undefined ? { sceneIdx: params.sceneIdx } : {}),
+    ...(params.storageKey ? { storageKey: params.storageKey } : {}),
+    ...(params.referenceImageKeys?.length ? { referenceImageKeys: params.referenceImageKeys } : {}),
+  })
+}
+
 export async function generateImages(reelId: string): Promise<void> {
   const db = getDb()
 
@@ -80,6 +117,44 @@ export async function generateImages(reelId: string): Promise<void> {
   // Generate at the channel's platform aspect (reels are 9:16) so scene images fill the frame.
   const aspect = (PLATFORM_PRESETS[(channel.targetPlatform ?? 'all') as keyof typeof PLATFORM_PRESETS] ?? PLATFORM_PRESETS.all).aspect
 
+  // Reel-level lighting (from the bible's time-of-day cues). Forces night/darkness into every scene + every
+  // location/object plate so a night story stops rendering in daylight. undefined for non-night reels.
+  const lighting = storyBible ? reelLightingDirective(channel.genreCategory, storyBible.continuity.timeline) : undefined
+
+  // Image model is chosen per genre (currently gpt-image-1 for all — owner preference). Used for both
+  // reference plates and scenes so the whole reel renders on one engine.
+  const imageEngine = imageEngineForGenre(channel.genreCategory)
+
+  // Lazy reference plates: mint ONE plate per entity the SCENES actually reference (and that lacks one),
+  // then persist. Done HERE — not in analyze_story — so we never pay for plates on entities the story
+  // doesn't use (channel-canon noise), and never render anything before the operator approves the cast at
+  // the gate. Idempotent: a retry skips entities that already have a key. Mutates `storyBible` in place so
+  // the per-scene assembly below sees the new keys.
+  // gpt-image-1 (openai) renders text-to-image only (its reference conditioning corrupts identity — see
+  // renderImage), so don't pay to mint plates it won't use. fal engines (gemini/flux) DO use them.
+  if (storyBible && imageEngine.family !== 'openai') {
+    const referenced = new Set<string>()
+    for (const s of reelScenes) {
+      if (!s.visualPrompt) continue
+      for (const e of sceneEntities(storyBible, { primaryEntity: s.primaryEntity, supportingEntities: s.supportingEntities })) referenced.add(slug(e.id))
+    }
+    const refNeg = assembleNegativePrompt({ genreCategory: channel.genreCategory })
+    let plateCost = 0
+    await Promise.all(
+      storyBible.entities.map(async (entity) => {
+        if (entity.referenceImageKey || !referenced.has(slug(entity.id))) return
+        try {
+          const res = await renderImage(imageEngine, { prompt: assembleReferencePrompt(entity, channel.stylePreset, lighting), negativePrompt: refNeg, reelId, storageKey: `reels/${reelId}/refs/${slug(entity.id)}.webp`, aspect })
+          entity.referenceImageKey = res.asset.storageKey
+          plateCost += res.costCents
+        } catch (err) {
+          console.warn(`[generate-images] ${reelId.slice(0, 8)} reference plate failed for "${entity.id}": ${err instanceof Error ? err.message : String(err)}`)
+        }
+      }),
+    )
+    if (plateCost > 0) await db.update(reels).set({ storyBible, costCents: reel.costCents + plateCost, updatedAt: new Date() }).where(eq(reels.id, reelId))
+  }
+
   const pending = reelScenes.filter((s) => s.visualPrompt && !s.imageAssetId) // skip already-generated (idempotency)
 
   // QA targets: the hero (tier:'video') beats that get animated/showcased, plus the peak scene (the climax
@@ -93,8 +168,17 @@ export async function generateImages(reelId: string): Promise<void> {
     const expansion = storyBible
       ? { bible: storyBible, primaryEntity: scene.primaryEntity, supportingEntities: scene.supportingEntities }
       : undefined
-    const finalPrompt = assembleImagePrompt(scene.visualPrompt!, channel.stylePreset, expansion)
+    const finalPrompt = assembleImagePrompt(scene.visualPrompt!, channel.stylePreset, expansion, lighting)
     const negativePrompt = assembleNegativePrompt({ genreCategory: channel.genreCategory })
+
+    // Reference plates of the entities this scene features (narrator suppression applied via sceneEntities,
+    // same resolver the prompt assembler uses). Non-empty → reference-conditioned edit on fal; empty →
+    // text-to-image on OpenAI. Entities without a minted plate simply don't contribute a reference.
+    const referenceImageKeys = storyBible
+      ? sceneEntities(storyBible, { primaryEntity: scene.primaryEntity, supportingEntities: scene.supportingEntities })
+          .map((e) => e.referenceImageKey)
+          .filter((k): k is string => Boolean(k))
+      : []
 
     const inputHash = buildInputHash('generate_images.v1', {
       finalPrompt,
@@ -102,6 +186,8 @@ export async function generateImages(reelId: string): Promise<void> {
       reelId,
       model: SCENE_IMAGE_MODEL,
       quality: SCENE_IMAGE_QUALITY, // in the hash so a recipe change busts the cache + regenerates
+      referenceImageKeys, // re-render when a scene's references change (gained/lost a plate)
+      engine: `${imageEngine.imageModel}|${imageEngine.editModel}`, // switching genre engine busts the cache
     })
 
     await runStep(
@@ -126,6 +212,8 @@ export async function generateImages(reelId: string): Promise<void> {
             mood: scene.mood,
             stylePreset: channel.stylePreset,
             genreCategory: channel.genreCategory,
+            referenceImageKeys,
+            engine: imageEngine,
           })
           totalCost += result.costCents
           chosen = result
@@ -164,7 +252,7 @@ export async function generateImages(reelId: string): Promise<void> {
             channelId: reel.channelId,
             kind: 'image',
             storageKey: chosen!.asset.storageKey,
-            provider: 'openai',
+            provider: chosen!.provider,
             costCents: totalCost,
             meta,
           })
@@ -217,44 +305,63 @@ interface ImageGenAttemptParams {
   mood: string[]
   stylePreset: string
   genreCategory: string
+  // Reference plates for this scene's entities (the scene's depictable bible entities). Non-empty →
+  // reference-conditioned; empty → plain text→image. Rendered on `engine` either way.
+  referenceImageKeys: string[]
+  engine: ImageEngine // per-genre image model (currently gpt-image-1 for all)
 }
 
 async function generateImageWithRetry(params: ImageGenAttemptParams) {
   let currentPrompt = params.prompt
+  let refKeys = params.referenceImageKeys
+  const provider: 'openai' | 'fal' = params.engine.family === 'openai' ? 'openai' : 'fal'
   let totalCost = 0
 
   for (let attempt = 0; attempt < MAX_REPHRASE_ATTEMPTS; attempt++) {
     try {
-      const result = await generateImage({
+      const result = await renderImage(params.engine, {
         prompt: currentPrompt,
         negativePrompt: params.negativePrompt,
         reelId: params.reelId,
         sceneIdx: params.sceneIdx,
         aspect: params.aspect,
-        quality: SCENE_IMAGE_QUALITY,
+        referenceImageKeys: refKeys, // [] → plain text→image; non-empty → reference-conditioned
       })
-      return { ...result, costCents: result.costCents + totalCost }
+      return { ...result, provider, costCents: result.costCents + totalCost }
     } catch (err) {
       if (!(err instanceof ContentFilterError)) throw err
 
-      // rephrase.v1 retry [docs/04 §4.3]
-      const { system, userMessage } = buildRephrasePrompt(currentPrompt, { genreCategory: params.genreCategory })
-      const rephrase = await llmCall({
-        templateVersion: REPHRASE_V1_VERSION,
-        schema: z.string(),
-        system,
-        messages: [{ role: 'user', content: userMessage }],
-      })
-      totalCost += rephrase.costCents
-      currentPrompt = typeof rephrase.data === 'string' ? rephrase.data : currentPrompt
+      // rephrase.v1 retry [docs/04 §4.3]. The rephrase LLM occasionally returns an object instead of a bare
+      // string, which fails schema validation and threw — turning a recoverable content-filter into a HARD
+      // scene failure. Guard it: if rephrase fails (or returns a non-string), don't crash — fall straight to
+      // the mood-only downgrade so the scene still renders.
+      let rephrased: string | null = null
+      try {
+        const { system, userMessage } = buildRephrasePrompt(currentPrompt, { genreCategory: params.genreCategory })
+        const rephrase = await llmCall({
+          templateVersion: REPHRASE_V1_VERSION,
+          schema: z.string(),
+          system,
+          messages: [{ role: 'user', content: userMessage }],
+        })
+        totalCost += rephrase.costCents
+        rephrased = typeof rephrase.data === 'string' ? rephrase.data : null
+      } catch (e) {
+        console.warn(`[rephrase] ${params.reelId.slice(0, 8)} scene${params.sceneIdx} rephrase failed → mood-only: ${e instanceof Error ? e.message : String(e)}`)
+      }
 
-      if (attempt === MAX_REPHRASE_ATTEMPTS - 1) {
-        // Final attempt failed → mood-only downgrade. Drop the (rejected) subject but KEEP the channel
-        // style so the fallback still looks like the rest of the reel, not a generic off-brand still.
+      if (rephrased) {
+        currentPrompt = rephrased
+      }
+      if (!rephrased || attempt === MAX_REPHRASE_ATTEMPTS - 1) {
+        // Rephrase failed, OR final attempt → mood-only downgrade. Drop the (rejected) subject but KEEP the
+        // channel style so the fallback still looks like the rest of the reel; drop the references too so it's
+        // a clean text-to-image atmosphere plate, not reference-locked to the filtered entity.
         currentPrompt = assembleImagePrompt(
           `${params.mood.join(', ')} atmosphere, empty scene, abstract shapes, deep shadow, negative space`,
           params.stylePreset,
         )
+        refKeys = []
       }
     }
   }

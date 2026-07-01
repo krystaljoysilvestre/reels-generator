@@ -17,6 +17,7 @@ import { relations } from 'drizzle-orm'
 export const reelStatusEnum = pgEnum('reel_status', [
   'drafting',
   'story_review',  // primary human gate — pipeline paused
+  'bible_review',  // gate after analyze_story — operator reviews the cast/places before any image is rendered
   'storyboard',    // assisted editing in the storyboard editor
   'rendering',     // steps 4–10 running
   'render_qa',     // automated QA checks

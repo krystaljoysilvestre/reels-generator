@@ -20,7 +20,7 @@ export interface PhaseView {
 
 const STATUS_PHASE: Record<string, PhaseKey> = {
   drafting: 'writing', story_review: 'writing', rejected: 'writing',
-  storyboard: 'storyboarding',
+  bible_review: 'storyboarding', storyboard: 'storyboarding',
   rendering: 'filming', render_qa: 'finishing', spot_check: 'finishing',
   approved: 'finishing', scheduled: 'finishing', published: 'finishing',
 }

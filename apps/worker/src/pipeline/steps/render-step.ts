@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { mkdir, writeFile, readFile } from 'node:fs/promises'
 import { getDb, reels, scenes, assets, channels } from '@reels/db'
 import { downloadBuffer, uploadBuffer, buildInputHash } from '@reels/providers'
-import { TimingsSchema, LutConfigSchema, CaptionStyleSchema, PLATFORM_PRESETS, effectsFromSelection } from '@reels/core'
+import { TimingsSchema, LutConfigSchema, CaptionStyleSchema, PLATFORM_PRESETS, effectsFromSelection, parseMotion } from '@reels/core'
 import { renderReelWithRemotion } from '@reels/render/remotion/render-remotion'
 import { runStep, setReelStatus } from '../harness.js'
 
@@ -29,7 +29,8 @@ function planSceneEffects(
   const m = mood.join(' ').toLowerCase()
   const tense = TENSE_FX_WORDS.some((k) => m.includes(k))
   const shock = /shock|terror|panic|scream|violent/.test(m)
-  if (tier === 'still') fx.push({ type: 'zoom', intensity: 0.5 }) // slow push-in so stills feel alive
+  // Stills get their life from camera-move-driven Ken Burns in SceneClip now — no generic push-in here, or
+  // it would fight a pull_out/locked move. Only the digital-unease effects remain mood-driven.
   if (edgy && tense) fx.push({ type: 'glitch', intensity: shock ? 0.9 : 0.45 })
   if (edgy && shock) { fx.push({ type: 'flash', intensity: 0.7 }); fx.push({ type: 'shake', intensity: 0.5 }) }
   return fx
@@ -97,6 +98,7 @@ export async function renderStep(reelId: string): Promise<void> {
 
         // Video (operator picks from 2 variations; default to variationIdx=0)
         let videoPath: string | null = null
+        let videoDurationSec: number | null = null
         if (scene.tier === 'video') {
           const videoAsset = allAssets.find(
             (a) =>
@@ -107,6 +109,8 @@ export async function renderStep(reelId: string): Promise<void> {
           if (videoAsset) {
             videoPath = join(tmp, `scene_${scene.idx}_vid.mp4`)
             await writeFile(videoPath, await downloadBuffer(videoAsset.storageKey))
+            const dur = (videoAsset.meta as Record<string, unknown>)['durationSec']
+            videoDurationSec = typeof dur === 'number' ? dur : null
           }
         }
 
@@ -119,6 +123,9 @@ export async function renderStep(reelId: string): Promise<void> {
           endMs: timing.endMs,
           mood: scene.mood,
           onScreenText: scene.onScreenText,
+          // Still: the director's camera move (recovered from the stored motion text) drives Ken Burns.
+          cameraMove: scene.tier === 'still' ? parseMotion(scene.motionPrompt).moveKey : null,
+          videoDurationSec,
           // Operator's explicit per-reel selection wins; null → auto-plan from mood + genre.
           effects: Array.isArray(reel.videoEffects)
             ? effectsFromSelection(reel.videoEffects as string[], scene.tier as 'still' | 'video')

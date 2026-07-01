@@ -24,6 +24,8 @@ export interface RemotionRenderInput {
     mood: string[]            // ambient/grade hints — drives per-scene atmosphere intensity
     onScreenText?: string | null // optional title/overlay burned on this scene
     effects?: SceneEffect[]   // per-scene video effects (zoom/shake/glitch/flash/vhs)
+    cameraMove?: string | null // director's camera move → still Ken Burns motion (ignored for video)
+    videoDurationSec?: number | null // native i2v clip length → stretch to fill a longer scene span
   }>
   subtitles: SubtitleChunk[]
   captionStyle: CaptionStyle
@@ -98,6 +100,8 @@ export async function renderReelWithRemotion(input: RemotionRenderInput): Promis
         mood: s.mood,
         onScreenText: s.onScreenText ?? null,
         effects: s.effects ?? [],
+        cameraMove: s.cameraMove ?? null,
+        videoDurationSec: s.videoDurationSec ?? null,
       }
     }),
   )

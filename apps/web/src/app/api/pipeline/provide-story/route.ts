@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { eq } from 'drizzle-orm'
 import { getDb, reels, channels, stories } from '@reels/db'
+import { enqueueStep } from '@reels/queue'
 import { getSession } from '@/lib/auth'
 
 const InputSchema = z.object({
@@ -11,9 +12,10 @@ const InputSchema = z.object({
   title: z.string().trim().max(120).optional(),
 })
 
-// BYO script: the operator provides their own story for this reel, so generate_story is skipped. Create
-// the reel directly at the story_review gate, linked to a source='user' story. (Not a reference — only
-// spot-check approval promotes a story into the few-shot set.)
+// BYO script: the operator provides their own story for this reel, so generate_story is skipped. The user
+// wrote it, so there's nothing to review — we DON'T stop at the story_review gate. Create the reel directly
+// at 'storyboard' and kick off the build (analyze_story → breakdown → images), which stops at the storyboard
+// gate as usual. (source='user' story; not a reference — only spot-check approval promotes one to few-shot.)
 export async function POST(req: NextRequest) {
   if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -39,8 +41,11 @@ export async function POST(req: NextRequest) {
     .returning()
   const [reel] = await db
     .insert(reels)
-    .values({ channelId: channel.id, status: 'story_review', language, storyId: story!.id })
+    .values({ channelId: channel.id, status: 'storyboard', language, storyId: story!.id })
     .returning()
+
+  // Auto-use the user's story: build the Story Bible → scenes → images straight away (no story-review stop).
+  await enqueueStep({ reelId: reel!.id, stepName: 'analyze_story' })
 
   return NextResponse.json({ reelId: reel!.id })
 }

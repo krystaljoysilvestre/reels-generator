@@ -35,20 +35,26 @@ describe('normalizeCanon', () => {
 describe('mergeBible', () => {
   const canon = normalizeCanon({ canonLocations: ['Lumang Bahay'], canonObjects: ['Gasera', 'Salamin'] })
 
-  it('keeps canon entities the analyzer did not mention', () => {
+  it('DROPS canon entities the story never features (no dead settings in the reel bible)', () => {
     const analyzed = StoryBibleSchema.parse({ entities: [{ id: 'rooftop', kind: 'location', description: 'a flat concrete rooftop' }] })
     const out = mergeBible(canon, analyzed)
-    expect(out.entities.map((e) => e.id).sort()).toEqual(['gasera', 'lumang-bahay', 'rooftop', 'salamin'])
+    // Only the story's own entity survives — unused channel canon (lumang-bahay, gasera, salamin) is not appended.
+    expect(out.entities.map((e) => e.id).sort()).toEqual(['rooftop'])
   })
 
-  it('lets the analyzer WIN (extend) a shared canon id', () => {
+  it('lets the analyzer WIN (extend) a shared canon id, without duplicating it', () => {
     const analyzed = StoryBibleSchema.parse({
       entities: [{ id: 'salamin', kind: 'object', description: 'an old mirror, dark stained wood frame, cracked glass' }],
     })
     const out = mergeBible(canon, analyzed)
     const salamin = out.entities.find((e) => e.id === 'salamin')
     expect(salamin?.description).toBe('an old mirror, dark stained wood frame, cracked glass')
-    expect(out.entities).toHaveLength(3) // not duplicated
+    expect(out.entities).toHaveLength(1) // only the featured entity; other canon (lumang-bahay, gasera) dropped
+  })
+
+  it('falls back to the full canon when analysis produced nothing', () => {
+    const out = mergeBible(canon, StoryBibleSchema.parse({ entities: [] }))
+    expect(out.entities.map((e) => e.id).sort()).toEqual(['gasera', 'lumang-bahay', 'salamin'])
   })
 
   it('carries continuity + constraints from the analyzer', () => {

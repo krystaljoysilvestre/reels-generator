@@ -1,0 +1,1 @@
+ALTER TYPE "reel_status" ADD VALUE 'bible_review';

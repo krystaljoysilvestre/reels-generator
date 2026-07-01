@@ -18,6 +18,78 @@ export type FalEngine = z.infer<typeof FalEngineSchema>
 export const FAL_VIDEO_COST_CENTS_PER_SEC = 10 // ~$0.10/sec, Kling
 export const FAL_VIDEO_COST_CENTS_PER_SEC_BUDGET = 5 // ~$0.05/sec, Wan
 
+// ── Still images (Gemini 2.5 Flash Image, aka "nano-banana") ──────────────────
+// Reference-conditioned image generation for cross-scene entity continuity. The edit endpoint takes
+// one-or-more reference images (image_urls[]) + a prompt and keeps the referenced subjects' identity
+// while rendering a NEW scene — unlike img2img it preserves the SUBJECT, not the composition, so the
+// same ghost/house can move through different rooms and angles without paraphrase-drift. The plain
+// (text→image) endpoint generates the per-entity reference plate that the edit endpoint conditions on.
+// Re-verify model IDs + pricing at build (fal renames endpoints).
+export const FAL_IMAGE_MODEL = 'fal-ai/gemini-25-flash-image' // text→image — entity reference plates
+export const FAL_IMAGE_EDIT_MODEL = 'fal-ai/gemini-25-flash-image/edit' // image→image — reference-conditioned scenes
+export const FAL_IMAGE_COST_CENTS = 4 // ~$0.039/image (text→image and edit are billed the same)
+
+// nano-banana takes a fixed aspect_ratio enum (it has no width/height). Anything else → fall back to 9:16
+// (the reel frame). Keep in sync with fal's documented enum.
+export const FAL_IMAGE_ASPECTS = new Set(['auto', '21:9', '16:9', '3:2', '4:3', '5:4', '1:1', '4:5', '3:4', '2:3', '9:16'])
+
+// ── Per-genre image engines ───────────────────────────────────────────────────
+// One image model can't be best for every genre — each genre wants the OPPOSITE bias. Gemini/nano-banana
+// is vibrant + heavily beauty-aligned (great for lifestyle/food, but it sands the dread off horror); Flux
+// is far less beauty-aligned (gritty, dark, uncanny) while STILL doing multi-reference (image_urls) edits,
+// so cross-scene continuity holds. The `family` selects the input/output adapter in ./image.ts (Gemini uses
+// aspect_ratio + webp; Flux uses image_size + jpeg/png). Re-verify model ids + pricing at build.
+export interface ImageEngine {
+  family: 'gemini' | 'flux' | 'openai' // 'openai' is gpt-image-1 (rendered via ../openai/image.ts, not fal)
+  imageModel: string // text→image (reference plates, no-reference scenes)
+  editModel: string // image→image (reference-conditioned scenes)
+  costCents: number
+  disableSafety?: boolean // flux: turn the safety checker OFF so it doesn't neuter the scare (prompt still guards nudity)
+}
+
+export const GEMINI_IMAGE_ENGINE: ImageEngine = {
+  family: 'gemini',
+  imageModel: FAL_IMAGE_MODEL,
+  editModel: FAL_IMAGE_EDIT_MODEL,
+  costCents: FAL_IMAGE_COST_CENTS,
+}
+
+export const FLUX_IMAGE_ENGINE: ImageEngine = {
+  family: 'flux',
+  imageModel: 'fal-ai/flux-2-pro', // text→image
+  editModel: 'fal-ai/flux-2-pro/edit', // multi-reference (up to 9) image→image, ~$0.03–0.045/image
+  costCents: 4,
+  disableSafety: true,
+}
+
+// gpt-image-1 — rendered via ../openai/image.ts (the `openai` family is dispatched there, not on fal). After
+// extensive live A/B the owner prefers its look for this content; it handles the horror dread (at
+// moderation:'low') AND does multi-image reference conditioning for character consistency. costCents is a
+// placeholder — the OpenAI path returns its own real cost.
+export const OPENAI_IMAGE_ENGINE: ImageEngine = {
+  family: 'openai',
+  imageModel: 'gpt-image-1',
+  editModel: 'gpt-image-1',
+  costCents: 19,
+}
+
+// Genre → image engine. Default is nano-banana (GEMINI): after live A/B the owner chose it for its reliable
+// multi-image reference conditioning (locked character faces) over gpt-image-1 (great look but faces drift,
+// and its edit endpoint corrupts identity). gpt-image-1 (OPENAI) + Flux stay available for per-genre routing
+// or a hybrid (e.g. gpt-image-1 for the apparition/scare beats, which nano-banana renders softer).
+export function imageEngineForGenre(_genre: string | null | undefined): ImageEngine {
+  return GEMINI_IMAGE_ENGINE
+}
+
+// 9:16 etc → Flux's image_size enum (Flux has no aspect_ratio). Default to the reel frame (portrait 16:9).
+export const FLUX_IMAGE_SIZES: Record<string, string> = {
+  '9:16': 'portrait_16_9',
+  '3:4': 'portrait_4_3',
+  '1:1': 'square_hd',
+  '4:3': 'landscape_4_3',
+  '16:9': 'landscape_16_9',
+}
+
 // Content-filter rejection signal from fal.ai — fal returns HTTP 422 with "content_policy_violation" in error.type
 export const FAL_CONTENT_FILTER_CODES = new Set([
   'content_policy_violation',

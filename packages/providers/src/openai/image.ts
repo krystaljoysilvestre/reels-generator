@@ -39,7 +39,8 @@ export interface ImageGenParams {
   storageKey?: string // override the R2 key (e.g. for ephemeral style-option previews)
   aspect?: string // '9:16' (default — the reel frame), etc. Drives image size.
   quality?: ImageQuality // defaults to the shared SCENE_IMAGE_QUALITY
-  referenceImageKey?: string // if set → edit FROM this R2 image: keeps its composition/room/lighting
+  referenceImageKey?: string // single reference (legacy regen path): edit FROM this R2 image
+  referenceImageKeys?: string[] // multi reference (entity plates): condition the new scene on these identities
 }
 
 // gpt-image-1 has no negative_prompt, so artifacts/content to avoid are folded into the prompt text.
@@ -54,21 +55,22 @@ export async function generateImage(params: ImageGenParams): Promise<ProviderRes
   const size = ASPECT_TO_OPENAI_SIZE[params.aspect ?? '9:16'] ?? '1024x1536'
   const prompt = withNegatives(params.prompt, params.negativePrompt)
 
+  // Reference plates for identity conditioning (multi), falling back to the single legacy key.
+  const refKeys = params.referenceImageKeys?.length ? params.referenceImageKeys : (params.referenceImageKey ? [params.referenceImageKey] : [])
+
   try {
     let b64: string | undefined
-    if (params.referenceImageKey) {
-      // Edit from the reference image: keep its room/door/light + framing, render THIS scene's action.
-      const refBuf = await downloadBuffer(params.referenceImageKey)
-      const refFile = await toFile(refBuf, 'reference.webp', { type: 'image/webp' })
-      const res = await withProviderLimit('openai', () => client.images.edit({
-        model: SCENE_IMAGE_MODEL,
-        image: refFile,
-        prompt,
-        size,
-        quality,
-        n: 1,
-        output_format: 'webp',
-      }))
+    if (refKeys.length > 0) {
+      // Condition on the reference plate(s): gpt-image-1 edit accepts an array of input images and uses them
+      // as references to render THIS scene's prompt — so a recurring character keeps the same face/wardrobe.
+      // (No moderation override here: the SDK's edit type rejects it, and reference-conditioned scenes are
+      // the non-gory character beats; the gory reveal is text-to-image below, where moderation:'low' applies.)
+      const files = await Promise.all(refKeys.map(async (k) => toFile(await downloadBuffer(k), 'reference.webp', { type: 'image/webp' })))
+      // moderation:'low' isn't in the SDK's edit param type yet (the API accepts it for gpt-image-1) — build
+      // the body and cast so the non-streaming overload is selected AND the flag is sent at runtime. Without
+      // it the edit path runs at strict moderation and minor+horror scenes get content-filtered.
+      const editBody: Record<string, unknown> = { model: SCENE_IMAGE_MODEL, image: files, prompt, size, quality, n: 1, output_format: 'webp', moderation: 'low' }
+      const res = await withProviderLimit('openai', () => client.images.edit(editBody as unknown as OpenAI.ImageEditParamsNonStreaming))
       b64 = res.data?.[0]?.b64_json
     } else {
       const res = await withProviderLimit('openai', () => client.images.generate({
@@ -78,6 +80,7 @@ export async function generateImage(params: ImageGenParams): Promise<ProviderRes
         quality,
         n: 1,
         output_format: 'webp',
+        moderation: 'low', // least-restrictive gpt-image-1 filtering — lets horror dread through (still no hard gore)
       }))
       b64 = res.data?.[0]?.b64_json
     }

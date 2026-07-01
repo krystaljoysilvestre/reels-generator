@@ -34,13 +34,16 @@ describe('assembleImagePrompt — bible expansion', () => {
     )
   })
 
-  it('suppresses the narrator full-figure splice in a first-person reel', () => {
+  it('now splices the narrator in a first-person reel too (she must render consistently when shown)', () => {
+    // Previously suppressed; that left the narrator unanchored → she rendered as a random/wrong figure when
+    // her reflection or body was in frame. She's now spliced like any entity; POV framing (not hiding her
+    // identity) keeps her from being a separate full figure.
     const out = assembleImagePrompt(ACTION, STYLE, {
       bible: bible('first_person', 'ashley'),
       primaryEntity: 'ashley',
       supportingEntities: ['cracked-mirror'],
     })
-    expect(out).not.toContain('a young woman, long black hair')
+    expect(out).toContain('a young woman, long black hair')
     expect(out).toContain('an old mirror, dark stained wood frame, cracked glass')
   })
 

@@ -67,6 +67,8 @@ export const ReelComposition: React.FC<ReelCompositionProps> = ({
                 tier={scene.tier}
                 durationFrames={scene.durationFrames}
                 idx={scene.idx}
+                cameraMove={scene.cameraMove}
+                videoDurationSec={scene.videoDurationSec}
               />
             </SceneEffects>
             {/* Per-scene grade — atmosphere intensity scales with THIS scene's mood + tier */}

@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { getDb, reels, stories, scenes, channels } from '@reels/db'
 import { llmCall, buildInputHash } from '@reels/providers'
-import { ScenesOutputSchema, WorldBibleSchema, StoryBibleSchema, EMPTY_STORY_BIBLE, resolveEntities, reviewSceneBreakdown, cameraMovePrompt } from '@reels/core'
+import { ScenesOutputSchema, WorldBibleSchema, StoryBibleSchema, EMPTY_STORY_BIBLE, resolveEntities, reviewSceneBreakdown, cameraMovePrompt, slug } from '@reels/core'
 import { buildScenesPrompt, SCENES_V1_VERSION, buildPeakExtractPrompt, PEAK_EXTRACT_V1_VERSION, PeakExtractSchema } from '../../prompts-bridge.js'
 import { runStep } from '../harness.js'
 
@@ -136,6 +136,24 @@ export async function breakdownScenes(reelId: string): Promise<void> {
         })
         final = repairLlm.data
         cost += repairLlm.costCents
+      }
+
+      // Safety net for character consistency. In a first-person reel the narrator's own body edges most POV
+      // frames, and scenes.v1 says to reference the narrator entity so their face plate locks the look — but
+      // the LLM sometimes omits it, leaving the character to be invented fresh each render (they look like a
+      // different person every scene). If a scene's image prompt clearly shows the narrator (a hand/arm/
+      // shoulder, the back of their head, their face/body, or their reflection) and the narrator entity isn't
+      // already referenced, attach it. Deterministic backstop — cheaper and more reliable than another repair
+      // round. Only depictable when analysis ran and named an embodied narrator entity.
+      const narratorId = analyzed?.continuity.narratorEntityId
+      if (narratorId && analyzed?.continuity.narratorPerspective === 'first_person') {
+        const BODY_CUE = /\b(hands?|arms?|forearms?|shoulders?|reflection|reflected|(?:her|his|their)\s+(?:face|body|head))\b/i
+        const narratorSlug = slug(narratorId)
+        for (const s of final.scenes) {
+          const refs = [...(s.primaryEntity ? [s.primaryEntity] : []), ...(s.supportingEntities ?? [])].map(slug)
+          if (refs.includes(narratorSlug)) continue
+          if (BODY_CUE.test(s.imagePrompt)) s.supportingEntities = [...(s.supportingEntities ?? []), narratorId]
+        }
       }
 
       // Log residual notes (post-repair) so real failures accumulate without blocking the render.

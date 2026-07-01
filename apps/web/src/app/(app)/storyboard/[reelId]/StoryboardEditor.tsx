@@ -31,6 +31,8 @@ interface StoryboardEditorProps {
   // Context for recommending a narrator on the fly when voicePool is empty (per_story channels).
   voiceRecommend: { nicheDescription: string; language: string; toneConfig: unknown; searchKeyword: string }
   sceneImages: Record<number, string>
+  // Every image ever generated per scene, oldest→newest — powers Undo/Redo (walk back to a prior take for free).
+  sceneImageHistory: Record<number, { assetId: string; url: string }[]>
   sceneVideoVariations: Record<number, string[]>
   renderUrl: string | null
   musicUrl: string | null // this reel's AI-composed intro bed (musicMode='ai'), for hearing/vetting on review
@@ -49,7 +51,7 @@ interface StoryboardEditorProps {
 
 export function StoryboardEditor({
   reel, story, scenes: initialScenes, voicePool, voiceRecommend,
-  sceneImages, sceneVideoVariations, renderUrl: initialRenderUrl, musicUrl: initialMusicUrl, musicUrlB: initialMusicUrlB, aiMusic,
+  sceneImages, sceneImageHistory, sceneVideoVariations, renderUrl: initialRenderUrl, musicUrl: initialMusicUrl, musicUrlB: initialMusicUrlB, aiMusic,
   initialVideoEffects, initialSoundNotes, initialOperatorSfx, initialVoiceSettings, voiceSettingsOverridden,
   channelName, genreCategory, moodTint, failure,
 }: StoryboardEditorProps) {
@@ -80,6 +82,9 @@ export function StoryboardEditor({
   // changes → browser keeps the already-loaded image → "nothing changed"). Stamping our own token the
   // instant the regen returns guarantees the src changes and the fresh image loads.
   const [imageBust, setImageBust] = useState<Record<number, number>>({})
+  // Local image URL override per scene, set the instant an Undo/Redo re-points the scene to a prior take so
+  // the preview swaps immediately (the target's storage key isn't in the sceneImages prop until refresh lands).
+  const [imageOverride, setImageOverride] = useState<Record<number, string>>({})
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null) // master-detail: which scene the inspector shows
   const [timelineView, setTimelineView] = useState<'strip' | 'grid'>('strip') // thumbnail rail layout
   const scrollRef = useRef<HTMLDivElement>(null) // the single scene scroll container; holds the --shrink var for the rail
@@ -213,15 +218,16 @@ export function StoryboardEditor({
     return (j && typeof j.error === 'string' ? j.error : fallback)
   }
 
-  // Regenerate a scene's image. The optional `instruction` (the creator's plain-language change, e.g.
-  // "make it foggier" or "show the old house instead") is rewritten by the LLM into a proper image prompt;
-  // the same call also decides whether to refine the current image or re-roll fresh. With no instruction
-  // it's a plain fresh re-roll.
-  async function handleRegenImage(sceneIdx: number, opts?: { instruction?: string }) {
+  // Regenerate a scene's image. `mode` picks the behaviour:
+  //   'vary'  (default) — condition on the CURRENT image (+ face plates) so it stays close: fix a hand, small
+  //                       variation. An optional `instruction` ("lower the hand") steers the tweak.
+  //   'fresh' — ignore the current image; re-roll a brand-new composition (plates only → faces still match).
+  // The plain "Regenerate" button sends 'vary' with no instruction; "Fresh take" sends 'fresh'.
+  async function handleRegenImage(sceneIdx: number, opts?: { instruction?: string; mode?: 'vary' | 'fresh' }) {
     setLoading(`regen-${sceneIdx}`)
     const res = await fetch('/api/pipeline/regen-image', {
       method: 'POST',
-      body: JSON.stringify({ reelId: reel.id, sceneIdx, instruction: opts?.instruction?.trim() || undefined }),
+      body: JSON.stringify({ reelId: reel.id, sceneIdx, instruction: opts?.instruction?.trim() || undefined, mode: opts?.mode ?? 'vary' }),
       headers: { 'Content-Type': 'application/json' },
     })
     if (!res.ok) {
@@ -229,6 +235,8 @@ export function StoryboardEditor({
       toast(await failMessage(res, 'Could not reshoot this scene.'), res.status === 429 ? 'info' : 'error')
       return
     }
+    // A new image supersedes any Undo/Redo override — drop it so the fresh server image wins.
+    setImageOverride((o) => { if (!(sceneIdx in o)) return o; const n = { ...o }; delete n[sceneIdx]; return n })
     // Force the <img> to re-fetch the (overwritten) scene image NOW — independent of whether
     // router.refresh() manages to push a fresh asset-id ?v= through the client router cache. Clear this
     // scene's loaded flag so the develop-in reveal plays for the fresh image instead of holding the stale
@@ -238,6 +246,22 @@ export function StoryboardEditor({
     setLoadedMedia((s) => { const n = new Set(s); n.delete(sceneIdx); return n })
     setScenes((prev) => prev.map((s) => (s.idx === sceneIdx ? { ...s, tier: 'still' } : s)))
     setLoading(null)
+    router.refresh()
+  }
+
+  // Undo/Redo: re-point a scene to one of its previously generated images (free, instant — no regeneration).
+  // Optimistic: swap the preview + the scene's imageAssetId locally right away, then persist. `url` is the
+  // target image's URL (already ?v=<assetId> cache-busted) so the <img> shows it immediately.
+  async function handleSetSceneImage(sceneIdx: number, assetId: string, url: string) {
+    setImageOverride((o) => ({ ...o, [sceneIdx]: url }))
+    setLoadedMedia((s) => { const n = new Set(s); n.delete(sceneIdx); return n })
+    setScenes((prev) => prev.map((s) => (s.idx === sceneIdx ? { ...s, imageAssetId: assetId, tier: 'still' } : s)))
+    const res = await fetch('/api/pipeline/set-scene-image', {
+      method: 'POST',
+      body: JSON.stringify({ reelId: reel.id, sceneIdx, assetId }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+    if (!res.ok) { toast(await failMessage(res, 'Could not switch to that image.'), 'error'); return }
     router.refresh()
   }
 
@@ -549,7 +573,9 @@ export function StoryboardEditor({
   const bustedImages: Record<number, string> = {}
   for (const [k, url] of Object.entries(sceneImages)) {
     const idx = Number(k)
-    bustedImages[idx] = imageBust[idx] ? `${url}&b=${imageBust[idx]}` : url
+    // An Undo/Redo override (a prior take) wins until the server refresh catches up; otherwise the current image.
+    const src = imageOverride[idx] ?? url
+    bustedImages[idx] = imageBust[idx] ? `${src}&b=${imageBust[idx]}` : src
   }
 
   // The selected scene's editor (or a fallback) — shared between the strip + grid layouts below
@@ -573,6 +599,8 @@ export function StoryboardEditor({
       onSetSceneType={setSceneType}
       onPreview={handlePreview}
       onReshoot={handleRegenImage}
+      history={sceneImageHistory[selectedScene.idx] ?? []}
+      onSetSceneImage={handleSetSceneImage}
       onSaveText={saveSceneText}
       sounds={operatorSfx.filter((c) => c.source === 'manual' && selectedScene.narrationText.includes(c.anchor))}
       soundPreviews={soundPreviews}
@@ -1434,7 +1462,7 @@ function sceneBeat(idx: number, total: number, twistIdx: number | null): 'Hook' 
 // ── Inspector (detail) ─────────────────────────────────────────────────────────
 function SceneInspector({
   scene, beat, imgSrc, variations, activeVar, setActiveVar, loaded, markLoaded, loading, moodTint,
-  sceneSaving, setScenes, setSceneSaving, onSetSceneType, onPreview, onReshoot, onSaveText,
+  sceneSaving, setScenes, setSceneSaving, onSetSceneType, onPreview, onReshoot, history, onSetSceneImage, onSaveText,
   sounds, soundPreviews, onAddSound, onPreviewSound, onRemoveSound,
 }: {
   scene: Scene; beat: 'Hook' | 'Build-up' | 'Twist' | 'Payoff'; imgSrc?: string | undefined; variations: string[]; activeVar: number
@@ -1445,7 +1473,9 @@ function SceneInspector({
   setSceneSaving: React.Dispatch<React.SetStateAction<Record<number, 'saving' | 'saved'>>>
   onSetSceneType: (idx: number, type: 'static' | 'motion' | 'hero') => void
   onPreview: (idx: number) => void
-  onReshoot: (idx: number, opts?: { instruction?: string }) => void
+  onReshoot: (idx: number, opts?: { instruction?: string; mode?: 'vary' | 'fresh' }) => void
+  history: { assetId: string; url: string }[] // this scene's images oldest→newest (for Undo/Redo)
+  onSetSceneImage: (idx: number, assetId: string, url: string) => void
   onSaveText: (idx: number, text: string) => void
   sounds: OperatorCue[]
   soundPreviews: Record<string, string>
@@ -1458,6 +1488,13 @@ function SceneInspector({
   const showVideo = isVideo && Boolean(videoKey)
   const animating = loading === `animate-${scene.idx}`
   const regenerating = loading === `regen-${scene.idx}`
+  // Undo/Redo walk this scene's image history (oldest→newest). histPos = where the current image sits; step
+  // back/forward re-points the scene to a neighbouring take for free (no regeneration).
+  const histPos = history.findIndex((h) => h.assetId === scene.imageAssetId)
+  const canUndo = histPos > 0
+  const canRedo = histPos >= 0 && histPos < history.length - 1
+  const goUndo = () => { const t = history[histPos - 1]; if (canUndo && t) onSetSceneImage(scene.idx, t.assetId, t.url) }
+  const goRedo = () => { const t = history[histPos + 1]; if (canRedo && t) onSetSceneImage(scene.idx, t.assetId, t.url) }
   // Actual clip length, read from the playing preview's metadata (state resets per scene via the key prop).
   const [clipSecs, setClipSecs] = useState<number | null>(null)
   // The Twist beat badge uses the mood color (distinct indigo on neutral channels, where mood == selection accent).
@@ -1687,7 +1724,8 @@ function SceneInspector({
           const runChange = () => {
             const instruction = changeText.trim()
             if (!instruction || regenerating) return
-            onReshoot(scene.idx, { instruction })
+            // A described tweak varies the CURRENT image so only what you asked for changes.
+            onReshoot(scene.idx, { instruction, mode: 'vary' })
             setChangeText('')
           }
           return (
@@ -1771,25 +1809,62 @@ function SceneInspector({
                 </div>
               </div>
 
-              {/* Change this scene — the hero. One field; the system decides whether to refine or re-imagine.
-                  This is the one elevated surface in the rail (stronger border + shadow) since it's the
-                  action the creator reaches for most. */}
-              <div className="flex flex-col gap-2.5 rounded-2xl border border-border-strong bg-surface p-4 shadow-sm">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Change this scene</p>
-                <textarea
-                  value={changeText}
-                  onChange={(e) => setChangeText(e.target.value)}
-                  onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') runChange() }}
-                  rows={3}
-                  disabled={regenerating}
-                  placeholder="Describe a tweak, or a whole new look…"
-                  aria-label={`Scene ${scene.idx} change`}
-                  className="input resize-y text-xs leading-relaxed disabled:opacity-60"
-                />
-                <button type="button" onClick={runChange} disabled={regenerating || !changeText.trim()} className="btn-accent btn-sm w-full active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-50">
-                  {regenerating ? (<><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />Reshooting…</>) : 'Apply change'}
-                </button>
-                <p className="text-[11px] leading-relaxed text-faint">We'll match whatever you describe. Re-render to apply.</p>
+              {/* Regenerate — the hero surface (stronger border + shadow), the action reached for most.
+                  Regenerate re-rolls a close variation of the current image (fix a small thing); Fresh take
+                  re-imagines the shot from scratch; the field applies a described tweak. Undo/Redo step through
+                  every take generated for this scene (free — no regeneration). */}
+              <div className="flex flex-col gap-3 rounded-2xl border border-border-strong bg-surface p-4 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Regenerate</p>
+                  {/* Undo / Redo — walk this scene's image history. Position shown when there's more than one take. */}
+                  <div className="inline-flex items-center gap-1">
+                    {history.length > 1 && histPos >= 0 && (
+                      <span className="mr-1 text-[10px] tabular-nums text-faint">{histPos + 1}/{history.length}</span>
+                    )}
+                    <button type="button" onClick={goUndo} disabled={!canUndo || regenerating} title="Undo — previous take"
+                      className="flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-surface text-muted transition-colors hover:border-border-strong hover:text-ink disabled:cursor-not-allowed disabled:opacity-40">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M9 14 4 9l5-5" /><path d="M4 9h11a5 5 0 0 1 5 5v0a5 5 0 0 1-5 5H9" /></svg>
+                      <span className="sr-only">Undo</span>
+                    </button>
+                    <button type="button" onClick={goRedo} disabled={!canRedo || regenerating} title="Redo — next take"
+                      className="flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-surface text-muted transition-colors hover:border-border-strong hover:text-ink disabled:cursor-not-allowed disabled:opacity-40">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="m15 14 5-5-5-5" /><path d="M20 9H9a5 5 0 0 0-5 5v0a5 5 0 0 0 5 5h6" /></svg>
+                      <span className="sr-only">Redo</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* One-click re-roll (varies the current image) + a from-scratch alternative. */}
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => { if (!regenerating) onReshoot(scene.idx, { mode: 'vary' }) }} disabled={regenerating}
+                    className="btn-accent btn-sm flex-1 active:scale-[.98] disabled:cursor-wait disabled:opacity-50">
+                    {regenerating ? (<><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />Regenerating…</>) : (<><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M21 12a9 9 0 1 1-2.64-6.36" /><path d="M21 3v6h-6" /></svg>Regenerate</>)}
+                  </button>
+                  <button type="button" onClick={() => { if (!regenerating) onReshoot(scene.idx, { mode: 'fresh' }) }} disabled={regenerating}
+                    title="Re-imagine this shot from scratch (new composition)"
+                    className="btn-secondary btn-sm active:scale-[.98] disabled:cursor-wait disabled:opacity-50">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 3v4M3 5h4M6 17v4M4 19h4M13 3l2.5 6.5L22 12l-6.5 2.5L13 21l-2.5-6.5L4 12l6.5-2.5z" /></svg>
+                    Fresh take
+                  </button>
+                </div>
+                <p className="text-[11px] leading-relaxed text-faint">Regenerate keeps it close — fixes a small thing. Fresh take re-imagines the whole shot.</p>
+
+                {/* Or describe a specific change (also anchored to the current image). */}
+                <div className="flex flex-col gap-2 border-t border-border pt-3">
+                  <textarea
+                    value={changeText}
+                    onChange={(e) => setChangeText(e.target.value)}
+                    onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') runChange() }}
+                    rows={2}
+                    disabled={regenerating}
+                    placeholder="Or describe a change — e.g. “lower her hand”…"
+                    aria-label={`Scene ${scene.idx} change`}
+                    className="input resize-y text-xs leading-relaxed disabled:opacity-60"
+                  />
+                  <button type="button" onClick={runChange} disabled={regenerating || !changeText.trim()} className="btn-secondary btn-sm w-full active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-50">
+                    {regenerating ? (<><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />Applying…</>) : 'Apply change'}
+                  </button>
+                </div>
               </div>
             </>
           )

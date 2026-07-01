@@ -7,37 +7,66 @@ export interface SceneClipProps {
   videoSrc: string | null            // null for stills
   tier: 'still' | 'video'
   durationFrames: number
-  idx: number                        // scene index → picks a Ken Burns variant (varied motion)
+  idx: number                        // scene index → fallback Ken Burns variant when no camera move is set
+  cameraMove?: string | null         // director's camera move → still Ken Burns motion
+  videoDurationSec?: number | null   // native i2v clip length → stretch to fill a longer scene span
 }
 
-// Ken Burns variants, cycled by scene index so motion isn't an identical zoom every scene: alternate
-// zoom in/out + an occasional slow horizontal drift. `pan` is % of the overflow to drift across.
-const KEN_BURNS_VARIANTS: Array<{ from: number; to: number; pan: number }> = [
-  { from: 1.0, to: 1.08, pan: 0 },   // slow zoom in
-  { from: 1.08, to: 1.0, pan: 0 },   // slow zoom out
-  { from: 1.05, to: 1.1, pan: 2 },   // zoom in, drift right
-  { from: 1.05, to: 1.1, pan: -2 },  // zoom in, drift left
+// A Ken Burns move: start/end zoom + horizontal/vertical drift (% of overflow). Tuned subtle — these read
+// as a slow cinematic camera, not a zoom effect.
+interface KenBurns { from: number; to: number; panX: number; panY: number }
+
+// The director's camera move → Ken Burns motion, so a still honours the SAME beat intent the breakdown
+// chose (push_in for emphasis, pull_out for a reveal, locked for stillness, …). Keys match motion.ts
+// CAMERA_MOVES. A move not listed here (or empty/Auto) falls back to the idx-cycled variant below.
+const MOVE_TO_KEN_BURNS: Record<string, KenBurns> = {
+  push_in: { from: 1.0, to: 1.12, panX: 0, panY: 0 },
+  pull_out: { from: 1.12, to: 1.0, panX: 0, panY: 0 },
+  pan_left: { from: 1.08, to: 1.08, panX: 3, panY: 0 },   // frame drifts left
+  pan_right: { from: 1.08, to: 1.08, panX: -3, panY: 0 }, // frame drifts right
+  tilt_up: { from: 1.08, to: 1.08, panX: 0, panY: 3 },    // frame drifts up
+  tilt_down: { from: 1.08, to: 1.08, panX: 0, panY: -3 }, // frame drifts down
+  drift: { from: 1.0, to: 1.05, panX: 1.5, panY: 0 },     // slow, subtle
+  handheld: { from: 1.0, to: 1.04, panX: 0, panY: 0 },    // minimal (shake effect carries the rest)
+  locked: { from: 1.0, to: 1.015, panX: 0, panY: 0 },     // almost still — a hair of life so it isn't frozen
+}
+
+// Fallback when the scene has no camera move (Auto): cycle by index so motion isn't an identical zoom.
+const KEN_BURNS_FALLBACK: KenBurns[] = [
+  { from: 1.0, to: 1.08, panX: 0, panY: 0 },   // slow zoom in
+  { from: 1.08, to: 1.0, panX: 0, panY: 0 },   // slow zoom out
+  { from: 1.05, to: 1.1, panX: 2, panY: 0 },   // zoom in, drift right
+  { from: 1.05, to: 1.1, panX: -2, panY: 0 },  // zoom in, drift left
 ]
 
-export const SceneClip: React.FC<SceneClipProps> = ({ imageSrc, videoSrc, tier, durationFrames, idx }) => {
+export const SceneClip: React.FC<SceneClipProps> = ({ imageSrc, videoSrc, tier, durationFrames, idx, cameraMove, videoDurationSec }) => {
   const frame = useCurrentFrame()
-  const { width, height } = useVideoConfig()
+  const { width, height, fps } = useVideoConfig()
 
   if (tier === 'video' && videoSrc) {
+    // The clip is a fixed 5s/10s; the scene may run longer (its narration span). Slow playback to fill the
+    // gap so the shot never freezes on its last frame mid-line — clamped to [0.5, 1] so we neither speed it
+    // up (which would drop content) nor slow it to an unnatural crawl. If the scene is >2× the clip (rare),
+    // the tail freezes, which is still better than a hard stop.
+    const sceneSec = durationFrames / fps
+    const clipSec = videoDurationSec ?? sceneSec
+    const playbackRate = Math.max(0.5, Math.min(1, clipSec / sceneSec))
     return (
       <OffthreadVideo
         src={videoSrc}
+        playbackRate={playbackRate}
         style={{ width, height, objectFit: 'cover' }}
         muted  // model audio is always stripped — our mix is the audio track
       />
     )
   }
 
-  // Still: Ken Burns — variant chosen by scene index (varied zoom direction + occasional drift)
-  const v = KEN_BURNS_VARIANTS[idx % KEN_BURNS_VARIANTS.length]!
+  // Still: Ken Burns driven by the director's camera move, falling back to the idx-cycled variant.
+  const v = (cameraMove && MOVE_TO_KEN_BURNS[cameraMove]) || KEN_BURNS_FALLBACK[idx % KEN_BURNS_FALLBACK.length]!
   const clamp = { extrapolateLeft: 'clamp' as const, extrapolateRight: 'clamp' as const }
   const scale = interpolate(frame, [0, durationFrames], [v.from, v.to], clamp)
-  const panX = v.pan ? interpolate(frame, [0, durationFrames], [-v.pan, v.pan], clamp) : 0
+  const panX = v.panX ? interpolate(frame, [0, durationFrames], [-v.panX, v.panX], clamp) : 0
+  const panY = v.panY ? interpolate(frame, [0, durationFrames], [-v.panY, v.panY], clamp) : 0
 
   return (
     <div style={{ width, height, overflow: 'hidden', position: 'relative' }}>
@@ -50,7 +79,7 @@ export const SceneClip: React.FC<SceneClipProps> = ({ imageSrc, videoSrc, tier, 
           position: 'absolute',
           top: '50%',
           left: '50%',
-          transform: `translate(calc(-50% + ${panX}%), -50%)`,
+          transform: `translate(calc(-50% + ${panX}%), calc(-50% + ${panY}%))`,
         }}
       />
     </div>

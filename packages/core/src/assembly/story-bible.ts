@@ -40,14 +40,16 @@ export function resolveEntityRef(bible: StoryBible, ref: string): BibleEntity | 
   return partial.length === 1 ? partial[0]! : null
 }
 
-// Resolve the final per-reel bible from channel canon + the analyzer's story extraction. The analyzer
-// is told to reuse canon ids, so for a shared id its (richer, possibly story-extended) entity WINS;
-// canon entities the analyzer didn't mention are appended so a channel-recurring place keeps its look
-// even when this story doesn't elaborate it. Continuity + constraints come from the analyzer.
+// Resolve the final per-reel bible from channel canon + the analyzer's story extraction. The reel bible is
+// exactly what the analyzer extracted for THIS story (it reuses canon ids where a canon entity actually
+// appears, so shared ids stay consistent across reels). We deliberately do NOT append canon entities the
+// story never features: an unreferenced channel location/object gets no reference plate and no scene points
+// at it, so appending it only bloats the bible with dead settings. If the analyzer produced nothing (analysis
+// failed), fall back to the full canon so the reel still carries its channel-recurring anchors.
 export function mergeBible(canon: BibleEntity[], analyzed: StoryBible): StoryBible {
+  if (analyzed.entities.length === 0) return { ...analyzed, entities: [...canon] }
   const bySlug = new Map<string, BibleEntity>()
-  for (const e of canon) bySlug.set(slug(e.id), e)
-  for (const e of analyzed.entities) bySlug.set(slug(e.id), e) // analyzer wins on shared id
+  for (const e of analyzed.entities) bySlug.set(slug(e.id), e) // analyzer wins (it saw the story); canon-only ids dropped
   return { ...analyzed, entities: [...bySlug.values()] }
 }
 
@@ -81,4 +83,65 @@ export function resolveEntities(bible: StoryBible, refs: EntityRefs): ResolvedEn
     resolved.push(entity)
   }
   return { resolved, unresolved }
+}
+
+// ── Operator overrides ────────────────────────────────────────────────────────
+// The operator (PM) can correct an entity the analyzer guessed wrong — the human's truth, not the machine's.
+
+export interface BibleEdit {
+  entityId: string
+  description?: string | undefined // new canonical description (trimmed, spliced verbatim). Marks the entity locked.
+  drop?: boolean | undefined // remove this entity from the bible entirely
+}
+
+// Apply one operator edit to a bible, returning a NEW bible (pure). A description edit replaces the text,
+// marks the entity `locked` (so re-derivation can't clobber it), and clears its reference plate key so the
+// caller re-mints the plate from the new description. A drop removes the entity. Slug-tolerant id match.
+export function applyBibleEdit(bible: StoryBible, edit: BibleEdit): StoryBible {
+  const target = slug(edit.entityId)
+  if (edit.drop) {
+    return { ...bible, entities: bible.entities.filter((e) => slug(e.id) !== target) }
+  }
+  const desc = edit.description?.trim()
+  if (!desc) return bible // nothing to apply
+  return {
+    ...bible,
+    entities: bible.entities.map((e) =>
+      slug(e.id) === target ? { ...e, description: desc, locked: true, referenceImageKey: undefined } : e,
+    ),
+  }
+}
+
+// Carry operator-locked entities from a PRIOR bible into a freshly re-derived one, so re-running the
+// analyzer never overwrites a human correction. A locked prior entity replaces the fresh entity of the
+// same id (or is appended if the fresh derivation dropped it). Fresh, unlocked entities pass through.
+export function preserveLockedEntities(fresh: StoryBible, prior: StoryBible | null | undefined): StoryBible {
+  const locked = (prior?.entities ?? []).filter((e) => e.locked)
+  if (locked.length === 0) return fresh
+  const lockedBySlug = new Map(locked.map((e) => [slug(e.id), e]))
+  const merged = fresh.entities.map((e) => lockedBySlug.get(slug(e.id)) ?? e)
+  const present = new Set(merged.map((e) => slug(e.id)))
+  for (const e of locked) if (!present.has(slug(e.id))) merged.push(e)
+  return { ...fresh, entities: merged }
+}
+
+// An entity is DEPICTABLE only if its description adds visual information beyond its bare name/id. Channel
+// canon stores entities as NAMES (description === name, e.g. "reloh sa telepono"), which an image model
+// renders as literal TEXT — it prints the words instead of drawing the thing. Such label-only entities
+// carry no usable visual, so they're dropped from splicing, plating, and the cast list; the scene's own
+// prose covers them. (The real fix is structured channel canon with real descriptions — deferred.)
+export function isDepictableEntity(e: BibleEntity): boolean {
+  const desc = e.description.trim()
+  return desc.length > 0 && slug(desc) !== slug(e.id)
+}
+
+// The entities that apply to a scene, in splice order. The first-person narrator is NO LONGER suppressed:
+// she's the main character and needs a reference plate + conditioning so her face stays consistent when
+// she IS shown (a reflection, her back, her hands) — suppressing her left her unanchored and drifting to a
+// random figure. Keeping her out of pure-POV shots as a full front-facing figure is now the breakdown's job
+// (the scenes.v1 POV rules compose her as a reflection/back/partial). Only depictability filters here
+// (label-only entities excluded — see isDepictableEntity).
+export function sceneEntities(bible: StoryBible, refs: EntityRefs): BibleEntity[] {
+  const { resolved } = resolveEntities(bible, refs)
+  return resolved.filter(isDepictableEntity)
 }

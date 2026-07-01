@@ -6,7 +6,7 @@
 import { z } from 'zod'
 import { ToneConfigSchema, WorldBibleSchema, PLATFORM_PRESETS, type TargetPlatform } from '../types/channel.js'
 
-export const CHANNEL_V1_VERSION = 'channel.v1'
+export const CHANNEL_V1_VERSION = 'channel.v1.1'
 
 // The full derived profile returned by the LLM. Narrator voices are NOT derived
 // — the operator picks real ElevenLabs voices in the UI. We derive an audioMood
@@ -99,8 +99,16 @@ Produce JSON with exactly these fields:
     // in plain English — they're metadata, not spoken in the narration.)
     "region": "a real-but-fictionalized region/setting",
     "era": "time period the channel lives in",
-    "canonLocations": ["3–5 recurring named places, in the narration language"],
-    "canonObjects": ["3–5 recurring evocative objects, in the narration language"],
+    // canonLocations/canonObjects are for things that RECUR across MANY episodes and must look identical every
+    // time — e.g. a channel built around ONE haunted house, ONE shop, ONE recurring cursed object. They are
+    // spliced into future reels, so a place/object that appears in only one story does NOT belong here.
+    // CRITICAL: most channels — especially ANTHOLOGIES where each episode is a standalone story with its own
+    // setting and cast (e.g. "first-person horror memories", "a different scary story each night") — have NO
+    // genuine channel-wide recurring places or objects. For those, return EMPTY arrays ([]). Do NOT pad to a
+    // quota: never invent one-off places/props just to fill these lists — that only pollutes every future reel
+    // with settings it never uses. Only list something here if you can name the multiple episodes it recurs in.
+    "canonLocations": ["ONLY places that recur across many episodes and must stay visually identical; else []"],
+    "canonObjects": ["ONLY signature objects that recur across many episodes and must stay identical; else []"],
     "vocabulary": { "term": "how this channel refers to it, in the narration language (2–5 entries)" }
   },
   "genreCategory": "the channel's VISUAL-LANGUAGE bucket — drives how scenes are composed and lit. Pick the ONE that fits how this channel's videos should LOOK, not just its topic:

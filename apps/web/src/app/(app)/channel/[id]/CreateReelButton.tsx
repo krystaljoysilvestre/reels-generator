@@ -58,7 +58,8 @@ export function CreateReelButton({
       })
       const json = await res.json().catch(() => null)
       if (!res.ok) throw new Error(json?.error ?? 'Could not save script')
-      router.push(`/reel/${json.reelId}/story`)
+      // The story is used as-is (no review stop) — go straight to the storyboard, which shows the build.
+      router.push(`/storyboard/${json.reelId}`)
       router.refresh()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not save script')
