@@ -15,8 +15,8 @@ export async function POST(req: NextRequest) {
   // mode: 'vary' (default) conditions on the CURRENT image so the regen stays close (fix a hand, small
   // variation); 'fresh' ignores the current image and re-rolls a new composition from scratch. Both keep the
   // character/location plates so faces stay consistent. instruction is optional (a plain re-roll needs none).
-  const { reelId, sceneIdx, instruction, mode } = (await req.json()) as {
-    reelId: string; sceneIdx: number; instruction?: string; mode?: 'vary' | 'fresh'
+  const { reelId, sceneIdx, instruction, mode, referenceKey } = (await req.json()) as {
+    reelId: string; sceneIdx: number; instruction?: string; mode?: 'vary' | 'fresh'; referenceKey?: string
   }
   const db = getDb()
 
@@ -114,7 +114,10 @@ export async function POST(req: NextRequest) {
   // A plate that has drifted to a different look would otherwise override what you see and swap the character
   // (the bug behind "revert to an image, tweak it, get a different woman"). Fresh/replace has no current
   // image, so it injects identity from the entity plates instead.
-  const referenceImageKeys = currentImage ? [currentImage.storageKey] : entityPlateKeys
+  const baseRefs = currentImage ? [currentImage.storageKey] : entityPlateKeys
+  // An operator-attached reference image (📎 in the regenerate field) is added as an EXTRA reference — the
+  // model conditions on it for the change ("make her wardrobe like this [photo]"), like attaching in chat.
+  const referenceImageKeys = referenceKey ? [...baseRefs, referenceKey] : baseRefs
 
   // Write each regen to a UNIQUE key so previous images survive (the pipeline overwrites one shared key; if
   // regens did too, undo/redo would have nothing to go back to). This is what makes image history possible.

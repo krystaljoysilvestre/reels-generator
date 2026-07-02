@@ -322,11 +322,11 @@ export function StoryboardEditor({
   //                       variation. An optional `instruction` ("lower the hand") steers the tweak.
   //   'fresh' — ignore the current image; re-roll a brand-new composition (plates only → faces still match).
   // The plain "Regenerate" button sends 'vary' with no instruction; "Fresh take" sends 'fresh'.
-  async function handleRegenImage(sceneIdx: number, opts?: { instruction?: string; mode?: 'vary' | 'fresh' }) {
+  async function handleRegenImage(sceneIdx: number, opts?: { instruction?: string; mode?: 'vary' | 'fresh'; referenceKey?: string }) {
     setLoading(`regen-${sceneIdx}`)
     const res = await fetch('/api/pipeline/regen-image', {
       method: 'POST',
-      body: JSON.stringify({ reelId: reel.id, sceneIdx, instruction: opts?.instruction?.trim() || undefined, mode: opts?.mode ?? 'vary' }),
+      body: JSON.stringify({ reelId: reel.id, sceneIdx, instruction: opts?.instruction?.trim() || undefined, mode: opts?.mode ?? 'vary', referenceKey: opts?.referenceKey }),
       headers: { 'Content-Type': 'application/json' },
     })
     if (!res.ok) {
@@ -352,6 +352,23 @@ export function StoryboardEditor({
     setLoadedMedia((s) => { const n = new Set(s); n.delete(sceneIdx); return n })
     setScenes((prev) => prev.map((s) => (s.idx === sceneIdx ? { ...s, tier: 'still' } : s)))
     setLoading(null)
+    router.refresh()
+  }
+
+  // "Upload image for this scene": use an operator-uploaded image directly as the scene's image (no
+  // generation). Registers it as an asset (joins undo/redo history) and points the scene at it.
+  async function handleUploadImage(sceneIdx: number, key: string) {
+    const res = await fetch('/api/pipeline/set-scene-image-upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reelId: reel.id, sceneIdx, key }),
+    })
+    if (!res.ok) { toast(await failMessage(res, 'Could not use that image.'), 'error'); return }
+    setImageOverride((o) => { if (!(sceneIdx in o)) return o; const n = { ...o }; delete n[sceneIdx]; return n })
+    setImageBust((b) => ({ ...b, [sceneIdx]: (b[sceneIdx] ?? 0) + 1 }))
+    setLoadedMedia((s) => { const n = new Set(s); n.delete(sceneIdx); return n })
+    setScenes((prev) => prev.map((s) => (s.idx === sceneIdx ? { ...s, tier: 'still' } : s)))
+    toast('Your image is set for this scene.', 'success')
     router.refresh()
   }
 
@@ -634,6 +651,7 @@ export function StoryboardEditor({
       onSetSceneType={setSceneType}
       onPreview={handlePreview}
       onReshoot={handleRegenImage}
+      onUploadImage={handleUploadImage}
       history={sceneImageHistory[selectedScene.idx] ?? []}
       onSetSceneImage={handleSetSceneImage}
       onSaveText={saveSceneText}
@@ -1628,7 +1646,7 @@ function sceneBeat(idx: number, total: number, twistIdx: number | null): 'Hook' 
 // ── Inspector (detail) ─────────────────────────────────────────────────────────
 function SceneInspector({
   scene, beat, imgSrc, variations, activeVar, setActiveVar, loaded, markLoaded, loading, moodTint,
-  sceneSaving, setScenes, setSceneSaving, onSetSceneType, onPreview, onReshoot, history, onSetSceneImage, onSaveText,
+  sceneSaving, setScenes, setSceneSaving, onSetSceneType, onPreview, onReshoot, onUploadImage, history, onSetSceneImage, onSaveText,
   sounds, soundPreviews, onAddSound, onPreviewSound, onRemoveSound,
 }: {
   scene: Scene; beat: 'Hook' | 'Build-up' | 'Twist' | 'Payoff'; imgSrc?: string | undefined; variations: string[]; activeVar: number
@@ -1639,7 +1657,8 @@ function SceneInspector({
   setSceneSaving: React.Dispatch<React.SetStateAction<Record<number, 'saving' | 'saved'>>>
   onSetSceneType: (idx: number, type: 'static' | 'video') => void
   onPreview: (idx: number) => void
-  onReshoot: (idx: number, opts?: { instruction?: string; mode?: 'vary' | 'fresh' }) => void
+  onReshoot: (idx: number, opts?: { instruction?: string; mode?: 'vary' | 'fresh'; referenceKey?: string }) => void
+  onUploadImage: (idx: number, key: string) => void
   history: { assetId: string; url: string }[] // this scene's images oldest→newest (for Undo/Redo)
   onSetSceneImage: (idx: number, assetId: string, url: string) => void
   onSaveText: (idx: number, text: string) => void
@@ -1669,6 +1688,19 @@ function SceneInspector({
   const [fullLoaded, setFullLoaded] = useState(false) // lightbox media has loaded
   const [lightboxAspect, setLightboxAspect] = useState<string | null>(null) // real aspect of the open media
   const [changeText, setChangeText] = useState('') // the creator's plain-language change for this scene
+  const [refKey, setRefKey] = useState<string | null>(null) // an attached reference image for the change
+  const [busyUpload, setBusyUpload] = useState<false | 'ref' | 'photo'>(false)
+  const [uploadErr, setUploadErr] = useState<string | null>(null)
+  // Upload an operator image → R2, return its key (or null on failure). Used for both "attach a reference"
+  // and "use my photo".
+  async function uploadImage(file: File): Promise<string | null> {
+    setUploadErr(null)
+    const fd = new FormData(); fd.append('file', file)
+    const res = await fetch('/api/pipeline/scene-image-upload', { method: 'POST', body: fd })
+    const j = await res.json().catch(() => null)
+    if (!res.ok || !j?.key) { setUploadErr(j?.error ?? 'Upload failed.'); return null }
+    return j.key as string
+  }
   // Per-scene "Add a sound" (manual cue) — targeted SFX or an off-screen spoken line for THIS scene.
   // Collapsed by default (sound is automatic; this is an optional extra) — expands on click.
   const [soundOpen, setSoundOpen] = useState(false)
@@ -1888,10 +1920,11 @@ function SceneInspector({
           const previewCost = `$${(motionCostCents(settings) / 100).toFixed(2)}`
           const runChange = () => {
             const instruction = changeText.trim()
-            if (!instruction || regenerating) return
-            // A described tweak varies the CURRENT image so only what you asked for changes.
-            onReshoot(scene.idx, { instruction, mode: 'vary' })
-            setChangeText('')
+            if ((!instruction && !refKey) || regenerating) return
+            // A described tweak varies the CURRENT image so only what you asked for changes; an attached
+            // reference image is passed alongside for the model to condition on ("make it like this").
+            onReshoot(scene.idx, { instruction, mode: 'vary', ...(refKey ? { referenceKey: refKey } : {}) })
+            setChangeText(''); setRefKey(null)
           }
           return (
             <>
@@ -2002,10 +2035,33 @@ function SceneInspector({
                     aria-label={`Scene ${scene.idx} change`}
                     className="input resize-y text-xs leading-relaxed disabled:opacity-60"
                   />
-                  <button type="button" onClick={runChange} disabled={regenerating || !changeText.trim()} className="btn-secondary btn-sm w-full active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-50">
+                  {/* Attach a reference image for the change — the model conditions on it, like attaching in chat. */}
+                  <div className="flex items-center gap-2">
+                    <label className={`btn-secondary btn-sm cursor-pointer ${regenerating || busyUpload ? 'pointer-events-none opacity-50' : ''}`}>
+                      <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" disabled={regenerating || busyUpload !== false}
+                        onChange={async (e) => { const f = e.target.files?.[0]; e.currentTarget.value = ''; if (!f) return; setBusyUpload('ref'); const k = await uploadImage(f); setBusyUpload(false); if (k) setRefKey(k) }} />
+                      {busyUpload === 'ref' ? 'Uploading…' : (<><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" /></svg>Attach reference</>)}
+                    </label>
+                    {refKey && <span className="flex items-center gap-1 text-[11px] text-positive">reference attached<button type="button" onClick={() => setRefKey(null)} className="text-faint hover:text-ink" aria-label="Remove reference">✕</button></span>}
+                  </div>
+                  <button type="button" onClick={runChange} disabled={regenerating || (!changeText.trim() && !refKey)} className="btn-secondary btn-sm w-full active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-50">
                     {regenerating ? (<><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />Applying…</>) : 'Apply change'}
                   </button>
                 </div>
+
+                {/* Upload your own image to use directly AS this scene's image (no generation). */}
+                <div className="flex flex-col gap-1 border-t border-border pt-3">
+                  <label className={`btn-ghost btn-sm cursor-pointer ${regenerating || busyUpload ? 'pointer-events-none opacity-50' : ''}`}>
+                    <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" disabled={regenerating || busyUpload !== false}
+                      onChange={async (e) => {
+                        const f = e.target.files?.[0]; e.currentTarget.value = ''; if (!f) return
+                        setBusyUpload('photo'); const k = await uploadImage(f); setBusyUpload(false); if (k) onUploadImage(scene.idx, k)
+                      }} />
+                    {busyUpload === 'photo' ? 'Uploading…' : (<><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="M17 8l-5-5-5 5" /><path d="M12 3v12" /></svg>Upload image for this scene</>)}
+                  </label>
+                  <span className="text-[11px] leading-relaxed text-faint">Use your own picture as this scene’s image — no generation.</span>
+                </div>
+                {uploadErr && <p className="text-[11px] text-negative">{uploadErr}</p>}
               </div>
             </>
           )
