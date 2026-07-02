@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest'
 import {
   computeTimings,
   AlignmentLengthError,
-  AnchorResolutionError,
   SceneCoverageError,
   type ComputeTimingsInput,
   type SceneSpan,
@@ -337,39 +336,41 @@ describe('AlignmentLengthError', () => {
 })
 
 // ── AnchorResolutionError ─────────────────────────────────────────────────────
-describe('AnchorResolutionError', () => {
-  it('throws not_found when SFX anchor is absent', () => {
+// An unresolvable SFX/silence anchor must NOT fail the render — the annotator sometimes mis-quotes an
+// anchor (casing/punctuation), so a single bad sound cue is dropped with a warning and the reel still renders.
+describe('unresolvable SFX anchor is soft (dropped, not thrown)', () => {
+  it('drops the SFX cue + warns when the anchor is absent', () => {
     const narration = 'Hindi dito matatagpuan ang hinahanap.'
-    expect(() =>
-      computeTimings({
-        narration,
-        alignment: syntheticAlignment(narration, 5000),
-        durationMs: 5000,
-        scenes: singleScene(narration),
-        audioScript: {
-          ...silentAudioScript(),
-          sfx: [{ anchor: 'WALANG_GANITO', offsetMs: 0, prompt: 'x', volumeDb: 0, impactAtEnd: false }],
-        },
-        twistAnchor: '',
-      }),
-    ).toThrow(AnchorResolutionError)
+    const result = computeTimings({
+      narration,
+      alignment: syntheticAlignment(narration, 5000),
+      durationMs: 5000,
+      scenes: singleScene(narration),
+      audioScript: {
+        ...silentAudioScript(),
+        sfx: [{ anchor: 'WALANG_GANITO', offsetMs: 0, prompt: 'x', volumeDb: 0, impactAtEnd: false }],
+      },
+      twistAnchor: '',
+    })
+    expect(result.sfxEvents).toHaveLength(0)
+    expect(result.warnings.some((w) => w.includes('SFX anchor unresolvable'))).toBe(true)
   })
 
-  it('throws ambiguous when SFX anchor matches multiple times', () => {
+  it('drops the SFX cue + warns when the anchor is ambiguous', () => {
     const narration = 'oo oo oo'  // "oo" appears 3 times
-    expect(() =>
-      computeTimings({
-        narration,
-        alignment: syntheticAlignment(narration, 3000),
-        durationMs: 3000,
-        scenes: singleScene(narration),
-        audioScript: {
-          ...silentAudioScript(),
-          sfx: [{ anchor: 'oo', offsetMs: 0, prompt: 'x', volumeDb: 0, impactAtEnd: false }],
-        },
-        twistAnchor: '',
-      }),
-    ).toThrow(AnchorResolutionError)
+    const result = computeTimings({
+      narration,
+      alignment: syntheticAlignment(narration, 3000),
+      durationMs: 3000,
+      scenes: singleScene(narration),
+      audioScript: {
+        ...silentAudioScript(),
+        sfx: [{ anchor: 'oo', offsetMs: 0, prompt: 'x', volumeDb: 0, impactAtEnd: false }],
+      },
+      twistAnchor: '',
+    })
+    expect(result.sfxEvents).toHaveLength(0)
+    expect(result.warnings.some((w) => w.includes('SFX anchor unresolvable'))).toBe(true)
   })
 })
 

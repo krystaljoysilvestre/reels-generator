@@ -221,7 +221,10 @@ export function computeTimings(input: ComputeTimingsInput): Timings {
   // §4.3 — SFX placement
   const sfxEvents: SfxEvent[] = []
   for (const cue of input.audioScript.sfx) {
-    const resolved = resolveAnchor(cps, input.alignment, cue.anchor)! // throws on not-found/ambiguous
+    // Soft: the annotator sometimes mis-quotes/paraphrases an anchor (casing, punctuation), so it isn't a
+    // verbatim substring. A single missing SFX cue must NOT fail the whole render — drop it with a warning.
+    const resolved = resolveAnchor(cps, input.alignment, cue.anchor, true)
+    if (!resolved) { warnings.push(`SFX anchor unresolvable, cue dropped: "${cue.anchor}"`); continue }
     let atMs = resolved.startMs + cue.offsetMs
     if (atMs < 0 || atMs > input.durationMs) {
       if (cfg.clampSfx) {
@@ -270,10 +273,15 @@ export function computeTimings(input: ComputeTimingsInput): Timings {
   let silenceDrop: Timings['silenceDrop'] = null
   if (input.audioScript.silenceDrop) {
     const sd = input.audioScript.silenceDrop
-    const resolved = resolveAnchor(cps, input.alignment, sd.anchor)! // fatal if not found
-    const atMs = resolved.startMs
-    const durationMs = Math.min(sd.durationMs, input.durationMs - atMs)
-    silenceDrop = { atMs, durationMs }
+    // Soft, same as SFX: a mis-quoted silence-drop anchor drops the effect with a warning, never fails render.
+    const resolved = resolveAnchor(cps, input.alignment, sd.anchor, true)
+    if (resolved) {
+      const atMs = resolved.startMs
+      const durationMs = Math.min(sd.durationMs, input.durationMs - atMs)
+      silenceDrop = { atMs, durationMs }
+    } else {
+      warnings.push(`Silence-drop anchor unresolvable, effect dropped: "${sd.anchor}"`)
+    }
   }
 
   // §4.6 — Subtitle chunking
