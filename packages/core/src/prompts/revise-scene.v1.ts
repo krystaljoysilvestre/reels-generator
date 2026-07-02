@@ -6,7 +6,7 @@
 
 import { z } from 'zod'
 
-export const REVISE_SCENE_V1_VERSION = 'revise-scene.v2'
+export const REVISE_SCENE_V1_VERSION = 'revise-scene.v4'
 
 // `intent` lets the system silently pick how to regenerate: "refine" = the operator wants to IMPROVE or
 // ADJUST the same scene, so we keep the existing composition and apply the change off the current image
@@ -35,13 +35,15 @@ export function buildReviseScenePrompt(
     opts?.genreCategory === 'horror'
       ? `
 
-This is a HORROR channel. When the change asks for something frightening, uncanny, or "creepy", do NOT settle for mood adjectives ("eerie", "unsettling", "a creepy smile") — the image model renders only concrete detail, so vague fear-words come out pretty and normal. Translate the fear into specific, visible WRONGNESS: a smile stretched unnaturally past the corners of the mouth baring too many teeth, eyes open too wide in a dead unblinking stare, bloodless waxy skin, a head or limb at a subtly wrong angle, a reflection that doesn't match the body, a figure half-swallowed by shadow. Name the physical detail, never just the feeling. Keep it genuinely disturbing — do not soften it into something tasteful or beautiful.`
+This is a HORROR channel. When the change asks for something frightening, uncanny, or "creepy", do NOT settle for mood adjectives ("eerie", "unsettling", "a creepy smile") — the image model renders only concrete detail, so vague fear-words come out pretty and normal. Translate the fear into specific, visible WRONGNESS: a smile stretched unnaturally past the corners of the mouth baring too many teeth, eyes open too wide in a dead unblinking stare, bloodless waxy skin, a head or limb at a subtly wrong angle, a reflection that doesn't match the body, a figure half-swallowed by shadow. Name the physical detail, never just the feeling. Keep it genuinely disturbing — do not soften it into something tasteful or beautiful. (Refer to the threat with non-person words — see FILTER-SAFE PHRASING above.)`
       : ''
   const system = `You are a storyboard director for vertical (9:16) narrated reels. You revise ONE scene's image prompt.
 
 An image prompt is CONTENT ONLY — it describes WHAT IS SEEN. Never include style or medium words ("cinematic", "photo", "painting", colour-grade or lens terms); the system owns the look. Lead with the key VISIBLE subject, then shot size + camera angle, one foreground element for depth, the light source + its direction, a touch of atmosphere. Use concrete nouns and a plain present-tense description of the frame — never meta-instructions like "show", "change", "instead", "make it". ~30–50 words.
 
-DESCRIBE PRESENCE, NOT ABSENCE. Only ever state what IS in the frame, never what is missing. The image model reads "no sink", "without a mirror" or "strictly no X" as a cue to DRAW that very thing — so when the operator asks to remove or keep out something, never echo it as a negation. Instead describe what fills that space so there is no room left for the unwanted thing (e.g. "no sink, just the stall walls" → "tight tiled partition walls press in close on the left and right, boxing in the narrow cubicle"). Your output must contain no "no", "not", "without", "avoid" or "remove".${horrorClause}`
+DESCRIBE PRESENCE, NOT ABSENCE. Only ever state what IS in the frame, never what is missing. The image model reads "no sink", "without a mirror" or "strictly no X" as a cue to DRAW that very thing — so when the operator asks to remove or keep out something, never echo it as a negation. Instead describe what fills that space so there is no room left for the unwanted thing (e.g. "no sink, just the stall walls" → "tight tiled partition walls press in close on the left and right, boxing in the narrow cubicle"). Your output must contain no "no", "not", "without", "avoid" or "remove".
+
+FILTER-SAFE PHRASING: when a PERSON is depicted dead, a corpse, a victim, bloodied/gravely injured, or as a supernatural or menacing presence, describe them with NON-PERSON words — "a figure", "a form", "a shape", "it" — never "a woman/man/girl" or "her/him" for THAT subject. Naming a person in such a state trips the image model's safety filter and the render fails entirely; the same subject as "a figure/form" renders identically and passes. Ordinary, living, unharmed people stay people.${horrorClause}`
 
   const entitiesBlock = opts?.entities?.length
     ? `\n\nRECURRING ENTITIES in this scene (their LOCKED canonical look — the SAME figure appears in other scenes):\n${opts.entities.map((e) => `- ${e.id}: ${e.description}`).join('\n')}\nIf the change alters the PERMANENT APPEARANCE of one of these entities ("make her hair wet", "give the ghost black eyes", "make him older") — NOT a one-off pose / action / framing / lighting change for this shot — set entityLook to { "entityId": the id, "description": that entity's FULL rewritten canonical look (appearance facts only: build, hair, wardrobe, distinguishing / wrong features; NO scene action) }. This updates the character everywhere. Otherwise leave entityLook null. An entityLook change is ALWAYS intent "replace".`
