@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { getDb, scenes, assets, channels, reels } from '@reels/db'
 import { eq, and, inArray } from 'drizzle-orm'
 import { generateImage, generateImageFal, imageEngineForGenre, ContentFilterError, ProviderRateLimitError, llmCall, SCENE_IMAGE_QUALITY } from '@reels/providers'
-import { assembleImagePrompt, assembleNegativePrompt, reelLightingDirective, sceneEntities, StoryBibleSchema, PLATFORM_PRESETS } from '@reels/core'
+import { assembleImagePrompt, assembleNegativePrompt, castNationality, reelLightingDirective, sceneEntities, StoryBibleSchema, PLATFORM_PRESETS } from '@reels/core'
 import { buildReviseScenePrompt, REVISE_SCENE_V1_VERSION, ReviseSceneSchema } from '@reels/core/prompts/revise-scene.v1'
 import { getSession } from '@/lib/auth'
 
@@ -40,6 +40,11 @@ export async function POST(req: NextRequest) {
   // change into a well-formed, content-only image prompt (same conventions scenes.v1 produces).
   const tweak = instruction?.trim()
   let contentPrompt = basePrompt
+  // The reviser also classifies the change: 'replace' = a fundamentally different shot (new subject/figure/
+  // viewpoint). An additive instruction ("add a figure in the mirror") classifies as replace — and MUST NOT
+  // condition on the current image, or the reference clamps it to the old composition and the addition never
+  // appears. So a 'replace' verdict forces a fresh render even when the UI sent the default 'vary'.
+  let reviseReplace = false
   if (tweak) {
     try {
       const { system, userMessage } = buildReviseScenePrompt(basePrompt, tweak, { genreCategory: channel.genreCategory })
@@ -50,6 +55,7 @@ export async function POST(req: NextRequest) {
         messages: [{ role: 'user', content: userMessage }],
       })
       contentPrompt = revised.data.imagePrompt.trim() || basePrompt
+      reviseReplace = revised.data.intent === 'replace'
     } catch {
       return NextResponse.json({ error: 'Could not apply your change — try rephrasing it.' }, { status: 502 })
     }
@@ -65,7 +71,7 @@ export async function POST(req: NextRequest) {
   const engine = imageEngineForGenre(channel.genreCategory)
   const aspect = (PLATFORM_PRESETS[(channel.targetPlatform ?? 'all') as keyof typeof PLATFORM_PRESETS] ?? PLATFORM_PRESETS.all).aspect
   const lighting = storyBible ? reelLightingDirective(channel.genreCategory, storyBible.continuity.timeline) : undefined
-  const finalPrompt = assembleImagePrompt(contentPrompt, channel.stylePreset, expansion, lighting)
+  const finalPrompt = assembleImagePrompt(contentPrompt, channel.stylePreset, expansion, lighting, castNationality(channel.languages, (channel.worldBible as { region?: string } | null)?.region))
   const negativePrompt = assembleNegativePrompt({ genreCategory: channel.genreCategory })
   const entityPlateKeys = storyBible
     ? sceneEntities(storyBible, { primaryEntity: scene.primaryEntity, supportingEntities: scene.supportingEntities })
@@ -74,7 +80,7 @@ export async function POST(req: NextRequest) {
     : []
   // 'vary' (default): put the CURRENT image first as the reference so the regen stays close to it (a small
   // fix keeps the composition). 'fresh': omit it → a new composition, plates-only. Faces stay locked either way.
-  const currentImage = mode !== 'fresh' && scene.imageAssetId
+  const currentImage = mode !== 'fresh' && !reviseReplace && scene.imageAssetId
     ? await db.query.assets.findFirst({ where: eq(assets.id, scene.imageAssetId) })
     : null
   const referenceImageKeys = [...(currentImage ? [currentImage.storageKey] : []), ...entityPlateKeys]

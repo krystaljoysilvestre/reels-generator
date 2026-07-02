@@ -58,7 +58,8 @@ FIRST decide the intent. The dividing line is PHYSICAL: "refine" re-touches the 
   • subject — "show the knife instead", "her face instead of the room"
   • location — "make it a forest", "move to the church", "outside looking in"
   • adding / removing a MAJOR element or otherwise restaging the scene
-  Phrases like "POV", "the view should be…", "show…", "see…", "from…" almost always mean replace.
+  • introducing a NEW person, figure, or creature not already in the frame — "add a woman behind her", "someone in the mirror", "a figure in the doorway", "the ghost appears beside her". A refine can only relight what is ALREADY there, so it can NEVER add someone — describing or adding a new subject is ALWAYS replace.
+  Phrases like "POV", "the view should be…", "show…", "see…", "from…", "add…", "beside…", "behind…" almost always mean replace.
 
 When it's genuinely ambiguous, choose "replace" — a fresh render that follows the description is what the operator expects; refine can only recolour what is already there, so a misjudged refine looks like "nothing changed but the colours".
 
