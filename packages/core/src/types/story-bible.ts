@@ -9,6 +9,10 @@ import { z } from 'zod'
 export const BibleEntitySchema = z.object({
   id: z.string().min(1), // kebab-case symbol: "bedroom", "ashley", "cracked-mirror"
   kind: z.enum(['character', 'location', 'object']),
+  // Optional role marker for routing. 'threat' = the story's supernatural presence (ghost/aswang/figure);
+  // its reference plate is minted on the grittier Flux engine for horror so it isn't beautified. Set by the
+  // analyzer. Absent for ordinary entities. (The narrator is tracked separately via continuity.narratorEntityId.)
+  role: z.enum(['threat']).optional(),
   // Canonical depictable noun phrase — FACTS ONLY, in the channel's narration language. Written once,
   // never regenerated. For a LOCATION this MUST enumerate the physical light sources/openings present
   // (a window, a bare bulb, a gasera, "no electricity") — they are facts of the place; WHICH source is

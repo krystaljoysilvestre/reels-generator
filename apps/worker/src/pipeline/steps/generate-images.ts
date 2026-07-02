@@ -1,7 +1,7 @@
 import { eq, and } from 'drizzle-orm'
 import { getDb, reels, scenes, assets, channels, stories } from '@reels/db'
-import { generateImage, generateImageFal, imageEngineForGenre, buildInputHash, ContentFilterError, llmCall, downloadBuffer, SCENE_IMAGE_MODEL, SCENE_IMAGE_QUALITY, type ImageEngine } from '@reels/providers'
-import { assembleImagePrompt, assembleNegativePrompt, assembleReferencePrompt, reelLightingDirective, sceneEntities, slug, PLATFORM_PRESETS, StoryBibleSchema } from '@reels/core'
+import { generateImage, generateImageFal, imageEngineForGenre, FLUX_IMAGE_ENGINE, buildInputHash, ContentFilterError, llmCall, downloadBuffer, SCENE_IMAGE_MODEL, SCENE_IMAGE_QUALITY, type ImageEngine } from '@reels/providers'
+import { assembleImagePrompt, assembleNegativePrompt, assembleReferencePrompt, castNationality, reelLightingDirective, sceneEntities, slug, PLATFORM_PRESETS, StoryBibleSchema } from '@reels/core'
 import { z } from 'zod'
 import { buildRephrasePrompt, REPHRASE_V1_VERSION, buildImageQAPrompt, IMAGE_QA_V1_VERSION, ImageQASchema } from '../../prompts-bridge.js'
 import { runStep } from '../harness.js'
@@ -125,6 +125,10 @@ export async function generateImages(reelId: string): Promise<void> {
   // reference plates and scenes so the whole reel renders on one engine.
   const imageEngine = imageEngineForGenre(channel.genreCategory)
 
+  // Cast nationality from the channel's language (region as fallback) — locked into both the character
+  // plates and every scene so the cast matches the channel's audience instead of the model's default look.
+  const cast = castNationality(channel.languages, (channel.worldBible as { region?: string } | null)?.region)
+
   // Lazy reference plates: mint ONE plate per entity the SCENES actually reference (and that lacks one),
   // then persist. Done HERE — not in analyze_story — so we never pay for plates on entities the story
   // doesn't use (channel-canon noise), and never render anything before the operator approves the cast at
@@ -144,7 +148,10 @@ export async function generateImages(reelId: string): Promise<void> {
       storyBible.entities.map(async (entity) => {
         if (entity.referenceImageKey || !referenced.has(slug(entity.id))) return
         try {
-          const res = await renderImage(imageEngine, { prompt: assembleReferencePrompt(entity, channel.stylePreset, lighting), negativePrompt: refNeg, reelId, storageKey: `reels/${reelId}/refs/${slug(entity.id)}.webp`, aspect })
+          // The supernatural threat mints on the grittier Flux engine for horror — Gemini beautifies faces,
+          // sanding the dread off the scare. Every other entity uses the channel's normal engine.
+          const plateEngine = channel.genreCategory === 'horror' && entity.role === 'threat' ? FLUX_IMAGE_ENGINE : imageEngine
+          const res = await renderImage(plateEngine, { prompt: assembleReferencePrompt(entity, channel.stylePreset, lighting, cast), negativePrompt: refNeg, reelId, storageKey: `reels/${reelId}/refs/${slug(entity.id)}.webp`, aspect })
           entity.referenceImageKey = res.asset.storageKey
           plateCost += res.costCents
         } catch (err) {
@@ -168,7 +175,7 @@ export async function generateImages(reelId: string): Promise<void> {
     const expansion = storyBible
       ? { bible: storyBible, primaryEntity: scene.primaryEntity, supportingEntities: scene.supportingEntities }
       : undefined
-    const finalPrompt = assembleImagePrompt(scene.visualPrompt!, channel.stylePreset, expansion, lighting)
+    const finalPrompt = assembleImagePrompt(scene.visualPrompt!, channel.stylePreset, expansion, lighting, cast)
     const negativePrompt = assembleNegativePrompt({ genreCategory: channel.genreCategory })
 
     // Reference plates of the entities this scene features (narrator suppression applied via sceneEntities,
