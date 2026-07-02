@@ -53,4 +53,5 @@ export interface ReelCompositionProps extends Record<string, unknown> {
   captionSafeZonePct: number // platform caption safe-zone (% of frame height kept clear of platform UI)
   grain: number
   vignette: number
+  watermark?: { dataUri: string; opacity: number } | null // roaming channel logo (see WatermarkOverlay); null = none
 }

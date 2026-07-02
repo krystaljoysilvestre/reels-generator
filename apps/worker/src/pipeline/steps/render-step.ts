@@ -12,6 +12,9 @@ import { runStep, setReelStatus } from '../harness.js'
 
 const execFileAsync = promisify(execFile)
 
+// The app's default watermark logo (R2 key) — burned onto every reel unless a channel overrides it.
+const DEFAULT_WATERMARK_KEY = 'app/watermark.png'
+
 // Pick per-scene video effects from the scene's (AI-derived) mood + the channel genre. Pure mapping —
 // no API call, so it's free; effects are composited at render time. Kept tasteful: gentle life on every
 // still, and digital unease (glitch/flash/shake) only on tense/shock beats of edgy genres.
@@ -133,6 +136,21 @@ export async function renderStep(reelId: string): Promise<void> {
         })
       }
 
+      // Roaming watermark: the APP brands every reel with its logo by default (DEFAULT_WATERMARK_KEY); a
+      // channel MAY override with its own key. Inlined as a data URI so the Remotion bundle stays
+      // self-contained (no external fetch under its CSP).
+      const wmKey = channel.watermarkKey ?? DEFAULT_WATERMARK_KEY
+      let watermark: { dataUri: string; opacity: number } | null = null
+      if (wmKey) {
+        try {
+          const buf = await downloadBuffer(wmKey)
+          const mime = wmKey.endsWith('.png') ? 'image/png' : wmKey.endsWith('.webp') ? 'image/webp' : 'image/jpeg'
+          watermark = { dataUri: `data:${mime};base64,${buf.toString('base64')}`, opacity: 0.28 }
+        } catch (err) {
+          console.warn(`[render] watermark load failed (${wmKey}): ${err instanceof Error ? err.message : String(err)}`)
+        }
+      }
+
       // ── Step 1: Remotion renders the visual track (no audio) ─────────────
       const visualPath = join(tmp, 'visual.mp4')
       await renderReelWithRemotion({
@@ -143,6 +161,7 @@ export async function renderStep(reelId: string): Promise<void> {
         durationMs: timings.durationMs,
         grain: lutConfig.grain,
         vignette: lutConfig.vignette,
+        watermark,
         outputPath: visualPath,
         onProgress: (p) => console.log(`  Remotion render: ${Math.round(p * 100)}%`),
       })

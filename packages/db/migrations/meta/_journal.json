@@ -225,6 +225,13 @@
       "when": 1782887715797,
       "tag": "0031_yellow_piledriver",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1782983768235,
+      "tag": "0032_aspiring_menace",
+      "breakpoints": true
     }
   ]
 }

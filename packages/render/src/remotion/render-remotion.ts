@@ -33,6 +33,7 @@ export interface RemotionRenderInput {
   durationMs: number
   grain: number
   vignette: number
+  watermark?: { dataUri: string; opacity: number } | null // roaming channel logo overlay; null = none
   outputPath: string
   onProgress?: (progress: number) => void
 }
@@ -113,6 +114,7 @@ export async function renderReelWithRemotion(input: RemotionRenderInput): Promis
     captionSafeZonePct: input.captionSafeZonePct,
     grain: input.grain,
     vignette: input.vignette,
+    watermark: input.watermark ?? null,
   }
 
   const bundleUrl = await getBundleUrl()
