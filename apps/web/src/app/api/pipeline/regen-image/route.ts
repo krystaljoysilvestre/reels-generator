@@ -107,7 +107,11 @@ export async function POST(req: NextRequest) {
   const currentImage = mode !== 'fresh' && !reviseReplace && scene.imageAssetId
     ? await db.query.assets.findFirst({ where: eq(assets.id, scene.imageAssetId) })
     : null
-  const referenceImageKeys = [...(currentImage ? [currentImage.storageKey] : []), ...entityPlateKeys]
+  // Vary/tweak: the DISPLAYED image is the identity source — condition on it ALONE, not the entity plates.
+  // A plate that has drifted to a different look would otherwise override what you see and swap the character
+  // (the bug behind "revert to an image, tweak it, get a different woman"). Fresh/replace has no current
+  // image, so it injects identity from the entity plates instead.
+  const referenceImageKeys = currentImage ? [currentImage.storageKey] : entityPlateKeys
 
   // Write each regen to a UNIQUE key so previous images survive (the pipeline overwrites one shared key; if
   // regens did too, undo/redo would have nothing to go back to). This is what makes image history possible.
@@ -136,7 +140,9 @@ export async function POST(req: NextRequest) {
     storageKey: result.asset.storageKey,
     provider,
     costCents: result.costCents,
-    meta: result.asset.meta,
+    // Store the prompt that made this image, so undo/redo can restore it alongside the picture — then a
+    // later tweak varies THIS image with a matching prompt instead of a stale, drifted one.
+    meta: { ...result.asset.meta, visualPrompt: contentPrompt },
   }).returning()
 
   // A new image invalidates any motion (the clip was animated from the OLD image): reset to a still and drop

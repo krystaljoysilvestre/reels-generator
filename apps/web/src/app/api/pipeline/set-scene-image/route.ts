@@ -17,8 +17,16 @@ export async function POST(req: NextRequest) {
   const asset = await db.query.assets.findFirst({ where: and(eq(assets.id, assetId), eq(assets.reelId, reelId), eq(assets.kind, 'image')) })
   if (!asset) return NextResponse.json({ error: 'Image not found for this reel' }, { status: 404 })
 
+  // Restore the prompt that made this image (stored in its meta at generation), so a later tweak varies
+  // THIS image with a matching prompt — not the newest, drifted one. The displayed image is the source of
+  // truth for both the picture and its prompt.
+  const savedPrompt = (asset.meta as Record<string, unknown>)['visualPrompt']
   await db.update(scenes)
-    .set({ imageAssetId: assetId, tier: 'still' }) // a swapped still image invalidates any motion clip
+    .set({
+      imageAssetId: assetId,
+      tier: 'still', // a swapped still image invalidates any motion clip
+      ...(typeof savedPrompt === 'string' && savedPrompt.trim() ? { visualPrompt: savedPrompt } : {}),
+    })
     .where(and(eq(scenes.reelId, reelId), eq(scenes.idx, sceneIdx)))
 
   return NextResponse.json({ ok: true, storageKey: asset.storageKey })

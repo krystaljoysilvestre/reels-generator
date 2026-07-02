@@ -249,6 +249,7 @@ export async function generateImages(reelId: string): Promise<void> {
         // pass can flag "this hero shot may not match the brief" to the operator instead of it being silent.
         const meta = {
           ...(chosen!.asset.meta as Record<string, unknown>),
+          visualPrompt: scene.visualPrompt, // store the prompt so undo/redo can restore it with the image
           ...(qa ? { qaPass: lastIssues.length === 0 } : {}),
           ...(lastIssues.length ? { qaIssues: lastIssues } : {}),
         }
