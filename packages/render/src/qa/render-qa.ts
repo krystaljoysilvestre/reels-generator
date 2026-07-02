@@ -22,7 +22,7 @@ export interface QaResult {
 }
 
 const MIN_DURATION_MS = 30_000   // 30s minimum
-const MAX_DURATION_MS = 120_000  // 120s maximum (2 minutes)
+const MAX_DURATION_MS = 180_000  // 180s maximum (3 minutes) — matches Instagram Reels & YouTube Shorts caps
 const TARGET_LUFS = -14
 const LUFS_TOLERANCE = 0.5       // ±0.5 LUFS (docs/07 §5)
 

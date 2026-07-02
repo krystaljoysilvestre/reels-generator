@@ -7,6 +7,9 @@
 import { bundle } from '@remotion/bundler'
 import { renderMedia, selectComposition, ensureBrowser } from '@remotion/renderer'
 import { readFile } from 'node:fs/promises'
+import { createReadStream, statSync } from 'node:fs'
+import { createServer } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { CaptionStyle, ReelCompositionProps, ReelScene, SceneEffect, SubtitleChunk } from './types.js'
@@ -80,15 +83,62 @@ async function toDataUri(filePath: string, mimeType: string): Promise<string> {
   return `data:${mimeType};base64,${buf.toString('base64')}`
 }
 
+// OffthreadVideo routes its src through Remotion's proxy by URL-encoding it into a query string, so a
+// multi-MB base64 video data URI overflows the URL length limit and the proxy fetch fails ("Failed to
+// fetch …/proxy?src=data:video/mp4;base64,…"). Images-as-data-URIs are small enough to be fine, but
+// video clips are not — so we serve the local clip files over an ephemeral loopback HTTP server and
+// hand OffthreadVideo short http URLs. Range support is required (the renderer seeks with byte ranges).
+interface FileServer { urlFor: (route: string) => string; close: () => Promise<void> }
+function startFileServer(routes: Map<string, string>): Promise<FileServer> {
+  const server = createServer((req, res) => {
+    const path = new URL(req.url ?? '/', 'http://127.0.0.1').pathname
+    const fsPath = routes.get(path)
+    if (!fsPath) { res.statusCode = 404; res.end(); return }
+    let size: number
+    try { size = statSync(fsPath).size } catch { res.statusCode = 404; res.end(); return }
+    res.setHeader('Content-Type', 'video/mp4')
+    res.setHeader('Accept-Ranges', 'bytes')
+    const range = req.headers.range
+    const m = range ? /bytes=(\d*)-(\d*)/.exec(range) : null
+    if (m) {
+      const start = m[1] ? parseInt(m[1], 10) : 0
+      const end = m[2] ? parseInt(m[2], 10) : size - 1
+      res.statusCode = 206
+      res.setHeader('Content-Range', `bytes ${start}-${end}/${size}`)
+      res.setHeader('Content-Length', String(end - start + 1))
+      createReadStream(fsPath, { start, end }).pipe(res)
+    } else {
+      res.setHeader('Content-Length', String(size))
+      createReadStream(fsPath).pipe(res)
+    }
+  })
+  return new Promise((resolve) => {
+    server.listen(0, '127.0.0.1', () => {
+      const port = (server.address() as AddressInfo).port
+      resolve({
+        urlFor: (route) => `http://127.0.0.1:${port}${route}`,
+        close: () => new Promise<void>((r) => server.close(() => r())),
+      })
+    })
+  })
+}
+
 export async function renderReelWithRemotion(input: RemotionRenderInput): Promise<void> {
   const fps = 30
   const totalFrames = Math.ceil((input.durationMs / 1000) * fps)
 
-  // Convert local file paths to data URIs (Remotion can't access arbitrary file system paths in browser context)
+  // Videos are served over a loopback HTTP server (OffthreadVideo can't take a big data URI — see
+  // startFileServer). Images are small enough to inline as data URIs.
+  const videoRoutes = new Map<string, string>()
+  for (const s of input.scenes) {
+    if (s.videoPath) videoRoutes.set(`/scene_${s.idx}.mp4`, s.videoPath)
+  }
+  const fileServer = await startFileServer(videoRoutes)
+
   const scenes: ReelScene[] = await Promise.all(
     input.scenes.map(async (s) => {
       const imageSrc = await toDataUri(s.imagePath, 'image/webp')
-      const videoSrc = s.videoPath ? await toDataUri(s.videoPath, 'video/mp4') : null
+      const videoSrc = s.videoPath ? fileServer.urlFor(`/scene_${s.idx}.mp4`) : null
       const startFrame = Math.round((s.startMs / 1000) * fps)
       const endFrame = Math.round((s.endMs / 1000) * fps)
       return {
@@ -120,23 +170,27 @@ export async function renderReelWithRemotion(input: RemotionRenderInput): Promis
   const bundleUrl = await getBundleUrl()
   await ensureBrowserOnce()
 
-  const composition = await selectComposition({
-    serveUrl: bundleUrl,
-    id: 'Reel',
-    inputProps: props,
-    ...(browserExecutable ? { browserExecutable } : {}),
-  })
+  try {
+    const composition = await selectComposition({
+      serveUrl: bundleUrl,
+      id: 'Reel',
+      inputProps: props,
+      ...(browserExecutable ? { browserExecutable } : {}),
+    })
 
-  await renderMedia({
-    composition: { ...composition, durationInFrames: totalFrames },
-    serveUrl: bundleUrl,
-    codec: 'h264',
-    outputLocation: input.outputPath,
-    inputProps: props,
-    onProgress: ({ progress }) => input.onProgress?.(progress),
-    chromiumOptions: { disableWebSecurity: true },  // allow data URIs
-    ...(browserExecutable ? { browserExecutable } : {}),
-    muted: true,  // visual only — audio is muxed in separately
-    concurrency: 2,
-  })
+    await renderMedia({
+      composition: { ...composition, durationInFrames: totalFrames },
+      serveUrl: bundleUrl,
+      codec: 'h264',
+      outputLocation: input.outputPath,
+      inputProps: props,
+      onProgress: ({ progress }) => input.onProgress?.(progress),
+      chromiumOptions: { disableWebSecurity: true },  // allow data URIs
+      ...(browserExecutable ? { browserExecutable } : {}),
+      muted: true,  // visual only — audio is muxed in separately
+      concurrency: 2,
+    })
+  } finally {
+    await fileServer.close()  // release the loopback port whether the render succeeds or throws
+  }
 }
