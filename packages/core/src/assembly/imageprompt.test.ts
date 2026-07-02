@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { assembleImagePrompt } from './imageprompt.js'
+import { assembleImagePrompt, castNationality } from './imageprompt.js'
 import { StoryBibleSchema, EMPTY_STORY_BIBLE, type StoryBible } from '../types/story-bible.js'
 
 const STYLE = 'grainy 16mm horror still, desaturated palette'
@@ -72,5 +72,40 @@ describe('assembleImagePrompt — bible expansion', () => {
       supportingEntities: ['whatever'],
     })
     expect(out).toBe(`${STYLE}. ${ACTION}`)
+  })
+})
+
+describe('castNationality', () => {
+  it('maps a channel language to a nationality', () => {
+    expect(castNationality(['tagalog'])).toBe('Filipino')
+    expect(castNationality(['taglish'])).toBe('Filipino')
+    expect(castNationality(['korean'])).toBe('Korean')
+  })
+  it('falls back to region when the language is ambiguous', () => {
+    expect(castNationality(['english'], 'rural Philippines')).toBe('Filipino')
+    expect(castNationality(['spanish'], 'a coastal town in Japan')).toBe('Japanese')
+  })
+  it('returns empty when neither language nor region is confident (no wrong guess)', () => {
+    expect(castNationality(['english'], 'a nameless city')).toBe('')
+    expect(castNationality([])).toBe('')
+    expect(castNationality(null)).toBe('')
+  })
+})
+
+describe('assembleImagePrompt — cast directive', () => {
+  it('injects the cast clause after style, defensively (does not force a person)', () => {
+    const out = assembleImagePrompt(ACTION, STYLE, undefined, undefined, 'Filipino')
+    expect(out).toBe(`${STYLE}, ${ACTION}. any people in frame are Filipino`)
+  })
+  it('places the cast clause between style and the entity specs', () => {
+    const out = assembleImagePrompt(ACTION, STYLE, {
+      bible: bible('third_person', null),
+      primaryEntity: 'ashley',
+      supportingEntities: [],
+    }, undefined, 'Filipino')
+    expect(out).toBe(`${STYLE}. any people in frame are Filipino. a young woman, long black hair, plain white shirt. ${ACTION}`)
+  })
+  it('omits the clause when cast is empty (unchanged behavior)', () => {
+    expect(assembleImagePrompt(ACTION, STYLE, undefined, undefined, '')).toBe(`${STYLE}, ${ACTION}`)
   })
 })

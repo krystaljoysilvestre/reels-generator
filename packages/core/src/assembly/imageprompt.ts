@@ -14,21 +14,51 @@ export interface EntityExpansion {
   supportingEntities: string[]
 }
 
+// The channel's cast nationality/ethnicity. Image models otherwise free-fill a generic (usually Western)
+// look, which reads wrong for a localized channel (a Filipino-language reel rendering red-haired leads).
+// Keyed off the channel's PRIMARY language; falls back to region keywords; empty when neither is confident —
+// we omit rather than guess (English/Spanish/Arabic span many nationalities). See castNationality().
+const LANGUAGE_NATIONALITY: Record<string, string> = {
+  tagalog: 'Filipino', filipino: 'Filipino', taglish: 'Filipino', cebuano: 'Filipino', bisaya: 'Filipino', ilocano: 'Filipino', hiligaynon: 'Filipino',
+  korean: 'Korean', japanese: 'Japanese', vietnamese: 'Vietnamese', thai: 'Thai',
+  indonesian: 'Indonesian', malay: 'Malaysian', hindi: 'Indian', tamil: 'Indian',
+  chinese: 'Chinese', mandarin: 'Chinese', cantonese: 'Chinese', turkish: 'Turkish',
+  greek: 'Greek', vietnamese_north: 'Vietnamese',
+}
+const REGION_NATIONALITY: [RegExp, string][] = [
+  [/philippine|filipino|manila|luzon|visayas|mindanao|cebu|davao/i, 'Filipino'],
+  [/korea/i, 'Korean'], [/japan/i, 'Japanese'], [/viet\s?nam/i, 'Vietnamese'],
+  [/thai|thailand/i, 'Thai'], [/indonesia/i, 'Indonesian'], [/\bindia\b/i, 'Indian'],
+  [/china|chinese/i, 'Chinese'],
+]
+// Resolve the cast nationality for a channel. `languages` = channel.languages (primary = [0]); `region` =
+// channel.worldBible.region (a fallback signal). Returns '' when neither maps confidently.
+export function castNationality(languages?: string[] | null, region?: string | null): string {
+  const primary = (languages?.[0] ?? '').toLowerCase().trim()
+  if (LANGUAGE_NATIONALITY[primary]) return LANGUAGE_NATIONALITY[primary]!
+  const r = region ?? ''
+  for (const [re, nat] of REGION_NATIONALITY) if (re.test(r)) return nat
+  return ''
+}
+
 export function assembleImagePrompt(
   contentPrompt: string,
   stylePreset: string,
   expansion?: EntityExpansion,
   lighting?: string, // reel-level time-of-day directive (see reelLightingDirective) — forces night/dark, etc.
+  cast?: string, // channel cast nationality (see castNationality); '' / undefined → no ethnicity directive
 ): string {
   const style = stylePreset.trim()
   const content = contentPrompt.trim()
   const light = lighting?.trim()
+  // Constrain ethnicity for whoever appears WITHOUT forcing a person into a people-free shot ("any people").
+  const castClause = cast?.trim() ? `any people in frame are ${cast.trim()}` : ''
 
   // No bible → unchanged: lead with style DNA, then the scene content (legacy callers, previews, etc.).
   // Lighting, when present, is appended as its own clause (keeps the legacy "style, content" form intact).
   if (!expansion) {
-    const base = `${style}, ${content}`
-    return light ? `${base}. ${light}` : base
+    const parts = [`${style}, ${content}`, castClause, light ?? ''].map((p) => p.trim().replace(/[.,\s]+$/, '')).filter(Boolean)
+    return parts.join('. ')
   }
 
   const { bible, primaryEntity, supportingEntities } = expansion
@@ -38,10 +68,10 @@ export function assembleImagePrompt(
   // can't encode (which light source is active, etc.), and they keep the text-only fallback identical.
   const specs = sceneEntities(bible, { primaryEntity, supportingEntities }).map((e) => e.description)
 
-  // Style first (convention: style DNA frames how the scene reads), then the frozen entity specs in
-  // role order (primary leads → satisfies VISUAL PRIORITY mechanically), then the scene's action prose,
-  // then the reel-level lighting directive last (it constrains the whole frame). Sentence-level join only.
-  const parts = [style, ...specs, content, light ?? ''].map((p) => p.trim().replace(/[.,\s]+$/, '')).filter(Boolean)
+  // Style first (convention: style DNA frames how the scene reads), then the cast ethnicity directive (so it
+  // frames every person), then the frozen entity specs in role order (primary leads → satisfies VISUAL
+  // PRIORITY mechanically), then the scene's action prose, then the reel-level lighting directive last.
+  const parts = [style, castClause, ...specs, content, light ?? ''].map((p) => p.trim().replace(/[.,\s]+$/, '')).filter(Boolean)
   return parts.join('. ')
 }
 
@@ -100,8 +130,11 @@ const PLATE_NO_TEXT = 'no text, no lettering, no words, no labels, no watermark'
 // then kind-specific isolating framing, a no-text guard, and (for non-character plates only) the reel's
 // night/lighting directive so a night reel's places/objects aren't anchored to a daylit plate. Character
 // plates stay evenly lit — the face must be readable for identity; the scene darkens them at render.
-export function assembleReferencePrompt(entity: BibleEntity, stylePreset: string, lighting?: string): string {
+export function assembleReferencePrompt(entity: BibleEntity, stylePreset: string, lighting?: string, cast?: string): string {
   const light = entity.kind === 'character' ? undefined : lighting?.trim()
-  const parts = [stylePreset, entity.description, REFERENCE_FRAMING[entity.kind], PLATE_NO_TEXT, light ?? '']
+  // Lock the cast nationality into the CHARACTER plate itself — every scene conditions on this plate, so if
+  // the plate isn't the right ethnicity nothing downstream will be. Only characters (locations/objects have no people).
+  const castClause = entity.kind === 'character' && cast?.trim() ? `the person is ${cast.trim()}` : ''
+  const parts = [stylePreset, castClause, entity.description, REFERENCE_FRAMING[entity.kind], PLATE_NO_TEXT, light ?? '']
   return parts.map((p) => p.trim().replace(/[.,\s]+$/, '')).filter(Boolean).join('. ')
 }
