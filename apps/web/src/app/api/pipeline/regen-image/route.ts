@@ -49,11 +49,13 @@ export async function POST(req: NextRequest) {
   // change into a well-formed, content-only image prompt (same conventions scenes.v1 produces).
   const tweak = instruction?.trim()
   let contentPrompt = basePrompt
-  // reviseReplace: the reviser flagged a fundamentally different shot (new subject/viewpoint/figure) OR an
-  // entity-look change — either way we must NOT condition on the current image (the reference would clamp it).
+  // reviseReplace: the reviser flagged a fundamentally different shot — a NEW subject/figure/viewpoint that
+  // must render from scratch (image-to-image can't add someone). We then drop the current-image reference.
+  // A change that only MODIFIES what's already in the frame stays a vary (edits the current image in place).
   let reviseReplace = false
-  // Set when the change edits a recurring CHARACTER's permanent look: we update the bible + re-mint its plate
-  // GLOBALLY (so she stays consistent everywhere), then flag her other scenes to refresh. Returned to the UI.
+  // Set only on a FRESH TAKE that edits a recurring CHARACTER's permanent look: update the bible + re-mint
+  // its plate GLOBALLY, then flag her other scenes to refresh. A plain vary tweak stays LOCAL (edits this
+  // image) and must never redefine the character everywhere. Returned to the UI.
   let entityLook: { entityId: string; affectedSceneIdxs: number[] } | null = null
   if (tweak) {
     try {
@@ -65,7 +67,9 @@ export async function POST(req: NextRequest) {
       contentPrompt = revised.data.imagePrompt.trim() || basePrompt
       reviseReplace = revised.data.intent === 'replace'
 
-      const look = revised.data.entityLook
+      // GLOBAL character-look change fires on a FRESH TAKE only; in vary the same instruction edits THIS
+      // image locally (so reverting to an image and tweaking a character keeps that image's character).
+      const look = mode === 'fresh' ? revised.data.entityLook : null
       const ent = look && storyBible ? storyBible.entities.find((e) => e.id === look.entityId) : undefined
       if (look && ent) {
         // Update the canonical look + re-mint the plate GLOBALLY (threat → Flux so it isn't beautified). A
@@ -81,7 +85,6 @@ export async function POST(req: NextRequest) {
           ent.referenceImageKey = plateRes.asset.storageKey
         } catch { /* keep old plate; description still updated */ }
         await db.update(reels).set({ storyBible }).where(eq(reels.id, reelId))
-        reviseReplace = true // her look changed — render this scene fresh off the new plate
         const allScenes = await db.query.scenes.findMany({ where: eq(scenes.reelId, reelId) })
         const affectedSceneIdxs = allScenes
           .filter((s) => s.idx !== sceneIdx && (s.primaryEntity === ent.id || (s.supportingEntities ?? []).includes(ent.id)))

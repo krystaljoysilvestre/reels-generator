@@ -60,6 +60,7 @@ FIRST decide the intent. The dividing line is PHYSICAL: "refine" re-touches the 
   • light level / source — "darker", "lights off", "add a candle glow", "moonlight"
   • weather / atmosphere — "more fog", "rain", "hazier", "smoke"
   • film qualities — "more grain", "sharper", "more cinematic", "softer focus"
+  • MODIFYING a subject ALREADY in the frame — its wardrobe, expression, age, dirtiness, wounds, wetness, condition ("make her dress old and dirty", "give him a scar", "make her look older", "dead-eyed"). Image-to-image can edit what's already there, so changing an EXISTING person/object is a refine — NOT a replace. (Only ADDING a subject that isn't there yet is replace.)
 
 "replace" — ANY change to WHAT the camera sees or WHERE it is. Realizing it means the camera or the layout moves, so it must render fresh:
   • viewpoint / POV / angle / framing / distance — "POV looking at the door", "from behind her", "the view should be the back of the door", "wider", "low angle", "over the shoulder", "closer"
