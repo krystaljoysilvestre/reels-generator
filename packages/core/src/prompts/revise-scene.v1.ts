@@ -6,7 +6,7 @@
 
 import { z } from 'zod'
 
-export const REVISE_SCENE_V1_VERSION = 'revise-scene.v1'
+export const REVISE_SCENE_V1_VERSION = 'revise-scene.v2'
 
 // `intent` lets the system silently pick how to regenerate: "refine" = the operator wants to IMPROVE or
 // ADJUST the same scene, so we keep the existing composition and apply the change off the current image
@@ -17,12 +17,16 @@ export const REVISE_SCENE_V1_VERSION = 'revise-scene.v1'
 export const ReviseSceneSchema = z.object({
   imagePrompt: z.string().min(1),
   intent: z.enum(['refine', 'replace']),
+  // Set ONLY when the change alters a RECURRING entity's permanent APPEARANCE (not the scene's action/
+  // framing/lighting). Names the entity + its full rewritten canonical look, so the pipeline updates the
+  // bible + re-mints the plate globally (the character then stays consistent everywhere). null otherwise.
+  entityLook: z.object({ entityId: z.string().min(1), description: z.string().min(1) }).nullable().default(null),
 })
 
 export function buildReviseScenePrompt(
   currentPrompt: string,
   instruction: string,
-  opts?: { genreCategory?: string },
+  opts?: { genreCategory?: string; entities?: { id: string; description: string }[] },
 ): { system: string; userMessage: string } {
   // Horror channels need the fear rendered as CONCRETE physical wrongness — the image model only draws what
   // is literally described, so a mild adjective ("creepy", "unsettling grin") renders as a pretty, normal
@@ -39,11 +43,15 @@ An image prompt is CONTENT ONLY — it describes WHAT IS SEEN. Never include sty
 
 DESCRIBE PRESENCE, NOT ABSENCE. Only ever state what IS in the frame, never what is missing. The image model reads "no sink", "without a mirror" or "strictly no X" as a cue to DRAW that very thing — so when the operator asks to remove or keep out something, never echo it as a negation. Instead describe what fills that space so there is no room left for the unwanted thing (e.g. "no sink, just the stall walls" → "tight tiled partition walls press in close on the left and right, boxing in the narrow cubicle"). Your output must contain no "no", "not", "without", "avoid" or "remove".${horrorClause}`
 
+  const entitiesBlock = opts?.entities?.length
+    ? `\n\nRECURRING ENTITIES in this scene (their LOCKED canonical look — the SAME figure appears in other scenes):\n${opts.entities.map((e) => `- ${e.id}: ${e.description}`).join('\n')}\nIf the change alters the PERMANENT APPEARANCE of one of these entities ("make her hair wet", "give the ghost black eyes", "make him older") — NOT a one-off pose / action / framing / lighting change for this shot — set entityLook to { "entityId": the id, "description": that entity's FULL rewritten canonical look (appearance facts only: build, hair, wardrobe, distinguishing / wrong features; NO scene action) }. This updates the character everywhere. Otherwise leave entityLook null. An entityLook change is ALWAYS intent "replace".`
+    : ''
+
   const userMessage = `Current image prompt:
 """${currentPrompt}"""
 
 The operator wants this change:
-"""${instruction}"""
+"""${instruction}"""${entitiesBlock}
 
 FIRST decide the intent. The dividing line is PHYSICAL: "refine" re-touches the existing image in place (image-to-image — it can only recolour / relight / add atmosphere to what is ALREADY in the frame; it CANNOT move the camera or restage the shot). "replace" renders the shot fresh from the description.
 
@@ -68,7 +76,7 @@ THEN rewrite the FULL image prompt with the change fully applied:
 - For "replace": re-describe the frame for the NEW shot. Keep the SAME location/world details the scene already established (it's still the same place unless they moved it) but recompose around the new viewpoint/subject — and drop whatever the new shot no longer shows. E.g. a "POV of the back of the cubicle door" keeps the cubicle but now leads with the door filling the frame from inside, not the person who was the old subject.
 - Content only, no style/medium words (the system owns the look). Lead with the key visible subject. ~30–50 words.
 
-OUTPUT (JSON only): { "imagePrompt": "the rewritten prompt", "intent": "refine" | "replace" }`
+OUTPUT (JSON only): { "imagePrompt": "the rewritten prompt", "intent": "refine" | "replace", "entityLook": null | { "entityId": "...", "description": "..." } }`
 
   return { system, userMessage }
 }

@@ -2,8 +2,8 @@ import type { NextRequest} from 'next/server';
 import { NextResponse } from 'next/server'
 import { getDb, scenes, assets, channels, reels } from '@reels/db'
 import { eq, and, inArray } from 'drizzle-orm'
-import { generateImage, generateImageFal, imageEngineForGenre, ContentFilterError, ProviderRateLimitError, llmCall, SCENE_IMAGE_QUALITY } from '@reels/providers'
-import { assembleImagePrompt, assembleNegativePrompt, castNationality, reelLightingDirective, sceneEntities, StoryBibleSchema, PLATFORM_PRESETS } from '@reels/core'
+import { generateImage, generateImageFal, imageEngineForGenre, FLUX_IMAGE_ENGINE, ContentFilterError, ProviderRateLimitError, llmCall, SCENE_IMAGE_QUALITY } from '@reels/providers'
+import { assembleImagePrompt, assembleReferencePrompt, assembleNegativePrompt, castNationality, reelLightingDirective, sceneEntities, slug, StoryBibleSchema, PLATFORM_PRESETS } from '@reels/core'
 import { buildReviseScenePrompt, REVISE_SCENE_V1_VERSION, ReviseSceneSchema } from '@reels/core/prompts/revise-scene.v1'
 import { getSession } from '@/lib/auth'
 
@@ -36,43 +36,67 @@ export async function POST(req: NextRequest) {
   ).trim()
   if (!basePrompt) return NextResponse.json({ error: 'No visual prompt' }, { status: 400 })
 
+  // Engine + look context up-front, so an entity-look change can re-mint that character's plate BEFORE we
+  // render the scene off it. Same engine/plates as the pipeline → the reshoot stays consistent with the reel.
+  const storyBible = reel.storyBible ? StoryBibleSchema.parse(reel.storyBible) : null
+  const engine = imageEngineForGenre(channel.genreCategory)
+  const aspect = (PLATFORM_PRESETS[(channel.targetPlatform ?? 'all') as keyof typeof PLATFORM_PRESETS] ?? PLATFORM_PRESETS.all).aspect
+  const lighting = storyBible ? reelLightingDirective(channel.genreCategory, storyBible.continuity.timeline) : undefined
+  const cast = castNationality(channel.languages, (channel.worldBible as { region?: string } | null)?.region)
+  const negativePrompt = assembleNegativePrompt({ genreCategory: channel.genreCategory })
+
   // A plain-language change goes through the LLM first, NOT straight into the image model — it bakes the
   // change into a well-formed, content-only image prompt (same conventions scenes.v1 produces).
   const tweak = instruction?.trim()
   let contentPrompt = basePrompt
-  // The reviser also classifies the change: 'replace' = a fundamentally different shot (new subject/figure/
-  // viewpoint). An additive instruction ("add a figure in the mirror") classifies as replace — and MUST NOT
-  // condition on the current image, or the reference clamps it to the old composition and the addition never
-  // appears. So a 'replace' verdict forces a fresh render even when the UI sent the default 'vary'.
+  // reviseReplace: the reviser flagged a fundamentally different shot (new subject/viewpoint/figure) OR an
+  // entity-look change — either way we must NOT condition on the current image (the reference would clamp it).
   let reviseReplace = false
+  // Set when the change edits a recurring CHARACTER's permanent look: we update the bible + re-mint its plate
+  // GLOBALLY (so she stays consistent everywhere), then flag her other scenes to refresh. Returned to the UI.
+  let entityLook: { entityId: string; affectedSceneIdxs: number[] } | null = null
   if (tweak) {
     try {
-      const { system, userMessage } = buildReviseScenePrompt(basePrompt, tweak, { genreCategory: channel.genreCategory })
-      const revised = await llmCall({
-        templateVersion: REVISE_SCENE_V1_VERSION,
-        schema: ReviseSceneSchema,
-        system,
-        messages: [{ role: 'user', content: userMessage }],
-      })
+      const sceneEnts = storyBible
+        ? sceneEntities(storyBible, { primaryEntity: scene.primaryEntity, supportingEntities: scene.supportingEntities }).map((e) => ({ id: e.id, description: e.description }))
+        : []
+      const { system, userMessage } = buildReviseScenePrompt(basePrompt, tweak, { genreCategory: channel.genreCategory, entities: sceneEnts })
+      const revised = await llmCall({ templateVersion: REVISE_SCENE_V1_VERSION, schema: ReviseSceneSchema, system, messages: [{ role: 'user', content: userMessage }] })
       contentPrompt = revised.data.imagePrompt.trim() || basePrompt
       reviseReplace = revised.data.intent === 'replace'
+
+      const look = revised.data.entityLook
+      const ent = look && storyBible ? storyBible.entities.find((e) => e.id === look.entityId) : undefined
+      if (look && ent) {
+        // Update the canonical look + re-mint the plate GLOBALLY (threat → Flux so it isn't beautified). A
+        // failed plate keeps the old one — the description still updates.
+        ent.description = look.description.trim() || ent.description
+        const plateEngine = channel.genreCategory === 'horror' && ent.role === 'threat' ? FLUX_IMAGE_ENGINE : engine
+        try {
+          const platePrompt = assembleReferencePrompt(ent, channel.stylePreset, lighting, cast)
+          const plateKey = `reels/${reelId}/refs/${slug(ent.id)}.webp`
+          const plateRes = plateEngine.family === 'openai'
+            ? await generateImage({ prompt: platePrompt, negativePrompt, reelId, sceneIdx, storageKey: plateKey, quality: SCENE_IMAGE_QUALITY, aspect })
+            : await generateImageFal({ prompt: platePrompt, negativePrompt, reelId, sceneIdx, storageKey: plateKey, aspect, engine: plateEngine })
+          ent.referenceImageKey = plateRes.asset.storageKey
+        } catch { /* keep old plate; description still updated */ }
+        await db.update(reels).set({ storyBible }).where(eq(reels.id, reelId))
+        reviseReplace = true // her look changed — render this scene fresh off the new plate
+        const allScenes = await db.query.scenes.findMany({ where: eq(scenes.reelId, reelId) })
+        const affectedSceneIdxs = allScenes
+          .filter((s) => s.idx !== sceneIdx && (s.primaryEntity === ent.id || (s.supportingEntities ?? []).includes(ent.id)))
+          .map((s) => s.idx)
+        entityLook = { entityId: ent.id, affectedSceneIdxs }
+      }
     } catch {
       return NextResponse.json({ error: 'Could not apply your change — try rephrasing it.' }, { status: 502 })
     }
   }
 
-  // Render on the SAME engine + reference plates as the pipeline, so a reshoot stays consistent with the rest
-  // of the reel (nano-banana + the scene's entity plates → the characters keep the same face). Previously this
-  // used gpt-image-1 with no plates, which is why manual reshoots drifted to a different-looking character.
-  const storyBible = reel.storyBible ? StoryBibleSchema.parse(reel.storyBible) : null
   const expansion = storyBible
     ? { bible: storyBible, primaryEntity: scene.primaryEntity, supportingEntities: scene.supportingEntities }
     : undefined
-  const engine = imageEngineForGenre(channel.genreCategory)
-  const aspect = (PLATFORM_PRESETS[(channel.targetPlatform ?? 'all') as keyof typeof PLATFORM_PRESETS] ?? PLATFORM_PRESETS.all).aspect
-  const lighting = storyBible ? reelLightingDirective(channel.genreCategory, storyBible.continuity.timeline) : undefined
-  const finalPrompt = assembleImagePrompt(contentPrompt, channel.stylePreset, expansion, lighting, castNationality(channel.languages, (channel.worldBible as { region?: string } | null)?.region))
-  const negativePrompt = assembleNegativePrompt({ genreCategory: channel.genreCategory })
+  const finalPrompt = assembleImagePrompt(contentPrompt, channel.stylePreset, expansion, lighting, cast)
   const entityPlateKeys = storyBible
     ? sceneEntities(storyBible, { primaryEntity: scene.primaryEntity, supportingEntities: scene.supportingEntities })
         .map((e) => e.referenceImageKey)
@@ -128,5 +152,7 @@ export async function POST(req: NextRequest) {
 
   await db.update(reels).set({ costCents: reel.costCents + result.costCents, updatedAt: new Date() }).where(eq(reels.id, reelId))
 
-  return NextResponse.json({ ok: true, storageKey: result.asset.storageKey })
+  // entityLook (when the change edited a character's look): the UI flags the other scenes she's in so the
+  // operator can refresh them to match — "update globally, refresh on demand".
+  return NextResponse.json({ ok: true, storageKey: result.asset.storageKey, entityLook })
 }

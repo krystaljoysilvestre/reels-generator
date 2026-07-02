@@ -334,6 +334,13 @@ export function StoryboardEditor({
       toast(await failMessage(res, 'Could not reshoot this scene.'), res.status === 429 ? 'info' : 'error')
       return
     }
+    // If the change edited a recurring character's look, it was updated everywhere — tell the operator which
+    // other scenes use her so they can refresh those to match ("update globally, refresh on demand").
+    const rj = await res.json().catch(() => null)
+    const affected: number[] = rj?.entityLook?.affectedSceneIdxs ?? []
+    if (affected.length) {
+      toast(`Updated that character everywhere. Scene${affected.length > 1 ? 's' : ''} ${[...affected].sort((a, b) => a - b).join(', ')} also use her — regenerate to match.`, 'info')
+    }
     // A new image supersedes any Undo/Redo override — drop it so the fresh server image wins.
     setImageOverride((o) => { if (!(sceneIdx in o)) return o; const n = { ...o }; delete n[sceneIdx]; return n })
     // Force the <img> to re-fetch the (overwritten) scene image NOW — independent of whether
