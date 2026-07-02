@@ -5,6 +5,7 @@ import { eq, and, inArray } from 'drizzle-orm'
 import { generateImage, generateImageFal, imageEngineForGenre, FLUX_IMAGE_ENGINE, ContentFilterError, ProviderRateLimitError, llmCall, SCENE_IMAGE_QUALITY } from '@reels/providers'
 import { assembleImagePrompt, assembleReferencePrompt, assembleNegativePrompt, castNationality, reelLightingDirective, sceneEntities, slug, StoryBibleSchema, PLATFORM_PRESETS } from '@reels/core'
 import { buildReviseScenePrompt, REVISE_SCENE_V1_VERSION, ReviseSceneSchema } from '@reels/core/prompts/revise-scene.v1'
+import { buildFilterSafePrompt, FILTER_SAFE_V1_VERSION, FilterSafeSchema } from '@reels/core/prompts/filter-safe.v1'
 import { getSession } from '@/lib/auth'
 
 export async function POST(req: NextRequest) {
@@ -122,20 +123,31 @@ export async function POST(req: NextRequest) {
   // Write each regen to a UNIQUE key so previous images survive (the pipeline overwrites one shared key; if
   // regens did too, undo/redo would have nothing to go back to). This is what makes image history possible.
   const outKey = `reels/${reelId}/scenes/${sceneIdx}/image-${Date.now()}.webp`
+  const render = (prompt: string) => engine.family === 'openai'
+    ? generateImage({ prompt, negativePrompt, reelId, sceneIdx, storageKey: outKey, quality: SCENE_IMAGE_QUALITY, aspect, ...(referenceImageKeys.length ? { referenceImageKeys } : {}) })
+    : generateImageFal({ prompt, negativePrompt, reelId, sceneIdx, storageKey: outKey, aspect, ...(referenceImageKeys.length ? { referenceImageKeys } : {}), engine })
 
   let result
   try {
-    result = engine.family === 'openai'
-      ? await generateImage({ prompt: finalPrompt, negativePrompt, reelId, sceneIdx, storageKey: outKey, quality: SCENE_IMAGE_QUALITY, aspect, ...(referenceImageKeys.length ? { referenceImageKeys } : {}) })
-      : await generateImageFal({ prompt: finalPrompt, negativePrompt, reelId, sceneIdx, storageKey: outKey, aspect, ...(referenceImageKeys.length ? { referenceImageKeys } : {}), engine })
+    result = await render(finalPrompt)
   } catch (err) {
+    // Filter-safe retry: on a safety-filter rejection, rewrite the prompt (a dead / menacing / supernatural
+    // PERSON → "a figure") and try ONCE more — so Regenerate / Fresh take / older person-worded prompts
+    // self-heal without the operator rewording. Only fires on rejection, so no cost on the happy path.
     if (err instanceof ContentFilterError) {
-      return NextResponse.json({ error: 'The image was rejected by the safety filter — try rewording your change.' }, { status: 422 })
-    }
-    if (err instanceof ProviderRateLimitError) {
+      try {
+        const { system, userMessage } = buildFilterSafePrompt(finalPrompt)
+        const safe = await llmCall({ templateVersion: FILTER_SAFE_V1_VERSION, schema: FilterSafeSchema, system, messages: [{ role: 'user', content: userMessage }] })
+        result = await render(safe.data.imagePrompt.trim() || finalPrompt)
+      } catch (err2) {
+        if (err2 instanceof ProviderRateLimitError) return NextResponse.json({ error: 'Image service is busy — wait a moment and try again.' }, { status: 429 })
+        return NextResponse.json({ error: 'The image was rejected by the safety filter — try rewording your change.' }, { status: 422 })
+      }
+    } else if (err instanceof ProviderRateLimitError) {
       return NextResponse.json({ error: 'Image service is busy — wait a moment and try again.' }, { status: 429 })
+    } else {
+      return NextResponse.json({ error: 'Image generation failed — try again.' }, { status: 502 })
     }
-    return NextResponse.json({ error: 'Image generation failed — try again.' }, { status: 502 })
   }
   const provider = engine.family === 'openai' ? 'openai' : 'fal'
 

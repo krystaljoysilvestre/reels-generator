@@ -3,7 +3,7 @@ import { getDb, reels, scenes, assets, channels, stories } from '@reels/db'
 import { generateImage, generateImageFal, imageEngineForGenre, FLUX_IMAGE_ENGINE, buildInputHash, ContentFilterError, llmCall, downloadBuffer, SCENE_IMAGE_MODEL, SCENE_IMAGE_QUALITY, type ImageEngine } from '@reels/providers'
 import { assembleImagePrompt, assembleNegativePrompt, assembleReferencePrompt, castNationality, reelLightingDirective, sceneEntities, slug, PLATFORM_PRESETS, StoryBibleSchema } from '@reels/core'
 import { z } from 'zod'
-import { buildRephrasePrompt, REPHRASE_V1_VERSION, buildImageQAPrompt, IMAGE_QA_V1_VERSION, ImageQASchema } from '../../prompts-bridge.js'
+import { buildRephrasePrompt, REPHRASE_V1_VERSION, buildImageQAPrompt, IMAGE_QA_V1_VERSION, ImageQASchema, buildFilterSafePrompt, FILTER_SAFE_V1_VERSION, FilterSafeSchema } from '../../prompts-bridge.js'
 import { runStep } from '../harness.js'
 
 // generate_images — step 4
@@ -69,31 +69,23 @@ async function renderImage(
   engine: ImageEngine,
   params: { prompt: string; negativePrompt: string; reelId: string; sceneIdx?: number; storageKey?: string; aspect: string; referenceImageKeys?: string[] },
 ): Promise<Awaited<ReturnType<typeof generateImageFal>>> {
-  if (engine.family === 'openai') {
-    // TEXT-TO-IMAGE ONLY for gpt-image-1. Its edit/reference conditioning proved unreliable — it ignored
-    // wardrobe and FLIPPED gender (girl plates → boy renders). Plain text-to-image with the frozen bible
-    // descriptions spliced into the prompt gives the right gender/traits + the look the owner prefers;
-    // cross-scene face consistency is description-driven, not pixel-locked (gpt-image-1 can't do the latter).
-    return generateImage({
-      prompt: params.prompt,
-      negativePrompt: params.negativePrompt,
-      reelId: params.reelId,
-      sceneIdx: params.sceneIdx ?? 0, // storageKey override is set for plates, so sceneIdx is unused there
-      quality: SCENE_IMAGE_QUALITY,
-      aspect: params.aspect,
-      ...(params.storageKey ? { storageKey: params.storageKey } : {}),
-    })
+  // TEXT-TO-IMAGE ONLY for gpt-image-1 (its edit/reference conditioning proved unreliable — ignored wardrobe,
+  // flipped gender); fal engines take reference plates. One dispatch, reused for the filter-safe retry below.
+  const dispatch = (prompt: string) =>
+    engine.family === 'openai'
+      ? generateImage({ prompt, negativePrompt: params.negativePrompt, reelId: params.reelId, sceneIdx: params.sceneIdx ?? 0, quality: SCENE_IMAGE_QUALITY, aspect: params.aspect, ...(params.storageKey ? { storageKey: params.storageKey } : {}) })
+      : generateImageFal({ prompt, negativePrompt: params.negativePrompt, reelId: params.reelId, aspect: params.aspect, engine, ...(params.sceneIdx !== undefined ? { sceneIdx: params.sceneIdx } : {}), ...(params.storageKey ? { storageKey: params.storageKey } : {}), ...(params.referenceImageKeys?.length ? { referenceImageKeys: params.referenceImageKeys } : {}) })
+  try {
+    return await dispatch(params.prompt)
+  } catch (err) {
+    // Filter-safe retry: a safety-filter rejection → rewrite the prompt (a dead / menacing / supernatural
+    // PERSON → "a figure") and try ONCE more, so a plate/scene from an older person-worded prompt self-heals
+    // instead of failing. Only on rejection → no cost on the happy path.
+    if (!(err instanceof ContentFilterError)) throw err
+    const { system, userMessage } = buildFilterSafePrompt(params.prompt)
+    const safe = await llmCall({ templateVersion: FILTER_SAFE_V1_VERSION, schema: FilterSafeSchema, system, messages: [{ role: 'user', content: userMessage }] })
+    return dispatch(safe.data.imagePrompt.trim() || params.prompt)
   }
-  return generateImageFal({
-    prompt: params.prompt,
-    negativePrompt: params.negativePrompt,
-    reelId: params.reelId,
-    aspect: params.aspect,
-    engine,
-    ...(params.sceneIdx !== undefined ? { sceneIdx: params.sceneIdx } : {}),
-    ...(params.storageKey ? { storageKey: params.storageKey } : {}),
-    ...(params.referenceImageKeys?.length ? { referenceImageKeys: params.referenceImageKeys } : {}),
-  })
 }
 
 export async function generateImages(reelId: string): Promise<void> {

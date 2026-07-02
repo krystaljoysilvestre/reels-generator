@@ -17,6 +17,7 @@
     "./prompts/peak-extract.v1": "./src/prompts/peak-extract.v1.ts",
     "./prompts/image-qa.v1": "./src/prompts/image-qa.v1.ts",
     "./prompts/video-qa.v1": "./src/prompts/video-qa.v1.ts",
+    "./prompts/filter-safe.v1": "./src/prompts/filter-safe.v1.ts",
     "./assembly/fewshot": "./src/assembly/fewshot.ts",
     "./assembly/avoidlist": "./src/assembly/avoidlist.ts",
     "./assembly/imageprompt": "./src/assembly/imageprompt.ts",
