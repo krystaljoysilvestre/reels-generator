@@ -8,6 +8,12 @@ import { StoryGenerating } from '@/components/StoryGenerating'
 import { Typewriter } from '@/components/Typewriter'
 import { phaseTicker, type ChannelMood } from '@/lib/pipeline-phases'
 
+// Best-of-N summary for the story card: why the shown draft won, plus the takes it beat.
+export interface CriticSummary {
+  rationale: string
+  runnersUp: Array<{ title: string; logline: string | null; note: string }>
+}
+
 interface StoryStudioProps {
   reelId: string
   channelId: string
@@ -17,13 +23,15 @@ interface StoryStudioProps {
   initialStatus: string
   initialCostCents: number
   story: { title: string; body: string; logline: string | null; subgenreTags: string[]; language: string } | null
+  critic: CriticSummary | null
 }
 
-export function StoryStudio({ reelId, channelId, channelName, mood, genre, initialStatus, initialCostCents, story }: StoryStudioProps) {
+export function StoryStudio({ reelId, channelId, channelName, mood, genre, initialStatus, initialCostCents, story, critic }: StoryStudioProps) {
   const router = useRouter()
   const [generating, setGenerating] = useState(initialStatus === 'drafting' || initialStatus === 'rejected')
   const [draft, setDraft] = useState(0)
   const [reviewing, setReviewing] = useState(false) // the "why?" panel
+  const [selectedReason, setSelectedReason] = useState('')
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const [startedAt] = useState(() => Date.now())
@@ -59,6 +67,7 @@ export function StoryStudio({ reelId, channelId, channelName, mood, genre, initi
     if (res.ok) {
       setDraft((d) => d + 1)
       setReviewing(false)
+      setSelectedReason('')
       setNote('')
       setGenerating(true) // restart polling for the new draft
     }
@@ -105,15 +114,16 @@ export function StoryStudio({ reelId, channelId, channelName, mood, genre, initi
           <div className="card flex flex-col gap-4 p-5">
             <div>
               <p className="text-sm font-semibold text-ink">What didn&apos;t land?</p>
-              <p className="text-xs text-muted">We&apos;ll write a different draft that fixes it.</p>
+              <p className="text-xs text-muted">Pick what&apos;s off and add a note — the next drafts are judged against it.</p>
             </div>
             <div className="grid gap-2">
               {STORY_REJECTION_REASONS.map((r) => (
                 <button
                   key={r.code}
-                  onClick={() => regenerate(r.code)}
+                  onClick={() => setSelectedReason(r.code)}
                   disabled={busy}
-                  className="rounded-lg border border-border-strong px-3 py-2.5 text-left text-sm font-medium text-ink transition-colors hover:border-accent/50 hover:bg-accent-soft disabled:opacity-50"
+                  aria-pressed={selectedReason === r.code}
+                  className={`rounded-lg border px-3 py-2.5 text-left text-sm font-medium transition-colors disabled:opacity-50 ${selectedReason === r.code ? 'border-accent bg-accent-soft text-accent ring-1 ring-accent' : 'border-border-strong text-ink hover:border-accent/50 hover:bg-accent-soft'}`}
                 >
                   {r.label}
                 </button>
@@ -122,10 +132,19 @@ export function StoryStudio({ reelId, channelId, channelName, mood, genre, initi
             <textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="Optional: what specifically to change…"
+              placeholder="What specifically to change… (optional)"
               className="input h-20 resize-none"
             />
-            <button onClick={() => setReviewing(false)} disabled={busy} className="btn-ghost btn-sm self-start">← Back</button>
+            <div className="flex gap-3">
+              <button onClick={() => setReviewing(false)} disabled={busy} className="btn-secondary flex-1">← Back</button>
+              <button
+                onClick={() => regenerate(selectedReason)}
+                disabled={busy || !selectedReason}
+                className="btn-accent flex-1"
+              >
+                {busy ? 'Writing…' : 'Write another'}
+              </button>
+            </div>
           </div>
         ) : (
           <div className="card animate-fade-in flex flex-col overflow-hidden">
@@ -152,6 +171,30 @@ export function StoryStudio({ reelId, channelId, channelName, mood, genre, initi
               <span className="font-mono tabular-nums text-ink">${(costCents / 100).toFixed(2)}</span>
               <span>so far</span>
             </div>
+            {critic && (
+              <div className="border-t border-border px-5 py-3">
+                <p className="text-xs leading-relaxed text-muted">
+                  <span className="font-medium text-ink">Why this one:</span> {critic.rationale}
+                </p>
+                {critic.runnersUp.length > 0 && (
+                  <details className="mt-2 group">
+                    <summary className="cursor-pointer select-none text-xs font-medium text-muted transition-colors hover:text-ink">
+                      Other takes ({critic.runnersUp.length})
+                    </summary>
+                    <p className="mt-1.5 text-xs text-faint">The takes that didn&rsquo;t make the cut, and why.</p>
+                    <ul className="mt-2 space-y-2">
+                      {critic.runnersUp.map((r, i) => (
+                        <li key={i} className="rounded-lg bg-subtle/60 px-3 py-2">
+                          <p className="text-xs font-medium text-ink">{r.title}</p>
+                          {r.logline && <p className="mt-0.5 text-xs text-muted">{r.logline}</p>}
+                          {r.note && <p className="mt-1 text-xs italic text-faint">&ldquo;{r.note}&rdquo;</p>}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+              </div>
+            )}
             <div className="flex gap-3 border-t border-border px-5 py-4">
               <button onClick={() => setReviewing(true)} disabled={busy} className="btn-secondary flex-1">Write another</button>
               <button onClick={approve} disabled={busy} className="btn-accent flex-1">{busy ? 'Saving…' : 'Use this story'}</button>

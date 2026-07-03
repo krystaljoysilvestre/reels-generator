@@ -232,6 +232,13 @@
       "when": 1782983768235,
       "tag": "0032_aspiring_menace",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1783048614067,
+      "tag": "0033_bitter_radioactive_man",
+      "breakpoints": true
     }
   ]
 }

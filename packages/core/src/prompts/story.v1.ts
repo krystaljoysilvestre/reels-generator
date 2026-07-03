@@ -1,7 +1,7 @@
 // story.v1 — story generation template (docs/04 §2.1)
 // Versioned source code. Never edit after a reel ships on this version — bump to v2.
 
-export const STORY_V1_VERSION = 'story.v1'
+export const STORY_V1_VERSION = 'story.v1.1'
 
 export interface StoryPromptVars {
   channelName: string
@@ -17,6 +17,7 @@ export interface StoryPromptVars {
   operatorFeedback?: string | undefined   // THIS reel's own latest rejection (reason + note), for regeneration
   regenerationNonce?: number | undefined   // 0 = first draft; increments per regenerate. MUST land in the prompt text
                               // so the inputHash changes and the LLM actually re-runs (else it caches).
+  angleDirective?: string | undefined  // best-of-N diversity: a hook/structure archetype this draft must commit to
 }
 
 export function buildStoryPrompt(v: StoryPromptVars): { system: string; userMessage: string } {
@@ -66,6 +67,10 @@ Avoid (anti-patterns from rejected reels): ${v.rejectionAvoidList || 'none yet'}
 ${
     v.operatorFeedback
       ? `\nThis is regeneration attempt #${(v.regenerationNonce ?? 1)}. The operator rejected the previous draft for this reason: "${v.operatorFeedback}". Write a DISTINCTLY DIFFERENT story that directly fixes this — change the premise/approach, not just the wording. Do not repeat the prior draft's plot or hook.\n`
+      : ''
+  }${
+    v.angleDirective
+      ? `\nANGLE FOR THIS DRAFT: ${v.angleDirective}\nCommit to this angle fully — interpret it in this niche's own terms. Do not blend it with other approaches.\n`
       : ''
   }
 OUTPUT (JSON only):

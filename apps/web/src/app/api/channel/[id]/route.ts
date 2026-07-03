@@ -25,6 +25,7 @@ const UpdateSchema = z
     worldBible: WorldBibleSchema,
     generationMode: z.enum(['review', 'auto']),
     musicMood: MusicMoodSchema.nullable(), // channel-default background-music mood; null = auto (fall back to audioMood). Lives in audioPacks jsonb.
+    tasteRubric: z.string().trim().max(4000).nullish(), // story-critic rubric; null/empty clears → default rubric
   })
   .partial()
   .strict()
@@ -49,6 +50,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   for (const [k, v] of Object.entries(patch)) {
     if (k === 'musicMood') continue
     if (k === 'description') updates[k] = v ?? null
+    else if (k === 'tasteRubric') updates[k] = v || null // clearing the textarea reverts to the default rubric
     else if (v !== undefined) updates[k] = v
   }
 

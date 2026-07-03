@@ -33,6 +33,7 @@ export interface LlmCallOptions<T> {
   provider?: LlmProvider // defaults to 'openai' (generation); QA passes 'anthropic'
   model?: string
   maxTokens?: number
+  temperature?: number // 0–1 (Anthropic's range; OpenAI accepts it too). Omit = provider default.
 }
 
 export interface LlmResult<T> {
@@ -120,12 +121,13 @@ function toAnthropicMessages(messages: LlmMessage[]): Anthropic.MessageParam[] {
   })
 }
 
-async function callAnthropic(model: string, system: string, messages: LlmMessage[], maxTokens: number): Promise<TransportResult> {
+async function callAnthropic(model: string, system: string, messages: LlmMessage[], maxTokens: number, temperature?: number): Promise<TransportResult> {
   const res = await getAnthropic().messages.create({
     model,
     max_tokens: maxTokens,
     system: system + JSON_INSTRUCTION,
     messages: toAnthropicMessages(messages),
+    ...(temperature !== undefined ? { temperature } : {}),
   })
   return {
     text: res.content.find((b) => b.type === 'text')?.text ?? '',
@@ -147,11 +149,12 @@ function toOpenAIMessages(system: string, messages: LlmMessage[]): OpenAI.Chat.C
   return [{ role: 'system', content: system + JSON_INSTRUCTION }, ...mapped]
 }
 
-async function callOpenAI(model: string, system: string, messages: LlmMessage[], maxTokens: number): Promise<TransportResult> {
+async function callOpenAI(model: string, system: string, messages: LlmMessage[], maxTokens: number, temperature?: number): Promise<TransportResult> {
   const res = await getOpenAI().chat.completions.create({
     model,
     max_tokens: maxTokens,
     messages: toOpenAIMessages(system, messages),
+    ...(temperature !== undefined ? { temperature } : {}),
   })
   return {
     text: res.choices[0]?.message?.content ?? '',
@@ -160,12 +163,12 @@ async function callOpenAI(model: string, system: string, messages: LlmMessage[],
   }
 }
 
-async function transport(provider: LlmProvider, model: string, system: string, messages: LlmMessage[], maxTokens: number): Promise<TransportResult> {
+async function transport(provider: LlmProvider, model: string, system: string, messages: LlmMessage[], maxTokens: number, temperature?: number): Promise<TransportResult> {
   // Per-provider concurrency cap (the real throttle — see shared/limiter.ts).
   return withProviderLimit(provider === 'anthropic' ? 'anthropic' : 'openai', () =>
     provider === 'anthropic'
-      ? callAnthropic(model, system, messages, maxTokens)
-      : callOpenAI(model, system, messages, maxTokens),
+      ? callAnthropic(model, system, messages, maxTokens, temperature)
+      : callOpenAI(model, system, messages, maxTokens, temperature),
   )
 }
 
@@ -181,7 +184,7 @@ export async function llmCall<T>(opts: LlmCallOptions<T>): Promise<LlmResult<T>>
   })
 
   // ── First attempt ─────────────────────────────────────────────────────────
-  const res1 = await transport(provider, model, opts.system, opts.messages, maxTokens)
+  const res1 = await transport(provider, model, opts.system, opts.messages, maxTokens, opts.temperature)
   const cost1 = calcCostCents(model, res1.inputTokens, res1.outputTokens)
   const parsed1 = tryParse(res1.text, opts.schema)
 
@@ -201,7 +204,7 @@ export async function llmCall<T>(opts: LlmCallOptions<T>): Promise<LlmResult<T>>
     },
   ]
 
-  const res2 = await transport(provider, model, opts.system, repairMessages, maxTokens)
+  const res2 = await transport(provider, model, opts.system, repairMessages, maxTokens, opts.temperature)
   const totalCost = cost1 + calcCostCents(model, res2.inputTokens, res2.outputTokens)
 
   const parsed2 = tryParse(res2.text, opts.schema)

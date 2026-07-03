@@ -1,6 +1,12 @@
 // Re-export prompt builders from packages/core.
 // Keeps import paths stable if core is restructured.
 export { buildStoryPrompt, STORY_V1_VERSION } from '@reels/core/prompts/story.v1'
+export {
+  buildStoryCriticPrompt,
+  STORY_CRITIC_V1_VERSION,
+  StoryCriticSchema,
+  DEFAULT_TASTE_RUBRIC,
+} from '@reels/core/prompts/story-critic.v1'
 export { buildAudioScriptPrompt, AUDIOSCRIPT_V1_VERSION } from '@reels/core/prompts/audioscript.v1'
 export { buildScenesPrompt, SCENES_V1_VERSION } from '@reels/core/prompts/scenes.v1'
 export { buildStoryAnalyzerPrompt, STORY_ANALYZER_V1_VERSION } from '@reels/core/prompts/story-analyzer.v1'

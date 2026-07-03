@@ -113,6 +113,9 @@ export const channels = pgTable('channels', {
   // 'auto' = run end-to-end through to a finished render, no stops. Set on the first reel, editable in
   // Settings. (Publishing stays manual either way.)
   generationMode: text('generation_mode').notNull().default('review'),
+  // Operator-editable taste rubric the story critic ranks candidates against.
+  // Null = use the hand-written default (DEFAULT_TASTE_RUBRIC in story-critic.v1).
+  tasteRubric: text('taste_rubric'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 })

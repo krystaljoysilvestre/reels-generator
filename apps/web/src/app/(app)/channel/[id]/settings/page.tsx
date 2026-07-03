@@ -34,6 +34,7 @@ export default async function ChannelSettingsPage({ params }: { params: Promise<
         generationMode: (channel.generationMode === 'auto' ? 'auto' : 'review'),
         musicMood: AudioPacksSchema.parse(channel.audioPacks ?? {}).musicMood ?? null,
         musicMode: AudioPacksSchema.parse(channel.audioPacks ?? {}).musicMode,
+        tasteRubric: channel.tasteRubric ?? null,
       }}
     />
   )

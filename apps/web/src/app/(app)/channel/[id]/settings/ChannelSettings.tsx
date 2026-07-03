@@ -42,6 +42,7 @@ interface Initial {
   generationMode: 'review' | 'auto'
   musicMood: MusicMood | null // channel-default background-music mood; null = auto (from audioMood)
   musicMode: MusicMode // only AI-music channels expose a mood control
+  tasteRubric: string | null // story-critic bar; null = built-in default for the genre
 }
 
 export function ChannelSettings({ id, initial }: { id: string; initial: Initial }) {
@@ -65,8 +66,30 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
   const [vocab, setVocab] = useState<Array<{ term: string; value: string }>>(
     Object.entries(initial.worldBible.vocabulary ?? {}).map(([term, value]) => ({ term, value })),
   )
+  const [tasteRubric, setTasteRubric] = useState(initial.tasteRubric ?? '')
+  const [mining, setMining] = useState(false)
+  const [rubricError, setRubricError] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+
+  async function handleMineRubric() {
+    setMining(true)
+    setRubricError('')
+    try {
+      const res = await fetch('/api/channel/mine-rubric', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channelId: id }),
+      })
+      const j = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(j?.error ?? 'That didn’t come through — try again.')
+      setTasteRubric(j.rubric)
+    } catch (e) {
+      setRubricError(e instanceof Error ? e.message : 'That didn’t come through — try again.')
+    } finally {
+      setMining(false)
+    }
+  }
 
   function setTier(k: keyof ToneConfig, v: number) {
     setTone((t) => ({ ...t, [k]: v }))
@@ -88,6 +111,7 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
       captionStyle,
       generationMode,
       musicMood,
+      tasteRubric: tasteRubric.trim() || null,
       worldBible: {
         region: region.trim(),
         era: era.trim(),
@@ -189,6 +213,29 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
               <span className="w-6 text-right font-mono text-xs tabular-nums text-ink">{Number(tone[k] ?? 0)}</span>
             </div>
           ))}
+        </section>
+
+        {/* Story taste — the bar the story critic scores candidate drafts against */}
+        <section className="card space-y-3 p-5">
+          <SectionLabel>Story taste</SectionLabel>
+          <p className="text-xs text-muted">
+            What separates a story worth publishing from one that gets cut. Every new script has to clear it before it reaches you.
+          </p>
+          <textarea
+            value={tasteRubric}
+            onChange={(e) => setTasteRubric(e.target.value)}
+            rows={8}
+            maxLength={4000}
+            placeholder="Leave empty to use the house bar for this genre."
+            className="input resize-y font-mono text-xs leading-relaxed"
+          />
+          <div className="flex items-center gap-3">
+            <button type="button" onClick={handleMineRubric} disabled={mining} className="btn-secondary btn-sm">
+              {mining ? 'Studying your decisions…' : 'Write it for me'}
+            </button>
+            <p className="text-xs text-faint">Drafted from the stories you’ve kept and the ones you’ve cut.</p>
+          </div>
+          {rubricError && <p className="text-xs text-danger">{rubricError}</p>}
         </section>
 
         {/* Background music — AI-music channels only. Sets the default bed mood; each reel can override it. */}
