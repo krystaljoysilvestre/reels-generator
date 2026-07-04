@@ -16,7 +16,9 @@ export function startBullBoard(port = 3001): void {
   app.use('/queues', serverAdapter.getRouter())
   app.get('/', (_req, res) => res.redirect('/queues'))
 
-  app.listen(port, () => {
+  // Bind to loopback only — Bull Board has no auth and exposes job payloads + retry/remove controls.
+  // Listening on 0.0.0.0 would hand that to anyone on the LAN.
+  app.listen(port, '127.0.0.1', () => {
     console.log(`[bull-board] http://localhost:${port}/queues`)
   })
 }

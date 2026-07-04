@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm'
+import { eq, and, desc } from 'drizzle-orm'
 import { getDb, reels, stories, scenes, assets } from '@reels/db'
 import { buildInputHash } from '@reels/providers'
 import {
@@ -48,9 +48,13 @@ export async function runComputeTimings(reelId: string): Promise<void> {
   reelScenes.sort((a, b) => a.idx - b.idx)
   if (reelScenes.length === 0) throw new Error(`No scenes for reel: ${reelId}`)
 
-  // Load alignment (the master clock) from the voiceover asset meta
-  const allAssets = await db.query.assets.findMany({ where: eq(assets.reelId, reelId) })
-  const voiceover = allAssets.find((a) => a.kind === 'voiceover')
+  // Load alignment (the master clock) from the voiceover asset meta. A voice change (re-run of
+  // generate_tts) appends a NEW voiceover row with fresh alignment; take the newest so timings are
+  // computed against the audio that actually plays, not a stale earlier take.
+  const voiceover = await db.query.assets.findFirst({
+    where: and(eq(assets.reelId, reelId), eq(assets.kind, 'voiceover')),
+    orderBy: [desc(assets.createdAt)],
+  })
   if (!voiceover) throw new Error(`No voiceover asset for reel: ${reelId}`)
 
   const meta = voiceover.meta as { alignment: AlignedChar[]; durationMs: number }
@@ -69,8 +73,11 @@ export async function runComputeTimings(reelId: string): Promise<void> {
     tier: (s.tier as 'still' | 'video'),
   }))
 
-  const inputHash = buildInputHash('compute_timings.v1', {
+  const inputHash = buildInputHash('compute_timings.v2', {
     narration: story.body,
+    // Alignment IS the master clock; a re-synthesized voiceover has new timestamps under a new row
+    // (createdAt). Hash it so a voice/narration change busts the cache instead of reusing stale timings.
+    voiceoverAt: voiceover.createdAt,
     sceneCount: sceneSpans.length,
     sfxCount: audioScript.sfx.length,
     opCues: operatorCues.map((c) => `${c.anchor}@${c.offsetMs}`).join('|'), // cue changes → re-run
@@ -107,12 +114,14 @@ export async function runComputeTimings(reelId: string): Promise<void> {
 
       const validated = TimingsSchema.parse(timings)
 
-      // Persist scene startMs/endMs back to scene rows
+      // Persist scene startMs/endMs back to scene rows. Must scope by BOTH reel and scene idx — without
+      // the idx predicate every row is overwritten with the last scene's span (all scenes collapse to
+      // one timing).
       for (const st of validated.scenes) {
         await db
           .update(scenes)
           .set({ startMs: st.startMs, endMs: st.endMs })
-          .where(eq(scenes.reelId, reelId))
+          .where(and(eq(scenes.reelId, reelId), eq(scenes.idx, st.idx)))
       }
 
       return { output: validated, costCents: 0 }  // pure computation, no provider cost

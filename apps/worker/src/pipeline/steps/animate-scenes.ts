@@ -3,7 +3,7 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { mkdir, writeFile, readFile } from 'node:fs/promises'
+import { mkdir, writeFile, readFile, rm } from 'node:fs/promises'
 import { getDb, reels, scenes, assets } from '@reels/db'
 import { generateVideo, buildInputHash, FalEngineSchema, downloadBuffer, llmCall } from '@reels/providers'
 import { TimingsSchema } from '@reels/core'
@@ -28,15 +28,20 @@ const MAX_VIDEO_QA_REROLLS = 1 // one extra attempt on a clear-artifact verdict;
 async function extractQAFrames(videoBuf: Buffer, durationSec: number, reelId: string, sceneIdx: number): Promise<Buffer[]> {
   const dir = join(tmpdir(), `reels-vqa-${reelId}-s${sceneIdx}`)
   await mkdir(dir, { recursive: true })
-  const inPath = join(dir, 'clip.mp4')
-  await writeFile(inPath, videoBuf)
+  try {
+    const inPath = join(dir, 'clip.mp4')
+    await writeFile(inPath, videoBuf)
 
-  const midPath = join(dir, 'mid.png')
-  const lastPath = join(dir, 'last.png')
-  // Input-seek (-ss/-sseof before -i) is fast and frame-accurate enough for a still grab.
-  await execFileAsync('ffmpeg', ['-ss', String(Math.max(0, durationSec / 2)), '-i', inPath, '-frames:v', '1', '-y', midPath])
-  await execFileAsync('ffmpeg', ['-sseof', '-0.2', '-i', inPath, '-frames:v', '1', '-y', lastPath])
-  return [await readFile(midPath), await readFile(lastPath)]
+    const midPath = join(dir, 'mid.png')
+    const lastPath = join(dir, 'last.png')
+    // Input-seek (-ss/-sseof before -i) is fast and frame-accurate enough for a still grab.
+    await execFileAsync('ffmpeg', ['-ss', String(Math.max(0, durationSec / 2)), '-i', inPath, '-frames:v', '1', '-y', midPath])
+    await execFileAsync('ffmpeg', ['-sseof', '-0.2', '-i', inPath, '-frames:v', '1', '-y', lastPath])
+    // Frames are read into memory here, so the dir can be removed as we return.
+    return [await readFile(midPath), await readFile(lastPath)]
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
 }
 
 // Vision QA of a generated clip for animation artifacts. Fail-soft: any error (ffmpeg/vision) → treat as a
@@ -158,6 +163,16 @@ export async function animateScenes(reelId: string): Promise<void> {
             console.warn(`[video-qa] ${reelId.slice(0, 8)} scene${scene.idx} attempt ${attempt} artifacts → ${tag}: ${qa.issues.join('; ')}`)
           }
 
+          const videoMeta = {
+            ...chosen!.asset.meta,
+            sceneIdx: scene.idx,
+            variationIdx: v,
+            // qaIssues rides on meta so a later pass can flag "this hero clip may warp" to the operator.
+            ...(lastIssues.length ? { qaIssues: lastIssues } : {}),
+            // Model audio is stripped in the render step — not here
+          }
+          // The clip's key is constant per (scene, variation) — a re-animation upserts this row in place
+          // and bumps createdAt so render (which hashes the selected clip's createdAt) re-renders.
           await db.insert(assets).values({
             reelId,
             channelId: reel.channelId,
@@ -166,13 +181,15 @@ export async function animateScenes(reelId: string): Promise<void> {
             provider: 'fal',
             providerJobId: chosen!.providerJobId ?? null,
             costCents: totalCost,
-            meta: {
-              ...chosen!.asset.meta,
-              sceneIdx: scene.idx,
-              variationIdx: v,
-              // qaIssues rides on meta so a later pass can flag "this hero clip may warp" to the operator.
-              ...(lastIssues.length ? { qaIssues: lastIssues } : {}),
-              // Model audio is stripped in the render step — not here
+            meta: videoMeta,
+          }).onConflictDoUpdate({
+            target: [assets.reelId, assets.storageKey],
+            set: {
+              provider: 'fal',
+              providerJobId: chosen!.providerJobId ?? null,
+              costCents: totalCost,
+              meta: videoMeta,
+              createdAt: new Date(),
             },
           })
 

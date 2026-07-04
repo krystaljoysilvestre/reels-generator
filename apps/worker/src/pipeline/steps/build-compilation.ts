@@ -3,7 +3,7 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { mkdir, writeFile, readFile } from 'node:fs/promises'
+import { mkdir, writeFile, readFile, rm } from 'node:fs/promises'
 import { getDb, compilations, reels, stories, assets, channels } from '@reels/db'
 import { llmCall, buildInputHash, ElevenLabsTtsProvider, downloadBuffer, uploadBuffer } from '@reels/providers'
 import {
@@ -94,6 +94,7 @@ export async function buildCompilation(compilationId: string): Promise<void> {
 
   const tmp = join(tmpdir(), `compilation-${compilationId}`)
   await mkdir(tmp, { recursive: true })
+  try {
 
   // Narrate intro
   const introTts = await tts.synthesize({ narration: script.intro_script, voiceId, reelId: `comp-${compilationId}-intro` })
@@ -199,6 +200,11 @@ export async function buildCompilation(compilationId: string): Promise<void> {
   }).where(eq(compilations.id, compilationId))
 
   console.log(`[compilation] done: ${compilationId} (${chapterMarks.length} chapters)`)
+  } finally {
+    // Reclaim the compilation scratch dir (every constituent reel MP4 + narration segments) on success
+    // or failure.
+    await rm(tmp, { recursive: true, force: true })
+  }
 }
 
 // Creates a black-frame video segment with audio-only narration (connective tissue)

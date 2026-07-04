@@ -1,11 +1,11 @@
-import { eq } from 'drizzle-orm'
+import { eq, desc } from 'drizzle-orm'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getDb, reels, assets, channels } from '@reels/db'
 import { downloadBuffer, uploadBuffer, buildInputHash } from '@reels/providers'
 import { TimingsSchema, AudioScriptSchema, AudioPacksSchema, musicIntensityToDb, moodMatchScore, peakFracForType } from '@reels/core'
 import { mixAudio, premixSfx } from '@reels/render/ffmpeg/mix-audio'
-import { writeFile, mkdir } from 'node:fs/promises'
+import { writeFile, mkdir, rm } from 'node:fs/promises'
 import { runStep } from '../harness.js'
 
 // Deterministic per-reel pick from the bed pool: same reel always draws the same bed (stable on
@@ -47,16 +47,25 @@ export async function mixAudioStep(reelId: string): Promise<void> {
   if (!channel) throw new Error(`Channel not found`)
   const audioPacks = AudioPacksSchema.parse(channel.audioPacks)
 
-  // Collect all assets for this reel
-  const allAssets = await db.query.assets.findMany({ where: eq(assets.reelId, reelId) })
+  // Collect all assets for this reel, newest first — so a re-synthesized voiceover or a fresh mix picks
+  // the current take, not an earlier row left behind by a re-run.
+  const allAssets = await db.query.assets.findMany({
+    where: eq(assets.reelId, reelId),
+    orderBy: [desc(assets.createdAt)],
+  })
+  const isFinalMix = (a: (typeof allAssets)[number]) => (a.meta as Record<string, unknown>)['type'] === 'final_mix'
   const voiceover = allAssets.find((a) => a.kind === 'voiceover')
-  const ambient = allAssets.find((a) => a.kind === 'ambient')
+  // The final mix is itself stored with kind 'ambient' (meta.type = 'final_mix') — must exclude it here,
+  // or a re-mix would layer the PREVIOUS full mix (voiceover + music + sfx) back in as the ambient bed.
+  const ambient = allAssets.find((a) => a.kind === 'ambient' && !isFinalMix(a))
   const sfxAssets = allAssets.filter((a) => a.kind === 'sfx')
   if (!voiceover) throw new Error('No voiceover asset')
 
-  const inputHash = buildInputHash('mix_audio.v1', {
-    voiceover: voiceover.storageKey,
-    ambient: ambient?.storageKey ?? 'none',
+  const inputHash = buildInputHash('mix_audio.v2', {
+    // Hash the voiceover's row identity (createdAt), not its constant storage key — the key never changes
+    // across re-synthesis, so hashing it would reuse a stale mix after a voice change.
+    voiceoverAt: voiceover.createdAt,
+    ambientKey: ambient?.storageKey ?? 'none',
     sfxCount: sfxAssets.length,
     hasMusic: !!timings.music,
     musicKey: reel.musicKey ?? 'none', // AI bed → re-mix when the per-reel bed (re)generates
@@ -68,6 +77,7 @@ export async function mixAudioStep(reelId: string): Promise<void> {
     async () => {
       const tmp = join(tmpdir(), `reels-${reelId}`)
       await mkdir(tmp, { recursive: true })
+      try {
 
       // Download assets to tmp dir
       const voiceoverBuf = await downloadBuffer(voiceover.storageKey)
@@ -174,18 +184,31 @@ export async function mixAudioStep(reelId: string): Promise<void> {
       const storageKey = `reels/${reelId}/mix.m4a`
       await uploadBuffer(storageKey, mixBuf, 'audio/mp4')
 
-      // Register as asset
+      // Register as asset. Constant key per reel → a re-mix upserts this row in place and bumps createdAt
+      // so render (which hashes the mix's createdAt) re-renders against the new audio.
       await db.insert(assets).values({
         reelId,
         channelId: reel.channelId,
-        kind: 'ambient',   // reusing 'ambient' kind for the final mix; could add a 'mix' kind later
+        kind: 'ambient',   // reusing 'ambient' kind for the final mix (meta.type='final_mix' distinguishes it)
         storageKey,
         provider: 'local',
         costCents: 0,
         meta: { type: 'final_mix', durationMs: timings.durationMs },
-      }).onConflictDoNothing()
+      }).onConflictDoUpdate({
+        target: [assets.reelId, assets.storageKey],
+        set: {
+          kind: 'ambient',
+          meta: { type: 'final_mix', durationMs: timings.durationMs },
+          createdAt: new Date(),
+        },
+      })
 
       return { output: { storageKey }, costCents: 0 }
+      } finally {
+        // Reclaim the per-mix scratch dir (voiceover + sfx clips + premix + final mix) on success or
+        // failure so repeated mixes don't accumulate on disk.
+        await rm(tmp, { recursive: true, force: true })
+      }
     },
   )
 }

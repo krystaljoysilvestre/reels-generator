@@ -1,4 +1,4 @@
-import { eq, and } from 'drizzle-orm'
+import { eq, and, sql } from 'drizzle-orm'
 import { getDb } from '@reels/db'
 import { pipelineSteps, reels } from '@reels/db'
 import { assertBudget, DEFAULT_BUDGET_CAPS_CENTS, type PipelineStepName } from '@reels/core'
@@ -89,9 +89,12 @@ export async function runStep<T>(
         )
 
       if (costCents > 0) {
+        // Atomic SQL increment (not reel.costCents + costCents): generate_images / animate_scenes fan out
+        // many concurrent runSteps, so a read-modify-write against the value read at step start would drop
+        // paid spend under last-write-wins — and understate the total the budget gate enforces against.
         await tx
           .update(reels)
-          .set({ costCents: reel.costCents + costCents, updatedAt: new Date() })
+          .set({ costCents: sql`${reels.costCents} + ${costCents}`, updatedAt: new Date() })
           .where(eq(reels.id, ctx.reelId))
       }
     })

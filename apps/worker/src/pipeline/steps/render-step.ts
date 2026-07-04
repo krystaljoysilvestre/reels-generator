@@ -1,9 +1,9 @@
-import { eq } from 'drizzle-orm'
+import { eq, desc } from 'drizzle-orm'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { mkdir, writeFile, readFile } from 'node:fs/promises'
+import { mkdir, writeFile, readFile, rm } from 'node:fs/promises'
 import { getDb, reels, scenes, assets, channels } from '@reels/db'
 import { downloadBuffer, uploadBuffer, buildInputHash } from '@reels/providers'
 import { TimingsSchema, LutConfigSchema, CaptionStyleSchema, PLATFORM_PRESETS, effectsFromSelection, parseMotion } from '@reels/core'
@@ -53,17 +53,41 @@ export async function renderStep(reelId: string): Promise<void> {
   const platformPreset = PLATFORM_PRESETS[(channel.targetPlatform ?? 'all') as keyof typeof PLATFORM_PRESETS] ?? PLATFORM_PRESETS.all
   const captionSafeZonePct = platformPreset.safeZoneBottomPct
 
-  const allAssets = await db.query.assets.findMany({ where: eq(assets.reelId, reelId) })
+  // Newest first: a re-mix or re-generated scene image/video appends a new row; render must pick the
+  // current take. (Scene images are selected by the scene's imageAssetId pointer below, which already
+  // tracks the latest; ordering covers the mix + per-scene video lookups.)
+  const allAssets = await db.query.assets.findMany({
+    where: eq(assets.reelId, reelId),
+    orderBy: [desc(assets.createdAt)],
+  })
   const reelScenes = await db.query.scenes.findMany({ where: eq(scenes.reelId, reelId) })
   reelScenes.sort((a, b) => a.idx - b.idx)
 
   const mixAsset = allAssets.find((a) => (a.meta as Record<string, unknown>)['type'] === 'final_mix')
   if (!mixAsset) throw new Error('No final mix asset — run mix_audio first')
 
-  const inputHash = buildInputHash('render.remotion.v1', {
+  // The hero clip a video-tier scene renders with — selected exactly as the render loop does below
+  // (newest matching row wins via the createdAt ordering). Used both for the cache key and the render.
+  const pickVideoAsset = (sceneIdx: number) =>
+    allAssets.find(
+      (a) =>
+        a.kind === 'video' &&
+        (a.meta as Record<string, unknown>)['sceneIdx'] === sceneIdx &&
+        (a.meta as Record<string, unknown>)['variationIdx'] === 0,
+    )
+
+  const inputHash = buildInputHash('render.remotion.v2', {
     sceneCount: reelScenes.length,
-    mixKey: mixAsset.storageKey,
+    // Hash the mix's row identity (createdAt), not its constant storage key — the key is fixed per reel,
+    // so a re-mix (new audio) would otherwise reuse the previous render.
+    mixAt: mixAsset.createdAt,
     onScreen: reelScenes.map((s) => s.onScreenText ?? '').join('|'),
+    // Visual content: a regenerated image repoints imageAssetId; a re-animated clip appends a newer video
+    // row. Include both or a reshoot followed by re-render would serve the old footage.
+    images: reelScenes.map((s) => s.imageAssetId ?? 'none').join('|'),
+    videos: reelScenes
+      .map((s) => (s.tier === 'video' ? (pickVideoAsset(s.idx)?.createdAt.toISOString() ?? 'none') : 'still'))
+      .join('|'),
     reelId,
   })
 
@@ -72,6 +96,7 @@ export async function renderStep(reelId: string): Promise<void> {
     async () => {
       const tmp = join(tmpdir(), `reels-render-${reelId}`)
       await mkdir(tmp, { recursive: true })
+      try {
 
       // ── Download audio mix ──────────────────────────────────────────────
       const mixBuf = await downloadBuffer(mixAsset.storageKey)
@@ -103,12 +128,7 @@ export async function renderStep(reelId: string): Promise<void> {
         let videoPath: string | null = null
         let videoDurationSec: number | null = null
         if (scene.tier === 'video') {
-          const videoAsset = allAssets.find(
-            (a) =>
-              a.kind === 'video' &&
-              (a.meta as Record<string, unknown>)['sceneIdx'] === scene.idx &&
-              (a.meta as Record<string, unknown>)['variationIdx'] === 0,
-          )
+          const videoAsset = pickVideoAsset(scene.idx)
           if (videoAsset) {
             videoPath = join(tmp, `scene_${scene.idx}_vid.mp4`)
             await writeFile(videoPath, await downloadBuffer(videoAsset.storageKey))
@@ -195,6 +215,7 @@ export async function renderStep(reelId: string): Promise<void> {
       const storageKey = `reels/${reelId}/render.mp4`
       await uploadBuffer(storageKey, renderBuf, 'video/mp4')
 
+      // Constant key per reel → a re-render upserts this row in place (bump createdAt for consistency).
       await db.insert(assets).values({
         reelId,
         channelId: reel.channelId,
@@ -203,9 +224,20 @@ export async function renderStep(reelId: string): Promise<void> {
         provider: 'local',
         costCents: 0,
         meta: { durationMs: timings.durationMs, renderer: 'remotion@4' },
-      }).onConflictDoNothing()
+      }).onConflictDoUpdate({
+        target: [assets.reelId, assets.storageKey],
+        set: {
+          meta: { durationMs: timings.durationMs, renderer: 'remotion@4' },
+          createdAt: new Date(),
+        },
+      })
 
       return { output: { storageKey }, costCents: 0 }
+      } finally {
+        // Reclaim the per-render scratch dir (scene videos/images + graded intermediates + final mp4 —
+        // 100+ MB) whether the render succeeded or threw, so repeated renders don't fill the disk.
+        await rm(tmp, { recursive: true, force: true })
+      }
     },
   )
 

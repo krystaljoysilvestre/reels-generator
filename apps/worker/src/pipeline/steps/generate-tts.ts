@@ -62,7 +62,9 @@ export async function generateTts(reelId: string): Promise<void> {
     },
   )
 
-  // Persist the voiceover asset with alignment as meta
+  // Persist the voiceover asset with alignment as meta. The storage key is constant per reel, so a voice
+  // change (re-synthesis) upserts THIS row in place — refreshing the alignment and bumping createdAt so
+  // compute_timings / mix_audio (which hash voiceover.createdAt) recompute against the new take.
   await db
     .insert(assets)
     .values({
@@ -77,5 +79,14 @@ export async function generateTts(reelId: string): Promise<void> {
         alignment: result.output.alignment, // word timestamps = master clock
       },
     })
-    .onConflictDoNothing()
+    .onConflictDoUpdate({
+      target: [assets.reelId, assets.storageKey],
+      set: {
+        channelId: reel.channelId,
+        provider: 'elevenlabs',
+        costCents: result.costCents,
+        meta: { durationMs: result.output.durationMs, alignment: result.output.alignment },
+        createdAt: new Date(),
+      },
+    })
 }

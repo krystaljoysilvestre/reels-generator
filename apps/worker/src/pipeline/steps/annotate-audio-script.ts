@@ -85,7 +85,21 @@ export async function annotateAudioScript(reelId: string): Promise<void> {
   if (!story) throw new Error(`Story not found: ${reel.storyId}`)
 
   const { system, userMessage } = buildAudioScriptPrompt(story.body)
-  const inputHash = buildInputHash(AUDIOSCRIPT_V1_VERSION, { narration: story.body })
+
+  // Both LLM calls (structured audio-script + free-text sound-note interpretation) share ONE runStep row.
+  // pipeline_steps is unique on (reelId, stepName), so two runSteps under the same stepName would clobber
+  // each other's inputHash and BOTH would miss the cache on every re-run — re-billing both LLMs, and the
+  // fresh cue UUIDs minted by realizeSoundNotes would then force generate_sfx to re-pay ElevenLabs too.
+  // One combined hash (narration + sound notes + manual-cue signature) re-runs only when an input changes,
+  // and a cache hit reuses the previously-minted cue UUIDs so downstream SFX generation stays cached.
+  const manualCues = OperatorSfxSchema.parse(reel.operatorSfx ?? []).filter((c) => c.source === 'manual')
+  const manualSig = manualCues.map((c) => `${c.id}:${c.anchor}:${c.assetKey ?? ''}`).join('|')
+  const inputHash = buildInputHash(AUDIOSCRIPT_V1_VERSION, {
+    narration: story.body,
+    soundNotes: reel.soundNotes ?? '',
+    manualSig,
+    interpret: INTERPRET_SOUNDS_V1_VERSION, // bump if the interpret prompt/schema changes
+  })
 
   const result = await runStep(
     { reelId, stepName: 'annotate_audio_script', inputHash },
@@ -98,6 +112,8 @@ export async function annotateAudioScript(reelId: string): Promise<void> {
       })
 
       // Validate anchor uniqueness — repair call if any fail
+      let scriptData = llm.data
+      let cost = llm.costCents
       const errors = validateAnchorUniqueness(story.body, llm.data)
       if (errors.length > 0) {
         const repairLlm = await llmCall({
@@ -113,10 +129,17 @@ export async function annotateAudioScript(reelId: string): Promise<void> {
             },
           ],
         })
-        return { output: repairLlm.data, costCents: llm.costCents + repairLlm.costCents }
+        scriptData = repairLlm.data
+        cost += repairLlm.costCents
       }
 
-      return { output: llm.data, costCents: llm.costCents }
+      // Realize the reel-level smart Sound design notes into placeable cues (soft-anchored downstream).
+      // Manual per-scene cues win on anchor collisions, so drop any smart cue that lands on a manual anchor.
+      const manualAnchors = new Set(manualCues.map((c) => c.anchor))
+      const { cues: smartAll, silenceAnchor } = await realizeSoundNotes(reel.soundNotes ?? '', story.body, reel.language)
+      const smart = smartAll.filter((c) => !manualAnchors.has(c.anchor))
+
+      return { output: { audioScript: scriptData, smart, silenceAnchor }, costCents: cost }
     },
   )
 
@@ -125,7 +148,9 @@ export async function annotateAudioScript(reelId: string): Promise<void> {
   //  • AI-music channels: the preset ALWAYS wins over any type/tags the LLM guessed (operator's choice);
   //    we keep the LLM's start/peak anchors (its timing), empty when it proposed no music.
   //  • preset/upload channels: unchanged — seed from the first pool bed; selectMusicTrack matches by type.
-  const audioScript = result.output as AudioScript
+  const audioScript = result.output.audioScript as AudioScript
+  const smartCues = result.output.smart as OperatorCue[]
+  const silenceAnchor = result.output.silenceAnchor as string | null
   {
     const { channels } = await import('@reels/db')
     const channel = await db.query.channels.findFirst({ where: eq(channels.id, reel.channelId) })
@@ -156,33 +181,21 @@ export async function annotateAudioScript(reelId: string): Promise<void> {
     }
   }
 
-  // Persist audio_script to reel
+  // A smart "silence" note sets the dramatic drop (only if the LLM didn't already place one). The mixer
+  // dips the music bed there; compute_timings hard-resolves the anchor (we only set a unique one).
+  if (silenceAnchor && !audioScript.silenceDrop) {
+    audioScript.silenceDrop = { anchor: silenceAnchor, durationMs: 1200 }
+  }
+
+  // Persist audio_script + the merged cue set (manual cues preserved, smart cues appended). These come
+  // from the (possibly cached) step output, so re-runs don't re-mint cue UUIDs and downstream SFX stays
+  // cached. Manual cues already won anchor collisions inside the step.
   await db
     .update(reels)
-    .set({ audioScript: audioScript as never, updatedAt: new Date() })
+    .set({
+      audioScript: audioScript as never,
+      operatorSfx: [...manualCues, ...smartCues] as never,
+      updatedAt: new Date(),
+    })
     .where(eq(reels.id, reelId))
-
-  // Realize the reel-level smart Sound design notes into placeable cues, and MERGE with the operator's
-  // manual per-scene cues (which we preserve). Manual wins on anchor collisions. Keyed by notes + narration
-  // + the manual-cue signature so it re-runs when any of them change; compute_timings + generate_sfx render
-  // them downstream.
-  const manualCues = OperatorSfxSchema.parse(reel.operatorSfx ?? []).filter((c) => c.source === 'manual')
-  const manualSig = manualCues.map((c) => `${c.id}:${c.anchor}:${c.assetKey ?? ''}`).join('|')
-  const interpretHash = buildInputHash('interpret_sounds.v1', { notes: reel.soundNotes ?? '', narration: story.body, manualSig })
-  await runStep(
-    { reelId, stepName: 'annotate_audio_script', inputHash: `${interpretHash}:interpret` as never },
-    async () => {
-      const manualAnchors = new Set(manualCues.map((c) => c.anchor))
-      const { cues: smartAll, silenceAnchor } = await realizeSoundNotes(reel.soundNotes ?? '', story.body, reel.language)
-      const smart = smartAll.filter((c) => !manualAnchors.has(c.anchor))
-      await db.update(reels).set({ operatorSfx: [...manualCues, ...smart] as never, updatedAt: new Date() }).where(eq(reels.id, reelId))
-      // A smart "silence" note sets the dramatic drop (only if the LLM didn't already place one). The mixer
-      // dips the music bed there; compute_timings hard-resolves the anchor (we only set a unique one).
-      if (silenceAnchor && !audioScript.silenceDrop) {
-        const withSilence = { ...audioScript, silenceDrop: { anchor: silenceAnchor, durationMs: 1200 } }
-        await db.update(reels).set({ audioScript: withSilence as never, updatedAt: new Date() }).where(eq(reels.id, reelId))
-      }
-      return { output: { manual: manualCues.length, smart: smart.length, silence: silenceAnchor ? 1 : 0 }, costCents: 0 }
-    },
-  )
 }

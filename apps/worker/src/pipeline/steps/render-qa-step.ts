@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, writeFile, rm } from 'node:fs/promises'
 import { getDb, reels, assets } from '@reels/db'
 import { downloadBuffer, buildInputHash } from '@reels/providers'
 import { TimingsSchema } from '@reels/core'
@@ -22,6 +22,7 @@ export async function renderQaStep(reelId: string): Promise<void> {
     async () => {
       const tmp = join(tmpdir(), `reels-qa-${reelId}`)
       await mkdir(tmp, { recursive: true })
+      try {
 
       const renderBuf = await downloadBuffer(reel.renderUrl!)
       const localPath = join(tmp, 'render.mp4')
@@ -47,6 +48,10 @@ export async function renderQaStep(reelId: string): Promise<void> {
           warnings: qa.warnings,
         },
         costCents: 0,
+      }
+      } finally {
+        // Reclaim the QA scratch dir on pass, fail, or throw.
+        await rm(tmp, { recursive: true, force: true })
       }
     },
   )

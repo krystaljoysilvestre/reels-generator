@@ -6,6 +6,7 @@ import type { Job } from 'bullmq'
 import { UnrecoverableError } from 'bullmq'
 import { resolveNextStep, enqueueStep } from '@reels/queue'
 import { BudgetExceededError } from '@reels/core'
+import { ProviderError } from '@reels/providers'
 import { captureException } from '../monitoring/sentry.js'
 import { autoCrossGate } from './auto-gate.js'
 import {
@@ -99,6 +100,11 @@ export async function dispatchPipelineJob(job: Job<PipelineJobData>): Promise<vo
     // Over-budget is PERMANENT — retrying can't help. Fail fast (no wasted retries); the worker's
     // 'failed' handler still marks the reel failed (it treats UnrecoverableError as terminal).
     if (err instanceof BudgetExceededError) throw new UnrecoverableError(err.message)
+    // Deterministic provider client errors (4xx other than 429 rate-limit) can't be fixed by retrying and
+    // would just re-bill every paid call in the step — fail fast. 429s and 5xx/network stay retryable.
+    if (err instanceof ProviderError && err.statusCode && err.statusCode >= 400 && err.statusCode < 500 && err.statusCode !== 429) {
+      throw new UnrecoverableError(err.message)
+    }
     throw err  // transient errors: rethrow so BullMQ retries with backoff
   }
 }

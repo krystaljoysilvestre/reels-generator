@@ -1,4 +1,4 @@
-import { eq, and } from 'drizzle-orm'
+import { eq, and, sql } from 'drizzle-orm'
 import { getDb, reels, scenes, assets, channels, stories } from '@reels/db'
 import { generateImage, generateImageFal, imageEngineForGenre, FLUX_IMAGE_ENGINE, buildInputHash, ContentFilterError, llmCall, downloadBuffer, SCENE_IMAGE_MODEL, SCENE_IMAGE_QUALITY, type ImageEngine } from '@reels/providers'
 import { assembleImagePrompt, assembleNegativePrompt, assembleReferencePrompt, castNationality, reelLightingDirective, sceneEntities, slug, PLATFORM_PRESETS, StoryBibleSchema } from '@reels/core'
@@ -151,7 +151,7 @@ export async function generateImages(reelId: string): Promise<void> {
         }
       }),
     )
-    if (plateCost > 0) await db.update(reels).set({ storyBible, costCents: reel.costCents + plateCost, updatedAt: new Date() }).where(eq(reels.id, reelId))
+    if (plateCost > 0) await db.update(reels).set({ storyBible, costCents: sql`${reels.costCents} + ${plateCost}`, updatedAt: new Date() }).where(eq(reels.id, reelId))
   }
 
   const pending = reelScenes.filter((s) => s.visualPrompt && !s.imageAssetId) // skip already-generated (idempotency)
@@ -245,6 +245,8 @@ export async function generateImages(reelId: string): Promise<void> {
           ...(qa ? { qaPass: lastIssues.length === 0 } : {}),
           ...(lastIssues.length ? { qaIssues: lastIssues } : {}),
         }
+        // Default scene-image key is constant per scene; a re-run (e.g. the rerender-images script clears
+        // imageAssetId) upserts this row in place rather than colliding on the unique (reelId, storageKey).
         const [asset] = await db
           .insert(assets)
           .values({
@@ -255,6 +257,10 @@ export async function generateImages(reelId: string): Promise<void> {
             provider: chosen!.provider,
             costCents: totalCost,
             meta,
+          })
+          .onConflictDoUpdate({
+            target: [assets.reelId, assets.storageKey],
+            set: { provider: chosen!.provider, costCents: totalCost, meta, createdAt: new Date() },
           })
           .returning()
 
