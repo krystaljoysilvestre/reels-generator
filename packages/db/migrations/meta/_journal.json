@@ -239,6 +239,20 @@
       "when": 1783048614067,
       "tag": "0033_bitter_radioactive_man",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1783143959454,
+      "tag": "0034_flat_stone_men",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1783144513730,
+      "tag": "0035_fantastic_penance",
+      "breakpoints": true
     }
   ]
 }

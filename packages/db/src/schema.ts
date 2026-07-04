@@ -9,6 +9,7 @@ import {
   uuid,
   index,
   uniqueIndex,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 
@@ -242,8 +243,11 @@ export const scenes = pgTable(
     // Durable "this is a key visual beat" flag, set at breakdown = the LLM's video designation. Unlike
     // `tier` (which the Motion toggle and regen mutate), this stays put so the hero marker persists.
     isHero: boolean('is_hero').notNull().default(false),
-    imageAssetId: uuid('image_asset_id'),
-    videoAssetId: uuid('video_asset_id'),
+    // FK to assets with ON DELETE SET NULL: if the referenced asset is deleted, the pointer nulls out
+    // (render falls back to a black placeholder) instead of dangling. `assets` is declared below — the
+    // thunk resolves lazily, so the forward reference is fine.
+    imageAssetId: uuid('image_asset_id').references((): AnyPgColumn => assets.id, { onDelete: 'set null' }),
+    videoAssetId: uuid('video_asset_id').references((): AnyPgColumn => assets.id, { onDelete: 'set null' }),
     startMs: integer('start_ms'),
     endMs: integer('end_ms'),
     mood: text('mood').array().notNull().default([]),
@@ -278,7 +282,14 @@ export const assets = pgTable(
     meta: jsonb('meta').notNull().default({}), // word timestamps, durations, etc.
     createdAt: timestamp('created_at').notNull().defaultNow(),
   },
-  (t) => ({ idxReel: index('idx_assets_reel').on(t.reelId) }),
+  (t) => ({
+    idxReel: index('idx_assets_reel').on(t.reelId),
+    // One row per logical artifact within a reel. Makes the onConflictDoUpdate upserts in the pipeline
+    // meaningful (they were silent no-ops without a matching constraint) and bounds duplicate-row growth.
+    // reel_id is nullable (app-level assets like style presets); Postgres treats NULLs as distinct, so
+    // those rows are unaffected.
+    uqReelStorageKey: uniqueIndex('uq_assets_reel_storage_key').on(t.reelId, t.storageKey),
+  }),
 )
 
 // ── pipeline_steps ────────────────────────────────────────────────────────────
@@ -308,36 +319,45 @@ export const pipelineSteps = pgTable(
 
 // ── publications ──────────────────────────────────────────────────────────────
 
-export const publications = pgTable('publications', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  reelId: uuid('reel_id')
-    .notNull()
-    .references(() => reels.id, { onDelete: 'cascade' }),
-  platform: platformEnum('platform').notNull(),
-  platformPostId: text('platform_post_id'),
-  scheduledAt: timestamp('scheduled_at'),
-  publishedAt: timestamp('published_at'),
-  status: text('status').notNull().default('pending'),
-  disclosureApplied: boolean('disclosure_applied').notNull().default(false),
-  killSwitchExpiresAt: timestamp('kill_switch_expires_at'),
-})
+export const publications = pgTable(
+  'publications',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    reelId: uuid('reel_id')
+      .notNull()
+      .references(() => reels.id, { onDelete: 'cascade' }),
+    platform: platformEnum('platform').notNull(),
+    platformPostId: text('platform_post_id'),
+    scheduledAt: timestamp('scheduled_at'),
+    publishedAt: timestamp('published_at'),
+    status: text('status').notNull().default('pending'),
+    disclosureApplied: boolean('disclosure_applied').notNull().default(false),
+    killSwitchExpiresAt: timestamp('kill_switch_expires_at'),
+  },
+  (t) => ({ idxReel: index('idx_publications_reel').on(t.reelId) }),
+)
 
 // ── metrics ───────────────────────────────────────────────────────────────────
 
-export const metrics = pgTable('metrics', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  publicationId: uuid('publication_id')
-    .notNull()
-    .references(() => publications.id, { onDelete: 'cascade' }),
-  capturedAt: timestamp('captured_at').notNull().defaultNow(),
-  views: integer('views').notNull().default(0),
-  qualifiedViews: integer('qualified_views').notNull().default(0),
-  avgWatchPct: integer('avg_watch_pct').notNull().default(0),
-  retention3s: integer('retention_3s').notNull().default(0),
-  followersDelta: integer('followers_delta').notNull().default(0),
-  revenueCents: integer('revenue_cents').notNull().default(0),
-  raw: jsonb('raw').notNull().default({}),
-})
+export const metrics = pgTable(
+  'metrics',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    publicationId: uuid('publication_id')
+      .notNull()
+      .references(() => publications.id, { onDelete: 'cascade' }),
+    capturedAt: timestamp('captured_at').notNull().defaultNow(),
+    views: integer('views').notNull().default(0),
+    qualifiedViews: integer('qualified_views').notNull().default(0),
+    avgWatchPct: integer('avg_watch_pct').notNull().default(0),
+    retention3s: integer('retention_3s').notNull().default(0),
+    followersDelta: integer('followers_delta').notNull().default(0),
+    revenueCents: integer('revenue_cents').notNull().default(0),
+    raw: jsonb('raw').notNull().default({}),
+  },
+  // Append-only growth table joined to publications on this FK — index it before metrics polling lands.
+  (t) => ({ idxPublication: index('idx_metrics_publication').on(t.publicationId) }),
+)
 
 // ── rejections ────────────────────────────────────────────────────────────────
 
