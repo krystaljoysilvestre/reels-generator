@@ -6,7 +6,9 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: reels_dev
     ports:
-      - "5433:5432"   # host 5433 → avoids clashing with a host Postgres on 5432
+      # Bind to loopback only — an unqualified "5433:5432" listens on 0.0.0.0, exposing Postgres
+      # (postgres/postgres) to anyone on the same LAN/Wi-Fi. Local tooling reaches it via 127.0.0.1.
+      - "127.0.0.1:5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -18,7 +20,8 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      # Loopback only — unauthenticated Redis on 0.0.0.0 is a job-injection vector (BullMQ runs on it).
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
