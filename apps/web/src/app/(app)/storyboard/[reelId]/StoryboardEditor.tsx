@@ -1225,9 +1225,12 @@ export function StoryboardEditor({
             <>
               <div className="mr-auto">
                 <p className="text-sm font-semibold text-ink">Spot-check</p>
-                <p className="text-xs text-muted">Watch the render below, then sign it off.</p>
+                <p className="text-xs text-muted">Watch the render below, then sign it off — or re-render to apply changes.</p>
               </div>
-              <button onClick={handleApprove} disabled={loading === 'approve'} className="btn-accent active:scale-[.98]">
+              <button onClick={handleRender} disabled={loading === 'render' || loading === 'approve'} className="btn-secondary active:scale-[.98]">
+                {loading === 'render' ? 'Queuing…' : 'Re-render'}
+              </button>
+              <button onClick={handleApprove} disabled={loading === 'approve' || loading === 'render'} className="btn-accent active:scale-[.98]">
                 {loading === 'approve' ? 'Approving…' : (
                   <>
                     Approve reel
