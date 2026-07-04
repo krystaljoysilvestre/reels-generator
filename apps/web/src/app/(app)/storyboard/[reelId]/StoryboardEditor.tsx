@@ -436,6 +436,27 @@ export function StoryboardEditor({
     router.refresh() // pull in the new video asset so the tile starts playing it
   }
 
+  // "Describe the motion" — the movement analog of the reshoot field. The operator says how the shot should
+  // move; suggest-motion (motion.v1) translates it to the scene's animation instruction AND arms the scene
+  // (video tier + clears any stale clip) so the next Preview/render animates the CURRENT image with it.
+  async function handleSuggestMotion(sceneIdx: number, request: string): Promise<boolean> {
+    setLoading(`motion-${sceneIdx}`)
+    const res = await fetch('/api/pipeline/suggest-motion', {
+      method: 'POST',
+      body: JSON.stringify({ reelId: reel.id, sceneIdx, request }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+    setLoading(null)
+    if (!res.ok) {
+      toast(await failMessage(res, 'Could not set the motion — try rephrasing.'), res.status === 429 ? 'info' : 'error')
+      return false
+    }
+    setScenes((prev) => prev.map((s) => (s.idx === sceneIdx ? { ...s, tier: 'video' } : s)))
+    toast('Motion set — preview to see it move.', 'success')
+    router.refresh() // resync the cleared clip + video tier so Preview regenerates with the new motion
+    return true
+  }
+
   // Persist an edited scene's narration (on blur). The route rebuilds story.body from all scenes so the
   // render's audio + timings match the edited script. Re-render to apply.
   async function saveSceneText(sceneIdx: number, narrationText: string) {
@@ -656,6 +677,7 @@ export function StoryboardEditor({
       setSceneSaving={setSceneSaving}
       onSetSceneType={setSceneType}
       onPreview={handlePreview}
+      onSuggestMotion={handleSuggestMotion}
       onReshoot={handleRegenImage}
       onUploadImage={handleUploadImage}
       history={sceneImageHistory[selectedScene.idx] ?? []}
@@ -1655,7 +1677,7 @@ function sceneBeat(idx: number, total: number, twistIdx: number | null): 'Hook' 
 // ── Inspector (detail) ─────────────────────────────────────────────────────────
 function SceneInspector({
   scene, beat, imgSrc, variations, activeVar, setActiveVar, loaded, markLoaded, loading, moodTint,
-  sceneSaving, setScenes, setSceneSaving, onSetSceneType, onPreview, onReshoot, onUploadImage, history, onSetSceneImage, onSaveText,
+  sceneSaving, setScenes, setSceneSaving, onSetSceneType, onPreview, onSuggestMotion, onReshoot, onUploadImage, history, onSetSceneImage, onSaveText,
   sounds, soundPreviews, onAddSound, onPreviewSound, onRemoveSound,
 }: {
   scene: Scene; beat: 'Hook' | 'Build-up' | 'Twist' | 'Payoff'; imgSrc?: string | undefined; variations: string[]; activeVar: number
@@ -1666,6 +1688,7 @@ function SceneInspector({
   setSceneSaving: React.Dispatch<React.SetStateAction<Record<number, 'saving' | 'saved'>>>
   onSetSceneType: (idx: number, type: 'static' | 'video') => void
   onPreview: (idx: number) => void
+  onSuggestMotion: (idx: number, request: string) => Promise<boolean>
   onReshoot: (idx: number, opts?: { instruction?: string; mode?: 'vary' | 'fresh'; referenceKey?: string }) => void
   onUploadImage: (idx: number, key: string) => void
   history: { assetId: string; url: string }[] // this scene's images oldest→newest (for Undo/Redo)
@@ -1697,6 +1720,7 @@ function SceneInspector({
   const [fullLoaded, setFullLoaded] = useState(false) // lightbox media has loaded
   const [lightboxAspect, setLightboxAspect] = useState<string | null>(null) // real aspect of the open media
   const [changeText, setChangeText] = useState('') // the creator's plain-language change for this scene
+  const [motionText, setMotionText] = useState('') // the creator's plain-language MOTION request (video only)
   const [refKey, setRefKey] = useState<string | null>(null) // an attached reference image for the change
   const [busyUpload, setBusyUpload] = useState<false | 'ref' | 'photo'>(false)
   const [uploadErr, setUploadErr] = useState<string | null>(null)
@@ -1973,6 +1997,26 @@ function SceneInspector({
                   </button>
                   {isVideoType && (
                     <div className="flex flex-col gap-3 border-t border-accent/20 px-3 py-3">
+                      {/* Describe the motion — an LLM turns it into the animation (which subject moves + camera
+                          move). The movement analog of the Regenerate field below; clears the old clip so a
+                          Preview/render re-rolls with the new motion. Leave blank to keep the auto motion. */}
+                      <div className="flex flex-col gap-1.5">
+                        <textarea
+                          value={motionText}
+                          onChange={(e) => setMotionText(e.target.value)}
+                          placeholder="Describe the motion — e.g. the figure to her right slowly grins at her as she freezes"
+                          className="input h-16 resize-none text-xs"
+                          disabled={loading === `motion-${scene.idx}`}
+                        />
+                        <button
+                          type="button"
+                          disabled={loading === `motion-${scene.idx}` || !motionText.trim()}
+                          onClick={async () => { const ok = await onSuggestMotion(scene.idx, motionText.trim()); if (ok) setMotionText('') }}
+                          className="btn-secondary btn-sm w-full active:scale-[.98] disabled:opacity-50"
+                        >
+                          {loading === `motion-${scene.idx}` ? 'Setting motion…' : 'Set motion'}
+                        </button>
+                      </div>
                       {/* Preview — optional; the scene becomes video at render either way. */}
                       {variations.length === 0 ? (
                         <div className="flex flex-col gap-1">
