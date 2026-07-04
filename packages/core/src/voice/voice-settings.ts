@@ -17,7 +17,11 @@ const clamp = (n: number, lo: number, hi: number): number => Math.max(lo, Math.m
 // Story-mood keyword → delivery nudges, matched as substrings against the story's mood tags.
 // Several can apply at once (their deltas sum); everything is clamped at the end so it never breaks.
 const MOOD_RULES: Array<{ match: RegExp; dStability: number; dStyle: number; dSpeed: number }> = [
-  { match: /dread|fear|terror|eerie|ominous|sinister|tense|suspense|horror|dark|haunt|unsettl|creep/i, dStability: -0.12, dStyle: 0.08, dSpeed: -0.04 },
+  // Dread/horror: RAISE stability + keep style modest. Counterintuitive but load-bearing — on ElevenLabs,
+  // LOW stability produces erratic pacing, rushing, and stutter (and high style adds theatrical wobble),
+  // which reads as an unhinged/jolly performance, not controlled dread. A steady, slow, low-drama read
+  // is what lands as menacing. (Was dStability -0.12 / dStyle 0.08 — the source of the rushing + stutter.)
+  { match: /dread|fear|terror|eerie|ominous|sinister|tense|suspense|horror|dark|haunt|unsettl|creep/i, dStability: 0.1, dStyle: 0.02, dSpeed: -0.05 },
   { match: /calm|serene|peaceful|gentle|tender|warm|hopeful|soothing/i, dStability: 0.12, dStyle: -0.05, dSpeed: -0.02 },
   { match: /sad|grief|mourn|melanchol|somber|wistful|lonely|loss|sorrow/i, dStability: 0.06, dStyle: 0, dSpeed: -0.05 },
   { match: /energetic|hype|excit|urgent|frantic|intense|epic|triumphant|thrill/i, dStability: -0.05, dStyle: 0.12, dSpeed: 0.06 },

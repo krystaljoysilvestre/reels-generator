@@ -17,11 +17,14 @@ describe('moodToVoiceSettings', () => {
     expect(s.use_speaker_boost).toBe(true)
   })
 
-  it('delivers dread more expressively (lower stability) + no faster than calm', () => {
+  it('delivers dread as steady + unhurried, not erratic', () => {
     const dread = moodToVoiceSettings(['dread', 'eerie'], neutralTone)
-    const calm = moodToVoiceSettings(['calm', 'gentle'], neutralTone)
-    expect(dread.stability).toBeLessThan(calm.stability)
-    expect(dread.speed).toBeLessThanOrEqual(calm.speed)
+    const base = moodToVoiceSettings([], neutralTone)
+    // Controlled dread reads as MORE stable than a neutral read — low stability on ElevenLabs causes the
+    // rushing/stutter we're fixing. And it should be no faster (slow, deliberate).
+    expect(dread.stability).toBeGreaterThan(base.stability)
+    expect(dread.speed).toBeLessThan(base.speed)
+    expect(dread.style).toBeLessThanOrEqual(base.style + 0.05) // low drama, no theatrical wobble
   })
 
   it('energetic mood adds drama (higher style) + faster pace', () => {

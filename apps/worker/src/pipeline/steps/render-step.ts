@@ -17,11 +17,7 @@ const DEFAULT_WATERMARK_KEY = 'app/watermark.png'
 
 // Pick per-scene video effects from the scene's (AI-derived) mood + the channel genre. Pure mapping —
 // no API call, so it's free; effects are composited at render time. Kept tasteful: gentle life on every
-// still, and digital unease (glitch/flash/shake) only on tense/shock beats of edgy genres.
-const TENSE_FX_WORDS = [
-  'tense', 'dread', 'fear', 'afraid', 'terror', 'horror', 'panic', 'menac', 'threat', 'ominous',
-  'sinister', 'eerie', 'unsettl', 'creep', 'anxious', 'suspense', 'shock', 'violent', 'forebod', 'haunt',
-]
+// still, and a hard flash + shake only on the sharpest shock beats of edgy genres.
 function planSceneEffects(
   mood: string[],
   tier: 'still' | 'video',
@@ -30,11 +26,14 @@ function planSceneEffects(
   const fx: Array<{ type: 'zoom' | 'shake' | 'glitch' | 'flash' | 'vhs'; intensity: number }> = []
   const edgy = genre === 'horror' || genre === 'general'
   const m = mood.join(' ').toLowerCase()
-  const tense = TENSE_FX_WORDS.some((k) => m.includes(k))
   const shock = /shock|terror|panic|scream|violent/.test(m)
   // Stills get their life from camera-move-driven Ken Burns in SceneClip now — no generic push-in here, or
   // it would fight a pull_out/locked move. Only the digital-unease effects remain mood-driven.
-  if (edgy && tense) fx.push({ type: 'glitch', intensity: shock ? 0.9 : 0.45 })
+  //
+  // Glitch is deliberately NOT auto-applied: its saturated RGB-split bars read as loud/attention-seeking
+  // on nearly every tense horror beat and fight the atmosphere. Horror unease comes from grain + vignette
+  // (LUT) + slow camera moves instead. Glitch stays available as an explicit operator selection
+  // (effectsFromSelection), just not on the auto path.
   if (edgy && shock) { fx.push({ type: 'flash', intensity: 0.7 }); fx.push({ type: 'shake', intensity: 0.5 }) }
   return fx
 }
