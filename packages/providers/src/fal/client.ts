@@ -11,6 +11,7 @@ import {
 import {
   FAL_CONTENT_FILTER_CODES,
   FAL_VIDEO_COST_CENTS_PER_SEC,
+  FAL_VIDEO_TIMEOUT_MS,
   type FalEngine,
 } from './config.js'
 
@@ -81,7 +82,11 @@ export async function generateVideo(params: VideoGenParams): Promise<ProviderRes
     // Kling v2.5 takes duration as a STRING enum ("5"/"10") + an aspect_ratio.
     const input = { image_url: imgBase64, prompt: params.motionPrompt, duration: String(durationSec), aspect_ratio: '9:16' }
 
-    const result = await withProviderLimit('fal', () => fal.subscribe(modelId, { input }))
+    // abortSignal is the only enforced deadline (the SDK's `timeout` is a no-op) — without it a stalled
+    // queue hangs the job and holds a fal slot indefinitely. Abort → rejects → slot released → job retries.
+    const result = await withProviderLimit('fal', () =>
+      fal.subscribe(modelId, { input, abortSignal: AbortSignal.timeout(FAL_VIDEO_TIMEOUT_MS) }),
+    )
 
     const parsed = FalVideoOutputSchema.safeParse(result.data)
     if (!parsed.success) {
@@ -109,6 +114,9 @@ export async function generateVideo(params: VideoGenParams): Promise<ProviderRes
     }
     if (isFalRateLimit(err)) throw new ProviderRateLimitError('fal')
     if (err instanceof ContentFilterError || err instanceof ProviderError) throw err
-    throw new ProviderError('fal', String(err))
+    // Carry the HTTP status so a deterministic 4xx (bad params) fails fast in the dispatcher instead of
+    // being retried (and re-billed); 5xx/unknown (status 0) stay retryable.
+    const status = err && typeof err === 'object' ? Number((err as Record<string, unknown>)['status'] ?? 0) : 0
+    throw new ProviderError('fal', String(err), status || undefined)
   }
 }

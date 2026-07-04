@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import OpenAI from 'openai'
 import type { z } from 'zod'
-import { ProviderError } from '../shared/types.js'
+import { ProviderError, ProviderRateLimitError } from '../shared/types.js'
 import { withProviderLimit } from '../shared/limiter.js'
 import { buildInputHash } from './input-hash.js'
 
@@ -52,10 +52,10 @@ const MODEL_PRICING: Record<string, { input: number; output: number }> = {
   // OpenAI (USD/M → cents/M)
   'gpt-4o': { input: 250, output: 1000 },
   'gpt-4o-mini': { input: 15, output: 60 },
-  // Anthropic (QA)
-  'claude-opus-4-8': { input: 1500, output: 7500 },
-  'claude-sonnet-4-6': { input: 300, output: 1500 },
-  'claude-haiku-4-5-20251001': { input: 80, output: 400 },
+  // Anthropic (QA) — cents per Mtok, matching published USD pricing ($/Mtok × 100)
+  'claude-opus-4-8': { input: 500, output: 2500 },       // $5 / $25
+  'claude-sonnet-4-6': { input: 300, output: 1500 },     // $3 / $15
+  'claude-haiku-4-5-20251001': { input: 100, output: 500 }, // $1 / $5 — live QA model
 }
 
 const JSON_INSTRUCTION = '\n\nRespond with valid JSON only. No markdown, no code fences.'
@@ -163,13 +163,33 @@ async function callOpenAI(model: string, system: string, messages: LlmMessage[],
   }
 }
 
+// Map a raw SDK error into the provider error taxonomy. Both the OpenAI and Anthropic SDKs surface the
+// HTTP status on `.status`. Without this, a 429 escapes untyped (no rate-limit branch) and — worse — a
+// deterministic 400 (malformed request, invalid param, oversized image) is rethrown as a generic error
+// that the dispatcher treats as retryable, so BullMQ re-runs the whole step 3× and re-bills every paid
+// call in it for an error that can never succeed.
+function classifyLlmError(provider: LlmProvider, err: unknown): Error {
+  const status =
+    err && typeof err === 'object' && 'status' in err ? Number((err as { status?: unknown }).status) : 0
+  const message = err instanceof Error ? err.message : String(err)
+  if (status === 429) return new ProviderRateLimitError(provider) // transient → BullMQ backoff retry
+  // 4xx (except 429) is a deterministic client error — carry the status so the dispatcher fails fast
+  // instead of retrying. 5xx / network / unknown stay as-is (transient → retried with backoff).
+  if (status >= 400 && status < 500) return new ProviderError(provider, `${status}: ${message}`, status)
+  return err instanceof Error ? err : new ProviderError(provider, message)
+}
+
 async function transport(provider: LlmProvider, model: string, system: string, messages: LlmMessage[], maxTokens: number, temperature?: number): Promise<TransportResult> {
   // Per-provider concurrency cap (the real throttle — see shared/limiter.ts).
-  return withProviderLimit(provider === 'anthropic' ? 'anthropic' : 'openai', () =>
-    provider === 'anthropic'
-      ? callAnthropic(model, system, messages, maxTokens, temperature)
-      : callOpenAI(model, system, messages, maxTokens, temperature),
-  )
+  try {
+    return await withProviderLimit(provider === 'anthropic' ? 'anthropic' : 'openai', () =>
+      provider === 'anthropic'
+        ? callAnthropic(model, system, messages, maxTokens, temperature)
+        : callOpenAI(model, system, messages, maxTokens, temperature),
+    )
+  } catch (err) {
+    throw classifyLlmError(provider, err)
+  }
 }
 
 export async function llmCall<T>(opts: LlmCallOptions<T>): Promise<LlmResult<T>> {

@@ -1,4 +1,5 @@
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3'
+import type { Readable } from 'node:stream'
 
 // Cloudflare R2 via S3-compat API. Zero egress fees. (docs/02)
 
@@ -45,6 +46,34 @@ export async function downloadBuffer(key: string): Promise<Buffer> {
     chunks.push(chunk)
   }
   return Buffer.concat(chunks)
+}
+
+export interface DownloadStream {
+  body: Readable
+  contentType?: string | undefined
+  contentLength?: number | undefined
+  contentRange?: string | undefined
+  // 206 when a Range was honored, else 200.
+  statusCode: 200 | 206
+}
+
+// Stream an object straight from R2, honoring an HTTP Range header. Lets the caller pipe bytes to the
+// client without buffering the whole object in memory, and gives <video> byte-range seeking (Safari
+// refuses to play a source that doesn't advertise range support). R2 parses/validates the range and
+// returns 206 + Content-Range, or throws (416) on an unsatisfiable one.
+export async function downloadStream(key: string, range?: string | null): Promise<DownloadStream> {
+  const client = getR2Client()
+  const res = await client.send(
+    new GetObjectCommand({ Bucket: getBucket(), Key: key, ...(range ? { Range: range } : {}) }),
+  )
+  if (!res.Body) throw new Error(`Empty body for R2 key: ${key}`)
+  return {
+    body: res.Body as Readable,
+    contentType: res.ContentType,
+    contentLength: res.ContentLength,
+    contentRange: res.ContentRange,
+    statusCode: res.ContentRange ? 206 : 200,
+  }
 }
 
 export function publicUrl(key: string): string {

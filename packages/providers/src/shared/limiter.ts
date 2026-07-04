@@ -26,16 +26,30 @@ class Semaphore {
   constructor(private readonly max: number) {}
 
   async run<T>(fn: () => Promise<T>): Promise<T> {
-    if (this.active >= this.max) {
-      await new Promise<void>((resolve) => this.waiters.push(resolve))
-    }
-    this.active++
+    await this.acquire()
     try {
       return await fn()
     } finally {
-      this.active--
-      this.waiters.shift()?.() // wake exactly one waiter (invariant: active never exceeds max)
+      this.release()
     }
+  }
+
+  private async acquire(): Promise<void> {
+    if (this.active < this.max) {
+      this.active++
+      return
+    }
+    // At capacity: wait for a slot to be HANDED to us. release() does not decrement when a waiter exists,
+    // so the slot stays counted on our behalf — we must NOT active++ on wake, or two holders would share one
+    // slot. (The prior version active++'d unconditionally on wake, so a fresh caller could barge into the
+    // freed slot before the woken waiter ran, pushing active past max.)
+    await new Promise<void>((resolve) => this.waiters.push(resolve))
+  }
+
+  private release(): void {
+    const next = this.waiters.shift()
+    if (next) next() // hand our slot straight to the next waiter (active unchanged — no free/re-acquire gap)
+    else this.active-- // no one waiting → actually free the slot
   }
 }
 

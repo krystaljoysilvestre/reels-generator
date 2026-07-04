@@ -16,6 +16,13 @@ export type FalEngine = z.infer<typeof FalEngineSchema>
 // Cost estimates (USD) — re-verify at build
 export const FAL_VIDEO_COST_CENTS_PER_SEC = 7 // ~$0.07/sec, Kling v2.5 Turbo Pro ($0.35/5s)
 
+// Hard deadlines for fal.subscribe. The SDK's `timeout` option is documented as NOT enforced, but
+// `abortSignal` is — a stalled fal queue would otherwise hang the pipeline job forever AND hold one of the
+// (few) fal concurrency slots, so a handful of stalls starve all image/video generation until restart.
+// Sized well above normal generation latency so only a genuine stall trips them.
+export const FAL_VIDEO_TIMEOUT_MS = 6 * 60_000 // Kling video gen: minutes; 6 min = clearly stuck
+export const FAL_IMAGE_TIMEOUT_MS = 3 * 60_000 // image gen: seconds normally; 3 min = clearly stuck
+
 // ── Still images (Gemini 2.5 Flash Image, aka "nano-banana") ──────────────────
 // Reference-conditioned image generation for cross-scene entity continuity. The edit endpoint takes
 // one-or-more reference images (image_urls[]) + a prompt and keeps the referenced subjects' identity

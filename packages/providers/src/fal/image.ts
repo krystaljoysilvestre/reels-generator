@@ -11,6 +11,7 @@ import {
 import {
   FAL_CONTENT_FILTER_CODES,
   FAL_IMAGE_ASPECTS,
+  FAL_IMAGE_TIMEOUT_MS,
   FLUX_IMAGE_SIZES,
   GEMINI_IMAGE_ENGINE,
   type ImageEngine,
@@ -155,7 +156,11 @@ export async function generateImageFal(params: FalImageGenParams): Promise<Provi
           contentType: 'image/webp',
         }
 
-    const result = await withProviderLimit('fal', () => fal.subscribe(modelId, { input: input as never }))
+    // abortSignal is the only enforced deadline (the SDK's `timeout` is a no-op) — a stalled fal queue would
+    // otherwise hang the job and hold a fal slot forever. Abort → rejects → slot released → job retries.
+    const result = await withProviderLimit('fal', () =>
+      fal.subscribe(modelId, { input: input as never, abortSignal: AbortSignal.timeout(FAL_IMAGE_TIMEOUT_MS) }),
+    )
 
     const parsed = FalImageOutputSchema.safeParse(result.data)
     if (!parsed.success) {
@@ -186,7 +191,9 @@ export async function generateImageFal(params: FalImageGenParams): Promise<Provi
     if (isFalRateLimit(err)) throw new ProviderRateLimitError('fal')
     if (err instanceof ContentFilterError || err instanceof ProviderError) throw err
     // Surface fal's validation detail (which field it rejected) — otherwise it's an opaque "Unprocessable Entity".
+    // Carry the HTTP status so a deterministic 4xx fails fast in the dispatcher instead of being re-billed.
     const body = err && typeof err === 'object' ? (err as Record<string, unknown>)['body'] : undefined
-    throw new ProviderError('fal', body ? `${String(err)}: ${JSON.stringify(body)}` : String(err))
+    const status = err && typeof err === 'object' ? Number((err as Record<string, unknown>)['status'] ?? 0) : 0
+    throw new ProviderError('fal', body ? `${String(err)}: ${JSON.stringify(body)}` : String(err), status || undefined)
   }
 }
