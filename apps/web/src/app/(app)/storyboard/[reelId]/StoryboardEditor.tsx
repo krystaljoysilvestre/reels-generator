@@ -1963,7 +1963,7 @@ function SceneInspector({
             <>
               {/* Format — two selectable rows. The Video row expands IN PLACE to reveal its preview. */}
               <div className="flex flex-col gap-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">Format</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">Motion · owns how it moves</p>
 
                 {/* Still image */}
                 <button
@@ -2042,7 +2042,7 @@ function SceneInspector({
                   every take generated for this scene (free — no regeneration). */}
               <div className="flex flex-col gap-3 rounded-2xl border border-border-strong bg-surface p-4 shadow-sm">
                 <div className="flex items-center justify-between">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Regenerate</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Image · owns the picture</p>
                   {/* Undo / Redo — walk this scene's image history. Position shown when there's more than one take. */}
                   <div className="inline-flex items-center gap-1">
                     {history.length > 1 && histPos >= 0 && (
