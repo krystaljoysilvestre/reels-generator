@@ -101,7 +101,9 @@ export const SubtitleOverlay: React.FC<SubtitleOverlayProps> = ({ subtitles, cap
       </span>
     )
   } else {
-    const activeIdx = active.words.reduce((acc, w, i) => (currentMs >= w.startMs ? i : acc), 0)
+    // -1, not 0: before the first word's startMs nothing is spoken yet. Defaulting to 0 pre-highlights
+    // word 1 at the start of every chunk (karaoke/marker styles key off isSpoken = i <= activeIdx).
+    const activeIdx = active.words.reduce((acc, w, i) => (currentMs >= w.startMs ? i : acc), -1)
     content = (
       <span style={{ ...baseText, display: 'inline-flex', flexWrap: 'wrap', justifyContent: 'center', gap: `0 ${Math.round(style.fontSizePx * 0.28)}px` }}>
         {active.words.map((w, i) => {

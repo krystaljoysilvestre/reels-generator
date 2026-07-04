@@ -91,25 +91,57 @@ async function toDataUri(filePath: string, mimeType: string): Promise<string> {
 interface FileServer { urlFor: (route: string) => string; close: () => Promise<void> }
 function startFileServer(routes: Map<string, string>): Promise<FileServer> {
   const server = createServer((req, res) => {
-    const path = new URL(req.url ?? '/', 'http://127.0.0.1').pathname
-    const fsPath = routes.get(path)
-    if (!fsPath) { res.statusCode = 404; res.end(); return }
-    let size: number
-    try { size = statSync(fsPath).size } catch { res.statusCode = 404; res.end(); return }
-    res.setHeader('Content-Type', 'video/mp4')
-    res.setHeader('Accept-Ranges', 'bytes')
-    const range = req.headers.range
-    const m = range ? /bytes=(\d*)-(\d*)/.exec(range) : null
-    if (m) {
-      const start = m[1] ? parseInt(m[1], 10) : 0
-      const end = m[2] ? parseInt(m[2], 10) : size - 1
-      res.statusCode = 206
-      res.setHeader('Content-Range', `bytes ${start}-${end}/${size}`)
-      res.setHeader('Content-Length', String(end - start + 1))
-      createReadStream(fsPath, { start, end }).pipe(res)
-    } else {
-      res.setHeader('Content-Length', String(size))
-      createReadStream(fsPath).pipe(res)
+    // Wrap the whole handler: a synchronous throw here (e.g. a bad Range → out-of-range createReadStream)
+    // would otherwise be an uncaught exception that takes down the worker mid-render.
+    try {
+      const path = new URL(req.url ?? '/', 'http://127.0.0.1').pathname
+      const fsPath = routes.get(path)
+      if (!fsPath) { res.statusCode = 404; res.end(); return }
+      let size: number
+      try { size = statSync(fsPath).size } catch { res.statusCode = 404; res.end(); return }
+      res.setHeader('Content-Type', 'video/mp4')
+      res.setHeader('Accept-Ranges', 'bytes')
+
+      const pipe = (opts?: { start: number; end: number }) => {
+        const stream = opts ? createReadStream(fsPath, opts) : createReadStream(fsPath)
+        // A mid-stream read error must not crash the process — tear the response down instead.
+        stream.on('error', () => { res.destroy() })
+        stream.pipe(res)
+      }
+
+      const range = req.headers.range
+      const m = range ? /^bytes=(\d*)-(\d*)$/.exec(range.trim()) : null
+      if (m && (m[1] || m[2])) {
+        let start: number
+        let end: number
+        if (m[1] === '') {
+          // Suffix range: bytes=-N → the last N bytes.
+          const n = parseInt(m[2]!, 10)
+          start = Math.max(0, size - n)
+          end = size - 1
+        } else {
+          start = parseInt(m[1]!, 10)
+          end = m[2] ? parseInt(m[2], 10) : size - 1
+        }
+        end = Math.min(end, size - 1) // clamp to EOF so Content-Length never overstates the body
+        if (!Number.isFinite(start) || start > end || start >= size) {
+          // Unsatisfiable — do NOT construct createReadStream({start>end}) (it throws synchronously).
+          res.statusCode = 416
+          res.setHeader('Content-Range', `bytes */${size}`)
+          res.end()
+          return
+        }
+        res.statusCode = 206
+        res.setHeader('Content-Range', `bytes ${start}-${end}/${size}`)
+        res.setHeader('Content-Length', String(end - start + 1))
+        pipe({ start, end })
+      } else {
+        res.statusCode = 200
+        res.setHeader('Content-Length', String(size))
+        pipe()
+      }
+    } catch {
+      try { res.statusCode = 500; res.end() } catch { /* headers already flushed */ }
     }
   })
   return new Promise((resolve) => {
@@ -135,6 +167,9 @@ export async function renderReelWithRemotion(input: RemotionRenderInput): Promis
   }
   const fileServer = await startFileServer(videoRoutes)
 
+  // Everything from here that can throw (image data-URI reads, bundling, browser download, render) must be
+  // inside the try — otherwise a failure before renderMedia would leak the loopback server + its port.
+  try {
   const scenes: ReelScene[] = await Promise.all(
     input.scenes.map(async (s) => {
       const imageSrc = await toDataUri(s.imagePath, 'image/webp')
@@ -170,7 +205,6 @@ export async function renderReelWithRemotion(input: RemotionRenderInput): Promis
   const bundleUrl = await getBundleUrl()
   await ensureBrowserOnce()
 
-  try {
     const composition = await selectComposition({
       serveUrl: bundleUrl,
       id: 'Reel',
@@ -194,3 +228,4 @@ export async function renderReelWithRemotion(input: RemotionRenderInput): Promis
     await fileServer.close()  // release the loopback port whether the render succeeds or throws
   }
 }
+

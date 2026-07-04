@@ -29,6 +29,10 @@ export interface MixAudioParams {
 
 const DEFAULT_BED_DB = -22
 const DEFAULT_PEAK_DB = -12
+// Ambient (environmental room-tone) level — a fixed layer independent of the music-intensity slider.
+// The music path previously reused bedDb here, so ambient loudness drifted with the music setting; both
+// paths now use this constant so ambient sits at the same level whether or not a music bed is present.
+const AMBIENT_DB = -20
 
 // Final loudness normalization → render_qa requires -14 ±0.5 LUFS. ffmpeg's loudnorm (single- OR
 // two-pass) undershoots on speech-crest content: to honor the -1.5 dBTP ceiling it backs off the
@@ -89,8 +93,11 @@ async function encodeWithLoudnorm(inputs: string[], pre: string[], durationSec: 
   const i1 = await measureFile(outputPath)
   if (i1 != null && Math.abs(TARGET_LUFS - i1) > 0.25) {
     const corrected = `${outputPath}.norm.m4a`
+    // Re-limit after the corrective gain. The correction is usually POSITIVE (the limiter left the mix
+    // quieter than target), which would push peaks back above the true-peak ceiling the limiter just
+    // enforced — inter-sample clipping. A second alimiter caps them again.
     await execFileAsync('ffmpeg', [
-      '-i', outputPath, '-af', `volume=${(TARGET_LUFS - i1).toFixed(2)}dB`,
+      '-i', outputPath, '-af', `volume=${(TARGET_LUFS - i1).toFixed(2)}dB,alimiter=limit=${TRUE_PEAK}dB:level=false`,
       '-c:a', 'aac', '-b:a', '192k', '-y', corrected,
     ])
     await rename(corrected, outputPath)
@@ -141,8 +148,8 @@ export async function mixAudio(params: MixAudioParams): Promise<void> {
     '-i', params.sfxPremixedPath,
   ]
   const pre = [
-    // ambient: volume-reduce + loop to cover full duration
-    `[1]volume=${bedDb}dB,aloop=loop=-1:size=2e9[amb]`,
+    // ambient: volume-reduce + loop to cover full duration (fixed level, not the music bed level)
+    `[1]volume=${AMBIENT_DB}dB,aloop=loop=-1:size=2e9[amb]`,
     // music: loop the bed to cover the reel → volume envelope
     `[2]aloop=loop=-1:size=2e9,volume='${gainExpr}':eval=frame[mus0]`,
     // sidechain duck: music ducks ~6-10 dB whenever voiceover speaks
@@ -164,7 +171,7 @@ async function mixNoMusic(params: MixAudioParams): Promise<void> {
     '-i', params.sfxPremixedPath,
   ]
   const pre = [
-    `[1]volume=-20dB,aloop=loop=-1:size=2e9[amb]`,
+    `[1]volume=${AMBIENT_DB}dB,aloop=loop=-1:size=2e9[amb]`,
     `[0][amb]amix=inputs=2:normalize=0[base]`,
     `[base][2]amix=inputs=2:normalize=0[premaster]`,
   ]
