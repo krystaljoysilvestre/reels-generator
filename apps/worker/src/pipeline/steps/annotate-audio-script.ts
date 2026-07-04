@@ -5,6 +5,7 @@ import { AudioScriptSchema, AudioPacksSchema, OperatorSfxSchema, cueVolumeDb, re
 import { buildInterpretSoundsPrompt, InterpretSoundsSchema, INTERPRET_SOUNDS_V1_VERSION } from '@reels/core/prompts/interpret-sounds.v1'
 import { buildAudioScriptPrompt, AUDIOSCRIPT_V1_VERSION } from '../../prompts-bridge.js'
 import { runStep } from '../harness.js'
+import { countOccurrences, validateAnchorUniqueness } from '../anchors.js'
 
 // Realize the operator's free-text Sound design notes into structured, anchored cues (the hidden step).
 // Runs at render off the FINAL narration so anchors are valid; cues that don't resolve uniquely are
@@ -46,34 +47,7 @@ async function realizeSoundNotes(notes: string, narration: string, language: str
 }
 
 // annotate_audio_script — step 2 (docs/02 §4)
-// Validates anchor uniqueness after generation.
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function validateAnchorUniqueness(narration: string, audioScript: any): string[] {
-  const errors: string[] = []
-
-  const allAnchors: { anchor: string; field: string }[] = [
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ...audioScript.sfx.map((s: any) => ({ anchor: s.anchor as string, field: 'sfx' })),
-    ...(audioScript.silenceDrop ? [{ anchor: audioScript.silenceDrop.anchor, field: 'silenceDrop' }] : []),
-  ]
-
-  for (const { anchor, field } of allAnchors) {
-    if (!anchor) continue
-    const occurrences = countOccurrences(narration, anchor)
-    if (occurrences === 0) errors.push(`${field} anchor not found in narration: "${anchor}"`)
-    if (occurrences > 1) errors.push(`${field} anchor ambiguous (${occurrences} matches): "${anchor}"`)
-  }
-
-  return errors
-}
-
-function countOccurrences(text: string, sub: string): number {
-  if (!sub) return 0
-  let count = 0, pos = 0
-  while ((pos = text.indexOf(sub, pos)) !== -1) { count++; pos++ }
-  return count
-}
+// Validates anchor uniqueness after generation (see ../anchors.ts).
 
 export async function annotateAudioScript(reelId: string): Promise<void> {
   const db = getDb()

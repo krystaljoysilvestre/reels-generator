@@ -13,24 +13,7 @@ import {
   type SfxEvent,
 } from '@reels/core'
 import { runStep } from '../harness.js'
-
-// Resolve an anchor to its FIRST occurrence in the narration (soft — returns null if absent). Operator
-// cues use this instead of compute_timings' strict unique-or-throw resolution, so an ambiguous anchor
-// still places (at the first match) rather than silently vanishing or crashing the render.
-function resolveFirstMs(cps: string[], alignment: AlignedChar[], anchor: string, offsetMs: number, durationMs: number): number | null {
-  const a = Array.from(anchor)
-  if (a.length === 0 || a.length > cps.length) return null
-  for (let i = 0; i <= cps.length - a.length; i++) {
-    let match = true
-    for (let j = 0; j < a.length; j++) { if (cps[i + j] !== a[j]) { match = false; break } }
-    if (match) {
-      const start = alignment[i]?.startMs
-      if (start == null) return null
-      return Math.max(0, Math.min(start + offsetMs, durationMs))
-    }
-  }
-  return null
-}
+import { resolveFirstMs } from '../anchors.js'
 
 // compute_timings pipeline step — step 6 (docs/02 §4)
 // Wraps the pure function, reads inputs from DB, persists Timings to reels.timings.
