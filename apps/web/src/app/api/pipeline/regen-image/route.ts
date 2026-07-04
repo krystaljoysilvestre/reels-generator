@@ -163,11 +163,14 @@ export async function POST(req: NextRequest) {
     meta: { ...result.asset.meta, visualPrompt: contentPrompt },
   }).returning()
 
-  // A new image invalidates any motion (the clip was animated from the OLD image): reset to a still and drop
-  // the stale clips. Persist the rewritten description so later regens build on it.
+  // A new image invalidates the OLD clip (it was animated from the previous image) — the stale clips are
+  // deleted below. But PRESERVE the scene's tier: a motion/hero beat (tier "video") stays video and
+  // re-animates from this new image at the next render, instead of silently dropping to a static still and
+  // never regaining motion (the bug behind "hero scenes aren't in motion" after a re-roll). A "still" beat
+  // stays still. Persist the rewritten description so later regens build on it.
   const descChanged = contentPrompt !== scene.visualPrompt
   await db.update(scenes)
-    .set({ imageAssetId: asset!.id, tier: 'still', ...(descChanged ? { visualPrompt: contentPrompt } : {}) })
+    .set({ imageAssetId: asset!.id, ...(descChanged ? { visualPrompt: contentPrompt } : {}) })
     .where(and(eq(scenes.reelId, reelId), eq(scenes.idx, sceneIdx)))
 
   const reelVideos = await db.query.assets.findMany({ where: and(eq(assets.reelId, reelId), eq(assets.kind, 'video')) })

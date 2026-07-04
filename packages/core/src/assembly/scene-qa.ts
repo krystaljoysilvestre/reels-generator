@@ -17,6 +17,8 @@ export interface SceneQAScene {
   imagePrompt: string
   tier: 'still' | 'video'
   location: string
+  primaryEntity?: string | null
+  supportingEntities?: string[]
 }
 
 export interface SceneQAInput {
@@ -32,7 +34,11 @@ export interface SceneQAResult {
   warnings: string[] // → logged only
 }
 
-const MAX_VIDEO_TIERS = 3
+// Motion budget: the max scenes that become tier "video" (i2v-animated). i2v is the most expensive op in
+// the pipeline (~$0.35/clip), so this is the natural subscription lever — later resolved per plan rather
+// than a constant. Single source for both the cap enforced here and the "at most N video" line in the
+// scenes prompt (breakdown passes it into buildScenesPrompt).
+export const MOTION_BUDGET = 3
 
 // Style/medium words the image prompt must NOT contain — the system owns the look.
 // Kept tight + word-boundary matched to avoid false hits (e.g. "render" inside "tenderness").
@@ -90,8 +96,8 @@ export function reviewSceneBreakdown(input: SceneQAInput): SceneQAResult {
 
   // ── Tier discipline ──────────────────────────────────────────────────────
   const videoCount = scenes.filter((s) => s.tier === 'video').length
-  if (videoCount > MAX_VIDEO_TIERS) {
-    errors.push(`${videoCount} scenes are marked "video"; at most ${MAX_VIDEO_TIERS} are allowed (cost + render time). Keep the ${MAX_VIDEO_TIERS} most visually dynamic beats as video, the rest "still".`)
+  if (videoCount > MOTION_BUDGET) {
+    errors.push(`${videoCount} scenes are marked "video"; at most ${MOTION_BUDGET} are allowed (cost + render time). Keep the ${MOTION_BUDGET} most visually dynamic beats as video, the rest "still".`)
   }
   if (scenes.length > 0 && scenes[0]!.tier !== 'video') {
     warnings.push('The opening scene is not "video" — the first beat usually benefits from motion.')
@@ -114,6 +120,25 @@ export function reviewSceneBreakdown(input: SceneQAInput): SceneQAResult {
     }
     if (SETTING_FIRST_OPENERS.some((o) => prompt.startsWith(o))) {
       warnings.push(`Scene ${n} image prompt may lead with the setting, not the subject (VISUAL PRIORITY) — open on the specific thing the line is about.`)
+    }
+  })
+
+  // ── primaryEntity ↔ imagePrompt lead consistency (error) ───────────────────
+  // The bible splices the PRIMARY entity's canonical look as the shot's subject. If the imagePrompt clearly
+  // OPENS on a *supporting* entity while primaryEntity is a different one, the wrong subject gets spliced
+  // (e.g. a reveal that opens on the apparition but tags the narrator primary → renders the narrator).
+  // Conservative on purpose: only fires when a supporting entity's id appears in the OPENING clause and the
+  // primary's id does not — natural-label prompts (the norm) contain no ids, so they never false-trigger.
+  const idForms = (id: string): string[] => [id.toLowerCase(), id.replace(/-/g, ' ').toLowerCase()]
+  const inLead = (id: string, lead: string): boolean => idForms(id).some((f) => lead.includes(f))
+  scenes.forEach((s, i) => {
+    const primary = s.primaryEntity
+    const supporting = s.supportingEntities ?? []
+    if (!primary || supporting.length === 0) return
+    const lead = norm(s.imagePrompt).slice(0, 45)
+    const leadSupporting = supporting.find((se) => inLead(se, lead))
+    if (leadSupporting && !inLead(primary, lead)) {
+      errors.push(`Scene ${i + 1} opens on "${leadSupporting}" (a supporting entity) but primaryEntity is "${primary}", which the shot never leads with. Set primaryEntity to the subject the imagePrompt opens on — that's what the bible splices as the shot's subject.`)
     }
   })
 

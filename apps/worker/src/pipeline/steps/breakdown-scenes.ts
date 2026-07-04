@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { getDb, reels, stories, scenes, channels } from '@reels/db'
 import { llmCall, buildInputHash } from '@reels/providers'
-import { ScenesOutputSchema, WorldBibleSchema, StoryBibleSchema, EMPTY_STORY_BIBLE, resolveEntities, reviewSceneBreakdown, cameraMovePrompt, animatorMotionPrompt, slug } from '@reels/core'
+import { ScenesOutputSchema, WorldBibleSchema, StoryBibleSchema, EMPTY_STORY_BIBLE, resolveEntities, reviewSceneBreakdown, MOTION_BUDGET, cameraMovePrompt, animatorMotionPrompt, slug } from '@reels/core'
 import { buildScenesPrompt, SCENES_V1_VERSION, buildPeakExtractPrompt, PEAK_EXTRACT_V1_VERSION, PeakExtractSchema } from '../../prompts-bridge.js'
 import { runStep } from '../harness.js'
 
@@ -89,6 +89,7 @@ export async function breakdownScenes(reelId: string): Promise<void> {
     minScenes,
     maxScenes,
     peakMoment,
+    maxVideoTiers: MOTION_BUDGET, // motion budget → subscription-derived later
   })
 
   // Bible folded into the hash: editing the bible (or re-analysis) re-triggers the breakdown.
@@ -112,7 +113,7 @@ export async function breakdownScenes(reelId: string): Promise<void> {
         peakMoment,
         minScenes,
         maxScenes,
-        scenes: s.map((x) => ({ narrationText: x.narrationText, imagePrompt: x.imagePrompt, tier: x.tier, location: x.location })),
+        scenes: s.map((x) => ({ narrationText: x.narrationText, imagePrompt: x.imagePrompt, tier: x.tier, location: x.location, primaryEntity: x.primaryEntity ?? null, supportingEntities: x.supportingEntities ?? [] })),
       })
       const tilingError = validateSceneTiling(story.body, llm.data.scenes.map((s) => s.narrationText))
       const qa = reviewSceneBreakdown(qaInput(llm.data.scenes))

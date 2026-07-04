@@ -27,6 +27,7 @@ export interface ScenesPromptVars {
   minScenes: number
   maxScenes: number
   peakMoment: string // the reel's peak line (verbatim substring) — gets its own scene; '' to skip
+  maxVideoTiers: number // motion budget — max scenes the director may mark tier "video" (see MOTION_BUDGET)
 }
 
 // Coarse genre bucket from the niche text — picks which module loads. Deterministic + free.
@@ -96,13 +97,13 @@ Narration:
 
 For each scene write:
 - narrationText: the COMPLETE, VERBATIM substring of the narration this scene covers (copy-paste exactly, no "…").
-- primaryEntity: the bible id of the ONE thing this shot leads with (see VISUAL PRIORITY). Use null if the subject is NOT a bible entity (e.g. a shadow, the narrator's own hands).
+- primaryEntity: the bible id of the ONE thing this shot leads with — it MUST be the same subject your imagePrompt OPENS on. Do not lead the imagePrompt with one thing and tag a different thing as primary. On a reveal/payoff you open on the threat/apparition, so THAT is the primaryEntity — even in a first-person reel where the narrator's reflection or body is also in frame, the narrator goes in supportingEntities, NOT primary. (Tagging the narrator primary on a reveal splices the narrator's face onto the shot and you get the narrator instead of the threat.) Use null if the subject you lead with is NOT a bible entity (a shadow, the narrator's own hands).
 - supportingEntities: the bible ids of the other recurring bible things visible in this shot. Include the scene's LOCATION entity here — but ONLY the place the scene is physically IN, NOT a place the character is merely HEADING TOWARD. A "walking toward a room" beat is set in the space they pass through (a hallway, a path, a yard), not inside that room — don't tag it with the destination (that drops them inside it); tag the place actually on screen. Also include the NARRATOR entity whenever their own reflection or body is visible (see PERSPECTIVE), so their appearance is locked. Use exact ids; never invent one.
 - imagePrompt: a VIVID, SPECIFIC description of this exact shot — aim for 45–75 words, not a terse tag list. Cover concretely: WHO is in frame and the precise action they are caught MID-doing (their posture, what their hands are doing, their expression, and where their gaze goes — at the object, at each other, into the dark — NOT into the camera); the shot size + camera angle; one foreground element for depth; the ACTIVE light source + its direction; the texture of the place. Show people ABSORBED in the moment — candid, mid-motion, never posing or staring into the lens (a person facing the camera doing nothing is the #1 failure). Refer to bible entities by a natural label only ("the mirror", "the friend") — the system splices their look; describe NON-bible subjects inline. No style, medium, or colour-grade words (the system owns the look).
 - sceneIntent: a short phrase for what the audience should NOTICE first in this shot (e.g. "the reflection before the woman", "the shadow under the door").
 - cameraMove: the ONE camera move that best fits this beat — choose from: drift (slow, subtle), push_in, pull_out, pan_left, pan_right, tilt_up, tilt_down, handheld (loose, immediate), locked (almost still). Match it to the beat: push_in for emphasis, pull_out for a reveal, locked for observation/stillness, drift for atmosphere, handheld for immediacy, pan/tilt to follow or discover.
 - subjectMotion: OPTIONAL, and only meaningful when this beat is tier "video". What the SUBJECT itself DOES on screen — above all a horror scare/reveal, where the THREAT is what moves. Write ONE short, concrete, SLOW motion (e.g. "her blank dead stare slowly splits into an impossibly wide grin, too many teeth baring", "the tall figure looms slowly closer, swelling to fill the frame", "her head tilts slowly, unnaturally, to one side, eyes never blinking"). One motion only — never a list, never frantic; the slowness is the dread. Leave it "" for any beat where only the CAMERA moves (an establishing shot, an atmosphere beat, and every "still" beat). On a scare/reveal beat DO fill it, and pair it with cameraMove:push_in so the frame closes in as the threat moves.
-- tier: "video" for the 2–3 most visually DYNAMIC beats — always include the opening; "still" otherwise. At most 3 video.
+- tier: "video" for up to ${v.maxVideoTiers} of the most visually DYNAMIC beats — always include the opening; "still" otherwise. At most ${v.maxVideoTiers} video.
 - mood: 2–3 words for ambient/grade hints.
 - location: a short canonical label for WHERE this scene is (e.g. "rented bedroom"). Same label for the same place; a new label only when the place actually changes.
 

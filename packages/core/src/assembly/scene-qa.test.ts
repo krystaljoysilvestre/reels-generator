@@ -43,6 +43,34 @@ describe('reviewSceneBreakdown', () => {
     expect(r.warnings.some((w) => w.includes('buried'))).toBe(true)
   })
 
+  it('errors when the imagePrompt opens on a supporting entity but primaryEntity is a different one', () => {
+    // The payoff bug: shot leads with the apparition (supporting) but tags the narrator primary, so the
+    // bible splices the narrator's look as the subject → narrator renders instead of the threat.
+    const scenes: SceneQAScene[] = [
+      scene({
+        narrationText: NARRATION,
+        imagePrompt: 'the mirror-apparition looms in the glass, half-lit, a too-wide grin — identical to the narrator',
+        primaryEntity: 'narrator',
+        supportingEntities: ['mirror-apparition'],
+      }),
+    ]
+    const r = reviewSceneBreakdown({ narration: NARRATION, peakMoment: '', minScenes: 1, maxScenes: 6, scenes })
+    expect(r.errors.some((e) => e.includes('opens on "mirror-apparition"') && e.includes('primaryEntity is "narrator"'))).toBe(true)
+  })
+
+  it('does not flag primaryEntity when the imagePrompt uses natural labels (no ids in the lead)', () => {
+    const scenes: SceneQAScene[] = [
+      scene({
+        narrationText: NARRATION,
+        imagePrompt: 'a figure looms in the glass beyond her shoulder, half-lit, a too-wide grin baring too many teeth',
+        primaryEntity: 'mirror-apparition',
+        supportingEntities: ['narrator'],
+      }),
+    ]
+    const r = reviewSceneBreakdown({ narration: NARRATION, peakMoment: '', minScenes: 1, maxScenes: 6, scenes })
+    expect(r.errors).toEqual([])
+  })
+
   it('errors when more than 3 scenes are marked video', () => {
     const scenes: SceneQAScene[] = ['a', 'b', 'c', 'd'].map((t) => scene({ narrationText: t, tier: 'video' }))
     const r = reviewSceneBreakdown({ narration: 'a b c d', peakMoment: '', minScenes: 3, maxScenes: 6, scenes })
