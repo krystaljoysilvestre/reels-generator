@@ -9,13 +9,19 @@ import { getSession } from '@/lib/auth'
 export async function POST(req: NextRequest) {
   if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { reelId, opMinutes } = (await req.json()) as { reelId: string; opMinutes?: number }
+  const { reelId, opMinutes } = (await req.json().catch(() => ({}))) as { reelId?: string; opMinutes?: number }
+  if (!reelId) return NextResponse.json({ error: 'reelId is required' }, { status: 400 })
   const db = getDb()
 
   const reel = await db.query.reels.findFirst({ where: eq(reels.id, reelId) })
   if (!reel) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  transition(reel.status, 'storyboard')  // throws if wrong state
+  // Only a story under review can be approved — return 409 (not an opaque 500) on a stale/double submit.
+  try {
+    transition(reel.status, 'storyboard')
+  } catch {
+    return NextResponse.json({ error: `Cannot approve a reel in '${reel.status}'` }, { status: 409 })
+  }
 
   await db.update(reels)
     .set({

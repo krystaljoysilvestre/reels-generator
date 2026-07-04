@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { getDb, scenes, assets, reels } from '@reels/db'
-import { eq, and } from 'drizzle-orm'
+import { eq, and, sql } from 'drizzle-orm'
 import { generateVideo, FalEngineSchema, ContentFilterError, ProviderRateLimitError } from '@reels/providers'
 import { resolveMotionSettings } from '@reels/core'
 import { getSession } from '@/lib/auth'
@@ -100,8 +100,9 @@ export async function POST(req: NextRequest) {
   }
 
   if (costAdded > 0) {
+    // Atomic increment so concurrent previews don't drop spend under read-modify-write.
     await db.update(reels)
-      .set({ costCents: reel.costCents + costAdded, updatedAt: new Date() })
+      .set({ costCents: sql`${reels.costCents} + ${costAdded}`, updatedAt: new Date() })
       .where(eq(reels.id, reelId))
   }
 

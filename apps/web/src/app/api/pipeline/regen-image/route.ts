@@ -1,7 +1,7 @@
 import type { NextRequest} from 'next/server';
 import { NextResponse } from 'next/server'
 import { getDb, scenes, assets, channels, reels } from '@reels/db'
-import { eq, and, inArray } from 'drizzle-orm'
+import { eq, and, inArray, sql } from 'drizzle-orm'
 import { generateImage, generateImageFal, imageEngineForGenre, FLUX_IMAGE_ENGINE, ContentFilterError, ProviderRateLimitError, llmCall, SCENE_IMAGE_QUALITY } from '@reels/providers'
 import { assembleImagePrompt, assembleReferencePrompt, assembleNegativePrompt, castNationality, reelLightingDirective, sceneEntities, slug, StoryBibleSchema, PLATFORM_PRESETS } from '@reels/core'
 import { buildReviseScenePrompt, REVISE_SCENE_V1_VERSION, ReviseSceneSchema } from '@reels/core/prompts/revise-scene.v1'
@@ -174,7 +174,9 @@ export async function POST(req: NextRequest) {
   const staleIds = reelVideos.filter((a) => (a.meta as Record<string, unknown>)['sceneIdx'] === sceneIdx).map((a) => a.id)
   if (staleIds.length) await db.delete(assets).where(inArray(assets.id, staleIds))
 
-  await db.update(reels).set({ costCents: reel.costCents + result.costCents, updatedAt: new Date() }).where(eq(reels.id, reelId))
+  // Atomic increment — concurrent scene regens (the storyboard invites them) would otherwise drop one
+  // increment under read-modify-write, drifting the reel's cost low.
+  await db.update(reels).set({ costCents: sql`${reels.costCents} + ${result.costCents}`, updatedAt: new Date() }).where(eq(reels.id, reelId))
 
   // entityLook (when the change edited a character's look): the UI flags the other scenes she's in so the
   // operator can refresh them to match — "update globally, refresh on demand".

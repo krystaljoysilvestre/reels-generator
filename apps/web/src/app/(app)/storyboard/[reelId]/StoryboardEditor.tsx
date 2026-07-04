@@ -238,6 +238,10 @@ export function StoryboardEditor({
   const [error, setError] = useState<string | null>(null)
   const [opMinutes, setOpMinutes] = useState(reel.operatorMinutes)
   const startedAt = useRef(Date.now())
+  // The operator-minutes total at mount, captured ONCE. Must not read the live reel.operatorMinutes prop
+  // in the tick below — router.refresh() updates that prop to a value that already includes the minutes
+  // we posted, so `prop + elapsedSinceMount` would re-add this session's elapsed on every tick.
+  const baseMinutes = useRef(reel.operatorMinutes)
 
   // per_story channels store no voicePool; recommend narrators on the fly (same call the
   // creation wizard uses) so this reel has something to pick and render isn't dead-ended.
@@ -298,7 +302,7 @@ export function StoryboardEditor({
     const interval = setInterval(async () => {
       if (document.hidden) return
       const elapsed = Math.round((Date.now() - startedAt.current) / 60000)
-      const next = reel.operatorMinutes + elapsed
+      const next = baseMinutes.current + elapsed
       setOpMinutes(next)
       try {
         await fetch('/api/pipeline/update-op-minutes', {
@@ -309,7 +313,9 @@ export function StoryboardEditor({
       } catch { /* best-effort telemetry — ignore */ }
     }, 30_000)
     return () => clearInterval(interval)
-  }, [reel.id, reel.operatorMinutes, reel.status])
+    // Intentionally excludes reel.operatorMinutes: the base is captured once in baseMinutes, and
+    // restarting the interval on every refresh would also reset the elapsed clock.
+  }, [reel.id, reel.status])
 
   // Pull a friendly message off a failed response; a 429 is a calm "busy, try again" (we never auto-retry).
   async function failMessage(res: Response, fallback: string) {

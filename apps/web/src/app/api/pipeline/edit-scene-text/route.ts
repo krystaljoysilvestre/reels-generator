@@ -28,6 +28,18 @@ export async function POST(req: NextRequest) {
   const reel = await db.query.reels.findFirst({ where: eq(reels.id, reelId) })
   if (!reel?.storyId) return NextResponse.json({ error: 'Reel or story not found' }, { status: 404 })
 
+  // Only edit narration in states where the operator hasn't handed off to a render. Editing during
+  // 'rendering'/'render_qa' rewrites story.body while TTS is synthesizing the OLD body — compute_timings'
+  // contiguous-substring match then fails or produces misaligned captions. storyboard + spot_check are
+  // the two gates a render is (re)started from, so they're the safe editable window.
+  const EDITABLE: string[] = ['storyboard', 'spot_check']
+  if (!EDITABLE.includes(reel.status)) {
+    return NextResponse.json(
+      { error: `Can't edit the script while the reel is '${reel.status}'.` },
+      { status: 409 },
+    )
+  }
+
   await db.update(scenes).set({ narrationText }).where(and(eq(scenes.reelId, reelId), eq(scenes.idx, sceneIdx)))
 
   const all = await db.query.scenes.findMany({

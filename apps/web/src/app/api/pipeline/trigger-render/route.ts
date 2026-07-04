@@ -12,7 +12,8 @@ import { getSession } from '@/lib/auth'
 export async function POST(req: NextRequest) {
   if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { reelId, voiceId, voiceSettings } = (await req.json()) as { reelId: string; voiceId: string; voiceSettings?: VoiceSettings }
+  const { reelId, voiceId, voiceSettings } = (await req.json().catch(() => ({}))) as { reelId?: string; voiceId?: string; voiceSettings?: VoiceSettings }
+  if (!reelId) return NextResponse.json({ error: 'reelId is required' }, { status: 400 })
   const db = getDb()
 
   // TTS (generate_tts) hard-requires a voice; reject empty up front so the worker
@@ -24,7 +25,13 @@ export async function POST(req: NextRequest) {
   const reel = await db.query.reels.findFirst({ where: eq(reels.id, reelId) })
   if (!reel) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  transition(reel.status, 'rendering')
+  // Only a reel at the storyboard gate can be rendered — return 409 (not an opaque 500) if it's already
+  // rendering or in another state (stale tab / double-click).
+  try {
+    transition(reel.status, 'rendering')
+  } catch {
+    return NextResponse.json({ error: `Cannot render a reel in '${reel.status}'` }, { status: 409 })
+  }
 
   // voiceSettings present = operator tweaked delivery for this reel → store the override; absent = leave
   // null so generate_tts auto-derives from the story's mood.

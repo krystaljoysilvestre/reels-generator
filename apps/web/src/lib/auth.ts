@@ -1,13 +1,19 @@
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
-import { createHmac } from 'node:crypto'
+import { createHmac, randomBytes } from 'node:crypto'
 
 const COOKIE = 'op_session'
 const MAX_AGE = 60 * 60 * 24 * 7  // 7 days
 
+// HMAC secret. If OPERATOR_PASSWORD is unset, fall back to a random per-process value rather than a
+// hardcoded constant — the old 'insecure-dev-secret' literal lives in the public repo, so any deploy
+// that failed to load the env var had forgeable cookies. Login is already blocked when the password is
+// unset (/api/auth rejects it), so no valid session can exist; a random secret just makes getSession
+// fail closed instead of accepting a forged cookie.
+const SECRET = process.env['OPERATOR_PASSWORD'] || randomBytes(32).toString('hex')
+
 function sign(value: string): string {
-  const secret = process.env['OPERATOR_PASSWORD'] ?? 'insecure-dev-secret'
-  return createHmac('sha256', secret).update(value).digest('hex')
+  return createHmac('sha256', SECRET).update(value).digest('hex')
 }
 
 export async function setSession(): Promise<void> {

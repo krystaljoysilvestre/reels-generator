@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { getDb, reels, channels } from '@reels/db'
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import { generateSfx, generateSpeechClip, ProviderRateLimitError } from '@reels/providers'
 import {
   OperatorSfxSchema,
@@ -58,8 +58,11 @@ export async function POST(req: NextRequest) {
     }
 
     const next = cues.map((c) => (c.id === cueId ? { ...c, assetKey } : c))
+    // Atomic cost increment so concurrent previews of different cues don't drop spend. (operatorSfx itself
+    // is a read-modify-write, but the per-cue inFlight lock serializes same-cue calls and the clip is
+    // freely regenerable, so a rare cross-cue overwrite is low-impact.)
     await db.update(reels)
-      .set({ operatorSfx: next, costCents: reel.costCents + costCents, updatedAt: new Date() })
+      .set({ operatorSfx: next, costCents: sql`${reels.costCents} + ${costCents}`, updatedAt: new Date() })
       .where(eq(reels.id, reelId))
 
     return NextResponse.json({ ok: true, url: `/api/asset?key=${encodeURIComponent(assetKey)}`, costCents })

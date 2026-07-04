@@ -34,6 +34,7 @@ export function StoryStudio({ reelId, channelId, channelName, mood, genre, initi
   const [selectedReason, setSelectedReason] = useState('')
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
   const [startedAt] = useState(() => Date.now())
 
   // Poll only while a draft is being written; the hook refreshes the server (new story) at the boundary.
@@ -49,11 +50,20 @@ export function StoryStudio({ reelId, channelId, channelName, mood, genre, initi
 
   async function approve() {
     setBusy(true)
-    await fetch('/api/pipeline/approve-story', {
+    setActionError(null)
+    // Only navigate once the transition actually succeeded — otherwise a stale/rejected 409 would leave
+    // the reel at story_review while we send the operator to a storyboard that never populates.
+    const res = await fetch('/api/pipeline/approve-story', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ reelId, opMinutes: opMinutes() }),
     })
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: string }
+      setActionError(body.error ?? 'Could not approve this story. Refresh and try again.')
+      setBusy(false)
+      return
+    }
     router.push(`/storyboard/${reelId}`)
   }
 
@@ -195,9 +205,12 @@ export function StoryStudio({ reelId, channelId, channelName, mood, genre, initi
                 )}
               </div>
             )}
-            <div className="flex gap-3 border-t border-border px-5 py-4">
-              <button onClick={() => setReviewing(true)} disabled={busy} className="btn-secondary flex-1">Write another</button>
-              <button onClick={approve} disabled={busy} className="btn-accent flex-1">{busy ? 'Saving…' : 'Use this story'}</button>
+            <div className="border-t border-border px-5 py-4">
+              {actionError && <p className="mb-3 text-sm text-danger">{actionError}</p>}
+              <div className="flex gap-3">
+                <button onClick={() => setReviewing(true)} disabled={busy} className="btn-secondary flex-1">Write another</button>
+                <button onClick={approve} disabled={busy} className="btn-accent flex-1">{busy ? 'Saving…' : 'Use this story'}</button>
+              </div>
             </div>
           </div>
         )}

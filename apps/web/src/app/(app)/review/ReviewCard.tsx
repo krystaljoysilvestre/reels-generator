@@ -28,17 +28,27 @@ export function ReviewCard({ reel, story, remaining, allPendingIds }: ReviewCard
   const [rejecting, setRejecting] = useState(false)
   const [loading, setLoading] = useState(false)
   const [note, setNote] = useState('')
+  const [error, setError] = useState<string | null>(null)
   // Operator-minutes timer — starts when the card mounts [E5.6]
   const [startedAt] = useState(Date.now())
 
   async function handleApprove() {
     setLoading(true)
+    setError(null)
     const opMinutes = Math.round((Date.now() - startedAt) / 60000)
-    await fetch('/api/pipeline/approve-story', {
+    // Navigate only on success — a stale/double-submit 409 would otherwise send the operator to a
+    // storyboard that never populates while the reel is stuck at story_review.
+    const res = await fetch('/api/pipeline/approve-story', {
       method: 'POST',
       body: JSON.stringify({ reelId: reel.id, opMinutes }),
       headers: { 'Content-Type': 'application/json' },
     })
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: string }
+      setError(body.error ?? 'Could not approve this story. Refresh and try again.')
+      setLoading(false)
+      return
+    }
     // Continue THIS reel into the storyboard — scenes + images are generating now and appear there
     // once ready (the chain stops at the storyboard gate for editing + voice + render).
     router.push(`/storyboard/${reel.id}`)
@@ -46,12 +56,19 @@ export function ReviewCard({ reel, story, remaining, allPendingIds }: ReviewCard
 
   async function handleReject(reasonCode: string) {
     setLoading(true)
+    setError(null)
     const opMinutes = Math.round((Date.now() - startedAt) / 60000)
-    await fetch('/api/pipeline/reject-story', {
+    const res = await fetch('/api/pipeline/reject-story', {
       method: 'POST',
       body: JSON.stringify({ reelId: reel.id, reasonCode, note, opMinutes }),
       headers: { 'Content-Type': 'application/json' },
     })
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: string }
+      setError(body.error ?? 'Could not reject this story. Refresh and try again.')
+      setLoading(false)
+      return
+    }
     const nextId = allPendingIds.find((id) => id !== reel.id)
     if (nextId) router.push(`/review?reelId=${nextId}`)
     else router.push('/dashboard')
@@ -82,6 +99,7 @@ export function ReviewCard({ reel, story, remaining, allPendingIds }: ReviewCard
           placeholder="Optional note…"
           className="input h-20 resize-none"
         />
+        {error && <p className="text-sm text-danger">{error}</p>}
         <button onClick={() => setRejecting(false)} className="btn-ghost btn-sm self-start">
           ← Back
         </button>
@@ -117,13 +135,16 @@ export function ReviewCard({ reel, story, remaining, allPendingIds }: ReviewCard
       </div>
 
       {/* Actions */}
-      <div className="flex gap-3 border-t border-border px-5 py-4">
-        <button onClick={() => setRejecting(true)} disabled={loading} className="btn-danger flex-1">
-          Reject
-        </button>
-        <button onClick={handleApprove} disabled={loading} className="btn-accent flex-1">
-          {loading ? 'Saving…' : 'Approve'}
-        </button>
+      <div className="border-t border-border px-5 py-4">
+        {error && <p className="mb-3 text-sm text-danger">{error}</p>}
+        <div className="flex gap-3">
+          <button onClick={() => setRejecting(true)} disabled={loading} className="btn-danger flex-1">
+            Reject
+          </button>
+          <button onClick={handleApprove} disabled={loading} className="btn-accent flex-1">
+            {loading ? 'Saving…' : 'Approve'}
+          </button>
+        </div>
       </div>
     </div>
   )
