@@ -1,7 +1,11 @@
 import { eq } from 'drizzle-orm'
+import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { getDb, reels, stories, scenes, assets, channels } from '@reels/db'
-import { ElevenLabsTtsProvider, buildInputHash } from '@reels/providers'
-import { moodToVoiceSettings, ToneConfigSchema, type VoiceSettings } from '@reels/core'
+import { ElevenLabsTtsProvider, buildInputHash, downloadBuffer, uploadBuffer } from '@reels/providers'
+import { moodToVoiceSettings, ToneConfigSchema, planNarrationPauses, resolvePauses, applyPausesToAlignment, type VoiceSettings } from '@reels/core'
+import { insertSilences } from '@reels/render'
 import { runStep } from '../harness.js'
 
 const ttsProvider = new ElevenLabsTtsProvider()
@@ -28,16 +32,24 @@ export async function generateTts(reelId: string): Promise<void> {
   // (aggregated from its scene moods). A tense story reads differently from a wistful one. [Step 3]
   const reelScenes = await db.query.scenes.findMany({
     where: eq(scenes.reelId, reelId),
-    columns: { mood: true },
+    columns: { idx: true, mood: true, narrationText: true },
   })
+  reelScenes.sort((a, b) => a.idx - b.idx)
   const moodTags = [...new Set(reelScenes.flatMap((s) => s.mood ?? []))]
   const override = reel.voiceSettings as VoiceSettings | null
   const voiceSettings = override ?? moodToVoiceSettings(moodTags, ToneConfigSchema.parse(channel.toneConfig ?? {}), channel.genreCategory)
 
-  const inputHash = buildInputHash('tts.elevenlabs.v1', {
+  // Dramatic pauses (horror): silence is spliced into the voiceover AFTER synthesis and the alignment
+  // shifts to match — the narration text stays verbatim, so nothing downstream re-rolls. Beats are planned
+  // up front (positions + TARGET total silence) so the cache busts when pacing changes; the actual top-up
+  // is resolved against the real alignment below. [M10-safe: alignment length is preserved]
+  const pauseBeats = planNarrationPauses(story.body, reelScenes.map((s) => s.narrationText), channel.genreCategory)
+
+  const inputHash = buildInputHash('tts.elevenlabs.v3', {
     narration: story.body,   // hash of the exact text to catch any upstream mutation
     voiceId: reel.voiceId,
     voiceSettings,           // re-run if the derived delivery changes
+    beats: pauseBeats.map((b) => `${b.cpIndex}:${b.targetMs}`).join('|'), // re-run if pacing changes
   })
 
   const result = await runStep(
@@ -51,11 +63,37 @@ export async function generateTts(reelId: string): Promise<void> {
         voiceSettings,
       })
 
+      // Resolve beats against the REAL alignment: only top up silence that isn't already there naturally.
+      const pauses = resolvePauses(pauseBeats, ttsResult.alignment)
+      if (pauses.length === 0) {
+        return {
+          output: {
+            audioStorageKey: ttsResult.audioStorageKey,
+            durationMs: ttsResult.durationMs,
+            alignment: ttsResult.alignment, // AlignedChar[] — the master clock
+          },
+          costCents: ttsResult.costCents,
+        }
+      }
+
+      // Splice the resolved silences into the just-uploaded voiceover, then shift the alignment to match.
+      const applied = applyPausesToAlignment(ttsResult.alignment, ttsResult.durationMs, pauses)
+      const tmp = await mkdtemp(join(tmpdir(), 'tts-pause-'))
+      try {
+        const inPath = join(tmp, 'in.mp3')
+        const outPath = join(tmp, 'out.mp3')
+        await writeFile(inPath, await downloadBuffer(ttsResult.audioStorageKey))
+        await insertSilences(inPath, outPath, applied.insertions)
+        await uploadBuffer(ttsResult.audioStorageKey, await readFile(outPath), 'audio/mpeg')
+      } finally {
+        await rm(tmp, { recursive: true, force: true })
+      }
+
       return {
         output: {
           audioStorageKey: ttsResult.audioStorageKey,
-          durationMs: ttsResult.durationMs,
-          alignment: ttsResult.alignment, // AlignedChar[] — the master clock
+          durationMs: applied.durationMs,   // extended by the total inserted silence
+          alignment: applied.alignment,     // shifted master clock (same length, times moved)
         },
         costCents: ttsResult.costCents,
       }
