@@ -2,12 +2,15 @@
 import { useState } from 'react'
 import { Sidebar } from './Sidebar'
 import { ToastProvider } from '@/components/Toast'
+import { RenderAlertWatcher } from '@/components/RenderAlertWatcher'
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false)
 
   return (
     <ToastProvider>
+    {/* App-wide "reel is done" alert — polls on every page so a finished render pings you anywhere. */}
+    <RenderAlertWatcher />
     <div className="flex h-screen overflow-hidden bg-bg">
       {/* Desktop sidebar — fixed full-height; only <main> scrolls (see h-screen + overflow-hidden above). */}
       <div className="hidden md:flex">

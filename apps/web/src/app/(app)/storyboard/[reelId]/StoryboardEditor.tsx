@@ -10,6 +10,7 @@ import { GenreLoader } from '@/components/GenreLoader'
 import { usePipelineStatus } from '@/hooks/usePipelineStatus'
 import { PipelinePhaseStepper } from '@/components/PipelinePhaseStepper'
 import { RenderingState } from '@/components/RenderingState'
+import { primeReelAlert } from '@/lib/reel-alert'
 import { MOOD_TINT, type ChannelMood } from '@/lib/pipeline-phases'
 import { useToast } from '@/components/Toast'
 
@@ -411,6 +412,7 @@ export function StoryboardEditor({
   async function handleRender() {
     // Guard: TTS hard-fails with no voice, so never queue a render without one.
     if (!selectedVoice) { setShowVoicePicker(true); return }
+    primeReelAlert() // user gesture — unlock the chime + ask for notification permission for the done-alert
     setError(null)
     setLoading('render')
     const res = await fetch('/api/pipeline/trigger-render', {
@@ -557,6 +559,8 @@ export function StoryboardEditor({
   // actually changes, so the slow idle poll is cheap.
   const watching = showProgress || reel.status === 'storyboard'
   const live = usePipelineStatus(reel.id, { enabled: watching, scenes: true, intervalMs: showProgress ? 2200 : 6000 })
+  // The "reel is done" alert is app-wide now (RenderAlertWatcher in the Shell) — it fires on any page.
+  // Here we only PRIME it (audio unlock + notification permission) on the Render click, in handleRender.
   const sceneProgress = live?.scenes?.length
     ? { done: live.scenes.filter((s) => s.hasImage).length, total: live.scenes.length }
     : scenes.length > 0
