@@ -10,6 +10,7 @@ import { readFile } from 'node:fs/promises'
 import { createReadStream, statSync } from 'node:fs'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
+import { cpus } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { CaptionStyle, ReelCompositionProps, ReelScene, SceneEffect, SubtitleChunk } from './types.js'
@@ -222,7 +223,10 @@ export async function renderReelWithRemotion(input: RemotionRenderInput): Promis
       chromiumOptions: { disableWebSecurity: true },  // allow data URIs
       ...(browserExecutable ? { browserExecutable } : {}),
       muted: true,  // visual only — audio is muxed in separately
-      concurrency: 2,
+      // Frames render in parallel Chromium tabs; 2 was leaving most of the CPU idle (~8fps on an 8-core
+      // machine → ~10min for a 3-minute reel). cores/2 is Remotion's own default and roughly halves the
+      // wall time; stays conservative so the dev box (web + worker + Postgres) isn't starved.
+      concurrency: Math.max(2, Math.floor(cpus().length / 2)),
     })
   } finally {
     await fileServer.close()  // release the loopback port whether the render succeeds or throws
