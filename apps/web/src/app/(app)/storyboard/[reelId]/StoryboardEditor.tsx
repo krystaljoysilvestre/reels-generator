@@ -9,6 +9,8 @@ import { resolveMotionSettings, motionCostCents, operatorCueLabel, VIDEO_EFFECTS
 import { GenreLoader } from '@/components/GenreLoader'
 import { usePipelineStatus } from '@/hooks/usePipelineStatus'
 import { PipelinePhaseStepper } from '@/components/PipelinePhaseStepper'
+import { RenderingState } from '@/components/RenderingState'
+import { MOOD_TINT, type ChannelMood } from '@/lib/pipeline-phases'
 import { useToast } from '@/components/Toast'
 
 type Scene = InferSelectModel<typeof scenes>
@@ -110,7 +112,10 @@ export function StoryboardEditor({
       body: JSON.stringify({ reelId: reel.id, ...patch }),
     }).catch(() => {})
   }
-  const [renderUrl] = useState(initialRenderUrl)
+  // Track the prop, don't freeze it: a re-render bumps the render asset's createdAt → page.tsx hands down a
+  // NEW render URL, and the preview must swap to it. (Was useState(initialRenderUrl), which pinned the very
+  // first URL for the whole session, so a fresh render never showed until a full reload.)
+  const renderUrl = initialRenderUrl
   // Smart sound design — the reel-level audio plan. Auto-drafted in the BACKGROUND (not shown in the UI);
   // realized into placed audio at render. The narration is never touched.
   const [soundNotes, setSoundNotes] = useState(initialSoundNotes)
@@ -561,6 +566,12 @@ export function StoryboardEditor({
   const canRender = isRenderable && !!selectedVoice
   // Post-render gates (spot-check → approved → published) get their own action bar, not the voice/render one.
   const isPostRender = ['spot_check', 'approved', 'scheduled', 'published'].includes(reel.status)
+  // While the render chain runs, editing is locked behind the RenderingState overlay (below). Build phase
+  // (images still generating) is NOT locked — the operator watches scenes populate.
+  const isRendering = reel.status === 'rendering' || reel.status === 'render_qa'
+  // moodTint is exactly one of the three MOOD_TINT values (derived server-side), so reverse-map it to the
+  // ChannelMood key the loaders/ticker want.
+  const channelMoodKey: ChannelMood = moodTint === MOOD_TINT.dark ? 'dark' : moodTint === MOOD_TINT.warm ? 'warm' : 'neutral'
 
   // Live build/render progress: scenes/images still generating (status='storyboard' before they land), or
   // the render chain running. Poll while active — the hook refreshes the server so images + status update.
@@ -647,6 +658,7 @@ export function StoryboardEditor({
     <div id="preview" className="border-t border-border px-4 py-6 sm:px-8">
       <p className="mb-3 text-xs font-medium text-muted">Render preview</p>
       <video
+        key={renderUrl}
         src={renderUrl}
         controls
         className="max-h-[28rem] rounded-xl border border-border shadow-sm"
@@ -930,7 +942,7 @@ export function StoryboardEditor({
   }
 
   return (
-    <div className="flex h-full flex-col bg-bg">
+    <div className="relative flex h-full flex-col bg-bg">
       {/* Header */}
       <div className="sticky top-0 z-40 flex flex-shrink-0 items-center justify-between gap-4 border-b border-border bg-bg/80 px-4 py-3 backdrop-blur sm:px-8 sm:py-4">
         <div className="flex min-w-0 items-center gap-3">
@@ -970,9 +982,10 @@ export function StoryboardEditor({
         </div>
       )}
 
-      {/* Live build / render progress — phases + scene readiness while the pipeline runs */}
-      {showProgress && (
-        <PipelinePhaseStepper reelStatus={live?.reelStatus ?? reel.status} steps={live?.steps ?? []} sceneProgress={sceneProgress} />
+      {/* Live BUILD progress strip — phases + scene readiness while images generate. During the RENDER
+          chain the full-surface RenderingState overlay (below) takes over instead. */}
+      {showProgress && !isRendering && (
+        <PipelinePhaseStepper reelStatus={live?.reelStatus ?? reel.status} steps={live?.steps ?? []} mood={channelMoodKey} sceneProgress={sceneProgress} />
       )}
 
       {/* Scene area — a compact thumbnail TIMELINE on top, the selected scene's INSPECTOR below. In STRIP
@@ -981,8 +994,9 @@ export function StoryboardEditor({
           GRID view the whole area scrolls as one. */}
       <div
         ref={scrollRef}
-        className="flex min-h-0 flex-1 flex-col overflow-y-auto [overflow-anchor:none]"
+        className={`flex min-h-0 flex-1 flex-col overflow-y-auto [overflow-anchor:none] ${isRendering ? 'pointer-events-none select-none' : ''}`}
         onScroll={timelineView === 'strip' ? onShrinkScroll : undefined}
+        aria-hidden={isRendering || undefined}
       >
         {/* STRIP: the rail pins to the top and shrinks to a slim filmstrip as you scroll; once compact it
             stays put while the selected-scene panel scrolls underneath it (native sticky → smooth, no shake).
@@ -1027,8 +1041,21 @@ export function StoryboardEditor({
         )}
       </div>
 
-      {/* Bottom bar — voice + render (storyboard flow only) */}
-      {!isPostRender && (
+      {/* Rendering moment — a playful, mood-tinted overlay that also LOCKS the editor while the render
+          chain runs (covers the scene area; the bottom bar is hidden below). Clears itself when the reel
+          lands at spot-check (isRendering → false). */}
+      {isRendering && (
+        <RenderingState
+          reelStatus={live?.reelStatus ?? reel.status}
+          steps={live?.steps ?? []}
+          mood={channelMoodKey}
+          genre={genreCategory}
+          sceneProgress={sceneProgress}
+        />
+      )}
+
+      {/* Bottom bar — voice + render (storyboard flow only; hidden while rendering) */}
+      {!isPostRender && !isRendering && (
       <div className="sticky bottom-0 z-40 flex flex-shrink-0 flex-wrap items-center gap-4 border-t border-border bg-bg/80 px-4 py-3 backdrop-blur sm:px-8 sm:py-4">
         {/* Narrator — tap to pick the voice. Delivery is auto-tuned per story (no manual sliders). */}
         <button

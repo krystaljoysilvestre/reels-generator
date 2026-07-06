@@ -75,13 +75,31 @@ const WRITING_TICKERS: Record<ChannelMood, string[]> = {
   neutral: ['Reading your channel’s voice…', 'Studying your reference stories…', 'Sketching the hook…', 'Finding the turn…', 'Tightening every line…'],
 }
 
-const PHASE_TICKERS: Record<Exclude<PhaseKey, 'writing'>, string[]> = {
-  storyboarding: ['Breaking the script into scenes…', 'Framing each shot…'],
-  filming: ['Painting the scenes…', 'Recording the narration…', 'Timing every beat…', 'Layering in sound…'],
-  scoring: ['Composing an original score…', 'Mixing voice and music…'],
-  finishing: ['Rendering the video…', 'Checking the final cut…'],
+// Mood-keyed so the whole render is in character — the "dark" set leans into dread, the others stay
+// neutral/warm. (Only 'writing' was themed before; the render phases now get the same treatment.)
+const PHASE_TICKERS: Record<Exclude<PhaseKey, 'writing'>, Record<ChannelMood, string[]>> = {
+  storyboarding: {
+    dark: ['Breaking the script into scenes…', 'Blocking each shot in the dark…', 'Deciding when to look away…'],
+    warm: ['Breaking the script into scenes…', 'Framing each moment…'],
+    neutral: ['Breaking the script into scenes…', 'Framing each shot…'],
+  },
+  filming: {
+    dark: ['Painting the shadows…', 'Recording the whisper…', 'Timing the scare…', 'Letting the dark bleed in…', 'Holding the frame a beat too long…'],
+    warm: ['Painting the scenes…', 'Recording the narration…', 'Timing every beat…', 'Layering in sound…'],
+    neutral: ['Painting the scenes…', 'Recording the narration…', 'Timing every beat…', 'Layering in sound…'],
+  },
+  scoring: {
+    dark: ['Scoring the dread…', 'Tuning the strings to unease…', 'Folding the voice into the dark…'],
+    warm: ['Composing a warm score…', 'Mixing voice and music…'],
+    neutral: ['Composing an original score…', 'Mixing voice and music…'],
+  },
+  finishing: {
+    dark: ['Developing the final cut…', 'One last look over your shoulder…', 'Sealing it shut…'],
+    warm: ['Rendering the video…', 'Checking the final cut…'],
+    neutral: ['Rendering the video…', 'Checking the final cut…'],
+  },
 }
 
 export function phaseTicker(key: PhaseKey, mood: ChannelMood): string[] {
-  return key === 'writing' ? WRITING_TICKERS[mood] : PHASE_TICKERS[key]
+  return key === 'writing' ? WRITING_TICKERS[mood] : PHASE_TICKERS[key][mood]
 }

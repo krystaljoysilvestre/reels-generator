@@ -65,8 +65,13 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
   // Story Bible → "Cast & Places" editor data. Each entity carries its reference-plate thumbnail (the look
   // every scene featuring it is anchored to). Plates overwrite the same R2 key on re-mint, so bust the
   // browser cache with the reel's updatedAt (an edit bumps it) — there's no per-plate asset id to use.
+  // Re-renders overwrite the SAME render.mp4 key and upsert the SAME asset row (id is stable), so the id
+  // alone never busts the cache — a new cut would show the old bytes. Bust on the asset's createdAt (bumped
+  // every render) so each render produces a fresh URL.
   const renderAsset = reelAssets.find((a) => a.kind === 'render')
-  const renderUrl = renderAsset ? `/api/asset?key=${encodeURIComponent(renderAsset.storageKey)}&v=${renderAsset.id}` : null
+  const renderUrl = renderAsset
+    ? `/api/asset?key=${encodeURIComponent(renderAsset.storageKey)}&v=${new Date(renderAsset.createdAt).getTime()}`
+    : null
   // Background music reflects the channel's chosen mode (Sound step): AI → a per-reel mood dropdown (steers
   // the bed generated at render); preset/upload → the actual chosen track(s), shown read-only with a preview;
   // none → silent. For preset/upload we resolve a friendly label + a playable URL for each pool track.
