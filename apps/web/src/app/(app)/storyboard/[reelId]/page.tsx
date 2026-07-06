@@ -82,12 +82,12 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
   // Per-reel operator-uploaded bed (overrides the channel's music at render); null if none.
   const musicUploadUrl = reel.musicUploadKey ? `/api/asset?key=${encodeURIComponent(reel.musicUploadKey)}` : null
 
-  // Starting point for the voice-picker's delivery sliders: the reel's saved override if it has one, else
-  // the channel's baseline delivery (tone only). Tweaking from here overrides the per-story auto-tuning.
+  // Delivery the picker's voice previews play at: the reel's saved override if it has one, else the
+  // channel's baseline delivery (genre envelope + tone). Auto-derived; no manual editing in the UI.
   const tone = ToneConfigSchema.parse(channel?.toneConfig ?? {})
   const initialVoiceSettings: VoiceSettings =
     (reel.voiceSettings as VoiceSettings | null) ??
-    moodToVoiceSettings([], tone)
+    moodToVoiceSettings([], tone, channel?.genreCategory)
   // Channel-mood accent (dark=red / warm=amber / neutral=midnight) for the storyboard's ambient touches.
   const moodTint = MOOD_TINT[channelMood(tone)]
 
@@ -134,7 +134,6 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
       initialSoundNotes={reel.soundNotes ?? ''}
       initialOperatorSfx={OperatorSfxSchema.parse(reel.operatorSfx ?? [])}
       initialVoiceSettings={initialVoiceSettings}
-      voiceSettingsOverridden={reel.voiceSettings != null}
       channelName={channel?.name ?? ''}
       genreCategory={channel?.genreCategory ?? 'general'}
       moodTint={moodTint}

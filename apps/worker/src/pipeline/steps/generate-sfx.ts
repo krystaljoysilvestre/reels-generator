@@ -109,7 +109,7 @@ export async function generateSfx(reelId: string): Promise<void> {
   // asset row per cue (delete-then-insert) keeps the mixer's anchor→asset match unambiguous on re-runs.
   if (operatorCues.length > 0) {
     const tone = ToneConfigSchema.parse(channel.toneConfig ?? {})
-    const base = (reel.voiceSettings as VoiceSettings | null) ?? moodToVoiceSettings([], tone)
+    const base = (reel.voiceSettings as VoiceSettings | null) ?? moodToVoiceSettings([], tone, channel.genreCategory)
 
     for (const cue of operatorCues) {
       const storageKey = `reels/${reelId}/sfx/op-${cue.id}.mp3`

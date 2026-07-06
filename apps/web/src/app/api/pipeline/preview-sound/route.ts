@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
       if (!cue.voiceId || !cue.words) return NextResponse.json({ error: 'This spoken sound is missing its voice or words.' }, { status: 400 })
       const channel = await db.query.channels.findFirst({ where: eq(channels.id, reel.channelId) })
       const tone = ToneConfigSchema.parse(channel?.toneConfig ?? {})
-      const base = (reel.voiceSettings as VoiceSettings | null) ?? moodToVoiceSettings([], tone)
+      const base = (reel.voiceSettings as VoiceSettings | null) ?? moodToVoiceSettings([], tone, channel?.genreCategory)
       const res = await generateSpeechClip({
         text: cue.words,
         voiceId: cue.voiceId,

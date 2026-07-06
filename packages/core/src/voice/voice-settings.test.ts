@@ -47,4 +47,39 @@ describe('moodToVoiceSettings', () => {
     expect(s.speed).toBeLessThanOrEqual(1.12)
     expect(s.style).toBeLessThanOrEqual(0.6)
   })
+
+  it('horror envelope holds even with NO mood tags (the original jolly-voice failure)', () => {
+    // With no dread tag the old logic gave stability ~0.47 / style ~0.3 / speed ~0.96 — the erratic,
+    // theatrical, slightly-fast read that sounded jolly. The genre envelope must floor stability, cap
+    // drama, and hold the pace down regardless of what the mood tagger emits.
+    const horror = moodToVoiceSettings([], neutralTone, 'horror')
+    expect(horror.stability).toBeGreaterThanOrEqual(0.5)
+    expect(horror.style).toBeLessThanOrEqual(0.15)
+    expect(horror.speed).toBeLessThanOrEqual(0.95)
+  })
+
+  it('horror envelope caps an energetic-tagged story (never rushes or turns theatrical)', () => {
+    const extreme: ToneConfig = { intensity: 10, warmth: 0, energy: 10, pacing: 10, humor: 0 }
+    const s = moodToVoiceSettings(['energetic', 'thrilling', 'epic'], extreme, 'horror')
+    expect(s.stability).toBeGreaterThanOrEqual(0.5)
+    expect(s.style).toBeLessThanOrEqual(0.15)
+    expect(s.speed).toBeLessThanOrEqual(0.95)
+  })
+
+  it('genre bands differ: horror is steadier + slower + less dramatic than lifestyle', () => {
+    // Use an intense tone so all three axes diverge (at neutral tone the horror/lifestyle stability bands
+    // both admit 0.55 and tie — the bands only separate on stability once the baseline is pushed low).
+    const intense: ToneConfig = { ...neutralTone, intensity: 8, energy: 8, pacing: 8 }
+    const horror = moodToVoiceSettings([], intense, 'horror')
+    const lifestyle = moodToVoiceSettings([], intense, 'lifestyle')
+    expect(horror.stability).toBeGreaterThan(lifestyle.stability)
+    expect(horror.style).toBeLessThan(lifestyle.style)
+    expect(horror.speed).toBeLessThan(lifestyle.speed)
+  })
+
+  it("'general' and unknown genres apply no envelope (tone/mood drive it)", () => {
+    const withGeneral = moodToVoiceSettings(['energetic'], neutralTone, 'general')
+    const noGenre = moodToVoiceSettings(['energetic'], neutralTone)
+    expect(withGeneral).toEqual(noGenre)
+  })
 })

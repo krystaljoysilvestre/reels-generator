@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import type { InferSelectModel } from 'drizzle-orm'
 import type { scenes, stories } from '@reels/db'
 import type { ChannelVoice, VoiceSettings, OperatorCue } from '@reels/core'
-import { resolveMotionSettings, motionCostCents, operatorCueLabel, VIDEO_EFFECTS, MUSIC_MOODS, MUSIC_MOOD_OPTIONS, type MusicMood, DELIVERY_PRESETS, DELIVERY_PRESET_OPTIONS, applyDeliveryPreset, matchDeliveryPreset, type DeliveryPreset } from '@reels/core'
+import { resolveMotionSettings, motionCostCents, operatorCueLabel, VIDEO_EFFECTS, MUSIC_MOODS, MUSIC_MOOD_OPTIONS, type MusicMood } from '@reels/core'
 import { GenreLoader } from '@/components/GenreLoader'
 import { usePipelineStatus } from '@/hooks/usePipelineStatus'
 import { PipelinePhaseStepper } from '@/components/PipelinePhaseStepper'
@@ -44,8 +44,7 @@ interface StoryboardEditorProps {
   initialVideoEffects: string[] | null // per-reel video effects; null = auto (planned from the story)
   initialSoundNotes: string // auto-drafted reel-level smart audio plan (read-only display)
   initialOperatorSfx: OperatorCue[] // operator-added per-scene manual cues
-  initialVoiceSettings: VoiceSettings // starting point for the delivery sliders
-  voiceSettingsOverridden: boolean // reel already has a saved manual override
+  initialVoiceSettings: VoiceSettings // auto-derived delivery; voice previews play at this (no manual editing)
   channelName: string
   genreCategory: string // horror | informational | lifestyle | general — picks the loader glyph
   moodTint: string // channel-mood accent (dark=red / warm=amber / neutral=midnight) for ambient touches
@@ -55,7 +54,7 @@ interface StoryboardEditorProps {
 export function StoryboardEditor({
   reel, story, scenes: initialScenes, voicePool, voiceRecommend,
   sceneImages, sceneImageHistory, sceneVideoVariations, renderUrl: initialRenderUrl, musicMood: initialMusicMood, channelMusicMood, aiMusic, musicMode, channelMusicTracks, musicUploadUrl: initialMusicUploadUrl,
-  initialVideoEffects, initialSoundNotes, initialOperatorSfx, initialVoiceSettings, voiceSettingsOverridden,
+  initialVideoEffects, initialSoundNotes, initialOperatorSfx, initialVoiceSettings,
   channelName, genreCategory, moodTint, failure,
 }: StoryboardEditorProps) {
   const router = useRouter()
@@ -101,77 +100,15 @@ export function StoryboardEditor({
   const tierBusyRef = useRef<Set<number>>(new Set()) // scenes with an in-flight motion toggle (drops rapid flips)
   const [selectedVoice, setSelectedVoice] = useState(reel.voiceId ?? voicePool[0]?.providerId ?? '')
   const [showVoicePicker, setShowVoicePicker] = useState(false)
-  // Narrator delivery: the picker's sliders edit this; `voiceTouched` = the operator overrode the
-  // per-story auto-tuning, so we send it to the render (else generate_tts auto-derives from mood).
-  const [voiceSettings, setVoiceSettings] = useState<VoiceSettings>(initialVoiceSettings)
-  const [voiceTouched, setVoiceTouched] = useState(voiceSettingsOverridden)
-  const [deliveryOpen, setDeliveryOpen] = useState(false) // footer delivery preset popover
-  // Custom hand-tune escape hatch — auto-open the sliders if the reel loads with an off-preset override.
-  const [showCustomDelivery, setShowCustomDelivery] = useState(() => voiceSettingsOverridden && !matchDeliveryPreset(initialVoiceSettings))
-  const setDelivery = (patch: Partial<VoiceSettings>) => { setVoiceSettings((s) => ({ ...s, ...patch })); setVoiceTouched(true) }
-
-  // Persist voice + delivery as they change, so they survive a reload without a render (they used to be
-  // sent only at render time). A ref mirrors the latest settings for the on-release preview below.
-  const voiceSettingsRef = useRef(voiceSettings)
-  voiceSettingsRef.current = voiceSettings
-  function saveVoice(patch: { voiceId?: string; voiceSettings?: VoiceSettings | null }) {
+  // Narrator delivery is fully auto — derived per story from the channel's genre + tone (moodToVoiceSettings
+  // at render). No manual editing in the UI on purpose: a one-line preview can't validate delivery across a
+  // whole narration, and a bad override ships silently. The picker's voice previews play at the auto profile
+  // (initialVoiceSettings) so what you audition matches the render.
+  function saveVoice(patch: { voiceId: string }) {
     return fetch('/api/pipeline/set-voice', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ reelId: reel.id, ...patch }),
     }).catch(() => {})
-  }
-  // Debounced persist of delivery edits (skips the first run so an already-overridden reel doesn't re-save
-  // on load). Reset clears the override explicitly (saveVoice({ voiceSettings: null })), handled at its button.
-  const deliverySaveInit = useRef(true)
-  useEffect(() => {
-    if (deliverySaveInit.current) { deliverySaveInit.current = false; return }
-    if (!voiceTouched) return
-    const t = setTimeout(() => { void saveVoice({ voiceSettings }) }, 500)
-    return () => clearTimeout(t)
-  }, [voiceSettings, voiceTouched])
-
-  // Hear the current delivery instantly, fired when a footer slider is released (onCommit). Uses the
-  // selected voice + the latest settings (via ref, so it isn't stale from the drag's last onChange).
-  const voicePreviewRef = useRef<HTMLAudioElement | null>(null)
-  const voicePreviewCache = useRef<Map<string, string>>(new Map()) // voice+settings → object URL; replays are free
-  const [voicePreviewLoading, setVoicePreviewLoading] = useState(false)
-  // Pass the target settings explicitly on preset-click (state/ref aren't updated yet within the handler);
-  // falls back to the live ref for any deferred caller.
-  async function previewDelivery(settings?: VoiceSettings) {
-    if (!selectedVoice) return
-    const vs = settings ?? voiceSettingsRef.current
-    const el = voicePreviewRef.current ?? (voicePreviewRef.current = new Audio())
-    const key = `${selectedVoice}|${vs.speed}|${vs.style}|${vs.stability}`
-    const play = (url: string) => { el.pause(); el.src = url; void el.play().catch(() => {}) }
-    const cached = voicePreviewCache.current.get(key)
-    if (cached) { play(cached); return }
-    setVoicePreviewLoading(true)
-    try {
-      const text = (story?.body.split('\n')[0] || 'Ito ang boses para sa reel mo.').slice(0, 120)
-      const res = await fetch('/api/pipeline/preview-voice', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ voiceId: selectedVoice, text, voiceSettings: vs }),
-      })
-      if (!res.ok) return
-      const url = URL.createObjectURL(await res.blob())
-      voicePreviewCache.current.set(key, url)
-      play(url)
-    } finally {
-      setVoicePreviewLoading(false)
-    }
-  }
-  // Delivery presets (mirror the music-mood dropdown): Auto + named presets, single-select, preview on pick.
-  const isAutoDelivery = !voiceTouched
-  const activeDelivery = voiceTouched ? matchDeliveryPreset(voiceSettings) : null
-  const pickDeliveryPreset = (preset: DeliveryPreset) => {
-    const next = applyDeliveryPreset(voiceSettings, preset)
-    setVoiceSettings(next); setVoiceTouched(true)
-    void previewDelivery(next) // debounced persist handled by the voiceSettings effect
-  }
-  const pickAutoDelivery = () => {
-    setVoiceSettings(initialVoiceSettings); setVoiceTouched(false)
-    void saveVoice({ voiceSettings: null })
-    void previewDelivery(initialVoiceSettings)
   }
   const [renderUrl] = useState(initialRenderUrl)
   // Smart sound design — the reel-level audio plan. Auto-drafted in the BACKGROUND (not shown in the UI);
@@ -477,7 +414,7 @@ export function StoryboardEditor({
     setLoading('render')
     const res = await fetch('/api/pipeline/trigger-render', {
       method: 'POST',
-      body: JSON.stringify({ reelId: reel.id, voiceId: selectedVoice, ...(voiceTouched ? { voiceSettings } : {}) }),
+      body: JSON.stringify({ reelId: reel.id, voiceId: selectedVoice }),
       headers: { 'Content-Type': 'application/json' },
     })
     if (!res.ok) {
@@ -1093,126 +1030,30 @@ export function StoryboardEditor({
       {/* Bottom bar — voice + render (storyboard flow only) */}
       {!isPostRender && (
       <div className="sticky bottom-0 z-40 flex flex-shrink-0 flex-wrap items-center gap-4 border-t border-border bg-bg/80 px-4 py-3 backdrop-blur sm:px-8 sm:py-4">
-        {/* Narrator — a pill matching the music control: tap the name to pick a voice, the sliders icon to
-            tweak this reel's delivery. */}
-        <div className={`relative flex items-center rounded-lg border bg-subtle/40 ${!selectedVoice ? 'border-accent ring-1 ring-accent' : 'border-border'}`}>
-          <button
-            onClick={() => setShowVoicePicker(true)}
-            disabled={recsLoading && !currentVoice}
-            className="flex h-11 items-center gap-1.5 rounded-l-lg px-2.5 text-xs font-medium text-ink transition-colors hover:bg-subtle disabled:cursor-wait disabled:text-muted"
-            title="Pick a narrator voice"
-          >
-            {recsLoading && !currentVoice ? (
-              <>
-                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-muted/50 border-t-transparent" />
-                Finding a voice…
-              </>
-            ) : (
-              <>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 text-muted" aria-hidden>
-                  <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3ZM19 11a7 7 0 0 1-14 0M12 18v3" />
-                </svg>
-                <span className="max-w-[11rem] truncate">{currentVoice ? (currentVoice.description ? `${currentVoice.name} · ${currentVoice.description}` : currentVoice.name) : 'Pick voice'}</span>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 text-faint" aria-hidden>
-                  <path d="m6 9 6 6 6-6" />
-                </svg>
-              </>
-            )}
-          </button>
-          <span className="h-5 w-px flex-shrink-0 bg-border" aria-hidden />
-          <button
-            onClick={() => setDeliveryOpen((o) => !o)}
-            aria-expanded={deliveryOpen}
-            className={`flex h-11 flex-shrink-0 items-center gap-1.5 rounded-r-lg px-2.5 text-xs font-medium transition-colors hover:bg-subtle hover:text-ink ${deliveryOpen ? 'text-ink' : 'text-muted'}`}
-            title="Narrator delivery"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" /><line x1="12" y1="21" x2="12" y2="12" /><line x1="12" y1="8" x2="12" y2="3" /><line x1="20" y1="21" x2="20" y2="16" /><line x1="20" y1="12" x2="20" y2="3" /><line x1="1" y1="14" x2="7" y2="14" /><line x1="9" y1="8" x2="15" y2="8" /><line x1="17" y1="16" x2="23" y2="16" />
-            </svg>
-            <span className={`rounded-full px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide ${isAutoDelivery ? 'bg-accent-soft text-accent' : 'bg-subtle text-muted'}`}>
-              {isAutoDelivery ? 'Auto' : activeDelivery ? DELIVERY_PRESETS[activeDelivery].label : 'Custom'}
-            </span>
-          </button>
-
-          {/* Delivery preset popover — mirrors the music-mood dropdown: Auto + named presets, single-select. */}
-          {deliveryOpen && (
-            <div className="absolute bottom-full left-0 z-50 mb-2 w-72 rounded-xl border border-border-strong bg-surface p-3 shadow-lg">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Narrator delivery</p>
-              </div>
-              <p className="mb-2 flex items-center gap-1.5 text-[11px] leading-relaxed text-faint">
-                {voicePreviewLoading && <span className="h-3 w-3 animate-spin rounded-full border-2 border-muted/50 border-t-transparent" aria-hidden />}
-                {selectedVoice ? 'How the narrator performs. Tap to hear it.' : 'Pick a voice first to hear delivery.'}
-              </p>
-              <div className="flex flex-col gap-1.5">
-                {/* Auto — per-story auto-tuning (mirrors the music "Channel default" row). */}
-                <button
-                  type="button"
-                  onClick={pickAutoDelivery}
-                  className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left transition-colors ${isAutoDelivery ? 'border-accent bg-accent-soft' : 'border-border hover:bg-subtle'}`}
-                >
-                  <span>
-                    <span className="block text-xs font-medium text-ink">Auto</span>
-                    <span className="block text-[11px] text-faint">Tuned to each story’s mood</span>
-                  </span>
-                  <span className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border ${isAutoDelivery ? 'border-accent bg-accent text-white' : 'border-border-strong'}`}>
-                    {isAutoDelivery && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M20 6 9 17l-5-5" /></svg>}
-                  </span>
-                </button>
-                {DELIVERY_PRESET_OPTIONS.map((d) => {
-                  const on = activeDelivery === d.value
-                  return (
-                    <button
-                      key={d.value}
-                      type="button"
-                      onClick={() => pickDeliveryPreset(d.value)}
-                      className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left transition-colors ${on ? 'border-accent bg-accent-soft' : 'border-border hover:bg-subtle'}`}
-                    >
-                      <span>
-                        <span className="block text-xs font-medium text-ink">{d.label}</span>
-                        <span className="block text-[11px] text-faint">{d.hint}</span>
-                      </span>
-                      <span className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border ${on ? 'border-accent bg-accent text-white' : 'border-border-strong'}`}>
-                        {on && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M20 6 9 17l-5-5" /></svg>}
-                      </span>
-                    </button>
-                  )
-                })}
-                {/* Custom — hand-tune escape hatch: reveals the raw sliders. Active when overridden off-preset. */}
-                {(() => {
-                  const isCustom = voiceTouched && !activeDelivery
-                  return (
-                    <button
-                      type="button"
-                      onClick={() => setShowCustomDelivery((s) => !s)}
-                      aria-expanded={showCustomDelivery}
-                      className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left transition-colors ${isCustom ? 'border-accent bg-accent-soft' : 'border-border hover:bg-subtle'}`}
-                    >
-                      <span>
-                        <span className="block text-xs font-medium text-ink">Custom…</span>
-                        <span className="block text-[11px] text-faint">Hand-tune pace, expressiveness, steadiness</span>
-                      </span>
-                      {isCustom ? (
-                        <span className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border border-accent bg-accent text-white">
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M20 6 9 17l-5-5" /></svg>
-                        </span>
-                      ) : (
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`flex-shrink-0 text-faint ${showCustomDelivery ? 'rotate-180' : ''}`} aria-hidden><path d="m6 9 6 6 6-6" /></svg>
-                      )}
-                    </button>
-                  )
-                })()}
-                {showCustomDelivery && (
-                  <div className="mt-1 flex flex-col gap-3 rounded-lg border border-border bg-subtle/40 p-3">
-                    <DeliverySlider label="Pace" lo="Slower" hi="Faster" min={0.7} max={1.15} step={0.01} value={voiceSettings.speed} onChange={(v) => setDelivery({ speed: v })} onCommit={() => void previewDelivery()} />
-                    <DeliverySlider label="Expressiveness" lo="Subtle" hi="Dramatic" min={0} max={0.6} step={0.05} value={voiceSettings.style} onChange={(v) => setDelivery({ style: v })} onCommit={() => void previewDelivery()} />
-                    <DeliverySlider label="Steadiness" lo="Varied" hi="Steady" min={0.2} max={0.85} step={0.05} value={voiceSettings.stability} onChange={(v) => setDelivery({ stability: v })} onCommit={() => void previewDelivery()} />
-                  </div>
-                )}
-              </div>
-            </div>
+        {/* Narrator — tap to pick the voice. Delivery is auto-tuned per story (no manual sliders). */}
+        <button
+          onClick={() => setShowVoicePicker(true)}
+          disabled={recsLoading && !currentVoice}
+          className={`flex h-11 items-center gap-1.5 rounded-lg border bg-subtle/40 px-2.5 text-xs font-medium text-ink transition-colors hover:bg-subtle disabled:cursor-wait disabled:text-muted ${!selectedVoice ? 'border-accent ring-1 ring-accent' : 'border-border'}`}
+          title="Pick a narrator voice"
+        >
+          {recsLoading && !currentVoice ? (
+            <>
+              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-muted/50 border-t-transparent" />
+              Finding a voice…
+            </>
+          ) : (
+            <>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 text-muted" aria-hidden>
+                <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3ZM19 11a7 7 0 0 1-14 0M12 18v3" />
+              </svg>
+              <span className="max-w-[11rem] truncate">{currentVoice ? (currentVoice.description ? `${currentVoice.name} · ${currentVoice.description}` : currentVoice.name) : 'Pick voice'}</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 text-faint" aria-hidden>
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </>
           )}
-        </div>
+        </button>
         {musicControl}
         {effectsControl}
         {error && <p className="text-sm text-danger">{error}</p>}
@@ -1247,8 +1088,33 @@ export function StoryboardEditor({
             <>
               <div className="mr-auto">
                 <p className="text-sm font-semibold text-ink">Spot-check</p>
-                <p className="text-xs text-muted">Watch the render below, then sign it off — or re-render to apply changes.</p>
+                <p className="text-xs text-muted">Watch the render below, then sign it off — or change the voice and re-render to apply changes.</p>
               </div>
+              {/* Change voice, then re-render — post-render analog of the storyboard voice pill. The picker
+                  saves the pick to the reel; the next Re-render re-runs TTS with it (stills/clips are reused). */}
+              <button
+                onClick={() => setShowVoicePicker(true)}
+                disabled={recsLoading && !currentVoice}
+                className="flex h-10 items-center gap-1.5 rounded-lg border border-border bg-subtle/40 px-2.5 text-xs font-medium text-ink transition-colors hover:bg-subtle disabled:cursor-wait disabled:text-muted"
+                title="Change the narrator voice, then re-render"
+              >
+                {recsLoading && !currentVoice ? (
+                  <>
+                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-muted/50 border-t-transparent" />
+                    Finding voices…
+                  </>
+                ) : (
+                  <>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 text-muted" aria-hidden>
+                      <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3ZM19 11a7 7 0 0 1-14 0M12 18v3" />
+                    </svg>
+                    <span className="max-w-[11rem] truncate">{currentVoice ? currentVoice.name : 'Change voice'}</span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 text-faint" aria-hidden>
+                      <path d="m6 9 6 6 6-6" />
+                    </svg>
+                  </>
+                )}
+              </button>
               <button onClick={handleRender} disabled={loading === 'render' || loading === 'approve'} className="btn-secondary active:scale-[.98]">
                 {loading === 'render' ? 'Queuing…' : 'Re-render'}
               </button>
@@ -1319,7 +1185,7 @@ export function StoryboardEditor({
           onRetry={fetchRecommendedVoices}
           selected={selectedVoice}
           storyFirstLine={story?.body.split('\n')[0] ?? ''}
-          voiceSettings={voiceSettings}
+          voiceSettings={initialVoiceSettings}
           onSelect={(id) => { setSelectedVoice(id); void saveVoice({ voiceId: id }); setShowVoicePicker(false) }}
           onClose={() => setShowVoicePicker(false)}
         />
@@ -2232,7 +2098,7 @@ function VoicePicker({ voices, recommended, loadingVoices, voicesError, onRetry,
   onRetry: () => void
   selected: string
   storyFirstLine: string
-  voiceSettings: VoiceSettings // previews play at the current delivery (edited in the footer, not here)
+  voiceSettings: VoiceSettings // previews play at the auto-derived delivery (no manual editing anywhere)
   onSelect: (id: string) => void
   onClose: () => void
 }) {
@@ -2407,25 +2273,6 @@ function VoicePicker({ voices, recommended, loadingVoices, voicesError, onRetry,
           </button>
         </div>
       </div>
-    </div>
-  )
-}
-
-// A single delivery axis (pace / expressiveness / steadiness) — used only by the Custom hand-tune escape
-// hatch in the delivery popover. onCommit fires on release so we preview once, not on every drag frame.
-function DeliverySlider({ label, lo, hi, min, max, step, value, onChange, onCommit }: {
-  label: string; lo: string; hi: string; min: number; max: number; step: number; value: number; onChange: (v: number) => void; onCommit?: () => void
-}) {
-  return (
-    <div>
-      <p className="mb-0.5 text-xs font-medium text-ink">{label}</p>
-      <input
-        type="range" min={min} max={max} step={step} value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        onPointerUp={onCommit} onKeyUp={onCommit}
-        className="w-full accent-accent"
-      />
-      <div className="flex justify-between text-[10px] text-faint"><span>{lo}</span><span>{hi}</span></div>
     </div>
   )
 }

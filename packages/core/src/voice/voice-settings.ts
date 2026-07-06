@@ -29,8 +29,23 @@ const MOOD_RULES: Array<{ match: RegExp; dStability: number; dStyle: number; dSp
   { match: /myster|curious|intrigu|enigmat|uncanny/i, dStability: -0.04, dStyle: 0.04, dSpeed: -0.02 },
 ]
 
-// Map (channel tone baseline + this reel's story mood) → ElevenLabs voice_settings.
-export function moodToVoiceSettings(mood: string[], tone: ToneConfig): VoiceSettings {
+// Per-genre delivery ENVELOPE. Genre is the strongest signal of a channel's desired vocal character, so it
+// sets the band the read must stay inside; tone + story mood only POSITION the read within that band. We
+// apply it as a final clamp so no story can drift out of the genre's character — critically, a horror read
+// can never rush or turn theatrical even when the story mood tagger emits nothing (the old failure: no dread
+// tag → baseline stability 0.47 / style 0.3 / speed 0.96, which reads as jolly, not dread). 'general' has no
+// envelope on purpose — it's the catch-all, so tone/mood drive it under the wide final clamp below.
+const GENRE_ENVELOPE: Record<string, { stability: [number, number]; style: [number, number]; speed: [number, number] }> = {
+  // Cold, controlled, slow — the scare is restraint. Steady enough to never rush/stutter; drama kept low.
+  horror: { stability: [0.5, 0.65], style: [0.05, 0.15], speed: [0.85, 0.95] },
+  // Clear and authoritative — steady, minimal drama, brisk but never rushed.
+  informational: { stability: [0.45, 0.6], style: [0.05, 0.22], speed: [0.96, 1.08] },
+  // Warm and natural — a little expressive, conversational pace.
+  lifestyle: { stability: [0.4, 0.55], style: [0.15, 0.35], speed: [0.95, 1.06] },
+}
+
+// Map (channel genre envelope + channel tone baseline + this reel's story mood) → ElevenLabs voice_settings.
+export function moodToVoiceSettings(mood: string[], tone: ToneConfig, genre?: string): VoiceSettings {
   // Baseline from the channel's tone axes (0–10): higher intensity → more expressive (lower stability)
   // + more drama (style); pacing drives speed.
   let stability = clamp(0.55 - (tone.intensity - 5) * 0.04, 0.25, 0.75)
@@ -41,6 +56,14 @@ export function moodToVoiceSettings(mood: string[], tone: ToneConfig): VoiceSett
   const tags = mood.join(' ')
   for (const r of MOOD_RULES) {
     if (r.match.test(tags)) { stability += r.dStability; style += r.dStyle; speed += r.dSpeed }
+  }
+
+  // Genre envelope — clamp into the genre's character band (dominant over tone/mood). No-op for 'general'.
+  const env = genre ? GENRE_ENVELOPE[genre] : undefined
+  if (env) {
+    stability = clamp(stability, env.stability[0], env.stability[1])
+    style = clamp(style, env.style[0], env.style[1])
+    speed = clamp(speed, env.speed[0], env.speed[1])
   }
 
   return {

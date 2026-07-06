@@ -32,7 +32,7 @@ export async function generateTts(reelId: string): Promise<void> {
   })
   const moodTags = [...new Set(reelScenes.flatMap((s) => s.mood ?? []))]
   const override = reel.voiceSettings as VoiceSettings | null
-  const voiceSettings = override ?? moodToVoiceSettings(moodTags, ToneConfigSchema.parse(channel.toneConfig ?? {}))
+  const voiceSettings = override ?? moodToVoiceSettings(moodTags, ToneConfigSchema.parse(channel.toneConfig ?? {}), channel.genreCategory)
 
   const inputHash = buildInputHash('tts.elevenlabs.v1', {
     narration: story.body,   // hash of the exact text to catch any upstream mutation
