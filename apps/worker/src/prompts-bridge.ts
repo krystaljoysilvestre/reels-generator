@@ -7,7 +7,7 @@ export {
   StoryCriticSchema,
   DEFAULT_TASTE_RUBRIC,
 } from '@reels/core/prompts/story-critic.v1'
-export { buildAudioScriptPrompt, AUDIOSCRIPT_V1_VERSION } from '@reels/core/prompts/audioscript.v1'
+export { buildSoundDesignerPrompt, SOUND_DESIGNER_V1_VERSION, SoundDesignSchema, type DesignerScene } from '@reels/core/prompts/sound-designer.v1'
 export { buildScenesPrompt, SCENES_V1_VERSION } from '@reels/core/prompts/scenes.v1'
 export { buildStoryAnalyzerPrompt, STORY_ANALYZER_V1_VERSION } from '@reels/core/prompts/story-analyzer.v1'
 export { buildRephrasePrompt, REPHRASE_V1_VERSION } from '@reels/core/prompts/rephrase.v1'

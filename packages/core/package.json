@@ -12,7 +12,7 @@
     "./prompts/story-critic.v1": "./src/prompts/story-critic.v1.ts",
     "./prompts/rubric-miner.v1": "./src/prompts/rubric-miner.v1.ts",
     "./assembly/story-angles": "./src/assembly/story-angles.ts",
-    "./prompts/audioscript.v1": "./src/prompts/audioscript.v1.ts",
+    "./prompts/sound-designer.v1": "./src/prompts/sound-designer.v1.ts",
     "./prompts/scenes.v1": "./src/prompts/scenes.v1.ts",
     "./prompts/story-analyzer.v1": "./src/prompts/story-analyzer.v1.ts",
     "./prompts/revise-scene.v1": "./src/prompts/revise-scene.v1.ts",
@@ -31,8 +31,6 @@
     "./prompts/voice-recommend.v1": "./src/prompts/voice-recommend.v1.ts",
     "./prompts/music-steer.v1": "./src/prompts/music-steer.v1.ts",
     "./prompts/add-sound.v1": "./src/prompts/add-sound.v1.ts",
-    "./prompts/audio-enrich.v1": "./src/prompts/audio-enrich.v1.ts",
-    "./prompts/interpret-sounds.v1": "./src/prompts/interpret-sounds.v1.ts",
     "./prompts/style-options.v1": "./src/prompts/style-options.v1.ts",
     "./prompts/style-ref.v1": "./src/prompts/style-ref.v1.ts"
   },

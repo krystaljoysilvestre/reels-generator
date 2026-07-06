@@ -240,10 +240,6 @@ export function computeTimings(input: ComputeTimingsInput): Timings {
   if (input.audioScript.music) {
     const m = input.audioScript.music
 
-    const startAnchorMs = m.startAnchor
-      ? (resolveAnchor(cps, input.alignment, m.startAnchor, true)?.startMs ?? 0)
-      : 0
-
     // peak: peakAnchor → twistAnchor → 0.8 * duration (soft — never throw)
     let peakAnchorMs: number | undefined
     if (m.peakAnchor) {
@@ -256,6 +252,16 @@ export function computeTimings(input: ComputeTimingsInput): Timings {
       peakAnchorMs = Math.round(0.8 * input.durationMs)
       warnings.push(`Music peak anchor unresolvable; using fallback 0.8 × duration = ${peakAnchorMs}ms`)
     }
+
+    // Build start (startAnchorMs = where the rise to the peak begins). When the annotator gives no
+    // startAnchor, DON'T build from t=0 — a whole-reel linear crawl reads as a static quiet bed with no
+    // act structure. Default to a late build: the bed holds flat, then rises over the final stretch into
+    // the peak (up to ~45s of build, never earlier than ~55% of the way there). Restraint early = the
+    // build is FELT.
+    const defaultBuildStartMs = Math.max(0, Math.max(Math.round(0.55 * peakAnchorMs), peakAnchorMs - 45_000))
+    const startAnchorMs = m.startAnchor
+      ? (resolveAnchor(cps, input.alignment, m.startAnchor, true)?.startMs ?? defaultBuildStartMs)
+      : defaultBuildStartMs
 
     // Sanity clamp
     let safeStart = startAnchorMs

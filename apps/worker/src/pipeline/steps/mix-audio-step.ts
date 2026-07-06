@@ -61,7 +61,9 @@ export async function mixAudioStep(reelId: string): Promise<void> {
   const sfxAssets = allAssets.filter((a) => a.kind === 'sfx')
   if (!voiceover) throw new Error('No voiceover asset')
 
-  const inputHash = buildInputHash('mix_audio.v2', {
+  // v3: gentler music duck (ratio 6 → 3) + late build-start envelope — the mixer's behavior changed,
+  // so cached v2 mixes are stale even when the inputs hash the same.
+  const inputHash = buildInputHash('mix_audio.v3', {
     // Hash the voiceover's row identity (createdAt), not its constant storage key — the key never changes
     // across re-synthesis, so hashing it would reuse a stale mix after a voice change.
     voiceoverAt: voiceover.createdAt,

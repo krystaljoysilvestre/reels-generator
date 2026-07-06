@@ -35,7 +35,9 @@ export function buildMusicPrompt(params: {
   const base =
     params.audioMood?.prompt?.trim() ||
     `a ${params.toneIntensity >= 6 ? 'dark, tense' : 'warm, gentle'} cinematic background bed for: ${params.nicheDescription.slice(0, 160)}`
-  // The preset's rich phrase leads when chosen; otherwise fall back to the terse story-mood tilt.
+  // The preset's rich phrase leads when chosen; otherwise fall back to the terse story-mood tilt. The bed's
+  // character comes from the operator's mood preset (and the story's mood) — NOT a hardcoded per-genre
+  // texture, so nothing forces e.g. a heartbeat on every horror reel.
   const mood = params.moodPrompt?.trim()
     ? ` ${params.moodPrompt.trim()}`
     : params.moodTags.length ? ` Lean ${params.moodTags.join(', ')} for this story.` : ''

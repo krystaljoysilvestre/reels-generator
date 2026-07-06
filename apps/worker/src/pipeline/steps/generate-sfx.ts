@@ -11,6 +11,7 @@ import {
   cueDurationSec,
   deliveryToVoiceSettings,
   moodToVoiceSettings,
+  isVocalSfxPrompt,
   type VoiceSettings,
 } from '@reels/core'
 import { runStep } from '../harness.js'
@@ -64,7 +65,16 @@ export async function generateSfx(reelId: string): Promise<void> {
   // ── Generate all SFX cues via ElevenLabs in one idempotent step ─────────
   // "Smart sound effects" toggle (Sound step): when off, generate no SFX for this channel. (Operator cues
   // are explicit user requests, so they generate regardless of the channel toggle — handled separately.)
-  const sfxCues = (audioPacks.sfxEnabled ? audioScript.sfx : []).filter((c) => !opAnchors.has(c.anchor))
+  // Vocal prompts are dropped (safety net behind the sound designer's non-vocal-SFX rule): a synthesized
+  // gasp/laugh/whisper reads as a random stranger next to the narrator. Intentional voices go through the
+  // designer's speech cues, not SFX.
+  const sfxCues = (audioPacks.sfxEnabled ? audioScript.sfx : [])
+    .filter((c) => !opAnchors.has(c.anchor))
+    .filter((c) => {
+      if (!isVocalSfxPrompt(c.prompt)) return true
+      console.log(`[sfx] dropped vocal SFX prompt "${c.prompt}" @ "${c.anchor}" (${reelId})`)
+      return false
+    })
   const sfxAnchors = sfxCues.map((c) => c.anchor).sort().join('|')
   const inputHash = buildInputHash('sfx.elevenlabs.v1', { sfxAnchors, reelId, sfxEnabled: audioPacks.sfxEnabled })
 

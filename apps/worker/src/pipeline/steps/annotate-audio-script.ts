@@ -1,49 +1,30 @@
 import { eq } from 'drizzle-orm'
-import { getDb, reels, stories } from '@reels/db'
+import { getDb, reels, stories, scenes } from '@reels/db'
 import { llmCall, listVoices, buildInputHash } from '@reels/providers'
-import { AudioScriptSchema, AudioPacksSchema, OperatorSfxSchema, cueVolumeDb, resolveMusicMood, MusicMoodSchema, type AudioScript, type OperatorCue } from '@reels/core'
-import { buildInterpretSoundsPrompt, InterpretSoundsSchema, INTERPRET_SOUNDS_V1_VERSION } from '@reels/core/prompts/interpret-sounds.v1'
-import { buildAudioScriptPrompt, AUDIOSCRIPT_V1_VERSION } from '../../prompts-bridge.js'
+import { AudioScriptSchema, AudioPacksSchema, OperatorSfxSchema, cueVolumeDb, resolveMusicMood, MusicMoodSchema, isVocalSfxPrompt, type AudioScript, type OperatorCue } from '@reels/core'
+import { buildSoundDesignerPrompt, SOUND_DESIGNER_V1_VERSION, SoundDesignSchema, type DesignerScene } from '../../prompts-bridge.js'
+import type { DesignerVoice } from '@reels/core/prompts/sound-designer.v1'
 import { runStep } from '../harness.js'
 import { countOccurrences, validateAnchorUniqueness } from '../anchors.js'
 
-// Realize the operator's free-text Sound design notes into structured, anchored cues (the hidden step).
-// Runs at render off the FINAL narration so anchors are valid; cues that don't resolve uniquely are
-// dropped. For speech cues, auto-pick a fitting voice from the catalog. Result feeds compute_timings +
-// generate_sfx (which place + render them like any SFX).
-async function realizeSoundNotes(notes: string, narration: string, language: string): Promise<{ cues: OperatorCue[]; silenceAnchor: string | null }> {
-  if (!notes.trim()) return { cues: [], silenceAnchor: null }
-  const { system, userMessage } = buildInterpretSoundsPrompt({ notes, narration })
-  const { data } = await llmCall({
-    templateVersion: INTERPRET_SOUNDS_V1_VERSION,
-    schema: InterpretSoundsSchema,
-    system,
-    messages: [{ role: 'user', content: userMessage }],
-    maxTokens: 900,
-  })
+// Turn the designer's pivotal non-narrator voices into placeable smart SPEECH cues: resolve each to a
+// fitting catalog voice and anchor it uniquely. This is now the ONLY source of non-narrator voices — the
+// old frozen enrich→interpret path is retired, so no more random background "voices"/laughter drifting in.
+async function realizeDesignerVoices(voices: DesignerVoice[], narration: string, language: string): Promise<OperatorCue[]> {
   const cues: OperatorCue[] = []
-  let silenceAnchor: string | null = null
-  for (const c of data.cues ?? []) {
-    const hits = countOccurrences(narration, c.anchor)
-    if (hits < 1) continue // anchor not in narration → can't place; skip
-    if (c.kind === 'silence') {
-      // Routed to audioScript.silenceDrop, which is HARD-resolved → only a unique anchor is safe.
-      if (hits === 1 && !silenceAnchor) silenceAnchor = c.anchor
-      continue
-    }
-    if (c.kind === 'speech') {
-      if (!c.words?.trim()) continue
-      const catalog = await listVoices(language, c.voiceSearchKeyword ? { search: c.voiceSearchKeyword } : undefined)
-      const pool = c.gender && c.gender !== 'any' ? catalog.filter((v) => v.gender.toLowerCase() === c.gender) : catalog
-      const voiceId = (pool[0] ?? catalog[0])?.id
-      if (!voiceId) continue
-      cues.push({ id: crypto.randomUUID(), source: 'smart', anchor: c.anchor, offsetMs: c.offsetMs ?? 0, volumeDb: cueVolumeDb('speech'), kind: 'speech', words: c.words, speaker: c.speaker || undefined, delivery: c.delivery || undefined, voiceId })
-    } else {
-      const kind = c.kind === 'ambience' ? 'ambience' : 'sfx'
-      cues.push({ id: crypto.randomUUID(), source: 'smart', anchor: c.anchor, offsetMs: c.offsetMs ?? 0, volumeDb: cueVolumeDb(kind), kind, prompt: c.prompt || (kind === 'ambience' ? 'ambience' : 'sound effect') })
-    }
+  for (const v of voices) {
+    if (!v.words.trim()) continue
+    if (countOccurrences(narration, v.anchor) !== 1) continue // must place uniquely
+    const catalog = await listVoices(language, v.voiceSearchKeyword ? { search: v.voiceSearchKeyword } : undefined)
+    const pool = v.gender && v.gender !== 'any' ? catalog.filter((c) => c.gender.toLowerCase() === v.gender) : catalog
+    const voiceId = (pool[0] ?? catalog[0])?.id
+    if (!voiceId) continue
+    cues.push({
+      id: crypto.randomUUID(), source: 'smart', anchor: v.anchor, offsetMs: 0, volumeDb: cueVolumeDb('speech'),
+      kind: 'speech', words: v.words, speaker: v.speaker || undefined, delivery: v.delivery || undefined, voiceId,
+    })
   }
-  return { cues, silenceAnchor }
+  return cues
 }
 
 // annotate_audio_script — step 2 (docs/02 §4)
@@ -58,41 +39,53 @@ export async function annotateAudioScript(reelId: string): Promise<void> {
   const story = await db.query.stories.findFirst({ where: eq(stories.id, reel.storyId) })
   if (!story) throw new Error(`Story not found: ${reel.storyId}`)
 
-  const { system, userMessage } = buildAudioScriptPrompt(story.body)
+  const { channels } = await import('@reels/db')
+  const channel = await db.query.channels.findFirst({ where: eq(channels.id, reel.channelId) })
+  const channelGenre = channel?.genreCategory
 
-  // Both LLM calls (structured audio-script + free-text sound-note interpretation) share ONE runStep row.
-  // pipeline_steps is unique on (reelId, stepName), so two runSteps under the same stepName would clobber
-  // each other's inputHash and BOTH would miss the cache on every re-run — re-billing both LLMs, and the
-  // fresh cue UUIDs minted by realizeSoundNotes would then force generate_sfx to re-pay ElevenLabs too.
-  // One combined hash (narration + sound notes + manual-cue signature) re-runs only when an input changes,
-  // and a cache hit reuses the previously-minted cue UUIDs so downstream SFX generation stays cached.
+  // Scene breakdown feeds the designer: which beats are HERO scares/reveals (→ jumpscare stings), plus
+  // each scene's mood + location + opening words (→ scene-aware, appropriately-placed cues).
+  const reelScenes = await db.query.scenes.findMany({ where: eq(scenes.reelId, reelId) })
+  reelScenes.sort((a, b) => a.idx - b.idx)
+  const designerScenes: DesignerScene[] = reelScenes.map((s) => ({
+    idx: s.idx,
+    isHero: s.isHero,
+    mood: s.mood ?? [],
+    location: s.location ?? '',
+    narrationText: s.narrationText,
+  }))
+  const { system, userMessage } = buildSoundDesignerPrompt(story.body, designerScenes, channelGenre)
+
+  // Manual per-scene cues (operator "Add a sound") win on anchor collisions and are preserved verbatim.
   const manualCues = OperatorSfxSchema.parse(reel.operatorSfx ?? []).filter((c) => c.source === 'manual')
   const manualSig = manualCues.map((c) => `${c.id}:${c.anchor}:${c.assetKey ?? ''}`).join('|')
-  const inputHash = buildInputHash(AUDIOSCRIPT_V1_VERSION, {
+  const inputHash = buildInputHash(SOUND_DESIGNER_V1_VERSION, {
     narration: story.body,
-    soundNotes: reel.soundNotes ?? '',
+    scenes: designerScenes.map((s) => `${s.idx}:${s.isHero ? 'H' : ''}:${s.mood.join(',')}`).join('|'),
+    genre: channelGenre ?? '',
     manualSig,
-    interpret: INTERPRET_SOUNDS_V1_VERSION, // bump if the interpret prompt/schema changes
   })
 
   const result = await runStep(
     { reelId, stepName: 'annotate_audio_script', inputHash },
     async () => {
       const llm = await llmCall({
-        templateVersion: AUDIOSCRIPT_V1_VERSION,
-        schema: AudioScriptSchema,
+        templateVersion: SOUND_DESIGNER_V1_VERSION,
+        schema: SoundDesignSchema,
         system,
         messages: [{ role: 'user', content: userMessage }],
       })
 
-      // Validate anchor uniqueness — repair call if any fail
-      let scriptData = llm.data
+      // Validate anchor uniqueness — repair call if any fail. The designer's voices carry anchors too, so
+      // pass the full design (SoundDesignSchema is a superset of AudioScript; validateAnchorUniqueness only
+      // reads .sfx/.silenceDrop/.music/.ambient, so voices are checked separately in realizeDesignerVoices).
+      let design = llm.data
       let cost = llm.costCents
-      const errors = validateAnchorUniqueness(story.body, llm.data)
+      const errors = validateAnchorUniqueness(story.body, design)
       if (errors.length > 0) {
         const repairLlm = await llmCall({
-          templateVersion: AUDIOSCRIPT_V1_VERSION,
-          schema: AudioScriptSchema,
+          templateVersion: SOUND_DESIGNER_V1_VERSION,
+          schema: SoundDesignSchema,
           system,
           messages: [
             { role: 'user', content: userMessage },
@@ -103,17 +96,24 @@ export async function annotateAudioScript(reelId: string): Promise<void> {
             },
           ],
         })
-        scriptData = repairLlm.data
+        design = repairLlm.data
         cost += repairLlm.costCents
       }
 
-      // Realize the reel-level smart Sound design notes into placeable cues (soft-anchored downstream).
-      // Manual per-scene cues win on anchor collisions, so drop any smart cue that lands on a manual anchor.
+      // Split the design: AudioScript fields (bed/score/sfx/silence) + pivotal voices → smart speech cues.
+      // Drop any vocal SFX the designer slipped in (belt-and-suspenders behind the prompt ban — voices are
+      // the ONLY intended human sound). Manual anchors win, so a smart voice on a manual anchor is dropped.
       const manualAnchors = new Set(manualCues.map((c) => c.anchor))
-      const { cues: smartAll, silenceAnchor } = await realizeSoundNotes(reel.soundNotes ?? '', story.body, reel.language)
-      const smart = smartAll.filter((c) => !manualAnchors.has(c.anchor))
+      const audioScript = AudioScriptSchema.parse({
+        ambient: design.ambient,
+        sfx: design.sfx.filter((c) => !isVocalSfxPrompt(c.prompt)),
+        music: design.music,
+        silenceDrop: design.silenceDrop,
+      })
+      const smart = (await realizeDesignerVoices((design.voices ?? []) as DesignerVoice[], story.body, reel.language))
+        .filter((c) => !manualAnchors.has(c.anchor))
 
-      return { output: { audioScript: scriptData, smart, silenceAnchor }, costCents: cost }
+      return { output: { audioScript, smart }, costCents: cost }
     },
   )
 
@@ -124,10 +124,7 @@ export async function annotateAudioScript(reelId: string): Promise<void> {
   //  • preset/upload channels: unchanged — seed from the first pool bed; selectMusicTrack matches by type.
   const audioScript = result.output.audioScript as AudioScript
   const smartCues = result.output.smart as OperatorCue[]
-  const silenceAnchor = result.output.silenceAnchor as string | null
   {
-    const { channels } = await import('@reels/db')
-    const channel = await db.query.channels.findFirst({ where: eq(channels.id, reel.channelId) })
     const audioPacks = channel ? AudioPacksSchema.parse(channel.audioPacks) : undefined
     if (audioPacks?.musicMode === 'ai') {
       const reelMood = MusicMoodSchema.safeParse(reel.musicMood)
@@ -154,12 +151,7 @@ export async function annotateAudioScript(reelId: string): Promise<void> {
       audioScript.music = { type: 'low_drone', startAnchor: '', peakAnchor: '', moodTags: [] }
     }
   }
-
-  // A smart "silence" note sets the dramatic drop (only if the LLM didn't already place one). The mixer
-  // dips the music bed there; compute_timings hard-resolves the anchor (we only set a unique one).
-  if (silenceAnchor && !audioScript.silenceDrop) {
-    audioScript.silenceDrop = { anchor: silenceAnchor, durationMs: 1200 }
-  }
+  // (silenceDrop now comes straight from the designer — no separate smart-note pass to merge.)
 
   // Persist audio_script + the merged cue set (manual cues preserved, smart cues appended). These come
   // from the (possibly cached) step output, so re-runs don't re-mint cue UUIDs and downstream SFX stays

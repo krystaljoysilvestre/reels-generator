@@ -153,6 +153,50 @@ describe('F3 — music peak anchor fallback', () => {
     expect(result.music!.peakAnchorMs).toBe(Math.round(0.8 * 5000))
     expect(result.warnings.some((w) => w.includes('fallback'))).toBe(true)
   })
+
+  it('defaults the build start LATE when startAnchor is empty (act structure, not a whole-reel crawl)', () => {
+    // A ~160s reel with the peak at 80%: the build must NOT start at t=0 — the bed holds flat and rises
+    // over at most the final 45s into the peak.
+    const narration = 'Ito ay isang mahabang kwento ng katatakutan na may mahabang narration na tumatagal. '.repeat(10).trim()
+    const durationMs = 160_000
+    const alignment = syntheticAlignment(narration, durationMs)
+    const input: ComputeTimingsInput = {
+      narration,
+      alignment,
+      durationMs,
+      scenes: singleScene(narration),
+      audioScript: {
+        ...silentAudioScript(),
+        music: { type: 'low_drone', startAnchor: '', peakAnchor: '', moodTags: ['dread'] },
+      },
+      twistAnchor: '',
+    }
+    const result = computeTimings(input)
+    const peak = result.music!.peakAnchorMs // 0.8 × duration fallback
+    expect(result.music!.startAnchorMs).toBe(peak - 45_000) // build spans the final 45s, not the whole reel
+    expect(result.music!.startAnchorMs).toBeGreaterThan(0)
+    expect(result.music!.startAnchorMs).toBeLessThan(peak)
+  })
+
+  it('build-start default respects the 55%-of-peak floor on short reels', () => {
+    // Peak at 4000ms on a 5s reel: peak−45s would be negative, so the floor (0.55 × peak) wins.
+    const narration = 'Maiksi lang ito.'
+    const alignment = syntheticAlignment(narration, 5000)
+    const input: ComputeTimingsInput = {
+      narration,
+      alignment,
+      durationMs: 5000,
+      scenes: singleScene(narration),
+      audioScript: {
+        ...silentAudioScript(),
+        music: { type: 'low_drone', startAnchor: '', peakAnchor: '', moodTags: [] },
+      },
+      twistAnchor: '',
+    }
+    const result = computeTimings(input)
+    const peak = result.music!.peakAnchorMs
+    expect(result.music!.startAnchorMs).toBe(Math.round(0.55 * peak))
+  })
 })
 
 // ── F4: Silence drop ─────────────────────────────────────────────────────────

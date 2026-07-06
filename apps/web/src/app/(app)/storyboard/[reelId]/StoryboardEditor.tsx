@@ -44,7 +44,6 @@ interface StoryboardEditorProps {
   channelMusicTracks: { label: string; url: string }[] // preset/upload beds — shown read-only with a preview
   musicUploadUrl: string | null // per-reel operator-uploaded bed; when set it overrides the channel's music
   initialVideoEffects: string[] | null // per-reel video effects; null = auto (planned from the story)
-  initialSoundNotes: string // auto-drafted reel-level smart audio plan (read-only display)
   initialOperatorSfx: OperatorCue[] // operator-added per-scene manual cues
   initialVoiceSettings: VoiceSettings // auto-derived delivery; voice previews play at this (no manual editing)
   channelName: string
@@ -56,7 +55,7 @@ interface StoryboardEditorProps {
 export function StoryboardEditor({
   reel, story, scenes: initialScenes, voicePool, voiceRecommend,
   sceneImages, sceneImageHistory, sceneVideoVariations, renderUrl: initialRenderUrl, musicMood: initialMusicMood, channelMusicMood, aiMusic, musicMode, channelMusicTracks, musicUploadUrl: initialMusicUploadUrl,
-  initialVideoEffects, initialSoundNotes, initialOperatorSfx, initialVoiceSettings,
+  initialVideoEffects, initialOperatorSfx, initialVoiceSettings,
   channelName, genreCategory, moodTint, failure,
 }: StoryboardEditorProps) {
   const router = useRouter()
@@ -116,10 +115,7 @@ export function StoryboardEditor({
   // NEW render URL, and the preview must swap to it. (Was useState(initialRenderUrl), which pinned the very
   // first URL for the whole session, so a fresh render never showed until a full reload.)
   const renderUrl = initialRenderUrl
-  // Smart sound design — the reel-level audio plan. Auto-drafted in the BACKGROUND (not shown in the UI);
-  // realized into placed audio at render. The narration is never touched.
-  const [soundNotes, setSoundNotes] = useState(initialSoundNotes)
-  const soundEnrichedRef = useRef(false)
+  // (Reel-level smart sound design moved to the render-time scene-aware sound designer; no client draft.)
   // Manual per-scene cues (operator-added, e.g. an off-screen line) + their preview clip URLs.
   const [operatorSfx, setOperatorSfx] = useState<OperatorCue[]>(initialOperatorSfx)
   const [soundPreviews, setSoundPreviews] = useState<Record<string, string>>({})
@@ -432,33 +428,10 @@ export function StoryboardEditor({
     router.push('/dashboard')
   }
 
-  // Compose this reel's background bed on demand. force=false is the auto-request on load (only if there's
-  // no bed yet, server-enforced); force=true recomposes a fresh take from the Regenerate button (a paid
-  // call). `instruction` is an optional plain-language steer the operator typed ("more tense").
-  // ── Smart sound design (background) ─────────────────────────────────────────
-  // Silently draft the reel-level audio-direction notes once on load so they're ready for the render-time
-  // interpreter. Not surfaced in the UI; the operator's per-scene cues are the visible control.
-  useEffect(() => {
-    if (soundEnrichedRef.current || soundNotes.trim() || reel.status !== 'storyboard') return
-    soundEnrichedRef.current = true
-    let retried = false
-    const draft = () =>
-      fetch('/api/pipeline/enrich-audio', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reelId: reel.id, force: false }),
-      })
-        .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
-        .then((json) => { if (json && typeof json.notes === 'string') setSoundNotes(json.notes) })
-        .catch(() => {
-          // The draft is a background nicety, but a single transient 502 used to leave the field empty
-          // for the whole session (the ref above blocks re-runs). Retry once after a short delay so a
-          // blip self-heals; if it still fails, the field just fills on the next storyboard open.
-          if (retried) return
-          retried = true
-          setTimeout(draft, 4000)
-        })
-    void draft()
-  }, [soundNotes, reel.status])
+  // Smart sound design is now owned by the scene-aware sound designer at render time (annotate_audio_script
+  // → sound-designer.v1), which reads the story + scene breakdown directly. The old "silently draft
+  // soundNotes on load" pass is retired — those notes fed a now-removed interpreter and were the source of
+  // the stray background voices/ambience. The operator's per-scene "Add a sound" cues remain the visible control.
 
   // ── Manual per-scene cues ───────────────────────────────────────────────────
   // Add ONE targeted sound to a scene (e.g. an off-screen line), then auto-preview it.

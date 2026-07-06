@@ -152,9 +152,12 @@ export async function mixAudio(params: MixAudioParams): Promise<void> {
     `[1]volume=${AMBIENT_DB}dB,aloop=loop=-1:size=2e9[amb]`,
     // music: loop the bed to cover the reel → volume envelope
     `[2]aloop=loop=-1:size=2e9,volume='${gainExpr}':eval=frame[mus0]`,
-    // sidechain duck: music ducks ~6-10 dB whenever voiceover speaks
+    // sidechain duck: music dips under the voiceover, but stays PRESENT. ratio 6 held the bed ~8–10dB
+    // down for the whole narration (VO is near-continuous) — the music read as silent/absent (owner
+    // feedback 2026-07-06). ratio 3 ducks ~4–5dB: VO stays clearly on top, the bed remains felt, and it
+    // swells back up in the dramatic pauses (release 400ms < the shortest pause).
     `[0]asplit=2[vox][voxkey]`,
-    `[mus0][voxkey]sidechaincompress=threshold=0.04:ratio=6:attack=20:release=400[musduck]`,
+    `[mus0][voxkey]sidechaincompress=threshold=0.04:ratio=3:attack=20:release=400[musduck]`,
     // mix layers
     `[vox][amb]amix=inputs=2:normalize=0[base]`,
     `[base][musduck]amix=inputs=2:normalize=0[withmus]`,

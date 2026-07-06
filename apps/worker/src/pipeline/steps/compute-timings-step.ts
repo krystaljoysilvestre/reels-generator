@@ -7,6 +7,8 @@ import {
   OperatorSfxSchema,
   operatorCueLabel,
   computeTimings,
+  isVocalSfxPrompt,
+  dropEventsNear,
   type ComputeTimingsInput,
   type SceneSpan,
   type AlignedChar,
@@ -46,6 +48,9 @@ export async function runComputeTimings(reelId: string): Promise<void> {
   }
 
   const audioScript = AudioScriptSchema.parse(reel.audioScript)
+  // Sound-design hygiene: drop LLM SFX with vocal prompts (mirrors the generate_sfx filter — a cue that
+  // won't be synthesized shouldn't be scheduled either). See sfx-rules.ts.
+  audioScript.sfx = audioScript.sfx.filter((c) => !isVocalSfxPrompt(c.prompt))
   // Operator + smart cues (SFX/speech/ambience). Placed AFTER compute_timings via soft anchoring, so an
   // ambiguous or slightly-off anchor lands at the first match instead of dropping / throwing.
   const operatorCues = OperatorSfxSchema.parse(reel.operatorSfx ?? [])
@@ -56,7 +61,8 @@ export async function runComputeTimings(reelId: string): Promise<void> {
     tier: (s.tier as 'still' | 'video'),
   }))
 
-  const inputHash = buildInputHash('compute_timings.v2', {
+  // v3: vocal-SFX drop + proximity dedupe + late music build-start (sound-design hygiene, 2026-07-06).
+  const inputHash = buildInputHash('compute_timings.v3', {
     narration: story.body,
     // Alignment IS the master clock; a re-synthesized voiceover has new timestamps under a new row
     // (createdAt). Hash it so a voice/narration change busts the cache instead of reusing stale timings.
@@ -93,7 +99,14 @@ export async function runComputeTimings(reelId: string): Promise<void> {
         opAnchors.add(c.anchor)
         opEvents.push({ anchor: c.anchor, prompt: operatorCueLabel(c), atMs, volumeDb: c.volumeDb })
       }
-      timings.sfxEvents = [...timings.sfxEvents.filter((e) => !opAnchors.has(e.anchor)), ...opEvents]
+      // Operator wins on the same anchor AND on the same BEAT: exact-anchor dedupe misses same-moment
+      // collisions with different anchor text ("mahinang tawa" vs "may narinig akong mahinang tawa" →
+      // two laughs at once). Drop LLM events within 1.5s of any operator/smart cue.
+      const llmEvents = dropEventsNear(
+        timings.sfxEvents.filter((e) => !opAnchors.has(e.anchor)),
+        opEvents.map((e) => e.atMs),
+      )
+      timings.sfxEvents = [...llmEvents, ...opEvents]
 
       const validated = TimingsSchema.parse(timings)
 
