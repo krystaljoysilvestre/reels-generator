@@ -3,7 +3,7 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { mkdir, writeFile, readFile, rm } from 'node:fs/promises'
+import { mkdir, writeFile, readFile, rm, copyFile } from 'node:fs/promises'
 import { getDb, reels, scenes, assets, channels } from '@reels/db'
 import { downloadBuffer, uploadBuffer, buildInputHash } from '@reels/providers'
 import { TimingsSchema, LutConfigSchema, CaptionStyleSchema, PLATFORM_PRESETS, effectsFromSelection, parseMotion } from '@reels/core'
@@ -75,18 +75,38 @@ export async function renderStep(reelId: string): Promise<void> {
         (a.meta as Record<string, unknown>)['variationIdx'] === 0,
     )
 
-  const inputHash = buildInputHash('render.remotion.v2', {
-    sceneCount: reelScenes.length,
-    // Hash the mix's row identity (createdAt), not its constant storage key — the key is fixed per reel,
-    // so a re-mix (new audio) would otherwise reuse the previous render.
-    mixAt: mixAsset.createdAt,
-    onScreen: reelScenes.map((s) => s.onScreenText ?? '').join('|'),
-    // Visual content: a regenerated image repoints imageAssetId; a re-animated clip appends a newer video
-    // row. Include both or a reshoot followed by re-render would serve the old footage.
+  // Visual FINGERPRINT — everything that determines the rendered PIXELS and their timing. The graded visual
+  // track is cached at reels/<id>/visual.mp4 and REUSED (skip the Remotion pass, just re-mux the new audio)
+  // whenever this is unchanged. Audio-only changes (mix/music/sfx/levels/voice-that-keeps-duration) don't
+  // touch it, so they become a ~seconds re-mux instead of a full multi-minute render. Must capture
+  // EVERYTHING visual — a gap here would mux new audio onto a stale picture.
+  const visualFingerprint = buildInputHash('reel.visual.v1', {
+    durationMs: timings.durationMs,
+    scenes: timings.scenes.map((s) => `${s.idx}:${s.startMs}:${s.endMs}:${s.tier}`).join('|'), // cut points
+    subtitles: timings.subtitles.map((c) => `${c.startMs}-${c.endMs}:${c.text}`).join('|'),     // burned in
     images: reelScenes.map((s) => s.imageAssetId ?? 'none').join('|'),
     videos: reelScenes
       .map((s) => (s.tier === 'video' ? (pickVideoAsset(s.idx)?.createdAt.toISOString() ?? 'none') : 'still'))
       .join('|'),
+    onScreen: reelScenes.map((s) => s.onScreenText ?? '').join('|'),
+    moods: reelScenes.map((s) => (s.mood ?? []).join(',')).join('|'),   // auto effects derive from mood
+    motions: reelScenes.map((s) => s.motionPrompt ?? '').join('|'),     // still Ken-Burns move derives from motion
+    videoEffects: Array.isArray(reel.videoEffects) ? (reel.videoEffects as string[]).join(',') : 'auto',
+    captionStyle: JSON.stringify(captionStyle),
+    captionSafeZonePct,
+    grain: lutConfig.grain,
+    vignette: lutConfig.vignette,
+    lut: lutConfig.lutPath ?? '',
+    watermark: channel.watermarkKey ?? DEFAULT_WATERMARK_KEY,
+    platform: channel.targetPlatform ?? 'all',
+  })
+
+  // The render step re-runs when the visual OR the audio changes; INSIDE, the expensive Remotion pass is
+  // gated by the visual fingerprint (cached visual reused across audio-only re-renders).
+  const inputHash = buildInputHash('render.remotion.v3', {
+    visual: visualFingerprint,
+    // Re-mix (new audio) bumps the mix row's createdAt → re-run to re-mux (the visual is reused within).
+    mixAt: mixAsset.createdAt,
     reelId,
   })
 
@@ -97,107 +117,129 @@ export async function renderStep(reelId: string): Promise<void> {
       await mkdir(tmp, { recursive: true })
       try {
 
-      // ── Download audio mix ──────────────────────────────────────────────
-      const mixBuf = await downloadBuffer(mixAsset.storageKey)
+      // ── Audio mix (always needed for the mux) ────────────────────────────
       const mixPath = join(tmp, 'mix.m4a')
-      await writeFile(mixPath, mixBuf)
+      await writeFile(mixPath, await downloadBuffer(mixAsset.storageKey))
 
-      // ── Build scene inputs with local file paths ─────────────────────────
-      type SceneInput = Parameters<typeof renderReelWithRemotion>[0]['scenes'][number]
-      const sceneInputs: SceneInput[] = []
+      const visualKey = `reels/${reelId}/visual.mp4`
+      const gradedPath = join(tmp, 'graded.mp4') // the final graded visual to mux (cached or freshly rendered)
 
-      for (const scene of reelScenes) {
-        const timing = timings.scenes.find((s) => s.idx === scene.idx)
-        if (!timing) continue
+      // ── Reuse the cached graded visual when the fingerprint is unchanged (audio-only re-render) ──────
+      // The prior render row records the fingerprint of the visual it produced. If it matches (and the
+      // duration agrees — belt-and-suspenders against a fingerprint gap), the cached visual.mp4 is valid.
+      const prevMeta = (allAssets.find((a) => a.kind === 'render')?.meta ?? {}) as Record<string, unknown>
+      let reused = false
+      if (prevMeta['visualFingerprint'] === visualFingerprint && prevMeta['durationMs'] === timings.durationMs) {
+        try {
+          await writeFile(gradedPath, await downloadBuffer(visualKey))
+          reused = true
+          console.log('[render] visual unchanged — reusing cached track, re-muxing audio only')
+        } catch {
+          reused = false // cached file missing/unreadable → fall through to a full render
+        }
+      }
 
-        // Image
-        let imagePath = join(tmp, `scene_${scene.idx}_img.webp`)
-        const imageAsset = scene.imageAssetId ? allAssets.find((a) => a.id === scene.imageAssetId) : null
-        if (imageAsset) {
-          await writeFile(imagePath, await downloadBuffer(imageAsset.storageKey))
-        } else {
-          // Black placeholder frame
-          await execFileAsync('ffmpeg', [
-            '-f', 'lavfi', '-i', 'color=black:s=1080x1920',
-            '-frames:v', '1', '-y', imagePath,
-          ])
+      if (!reused) {
+        // ── Build scene inputs with local file paths ───────────────────────
+        type SceneInput = Parameters<typeof renderReelWithRemotion>[0]['scenes'][number]
+        const sceneInputs: SceneInput[] = []
+
+        for (const scene of reelScenes) {
+          const timing = timings.scenes.find((s) => s.idx === scene.idx)
+          if (!timing) continue
+
+          // Image
+          const imagePath = join(tmp, `scene_${scene.idx}_img.webp`)
+          const imageAsset = scene.imageAssetId ? allAssets.find((a) => a.id === scene.imageAssetId) : null
+          if (imageAsset) {
+            await writeFile(imagePath, await downloadBuffer(imageAsset.storageKey))
+          } else {
+            // Black placeholder frame
+            await execFileAsync('ffmpeg', [
+              '-f', 'lavfi', '-i', 'color=black:s=1080x1920',
+              '-frames:v', '1', '-y', imagePath,
+            ])
+          }
+
+          // Video (operator picks from 2 variations; default to variationIdx=0)
+          let videoPath: string | null = null
+          let videoDurationSec: number | null = null
+          if (scene.tier === 'video') {
+            const videoAsset = pickVideoAsset(scene.idx)
+            if (videoAsset) {
+              videoPath = join(tmp, `scene_${scene.idx}_vid.mp4`)
+              await writeFile(videoPath, await downloadBuffer(videoAsset.storageKey))
+              const dur = (videoAsset.meta as Record<string, unknown>)['durationSec']
+              videoDurationSec = typeof dur === 'number' ? dur : null
+            }
+          }
+
+          sceneInputs.push({
+            idx: scene.idx,
+            imagePath,
+            videoPath,
+            tier: scene.tier as 'still' | 'video',
+            startMs: timing.startMs,
+            endMs: timing.endMs,
+            mood: scene.mood,
+            onScreenText: scene.onScreenText,
+            // Still: the director's camera move (recovered from the stored motion text) drives Ken Burns.
+            cameraMove: scene.tier === 'still' ? parseMotion(scene.motionPrompt).moveKey : null,
+            videoDurationSec,
+            // Operator's explicit per-reel selection wins; null → auto-plan from mood + genre.
+            effects: Array.isArray(reel.videoEffects)
+              ? effectsFromSelection(reel.videoEffects as string[], scene.tier as 'still' | 'video')
+              : planSceneEffects(scene.mood, scene.tier as 'still' | 'video', channel.genreCategory ?? 'general'),
+          })
         }
 
-        // Video (operator picks from 2 variations; default to variationIdx=0)
-        let videoPath: string | null = null
-        let videoDurationSec: number | null = null
-        if (scene.tier === 'video') {
-          const videoAsset = pickVideoAsset(scene.idx)
-          if (videoAsset) {
-            videoPath = join(tmp, `scene_${scene.idx}_vid.mp4`)
-            await writeFile(videoPath, await downloadBuffer(videoAsset.storageKey))
-            const dur = (videoAsset.meta as Record<string, unknown>)['durationSec']
-            videoDurationSec = typeof dur === 'number' ? dur : null
+        // Roaming watermark: the APP brands every reel with its logo by default (DEFAULT_WATERMARK_KEY); a
+        // channel MAY override with its own key. Inlined as a data URI so the Remotion bundle stays
+        // self-contained (no external fetch under its CSP).
+        const wmKey = channel.watermarkKey ?? DEFAULT_WATERMARK_KEY
+        let watermark: { dataUri: string; opacity: number } | null = null
+        if (wmKey) {
+          try {
+            const buf = await downloadBuffer(wmKey)
+            const mime = wmKey.endsWith('.png') ? 'image/png' : wmKey.endsWith('.webp') ? 'image/webp' : 'image/jpeg'
+            watermark = { dataUri: `data:${mime};base64,${buf.toString('base64')}`, opacity: 0.28 }
+          } catch (err) {
+            console.warn(`[render] watermark load failed (${wmKey}): ${err instanceof Error ? err.message : String(err)}`)
           }
         }
 
-        sceneInputs.push({
-          idx: scene.idx,
-          imagePath,
-          videoPath,
-          tier: scene.tier as 'still' | 'video',
-          startMs: timing.startMs,
-          endMs: timing.endMs,
-          mood: scene.mood,
-          onScreenText: scene.onScreenText,
-          // Still: the director's camera move (recovered from the stored motion text) drives Ken Burns.
-          cameraMove: scene.tier === 'still' ? parseMotion(scene.motionPrompt).moveKey : null,
-          videoDurationSec,
-          // Operator's explicit per-reel selection wins; null → auto-plan from mood + genre.
-          effects: Array.isArray(reel.videoEffects)
-            ? effectsFromSelection(reel.videoEffects as string[], scene.tier as 'still' | 'video')
-            : planSceneEffects(scene.mood, scene.tier as 'still' | 'video', channel.genreCategory ?? 'general'),
+        // ── Remotion renders the visual track (no audio) ─────────────────
+        const visualPath = join(tmp, 'visual.mp4')
+        await renderReelWithRemotion({
+          scenes: sceneInputs,
+          subtitles: timings.subtitles,
+          captionStyle,
+          captionSafeZonePct,
+          durationMs: timings.durationMs,
+          grain: lutConfig.grain,
+          vignette: lutConfig.vignette,
+          watermark,
+          outputPath: visualPath,
+          onProgress: (p) => console.log(`  Remotion render: ${Math.round(p * 100)}%`),
         })
-      }
 
-      // Roaming watermark: the APP brands every reel with its logo by default (DEFAULT_WATERMARK_KEY); a
-      // channel MAY override with its own key. Inlined as a data URI so the Remotion bundle stays
-      // self-contained (no external fetch under its CSP).
-      const wmKey = channel.watermarkKey ?? DEFAULT_WATERMARK_KEY
-      let watermark: { dataUri: string; opacity: number } | null = null
-      if (wmKey) {
-        try {
-          const buf = await downloadBuffer(wmKey)
-          const mime = wmKey.endsWith('.png') ? 'image/png' : wmKey.endsWith('.webp') ? 'image/webp' : 'image/jpeg'
-          watermark = { dataUri: `data:${mime};base64,${buf.toString('base64')}`, opacity: 0.28 }
-        } catch (err) {
-          console.warn(`[render] watermark load failed (${wmKey}): ${err instanceof Error ? err.message : String(err)}`)
+        // ── LUT grade (if configured) → gradedPath; else the raw visual IS the graded track ──────────
+        if (lutConfig.lutPath) {
+          await execFileAsync('ffmpeg', [
+            '-i', visualPath,
+            '-vf', `lut3d=${lutConfig.lutPath}`,
+            '-c:v', 'libx264', '-preset', 'fast', '-crf', '18',
+            '-y', gradedPath,
+          ])
+        } else {
+          await copyFile(visualPath, gradedPath)
         }
+
+        // Cache the finished visual so future audio-only renders skip everything above and just re-mux.
+        await uploadBuffer(visualKey, await readFile(gradedPath), 'video/mp4')
       }
 
-      // ── Step 1: Remotion renders the visual track (no audio) ─────────────
-      const visualPath = join(tmp, 'visual.mp4')
-      await renderReelWithRemotion({
-        scenes: sceneInputs,
-        subtitles: timings.subtitles,
-        captionStyle,
-        captionSafeZonePct,
-        durationMs: timings.durationMs,
-        grain: lutConfig.grain,
-        vignette: lutConfig.vignette,
-        watermark,
-        outputPath: visualPath,
-        onProgress: (p) => console.log(`  Remotion render: ${Math.round(p * 100)}%`),
-      })
-
-      // ── Step 2: FFmpeg applies LUT (if configured) ────────────────────────
-      let gradedPath = visualPath
-      if (lutConfig.lutPath) {
-        gradedPath = join(tmp, 'graded.mp4')
-        await execFileAsync('ffmpeg', [
-          '-i', visualPath,
-          '-vf', `lut3d=${lutConfig.lutPath}`,
-          '-c:v', 'libx264', '-preset', 'fast', '-crf', '18',
-          '-y', gradedPath,
-        ])
-      }
-
-      // ── Step 3: FFmpeg muxes visual + audio → final reel ─────────────────
+      // ── Mux graded visual + audio → final reel (pure -c:v copy; fast even on the reuse path) ────────
       const outputPath = join(tmp, 'reel.mp4')
       await execFileAsync('ffmpeg', [
         '-i', gradedPath,
@@ -209,12 +251,13 @@ export async function renderStep(reelId: string): Promise<void> {
         '-y', outputPath,
       ])
 
-      // ── Upload ────────────────────────────────────────────────────────────
-      const renderBuf = await readFile(outputPath)
+      // ── Upload the final reel ──────────────────────────────────────────
       const storageKey = `reels/${reelId}/render.mp4`
-      await uploadBuffer(storageKey, renderBuf, 'video/mp4')
+      await uploadBuffer(storageKey, await readFile(outputPath), 'video/mp4')
 
-      // Constant key per reel → a re-render upserts this row in place (bump createdAt for consistency).
+      // Constant key per reel → upsert in place; bump createdAt (drives the preview cache-bust + render_qa
+      // re-validation). meta.visualFingerprint lets the NEXT render decide whether it can reuse the visual.
+      const meta = { durationMs: timings.durationMs, renderer: 'remotion@4', visualFingerprint }
       await db.insert(assets).values({
         reelId,
         channelId: reel.channelId,
@@ -222,16 +265,13 @@ export async function renderStep(reelId: string): Promise<void> {
         storageKey,
         provider: 'local',
         costCents: 0,
-        meta: { durationMs: timings.durationMs, renderer: 'remotion@4' },
+        meta,
       }).onConflictDoUpdate({
         target: [assets.reelId, assets.storageKey],
-        set: {
-          meta: { durationMs: timings.durationMs, renderer: 'remotion@4' },
-          createdAt: new Date(),
-        },
+        set: { meta, createdAt: new Date() },
       })
 
-      return { output: { storageKey }, costCents: 0 }
+      return { output: { storageKey, reused }, costCents: 0 }
       } finally {
         // Reclaim the per-render scratch dir (scene videos/images + graded intermediates + final mp4 —
         // 100+ MB) whether the render succeeded or threw, so repeated renders don't fill the disk.
