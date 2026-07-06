@@ -39,7 +39,8 @@ export type SilenceDrop = z.infer<typeof SilenceDropSchema>
 
 export const AudioScriptSchema = z.object({
   ambient: AmbientSchema,
-  sfx: z.array(SfxCueSchema).max(7),
+  // Ceiling only (dense quiet realism = many low cues); the designer places what the place needs, not a quota.
+  sfx: z.array(SfxCueSchema).max(18),
   silenceDrop: SilenceDropSchema.nullable().default(null),
   music: MusicCueSchema.nullable().default(null),
 })

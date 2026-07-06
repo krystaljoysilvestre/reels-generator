@@ -8,7 +8,10 @@
 import { z } from 'zod'
 import { AmbientSchema, MusicCueSchema, SfxCueSchema, SilenceDropSchema } from '../types/audio-script.js'
 
-export const SOUND_DESIGNER_V1_VERSION = 'sound-designer.v1'
+// Bump on any material prompt/craft change so annotate_audio_script re-plans instead of reusing a cached
+// design. v1.1 = dense-realism + restraint rebalance. v1.2 = audibility fix (foreground detail must be
+// clearly heard, not "faint/distant"; payoff = a full-bodied audible hit, not pure inaudible sub-bass).
+export const SOUND_DESIGNER_V1_VERSION = 'sound-designer.v1.2'
 
 // A non-narrator voice the designer chose to place. Rare + deliberate — resolved to a catalog voice and
 // synthesized as a speech cue downstream. NOT for incidental human noise (that's banned entirely).
@@ -27,7 +30,9 @@ export type DesignerVoice = z.infer<typeof DesignerVoiceSchema>
 export const SoundDesignSchema = z.object({
   ambient: AmbientSchema,
   music: MusicCueSchema.nullable().default(null),
-  sfx: z.array(SfxCueSchema).max(10),
+  // Cap is a ceiling, not a target — dense realism wants room for many quiet cues (the 90% layer), so the
+  // limit is generous. It never forces a count; the model places what the place genuinely has.
+  sfx: z.array(SfxCueSchema).max(18),
   voices: z.array(DesignerVoiceSchema).max(2).default([]),
   silenceDrop: SilenceDropSchema.nullable().default(null),
 })
@@ -59,33 +64,35 @@ export function buildSoundDesignerPrompt(
     })
     .join('\n')
 
-  const system = `You are the sound designer for a cinematic narrated ${horror ? 'HORROR ' : ''}reel — the single artist responsible for everything the audience hears besides the narrator. Design in LAYERS that work together, and let TASTE lead: give each moment what it EARNS, never a quota.
+  const system = `You are the sound designer for a cinematic narrated ${horror ? 'HORROR ' : ''}reel — the single artist responsible for everything heard besides the narrator. ${horror ? 'The craft here is NOT scary music and loud stings — it is a BELIEVABLE WORLD that something quietly invades. Aim for roughly nine parts ordinary reality to one part overt horror: the supernatural lands because it interrupts a real place, not because it announces itself.' : 'Build a believable, immersive world of sound that serves the story.'}
 
-You get the full narration and the SCENE BREAKDOWN, including which scenes are HERO beats (the scares / reveal / payoff). Hero flags tell you where the WEIGHT of the story sits — not where to dump effects.
+You get the full narration and the SCENE BREAKDOWN (where the story's weight sits, each scene's mood + location).
 
-Principles:
-- Layer, don't clutter. A bed sets the room; a score can build dread; SFX punctuate specific words; a sting can detonate a moment; silence can be the loudest choice of all.
-- Every sound must EARN its place. A cue that doesn't fit is worse than nothing — when in doubt, leave it out. Sparse and intentional beats busy and forced.
+Build the soundscape in layers that run together:
 
-The layers — use only what THIS story needs; any of them may be empty:
-- ambient — an optional low room-tone bed for the setting (may evolve once).
-- music — an optional score. If a bed fits, give it an ARC by setting peakAnchor to the line it should build toward (leave startAnchor ""). YOU choose its character from what suits this story — a low drone, a slow pulse, sparse tones, rising unease, or none at all. Don't default to any one texture.
-- sfx — non-vocal sounds ONLY: objects, environment, impacts, risers, drones, textures (a door, footsteps, a phone buzz, wind, a low boom). Place each ON its meaning-bearing word. Human/vocal sounds are NEVER sfx — a real, story-driving voice goes in "voices" below; incidental human noise (gasps, breathing, whispers, laughter) belongs nowhere.
-  · impactAtEnd=true for a sound that BUILDS to its hit (riser/swell → lands its impact ON the word); false for an instant one-shot.
-- HERO scenes are your strongest CANDIDATES for a hit (a sting, a boom, a riser) — but a hit only when the moment has earned it. A scare landing in near-silence, or a held breath, often hits harder than a stinger. Do NOT force a hit on every hero beat; place them only where the story truly detonates.
-- The opening should GRIP — but how is your call: unsettling atmosphere, one deliberate sound, or held silence. Just don't leave it accidentally empty.
-- silenceDrop — optional, at most one: a beat of cut sound right before a big hit makes it land harder. Use it only where it serves.
-- voices — at most ${horror ? 2 : 1}, and ONLY when the STORY PIVOTS on hearing a non-narrator voice (a voice answering back, mimicking, a call that changes everything). Otherwise return []. One perfectly-placed voice is chilling; a stray voice is a stranger in the room. Never for ambience or filler.${horror ? '\n\nCraft: horror is built from restraint, tension, and silence, then broken only when the story genuinely turns. Trust the quiet — the scariest sound is often the one you almost don\'t hear until it\'s right next to you.' : ''}
+1. A CONTINUOUS bed — always present, barely noticeable: the low texture of the ACTUAL place (room tone, a faint hum, air, distant rumble). It should read as "something is slightly off here," never as "ghost music." Carry it with ambient + music; choose music's character to suit this story (a low room-tone drone, faint air, a slow pulse — not a melody). The bed never fully stops.
+2. REALISM the viewer can HEAR — the real sounds of THIS place and these exact actions, each on the moment it happens: a latch, a faucet, cloth, a chair scrape, a fluorescent buzz, footsteps, a phone against a hard surface. BE GENEROUS with these — a believable world is full of them. They sit UNDER the narrator but must be clearly present, NOT subliminal: a viewer should notice the door, the footsteps, the phone. Avoid burying everything in "faint / distant / barely-there" — reserve true faintness for the continuous bed (layer 1); these foreground details are audible. (A near-silent realism layer is the #1 failure — don't under-fill it or under-play it.)
+3. RESTRAINT on the overt. The reel builds toward essentially ONE real payoff: a single, CLEARLY AUDIBLE impact — a full-bodied hit with real body AND weight (a boom/slam/stab with low-end under it, NOT a pure sub-bass rumble, which is inaudible on phone speakers), set up by a beat of SILENCE right before it. Resist a hit on every scare — one earned payoff lands harder than five. A HERO scene is where it most likely belongs, but only the moment that truly turns.
 
-Anchor EVERY cue (sfx, silenceDrop, voice) to an EXACT substring of the narration, verbatim and UNIQUE (extend the span until it appears exactly once).`
+Devices to reach for WHERE THEY FIT (never all, never forced):
+- a reverse swell rising into the impact (makes the ear brace); a slow subconscious pulse that quickens with tension; a high ringing / everything-goes-quiet after the hit; faint tape/analog hiss for a found, old-recording feel; metallic resonance (a pipe, a far clang) for schools/hospitals/lots/elevators; and — used SPARINGLY and mixed very low — non-verbal breath or whisper TEXTURES.
+
+Hard rules:
+- sfx are sounds and textures, never spoken performance. Actual words, laughter, or screams are NEVER sfx. (Quiet non-verbal breath/whisper texture is fine; a person laughing or speaking is not.)
+- impactAtEnd=true for a sound that BUILDS to its hit (riser/swell → lands ON the word); false for an instant one-shot.
+- The opening should GRIP from the first second — settle the viewer into the real place with something faintly wrong. Don't leave it empty.
+- voices — at most ${horror ? 2 : 1}, and ONLY when the STORY PIVOTS on hearing a non-narrator voice (a voice answering back, mimicking, a call that changes everything). Otherwise []. One perfect voice is chilling; a stray one is a stranger in the room.
+- Anchor EVERY cue (sfx, silenceDrop, voice) to an EXACT substring of the narration, verbatim and UNIQUE (extend until it appears exactly once).
+
+The target: a soundscape that feels like a real recording of the place${horror ? ' — an apartment at 2am, a school after hours, a dripping bathroom — until something that doesn\'t belong slips in. Dense with quiet reality; ruthless with the overt.' : '.'}`
 
   const userMessage = `NARRATION:
 """${narration}"""
 
-SCENES ([HERO] = where the story's weight sits — a candidate for a hit IF the moment earns it, never a requirement):
+SCENES ([HERO] = where the story's weight sits — the likeliest home for the one payoff, if the moment earns it):
 ${sceneLines}
 
-Design the soundscape this story earns — layered, restrained, intentional. OUTPUT JSON only:
+Design the full soundscape: a continuous bed, dense quiet realism throughout, and a restrained overt layer that builds to one felt payoff. OUTPUT JSON only:
 {
   "ambient": { "packTags": ["province_night"], "evolution": null },
   "music": { "type": "low_drone" | "drone_swell" | "riser_sting", "startAnchor": "", "peakAnchor": "the twist/reveal line", "moodTags": ["dread"] },

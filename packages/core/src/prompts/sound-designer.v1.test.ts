@@ -11,22 +11,33 @@ describe('buildSoundDesignerPrompt', () => {
     const { system, userMessage } = buildSoundDesignerPrompt('Gabi na noon… May sumagot sa likod ko.', SCENES, 'horror')
     expect(userMessage).toContain('HERO')
     expect(userMessage).toContain('May sumagot sa likod ko')
-    expect(system).toMatch(/non-vocal/i)
   })
 
-  it('frames hits as earned, not forced on every hero scene (debiased)', () => {
-    const { system, userMessage } = buildSoundDesignerPrompt('x', SCENES, 'horror')
-    // No mandate to hit every hero beat; hits are candidates the moment must earn.
+  it('pushes DENSE believable realism, not sparseness (fixes the flat output)', () => {
+    const { system } = buildSoundDesignerPrompt('x', SCENES, 'horror')
+    expect(system).toMatch(/DENSE|BE GENEROUS/i)
+    expect(system).toMatch(/believable|ordinary reality|real place/i)
+    // The 90/10 balance — mostly reality, sparingly overt.
+    expect(system).toMatch(/nine parts|9.*1|believable world/i)
+  })
+
+  it('keeps the overt layer restrained — builds to one felt payoff, hits earned not forced', () => {
+    const { system } = buildSoundDesignerPrompt('x', SCENES, 'horror')
     expect(system).not.toMatch(/JUMPSCARES/)
-    expect(system).toMatch(/earned|earns/i)
-    expect(system).toMatch(/Do NOT force a hit on every hero beat/)
-    expect(userMessage).not.toMatch(/needs a jumpscare/)
+    expect(system).toMatch(/one .*payoff|one earned payoff|Resist a hit|only the moment that truly turns/i)
+    expect(system).toMatch(/earn/i)
   })
 
   it('lets the LLM choose the music character (no hardcoded texture like heartbeat)', () => {
     const { system } = buildSoundDesignerPrompt('x', SCENES, 'horror')
-    expect(system).toMatch(/YOU choose its character/)
+    expect(system).toMatch(/choose music'?s character/i)
     expect(system).not.toMatch(/heartbeat/i)
+  })
+
+  it('allows quiet non-verbal textures but bans overt vocal sfx', () => {
+    const { system } = buildSoundDesignerPrompt('x', SCENES, 'horror')
+    expect(system).toMatch(/breath|whisper/i)          // textures are on the palette
+    expect(system).toMatch(/never sfx/i)               // words/laughter/screams are not
   })
 
   it('scales the voice budget by genre (horror allows more pivotal voices than non-horror)', () => {

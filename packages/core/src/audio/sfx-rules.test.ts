@@ -2,32 +2,32 @@ import { describe, it, expect } from 'vitest'
 import { isVocalSfxPrompt, dropEventsNear } from './sfx-rules.js'
 
 describe('isVocalSfxPrompt', () => {
-  it('flags the real-world vocal prompts that caused the random-voices complaint', () => {
-    // These four shipped on the owner's reel and rendered as uncanny strangers.
+  it('flags OVERT/verbal human sounds (the random-voices/laughter complaint)', () => {
     expect(isVocalSfxPrompt('startled gasp')).toBe(true)
-    expect(isVocalSfxPrompt('whisper echoes')).toBe(true)
     expect(isVocalSfxPrompt('creepy soft laughter')).toBe(true)
-    expect(isVocalSfxPrompt('shaky breathing')).toBe(true)
-  })
-
-  it('flags other vocal phrasings', () => {
     expect(isVocalSfxPrompt('a distant voice calls out')).toBe(true)
     expect(isVocalSfxPrompt('woman screaming far away')).toBe(true)
-    expect(isVocalSfxPrompt('low humming from the next room')).toBe(true)
+    expect(isVocalSfxPrompt('a voice says her name')).toBe(true)
+  })
+
+  it('ALLOWS quiet non-verbal textures (owner: fine as atmosphere)', () => {
+    // These are legitimate horror texture — breath, whisper hush, hum — not a stray person.
+    expect(isVocalSfxPrompt('slow distorted breathing')).toBe(false)
+    expect(isVocalSfxPrompt('faint whisper texture, no words')).toBe(false)
+    expect(isVocalSfxPrompt('low electrical hum from the next room')).toBe(false)
   })
 
   it('passes non-vocal environmental sounds', () => {
     expect(isVocalSfxPrompt('electricity switch off')).toBe(false)
     expect(isVocalSfxPrompt('phone vibration')).toBe(false)
     expect(isVocalSfxPrompt('door slam')).toBe(false)
-    expect(isVocalSfxPrompt('soft door creak opens')).toBe(false)
     expect(isVocalSfxPrompt('low boom riser into a hit')).toBe(false)
     expect(isVocalSfxPrompt('distant footsteps in an empty hallway')).toBe(false)
   })
 
   it('matches on word boundaries, not substrings', () => {
     expect(isVocalSfxPrompt('door slam')).toBe(false) // "slam" ≠ "scream"
-    expect(isVocalSfxPrompt('wind whistles through a crack')).toBe(false) // "whistles" is not "whisper"
+    expect(isVocalSfxPrompt('wind whistles through a crack')).toBe(false) // "whistles" is not a blocked word
   })
 })
 

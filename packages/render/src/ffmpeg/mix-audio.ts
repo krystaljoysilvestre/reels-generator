@@ -33,6 +33,11 @@ const DEFAULT_PEAK_DB = -12
 // The music path previously reused bedDb here, so ambient loudness drifted with the music setting; both
 // paths now use this constant so ambient sits at the same level whether or not a music bed is present.
 const AMBIENT_DB = -20
+// SFX-bus lift. Cues sit at the designer's per-cue volumeDb, but under near-continuous narration they
+// were landing at/below the voice level and reading as "no sound effects" (owner feedback 2026-07-06).
+// A bus lift raises the whole SFX layer so effects clearly sit under the voice instead of buried — while
+// loudnorm (set by the continuous voiceover) keeps overall loudness on target.
+const SFX_BUS_DB = 6
 
 // Final loudness normalization → render_qa requires -14 ±0.5 LUFS. ffmpeg's loudnorm (single- OR
 // two-pass) undershoots on speech-crest content: to honor the -1.5 dBTP ceiling it backs off the
@@ -158,10 +163,11 @@ export async function mixAudio(params: MixAudioParams): Promise<void> {
     // swells back up in the dramatic pauses (release 400ms < the shortest pause).
     `[0]asplit=2[vox][voxkey]`,
     `[mus0][voxkey]sidechaincompress=threshold=0.04:ratio=3:attack=20:release=400[musduck]`,
-    // mix layers
+    // mix layers (SFX lifted so effects sit clearly under the voice, not buried)
+    `[3]volume=${SFX_BUS_DB}dB[sfxb]`,
     `[vox][amb]amix=inputs=2:normalize=0[base]`,
     `[base][musduck]amix=inputs=2:normalize=0[withmus]`,
-    `[withmus][3]amix=inputs=2:normalize=0[premaster]`,
+    `[withmus][sfxb]amix=inputs=2:normalize=0[premaster]`,
   ]
   await encodeWithLoudnorm(inputs, pre, params.timings.durationMs / 1000, params.outputPath)
 }
@@ -175,8 +181,9 @@ async function mixNoMusic(params: MixAudioParams): Promise<void> {
   ]
   const pre = [
     `[1]volume=${AMBIENT_DB}dB,aloop=loop=-1:size=2e9[amb]`,
+    `[2]volume=${SFX_BUS_DB}dB[sfxb]`,
     `[0][amb]amix=inputs=2:normalize=0[base]`,
-    `[base][2]amix=inputs=2:normalize=0[premaster]`,
+    `[base][sfxb]amix=inputs=2:normalize=0[premaster]`,
   ]
   await encodeWithLoudnorm(inputs, pre, params.timings.durationMs / 1000, params.outputPath)
 }

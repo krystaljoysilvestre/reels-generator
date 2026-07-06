@@ -61,9 +61,9 @@ export async function mixAudioStep(reelId: string): Promise<void> {
   const sfxAssets = allAssets.filter((a) => a.kind === 'sfx')
   if (!voiceover) throw new Error('No voiceover asset')
 
-  // v3: gentler music duck (ratio 6 → 3) + late build-start envelope — the mixer's behavior changed,
-  // so cached v2 mixes are stale even when the inputs hash the same.
-  const inputHash = buildInputHash('mix_audio.v3', {
+  // v4: SFX bus lift + newest-per-anchor dedupe (was v3: gentler music duck + late build). Mixer behavior
+  // changed, so cached mixes are stale even when the inputs hash the same — bump to force a re-mix.
+  const inputHash = buildInputHash('mix_audio.v4', {
     // Hash the voiceover's row identity (createdAt), not its constant storage key — the key never changes
     // across re-synthesis, so hashing it would reuse a stale mix after a voice change.
     voiceoverAt: voiceover.createdAt,
@@ -103,12 +103,17 @@ export async function mixAudioStep(reelId: string): Promise<void> {
         ])
       }
 
-      // Pre-mix SFX
+      // Pre-mix SFX. sfxAssets is newest-first (allAssets is desc by createdAt), so take the FIRST asset
+      // per anchor — the current design's take — and skip the rest. Without this, the 50+ accumulated
+      // assets from past renders whose anchors coincidentally match get layered in as stale duplicates.
       const sfxEvents: { storageKey: string; atMs: number; volumeDb: number }[] = []
+      const usedAnchors = new Set<string>()
       for (const sfxAsset of sfxAssets) {
         const meta = sfxAsset.meta as { anchor?: string; durationMs?: number; impactAtEnd?: boolean }
+        if (!meta.anchor || usedAnchors.has(meta.anchor)) continue
         const event = timings.sfxEvents.find((e) => e.anchor === meta.anchor)
         if (event) {
+          usedAnchors.add(meta.anchor)
           const buf = await downloadBuffer(sfxAsset.storageKey)
           const localPath = join(tmp, `sfx_${sfxAsset.id}.mp3`)
           await writeFile(localPath, buf)
