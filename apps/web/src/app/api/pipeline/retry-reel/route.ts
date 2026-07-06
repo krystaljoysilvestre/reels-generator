@@ -25,7 +25,7 @@ const STEP_RESET_STATUS: Record<string, string> = {
 export async function POST(req: NextRequest) {
   if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { reelId } = (await req.json()) as { reelId: string }
+  const { reelId } = (await req.json().catch(() => ({}))) as { reelId: string }
   const db = getDb()
 
   const reel = await db.query.reels.findFirst({ where: eq(reels.id, reelId) })

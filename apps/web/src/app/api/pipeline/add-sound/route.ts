@@ -21,7 +21,7 @@ function countOccurrences(text: string, sub: string): number {
 export async function POST(req: NextRequest) {
   if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { reelId, sceneIdx, instruction } = (await req.json()) as { reelId: string; sceneIdx?: number; instruction: string }
+  const { reelId, sceneIdx, instruction } = (await req.json().catch(() => ({}))) as { reelId: string; sceneIdx?: number; instruction: string }
   if (!instruction?.trim()) return NextResponse.json({ error: 'Describe the sound you want.' }, { status: 400 })
 
   const db = getDb()

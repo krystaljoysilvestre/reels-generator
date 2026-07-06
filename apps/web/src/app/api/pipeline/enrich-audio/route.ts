@@ -12,7 +12,7 @@ import { getSession } from '@/lib/auth'
 export async function POST(req: NextRequest) {
   if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { reelId, force } = (await req.json()) as { reelId: string; force?: boolean }
+  const { reelId, force } = (await req.json().catch(() => ({}))) as { reelId: string; force?: boolean }
   const db = getDb()
   const reel = await db.query.reels.findFirst({ where: eq(reels.id, reelId) })
   if (!reel?.storyId) return NextResponse.json({ error: 'Reel or story not found' }, { status: 404 })

@@ -11,7 +11,7 @@ import { getSession } from '@/lib/auth'
 // render re-animates with the new settings.
 export async function POST(req: NextRequest) {
   if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const { reelId, sceneIdx, motionPrompt, motionSettings } = (await req.json()) as {
+  const { reelId, sceneIdx, motionPrompt, motionSettings } = (await req.json().catch(() => ({}))) as {
     reelId: string; sceneIdx: number; motionPrompt?: string; motionSettings?: unknown
   }
   const db = getDb()

@@ -10,7 +10,7 @@ import { getSession } from '@/lib/auth'
 export async function POST(req: NextRequest) {
   if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { reelId, sceneIdx, key } = (await req.json()) as { reelId: string; sceneIdx: number; key: string }
+  const { reelId, sceneIdx, key } = (await req.json().catch(() => ({}))) as { reelId: string; sceneIdx: number; key: string }
   if (!key) return NextResponse.json({ error: 'No image' }, { status: 400 })
   const db = getDb()
 

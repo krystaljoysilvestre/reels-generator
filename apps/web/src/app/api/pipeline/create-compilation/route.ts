@@ -6,7 +6,7 @@ import { getSession } from '@/lib/auth'
 export async function POST(req: NextRequest) {
   if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { reelIds, theme, title } = (await req.json()) as {
+  const { reelIds, theme, title } = (await req.json().catch(() => ({}))) as {
     reelIds: string[]
     theme?: string
     title?: string

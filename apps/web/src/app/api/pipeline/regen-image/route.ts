@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
   // mode: 'vary' (default) conditions on the CURRENT image so the regen stays close (fix a hand, small
   // variation); 'fresh' ignores the current image and re-rolls a new composition from scratch. Both keep the
   // character/location plates so faces stay consistent. instruction is optional (a plain re-roll needs none).
-  const { reelId, sceneIdx, instruction, mode, referenceKey } = (await req.json()) as {
+  const { reelId, sceneIdx, instruction, mode, referenceKey } = (await req.json().catch(() => ({}))) as {
     reelId: string; sceneIdx: number; instruction?: string; mode?: 'vary' | 'fresh'; referenceKey?: string
   }
   const db = getDb()

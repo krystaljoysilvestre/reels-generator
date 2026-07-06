@@ -10,7 +10,7 @@ import { getSession } from '@/lib/auth'
 export async function POST(req: NextRequest) {
   if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { reelId, sceneIdx, assetId } = (await req.json()) as { reelId: string; sceneIdx: number; assetId: string }
+  const { reelId, sceneIdx, assetId } = (await req.json().catch(() => ({}))) as { reelId: string; sceneIdx: number; assetId: string }
   const db = getDb()
 
   // The asset must belong to THIS reel and be an image (don't let an arbitrary id be pointed in).

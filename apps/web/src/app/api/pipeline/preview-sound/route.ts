@@ -22,7 +22,7 @@ export const maxDuration = 120
 export async function POST(req: NextRequest) {
   if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { reelId, cueId } = (await req.json()) as { reelId: string; cueId: string }
+  const { reelId, cueId } = (await req.json().catch(() => ({}))) as { reelId: string; cueId: string }
   const db = getDb()
   const reel = await db.query.reels.findFirst({ where: eq(reels.id, reelId) })
   if (!reel) return NextResponse.json({ error: 'Reel not found' }, { status: 404 })

@@ -10,7 +10,7 @@ const tts = new ElevenLabsTtsProvider()
 export async function POST(req: NextRequest) {
   if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { voiceId, text, voiceSettings } = (await req.json()) as { voiceId: string; text: string; voiceSettings?: VoiceSettings }
+  const { voiceId, text, voiceSettings } = (await req.json().catch(() => ({}))) as { voiceId: string; text: string; voiceSettings?: VoiceSettings }
   if (!voiceId || !text) return NextResponse.json({ error: 'Missing voiceId or text' }, { status: 400 })
 
   // Use a temp reelId prefix for the preview — won't persist to a real reel. Honor the operator's
