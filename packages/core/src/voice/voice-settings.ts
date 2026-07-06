@@ -36,8 +36,9 @@ const MOOD_RULES: Array<{ match: RegExp; dStability: number; dStyle: number; dSp
 // tag → baseline stability 0.47 / style 0.3 / speed 0.96, which reads as jolly, not dread). 'general' has no
 // envelope on purpose — it's the catch-all, so tone/mood drive it under the wide final clamp below.
 const GENRE_ENVELOPE: Record<string, { stability: [number, number]; style: [number, number]; speed: [number, number] }> = {
-  // Cold, controlled, slow — the scare is restraint. Steady enough to never rush/stutter; drama kept low.
-  horror: { stability: [0.5, 0.65], style: [0.05, 0.15], speed: [0.85, 0.95] },
+  // Cold, controlled, slow — the scare is restraint. Steady enough to never rush/stutter; drama kept low;
+  // deliberately slow. Tuned to the deep, measured delivery that tested best (≈0.55 / 0.10 / 0.88).
+  horror: { stability: [0.53, 0.65], style: [0.05, 0.1], speed: [0.82, 0.9] },
   // Clear and authoritative — steady, minimal drama, brisk but never rushed.
   informational: { stability: [0.45, 0.6], style: [0.05, 0.22], speed: [0.96, 1.08] },
   // Warm and natural — a little expressive, conversational pace.
