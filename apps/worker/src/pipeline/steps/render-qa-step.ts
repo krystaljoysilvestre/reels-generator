@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm'
+import { eq, and, desc } from 'drizzle-orm'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { mkdir, writeFile, rm } from 'node:fs/promises'
@@ -15,7 +15,17 @@ export async function renderQaStep(reelId: string): Promise<void> {
   if (!reel?.timings || !reel.renderUrl) throw new Error(`Reel missing timings or renderUrl: ${reelId}`)
 
   const timings = TimingsSchema.parse(reel.timings)
-  const inputHash = buildInputHash('render_qa.v1', { renderUrl: reel.renderUrl, reelId })
+  // The render key is constant per reel, so hashing renderUrl alone let QA SKIP a re-render (validating a
+  // stale cut). Hash the render asset's createdAt too — it's bumped on every render → QA re-runs each time.
+  const renderAsset = await db.query.assets.findFirst({
+    where: and(eq(assets.reelId, reelId), eq(assets.kind, 'render')),
+    orderBy: [desc(assets.createdAt)],
+  })
+  const inputHash = buildInputHash('render_qa.v2', {
+    renderUrl: reel.renderUrl,
+    reelId,
+    renderAt: renderAsset?.createdAt ?? null,
+  })
 
   const result = await runStep(
     { reelId, stepName: 'render_qa', inputHash },
