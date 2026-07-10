@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./ffmpeg/mix-audio": "./src/ffmpeg/mix-audio.ts",
+    "./ffmpeg/audio-analysis": "./src/ffmpeg/audio-analysis.ts",
     "./ffmpeg/render-video": "./src/ffmpeg/render-video.ts",
     "./qa/render-qa": "./src/qa/render-qa.ts",
     "./music/music-sync": "./src/music/music-sync.ts",

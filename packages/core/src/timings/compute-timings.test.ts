@@ -66,6 +66,116 @@ describe('F1 — Taglish code-switch SFX placement', () => {
   })
 })
 
+// ── F1b: Sustained SFX span (endAnchor → endMs) ──────────────────────────────
+describe('F1b — sustained SFX span resolution', () => {
+  const narration = 'Naglakad ako papunta sa banyo. Binuksan ko ang pinto at pumasok ako.'
+
+  function inputWith(sfx: AudioScript['sfx']): ComputeTimingsInput {
+    return {
+      narration,
+      alignment: syntheticAlignment(narration, 10000),
+      durationMs: 10000,
+      scenes: singleScene(narration),
+      audioScript: { ...silentAudioScript(), sfx },
+      twistAnchor: 'pinto',
+    }
+  }
+
+  it('resolves endAnchor to the END of the end phrase and carries endMs on the event', () => {
+    const result = computeTimings(inputWith([
+      { anchor: 'Naglakad', endAnchor: 'Binuksan ko ang pinto', offsetMs: 0, prompt: 'slow heartbeat, seamless loop', volumeDb: -9, impactAtEnd: false },
+    ]))
+    expect(result.sfxEvents).toHaveLength(1)
+    const ev = result.sfxEvents[0]!
+    expect(ev.endMs).toBeDefined()
+    expect(ev.endMs!).toBeGreaterThan(ev.atMs)
+    // The span ends at the END of the endAnchor phrase, not its start.
+    const endIdx = narration.indexOf('Binuksan ko ang pinto') + 'Binuksan ko ang pinto'.length - 1
+    expect(ev.endMs).toBe(syntheticAlignment(narration, 10000)[endIdx]!.endMs)
+    expect(result.warnings).toHaveLength(0)
+  })
+
+  it('rescues a case-mismatched endAnchor via the fuzzy pass (LLM lowercases sentence starts)', () => {
+    const result = computeTimings(inputWith([
+      { anchor: 'Naglakad', endAnchor: 'binuksan ko ang pinto', offsetMs: 0, prompt: 'loop', volumeDb: -9, impactAtEnd: false },
+    ]))
+    expect(result.sfxEvents).toHaveLength(1)
+    expect(result.sfxEvents[0]!.endMs).toBeDefined()
+    expect(result.warnings).toHaveLength(0)
+  })
+
+  it('degrades to a one-shot (no endMs) with a warning when endAnchor is unresolvable', () => {
+    const result = computeTimings(inputWith([
+      { anchor: 'Naglakad', endAnchor: 'this text is not in the narration', offsetMs: 0, prompt: 'loop', volumeDb: -9, impactAtEnd: false },
+    ]))
+    expect(result.sfxEvents).toHaveLength(1)
+    expect(result.sfxEvents[0]!.endMs).toBeUndefined()
+    expect(result.warnings.some((w) => w.includes('endAnchor'))).toBe(true)
+  })
+
+  it('degrades to a one-shot when endAnchor resolves BEFORE the start anchor', () => {
+    const result = computeTimings(inputWith([
+      { anchor: 'pumasok', endAnchor: 'Naglakad', offsetMs: 0, prompt: 'loop', volumeDb: -9, impactAtEnd: false },
+    ]))
+    expect(result.sfxEvents).toHaveLength(1)
+    expect(result.sfxEvents[0]!.endMs).toBeUndefined()
+    expect(result.warnings.some((w) => w.includes('endAnchor'))).toBe(true)
+  })
+})
+
+// ── F1c: Climax ring-out room (§4.7) ─────────────────────────────────────────
+describe('F1c — climax ring-out room', () => {
+  // A loud hit anchored on the LAST word → little room after it → reel extends so the tail can decay.
+  it('extends the reel when a loud climax hit lands at the very end', () => {
+    const narration = 'Naglakad ako sa madilim na pasilyo. May nakatayo sa dulo.'
+    const alignment = syntheticAlignment(narration, 10000)
+    const input: ComputeTimingsInput = {
+      narration,
+      alignment,
+      durationMs: 10000,
+      scenes: singleScene(narration),
+      audioScript: { ...silentAudioScript(), sfx: [{ anchor: 'sa dulo', offsetMs: 0, prompt: 'sudden bang', volumeDb: 6, impactAtEnd: false }] },
+      twistAnchor: 'sa dulo',
+    }
+    const r = computeTimings(input)
+    expect(r.durationMs).toBeGreaterThan(10000)               // extended
+    const hitAt = r.sfxEvents[0]!.atMs
+    expect(r.durationMs - hitAt).toBeGreaterThanOrEqual(6999) // ~RING_OUT_MS of room after the hit
+    expect(r.scenes[r.scenes.length - 1]!.endMs).toBe(r.durationMs) // last scene holds through the tail
+    expect(r.warnings.some((w) => w.includes('ring-out'))).toBe(true)
+  })
+
+  it('does NOT extend when the loud hit is mid-story (tail rings out over what follows)', () => {
+    const narration = 'May malakas na putok. Tapos tumakbo ako palabas ng gusali papunta sa kalsada nang mabilis.'
+    const alignment = syntheticAlignment(narration, 12000)
+    const input: ComputeTimingsInput = {
+      narration,
+      alignment,
+      durationMs: 12000,
+      scenes: singleScene(narration),
+      audioScript: { ...silentAudioScript(), sfx: [{ anchor: 'putok', offsetMs: 0, prompt: 'bang', volumeDb: 6, impactAtEnd: false }] },
+      twistAnchor: 'putok',
+    }
+    const r = computeTimings(input)
+    expect(r.durationMs).toBe(12000) // plenty of room after an early hit → no change
+  })
+
+  it('does NOT extend for a quiet end cue (only a real hit triggers ring-out)', () => {
+    const narration = 'Tahimik na tahimik. Umuwi na ako.'
+    const alignment = syntheticAlignment(narration, 8000)
+    const input: ComputeTimingsInput = {
+      narration,
+      alignment,
+      durationMs: 8000,
+      scenes: singleScene(narration),
+      audioScript: { ...silentAudioScript(), sfx: [{ anchor: 'Umuwi na ako', offsetMs: 0, prompt: 'soft footstep', volumeDb: -8, impactAtEnd: false }] },
+      twistAnchor: 'Umuwi na ako',
+    }
+    const r = computeTimings(input)
+    expect(r.durationMs).toBe(8000) // quiet cue, reflective ending → untouched
+  })
+})
+
 // ── F2: Pause + punctuation chunking ─────────────────────────────────────────
 describe('F2 — subtitle chunking', () => {
   it('breaks on sentence punctuation', () => {

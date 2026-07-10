@@ -1,6 +1,7 @@
 // Remotion v4 — license: free for individuals + companies <$1M revenue. Re-evaluate at M7 SaaS launch [H6].
 import React from 'react'
 import { useCurrentFrame, useVideoConfig, interpolate, Img, OffthreadVideo } from 'remotion'
+import { clipPlaybackRate } from '@reels/core/timings'
 
 export interface SceneClipProps {
   imageSrc: string                   // data URI or URL
@@ -50,7 +51,8 @@ export const SceneClip: React.FC<SceneClipProps> = ({ imageSrc, videoSrc, tier, 
     // the tail freezes, which is still better than a hard stop.
     const sceneSec = durationFrames / fps
     const clipSec = videoDurationSec ?? sceneSec
-    const playbackRate = Math.max(0.5, Math.min(1, clipSec / sceneSec))
+    // Shared with the mixer's foley placement (packages/core clip-playback) so sync never drifts.
+    const playbackRate = clipPlaybackRate(clipSec, sceneSec)
     return (
       <OffthreadVideo
         src={videoSrc}

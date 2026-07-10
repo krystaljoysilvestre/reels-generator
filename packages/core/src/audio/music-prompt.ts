@@ -6,13 +6,37 @@ import type { AudioMood } from '../types/channel.js'
 export const MUSIC_MIN_MS = 10_000
 export const MUSIC_MAX_MS = 300_000
 
-// Hard constraints (mirrors the preset library): no vocals — they'd fight the narration — and a
-// steady texture that sits under a speaking voice. Eleven Music's force_instrumental guarantees the
-// no-vocals part; the prompt reinforces the texture.
+// Hard constraints: no vocals (they'd fight the narration) and it must stay UNDER a speaking voice.
+// Eleven Music's force_instrumental guarantees the no-vocals part. Crucially, we NO LONGER ask for a
+// "consistent/steady texture" — that instruction produced a single unchanging wash for the whole reel
+// (the "continuous flat sound" complaint). The bed must EVOLVE; the arc clause below shapes how.
 export const MUSIC_CONSTRAINT =
   ' Instrumental only — no vocals, no singing, no choir, no lyrics, no spoken word.' +
-  ' Consistent texture and steady volume throughout, no jarring hits or big drops.' +
-  ' Sits quietly in the background under a speaking voice.'
+  ' It plays under a speaking voice, so keep the midrange clear and never bury the narrator —' +
+  ' but it must NOT sit still: let the texture and intensity EVOLVE across the piece, with elements' +
+  ' entering and receding, so it breathes and develops rather than looping one flat tone.'
+
+// The bed's arc — WHERE and HOW it develops. Keyed to the sound designer's chosen music type (its
+// intended movement) and the story's emotional peak position, so a low_drone still drifts and mounts
+// instead of sitting dead, while a riser_sting genuinely builds. Genre-neutral ("emotional peak"), so
+// warmth builds as naturally as dread.
+// Every arc opens with IMMEDIATE presence — the intensity must be felt within the first second (owner
+// direction 2026-07-06: a sparse/near-silent intro reads as "no music" and loses the viewer before the
+// story starts). The build is in texture and tightness, not in fading up from nothing.
+function musicArc(musicType: string | undefined, peakFrac: number): string {
+  const pct = Math.round(Math.min(0.95, Math.max(0.3, peakFrac)) * 100)
+  const openPresent = ' It must be clearly present and set the tension from the VERY FIRST SECOND — no slow fade-in from silence, no sparse empty intro.'
+  switch (musicType) {
+    case 'riser_sting':
+      return `${openPresent} Shape it as a continuous build: taut from the open, layering in and tightening, mounting toward an emotional peak around ${pct}% of the way through, then pull back.`
+    case 'drone_swell':
+      return `${openPresent} Let it move in swells — rising and receding like breath, always audible, cresting toward an emotional peak around ${pct}% of the way through.`
+    case 'low_drone':
+      return `${openPresent} Keep it low and uneasy but continuously evolving — the texture shifting, tension mounting toward around ${pct}% of the way through; never a single unchanging tone.`
+    default:
+      return `${openPresent} Let it develop and build toward an emotional peak around ${pct}% of the way through, then settle.`
+  }
+}
 
 // Compose the full Eleven Music prompt for a reel's bed. ONE coherent bed per reel — the mixer's
 // volume envelope swells it toward the twist and SFX carry the climax hit, so the bed itself stays a
@@ -31,6 +55,8 @@ export function buildMusicPrompt(params: {
   moodTags: string[]
   moodPrompt?: string | undefined // rich phrase for the chosen mood preset — leads the character when set
   instruction?: string | undefined
+  musicType?: string | undefined  // designer's chosen movement (low_drone | drone_swell | riser_sting)
+  peakFrac?: number | undefined   // where the story's emotional peak sits (0..1 of the reel)
 }): string {
   const base =
     params.audioMood?.prompt?.trim() ||
@@ -41,8 +67,10 @@ export function buildMusicPrompt(params: {
   const mood = params.moodPrompt?.trim()
     ? ` ${params.moodPrompt.trim()}`
     : params.moodTags.length ? ` Lean ${params.moodTags.join(', ')} for this story.` : ''
+  const arc = musicArc(params.musicType, params.peakFrac ?? 0.8)
   const steer = params.instruction?.trim() ? ` ${params.instruction.trim()}` : ''
-  return base + mood + steer + MUSIC_CONSTRAINT
+  // Operator steer stays the last, strongest directive before the hard constraints.
+  return base + mood + arc + steer + MUSIC_CONSTRAINT
 }
 
 export function clampMusicLengthMs(lengthMs: number): number {

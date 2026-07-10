@@ -24,6 +24,16 @@ export function isVocalSfxPrompt(prompt: string): boolean {
   return VOCAL_SFX.test(prompt)
 }
 
+// High-frequency textures that are fine as a brief one-shot but PAINFUL when looped continuously under a
+// whole stretch of story (owner 2026-07-06: a looped "fluorescent hum" read as an annoying metallic-cricket
+// whine that "hurts my ears"). A sustained bed should be LOW and soft (room tone, a low drone, air) — not a
+// buzzy/whiny/shrill high-frequency loop. Used to drop these from the SUSTAINED layer only (one-shots keep).
+const HARSH_SUSTAINED = /\b(fluorescent|buzz(?:ing|y)?|whine|whining|whistl\w*|shrill|screech\w*|shriek\w*|piercing|high[- ]?pitched|tinnitus|cicadas?)\b/i
+
+export function isHarshSustainedTexture(prompt: string): boolean {
+  return HARSH_SUSTAINED.test(prompt)
+}
+
 // Drop events that land within `windowMs` of any protected event's time. Used to keep LLM SFX from
 // stacking on a beat the operator/smart layer already owns.
 export function dropEventsNear<T extends { atMs: number }>(

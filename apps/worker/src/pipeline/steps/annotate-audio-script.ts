@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { getDb, reels, stories, scenes } from '@reels/db'
 import { llmCall, listVoices, buildInputHash } from '@reels/providers'
-import { AudioScriptSchema, AudioPacksSchema, OperatorSfxSchema, cueVolumeDb, resolveMusicMood, MusicMoodSchema, isVocalSfxPrompt, type AudioScript, type OperatorCue } from '@reels/core'
+import { AudioScriptSchema, AudioPacksSchema, OperatorSfxSchema, cueVolumeDb, resolveMusicMood, MusicMoodSchema, isVocalSfxPrompt, isHarshSustainedTexture, buildOpeningDreadCue, pickDreadEndAnchor, choreographClimax, type AudioScript, type OperatorCue } from '@reels/core'
 import { buildSoundDesignerPrompt, SOUND_DESIGNER_V1_VERSION, SoundDesignSchema, type DesignerScene } from '../../prompts-bridge.js'
 import type { DesignerVoice } from '@reels/core/prompts/sound-designer.v1'
 import { runStep } from '../harness.js'
@@ -104,12 +104,57 @@ export async function annotateAudioScript(reelId: string): Promise<void> {
       // Drop any vocal SFX the designer slipped in (belt-and-suspenders behind the prompt ban — voices are
       // the ONLY intended human sound). Manual anchors win, so a smart voice on a manual anchor is dropped.
       const manualAnchors = new Set(manualCues.map((c) => c.anchor))
+      // Owner-set deterministic rule (2026-07-06, after rejecting the drone on three listening passes):
+      // narrated reels never take a static low_drone bed — the LLM kept choosing it for eerie/sparse moods
+      // despite explicit prompt guidance ("never low_drone" in v1.7), so it's enforced here. drone_swell
+      // keeps the chosen moods but MOVES. (low_drone stays valid for preset/uploaded beds.)
+      const music =
+        design.music?.type === 'low_drone' ? { ...design.music, type: 'drone_swell' as const } : design.music
+
       const audioScript = AudioScriptSchema.parse({
         ambient: design.ambient,
-        sfx: design.sfx.filter((c) => !isVocalSfxPrompt(c.prompt)),
-        music: design.music,
+        sfx: design.sfx
+          .filter((c) => !isVocalSfxPrompt(c.prompt))
+          // Drop harsh high-freq textures from the SUSTAINED layer (endAnchor) — looped for a whole stretch
+          // they become a painful buzzy/whiny wall (owner: the looped "fluorescent hum" hurt). One-shots keep.
+          .filter((c) => {
+            if (c.endAnchor && isHarshSustainedTexture(c.prompt)) {
+              console.log(`[annotate] ${reelId.slice(0, 8)} dropped harsh sustained texture "${c.prompt}"`)
+              return false
+            }
+            return true
+          }),
+        music,
         silenceDrop: design.silenceDrop,
       })
+
+      // Owner-set HORROR climax choreography (2026-07-10): deterministically land the ONE hit on the PAYOFF
+      // (last-hero) scene, with a silence beat right before it and any sustained texture clamped to stop at
+      // that silence — the LLM anchors the reveal on a narration line that often falls in the wrong scene,
+      // so the scare fired over the wrong picture. See climax-choreography.ts.
+      let silenceAnchor: string | null = null
+      if (channelGenre === 'horror') {
+        const choreo = choreographClimax({
+          sfx: audioScript.sfx,
+          silenceDrop: audioScript.silenceDrop,
+          narration: story.body,
+          scenes: reelScenes.map((s) => ({ idx: s.idx, isHero: s.isHero, narrationText: s.narrationText })),
+        })
+        audioScript.sfx = choreo.sfx
+        audioScript.silenceDrop = choreo.silenceDrop
+        silenceAnchor = choreo.silenceAnchor
+        if (choreo.payoffAnchor) console.log(`[annotate] ${reelId.slice(0, 8)} climax hit → payoff scene "${choreo.payoffAnchor}"`)
+      }
+      // Guaranteed continuous dread bed from the opening line UNTIL the silence beat (so it stops right
+      // before the hit), else until the climax. The LLM won't reliably place an opening tension texture.
+      if (channelGenre === 'horror' && audioScript.sfx.length < 18) {
+        const endAnchor = silenceAnchor ?? pickDreadEndAnchor({ sfx: audioScript.sfx, music: audioScript.music })
+        const dread = endAnchor ? buildOpeningDreadCue({ narration: story.body, endAnchor }) : null
+        if (dread && !audioScript.sfx.some((c) => c.anchor === dread.anchor)) {
+          audioScript.sfx.unshift(dread)
+          console.log(`[annotate] ${reelId.slice(0, 8)} injected opening dread bed → "${dread.anchor}" until "${endAnchor}"`)
+        }
+      }
       const smart = (await realizeDesignerVoices((design.voices ?? []) as DesignerVoice[], story.body, reel.language))
         .filter((c) => !manualAnchors.has(c.anchor))
 
@@ -133,8 +178,13 @@ export async function annotateAudioScript(reelId: string): Promise<void> {
         audioPacks.musicMood,
         audioPacks.audioMood,
       )
+      // Owner-set deterministic rule (2026-07-06, after rejecting the drone on three listening passes):
+      // an AI-composed bed for a narrated reel is never a static low_drone — it reads as one flat
+      // unchanging tone under the whole story. drone_swell keeps the preset's moods but MOVES. This is
+      // the ACTUAL type decision point (the preset always wins here, so prompt-side guidance couldn't
+      // reach it). Preset/uploaded beds are untouched below.
       audioScript.music = {
-        type,
+        type: type === 'low_drone' ? 'drone_swell' : type,
         startAnchor: audioScript.music?.startAnchor ?? '',
         peakAnchor: audioScript.music?.peakAnchor ?? '',
         moodTags,

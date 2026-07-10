@@ -3,8 +3,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getDb, reels, assets, channels } from '@reels/db'
 import { downloadBuffer, uploadBuffer, buildInputHash } from '@reels/providers'
-import { TimingsSchema, AudioScriptSchema, AudioPacksSchema, musicIntensityToDb, moodMatchScore, peakFracForType } from '@reels/core'
-import { mixAudio, premixSfx } from '@reels/render/ffmpeg/mix-audio'
+import { TimingsSchema, AudioScriptSchema, AudioPacksSchema, musicIntensityToDb, moodMatchScore, peakFracForType, buildFoleyEvents, type FoleyAssetMeta } from '@reels/core'
+import { mixAudio, premixSfx, type StemPaths } from '@reels/render/ffmpeg/mix-audio'
+import { findImpactMs } from '@reels/render/ffmpeg/audio-analysis'
 import { writeFile, mkdir, rm } from 'node:fs/promises'
 import { runStep } from '../harness.js'
 
@@ -58,17 +59,37 @@ export async function mixAudioStep(reelId: string): Promise<void> {
   // The final mix is itself stored with kind 'ambient' (meta.type = 'final_mix') — must exclude it here,
   // or a re-mix would layer the PREVIOUS full mix (voiceover + music + sfx) back in as the ambient bed.
   const ambient = allAssets.find((a) => a.kind === 'ambient' && !isFinalMix(a))
-  const sfxAssets = allAssets.filter((a) => a.kind === 'sfx')
+  const allSfx = allAssets.filter((a) => a.kind === 'sfx')
+  // Foley (spotted to a clip's visible motion) carries meta.foley + sceneIdx/clipMs instead of a narration
+  // anchor, so it takes a separate placement path (buildFoleyEvents) from the anchored designer cues.
+  const foleyAssets = allSfx.filter((a) => (a.meta as Record<string, unknown>)['foley'] === true)
+  const sfxAssets = allSfx.filter((a) => (a.meta as Record<string, unknown>)['foley'] !== true)
   if (!voiceover) throw new Error('No voiceover asset')
 
-  // v4: SFX bus lift + newest-per-anchor dedupe (was v3: gentler music duck + late build). Mixer behavior
-  // changed, so cached mixes are stale even when the inputs hash the same — bump to force a re-mix.
-  const inputHash = buildInputHash('mix_audio.v4', {
+  // v5: detected-impact alignment + ambient dip in silenceDrop. v6: sustained loop cues (endMs spans).
+  // v7: iterative loudness convergence (crest-heavy jumpscare mixes drifted past ±0.5 LU in one pass).
+  // v8: foley (motion-synced SFX) merge + persisted stems. v9: SFX bus +6→+2 (background sits under the
+  // voice; only the payoff hit exceeds it). Mixer behavior changed, so cached mixes are stale even when
+  // the inputs hash the same — bump to force a re-mix.
+  const inputHash = buildInputHash('mix_audio.v9', {
     // Hash the voiceover's row identity (createdAt), not its constant storage key — the key never changes
     // across re-synthesis, so hashing it would reuse a stale mix after a voice change.
     voiceoverAt: voiceover.createdAt,
     ambientKey: ambient?.storageKey ?? 'none',
     sfxCount: sfxAssets.length,
+    // sfxAssets is newest-first, so [0].createdAt is the freshest SFX row. Count alone can't tell a
+    // regenerated same-size SFX set apart from the old one; this makes a re-gen force a fresh mix.
+    sfxNewestAt: sfxAssets[0]?.createdAt ?? 'none',
+    // Placement identity: re-timed events (moved anchors, new sustained endMs spans) must re-mix even
+    // when the assets themselves are unchanged — the premix is built FROM these timestamps.
+    sfxSpans: timings.sfxEvents.map((e) => `${e.atMs}-${e.endMs ?? ''}@${e.volumeDb}`).join('|'),
+    // Foley identity: placement derives from scene spans + clip times, so both must re-mix on change.
+    foleyNewestAt: foleyAssets[0]?.createdAt ?? 'none',
+    foleySpans: foleyAssets
+      .map((a) => { const m = a.meta as FoleyAssetMeta; return `${m.sceneIdx}:${m.clipMs}@${m.volumeDb}` })
+      .sort()
+      .join('|'),
+    sceneSpans: timings.scenes.map((s) => `${s.idx}:${s.startMs}-${s.endMs}`).join('|'),
     hasMusic: !!timings.music,
     musicKey: reel.musicKey ?? 'none', // AI bed → re-mix when the per-reel bed (re)generates
     reelId,
@@ -106,7 +127,7 @@ export async function mixAudioStep(reelId: string): Promise<void> {
       // Pre-mix SFX. sfxAssets is newest-first (allAssets is desc by createdAt), so take the FIRST asset
       // per anchor — the current design's take — and skip the rest. Without this, the 50+ accumulated
       // assets from past renders whose anchors coincidentally match get layered in as stale duplicates.
-      const sfxEvents: { storageKey: string; atMs: number; volumeDb: number }[] = []
+      const sfxEvents: { storageKey: string; atMs: number; volumeDb: number; endMs?: number }[] = []
       const usedAnchors = new Set<string>()
       for (const sfxAsset of sfxAssets) {
         const meta = sfxAsset.meta as { anchor?: string; durationMs?: number; impactAtEnd?: boolean }
@@ -117,12 +138,36 @@ export async function mixAudioStep(reelId: string): Promise<void> {
           const buf = await downloadBuffer(sfxAsset.storageKey)
           const localPath = join(tmp, `sfx_${sfxAsset.id}.mp3`)
           await writeFile(localPath, buf)
-          // A build-to-hit cue (riser/swell) must land its IMPACT on the anchor, not its start — so start
-          // it earlier by its own length. Instant one-shots fire on the anchor. adelay clamps at 0.
-          const startMs = meta.impactAtEnd ? Math.max(0, event.atMs - (meta.durationMs ?? 2000)) : event.atMs
-          sfxEvents.push({ storageKey: localPath, atMs: startMs, volumeDb: event.volumeDb })
+          // A build-to-hit cue (riser/swell) must land its IMPACT on the anchor, not its start. We detect
+          // the clip's actual loudest transient and start the clip so THAT lands on the anchor — robust to
+          // ElevenLabs not placing the hit at the clip's end, and the post-impact tail rings out past the
+          // anchor for free. Fall back to clip length if detection fails. Instant one-shots fire on the
+          // anchor. adelay clamps at 0 (never negative).
+          let startMs = event.atMs
+          if (meta.impactAtEnd) {
+            const impactMs = (await findImpactMs(localPath)) ?? meta.durationMs ?? 2000
+            startMs = Math.max(0, event.atMs - impactMs)
+          }
+          // Sustained cue: carry the span end through — premixSfx loops the clip to fill [atMs, endMs].
+          sfxEvents.push({ storageKey: localPath, atMs: startMs, volumeDb: event.volumeDb, ...(event.endMs != null ? { endMs: event.endMs } : {}) })
         }
       }
+      // Foley: map each spotted clip-motion cue to reel time (scene span + shared playback math), dedupe
+      // against the anchored cues already placed, then add to the premix as point cues.
+      const placedFoley = buildFoleyEvents({
+        foley: foleyAssets.map((a) => ({ storageKey: a.storageKey, createdAt: a.createdAt, meta: a.meta as FoleyAssetMeta })),
+        sceneSpans: timings.scenes.map((s) => ({ idx: s.idx, startMs: s.startMs, endMs: s.endMs })),
+        anchoredAtMs: timings.sfxEvents.map((e) => e.atMs),
+      })
+      let foleyIdx = 0
+      for (const f of placedFoley) {
+        const buf = await downloadBuffer(f.storageKey)
+        const localPath = join(tmp, `foley_${foleyIdx++}.mp3`)
+        await writeFile(localPath, buf)
+        sfxEvents.push({ storageKey: localPath, atMs: f.atMs, volumeDb: f.volumeDb })
+      }
+      if (placedFoley.length) console.log(`[mix] ${reelId} +${placedFoley.length} foley cue(s) from animated clips`)
+
       const sfxPremixPath = join(tmp, 'sfx_premix.aac')
       await premixSfx({
         sfxEvents,
@@ -171,6 +216,12 @@ export async function mixAudioStep(reelId: string): Promise<void> {
 
       // Full mix — music loudness follows the channel's intensity setting (Sound step).
       const mixPath = join(tmp, 'mix.m4a')
+      const stemPaths: StemPaths = {
+        voice: join(tmp, 'stem_voice.m4a'),
+        music: join(tmp, 'stem_music.m4a'),
+        sfx: join(tmp, 'stem_sfx.m4a'),
+        ambient: join(tmp, 'stem_ambient.m4a'),
+      }
       const { bedDb, peakDb } = musicIntensityToDb(audioPacks.musicIntensity)
       await mixAudio({
         voiceoverPath,
@@ -183,6 +234,7 @@ export async function mixAudioStep(reelId: string): Promise<void> {
         musicMoodTags: audioScript.music?.moodTags ?? [],
         bedDb,
         peakDb,
+        stemPaths,
       })
 
       // Upload result
@@ -209,6 +261,27 @@ export async function mixAudioStep(reelId: string): Promise<void> {
           createdAt: new Date(),
         },
       })
+
+      // Persist the 4 layer stems (pre-loudnorm) for rebalancing / per-layer QA / the future mixer feature.
+      // Constant keys per reel → upsert in place, bump createdAt (same pattern as the final mix).
+      const { readFile: readFileForStem } = await import('node:fs/promises')
+      for (const layer of ['voice', 'music', 'sfx', 'ambient'] as const) {
+        const stemKey = `reels/${reelId}/stems/${layer}.m4a`
+        await uploadBuffer(stemKey, await readFileForStem(stemPaths[layer]), 'audio/mp4')
+        const stemMeta = { type: 'stem', layer, durationMs: timings.durationMs, loudnormApplied: false, note: 'pre-loudnorm layer; summed stems ≈ mix minus final loudness gain' }
+        await db.insert(assets).values({
+          reelId,
+          channelId: reel.channelId,
+          kind: 'stem',
+          storageKey: stemKey,
+          provider: 'local',
+          costCents: 0,
+          meta: stemMeta,
+        }).onConflictDoUpdate({
+          target: [assets.reelId, assets.storageKey],
+          set: { kind: 'stem', meta: stemMeta, createdAt: new Date() },
+        })
+      }
 
       return { output: { storageKey }, costCents: 0 }
       } finally {

@@ -46,6 +46,7 @@ export const assetKindEnum = pgEnum('asset_kind', [
   'ambient',
   'music',
   'render',
+  'stem', // a single mix layer (voice/music/sfx/ambient) persisted alongside the final mix for rebalancing
 ])
 
 export const storySourceEnum = pgEnum('story_source', [

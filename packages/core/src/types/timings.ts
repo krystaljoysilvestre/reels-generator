@@ -41,6 +41,8 @@ export const SfxEventSchema = z.object({
   prompt: z.string(),
   atMs: z.number().int().nonnegative(),
   volumeDb: z.number(),
+  // Sustained cue: the loop runs from atMs until endMs (resolved from the cue's endAnchor). Absent = point cue.
+  endMs: z.number().int().nonnegative().optional(),
 })
 export type SfxEvent = z.infer<typeof SfxEventSchema>
 

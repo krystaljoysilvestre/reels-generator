@@ -1,4 +1,5 @@
 import { eq } from 'drizzle-orm'
+import { createHash } from 'node:crypto'
 import { getDb, reels, channels } from '@reels/db'
 import { generateMusic, uploadBuffer, buildInputHash } from '@reels/providers'
 import {
@@ -39,11 +40,9 @@ export async function generateMusicStep(reelId: string): Promise<void> {
   const timings = TimingsSchema.parse(reel.timings)
   const audioScript = AudioScriptSchema.parse(reel.audioScript)
 
-  // Idempotency: a prior run already composed this reel's bed — reuse it, don't re-pay the provider.
-  if (reel.musicKey) {
-    console.log(`[music] ${reelId} reusing existing bed (${reel.musicLengthMs ?? '?'}ms)`)
-    return
-  }
+  // Idempotency is handled below by runStep's inputHash (prompt + length) — NOT a blanket "musicKey exists
+  // → skip". That blanket skip meant a changed prompt (e.g. this evolving-bed rework) reused the old flat
+  // bed forever. Now the content-hashed key changes with the prompt, so the mixer also re-mixes.
 
   const tone = ToneConfigSchema.parse(channel.toneConfig ?? {})
   // ONE coherent bed for the reel: the channel's sonic DNA + the operator's chosen MOOD (reel override →
@@ -55,21 +54,30 @@ export async function generateMusicStep(reelId: string): Promise<void> {
     audioPacks.musicMood,
     audioPacks.audioMood,
   )
+  // Where the story's emotional peak sits (fraction of the reel) — so the bed builds toward the same beat
+  // the mixer's volume envelope swells to. Fall back to a late peak when there's no music timing.
+  const peakFrac = timings.music ? timings.music.peakAnchorMs / timings.durationMs : 0.8
   const prompt = buildMusicPrompt({
     audioMood: audioPacks.audioMood,
     toneIntensity: tone.intensity,
     nicheDescription: channel.nicheDescription,
     moodTags,
     ...(moodPrompt ? { moodPrompt } : {}),
+    ...(audioScript.music?.type ? { musicType: audioScript.music.type } : {}),
+    peakFrac,
   })
   const lengthMs = clampMusicLengthMs(timings.durationMs)
-  const inputHash = buildInputHash('generate_music.v3', { prompt, lengthMs, reelId })
+  // v4: evolving bed (was v3: steady wash). Prompt now carries the arc, so the hash changes and re-composes.
+  const inputHash = buildInputHash('generate_music.v4', { prompt, lengthMs, reelId })
 
   await runStep(
     { reelId, stepName: 'generate_music', inputHash },
     async () => {
       const bed = await generateMusic({ prompt, lengthMs })
-      const key = `audio/reel/${reelId}.mp3`
+      // Content-hash the key on prompt+length so a re-composed bed lands on a NEW key — the mixer hashes
+      // reel.musicKey, so a same-key overwrite would NOT trigger a re-mix and the new bed would go unheard.
+      const promptHash = createHash('sha1').update(`${prompt}|${lengthMs}`).digest('hex').slice(0, 10)
+      const key = `audio/reel/${reelId}-${promptHash}.mp3`
       await uploadBuffer(key, bed.audio, 'audio/mpeg')
       await db
         .update(reels)

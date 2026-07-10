@@ -13,6 +13,16 @@ import { selectMusicTrack } from '../music/music-selection.js'
 
 const execFileAsync = promisify(execFile)
 
+// Where to write the four per-layer stems. When provided, mixAudio writes them (in a SEPARATE ffmpeg run
+// from the final encode, so the loudnorm measure pass is untouched). Stems are the layers as they enter
+// the mix — PRE-loudnorm — so summing them ≈ the mix minus the final loudness gain (documented, expected).
+export interface StemPaths {
+  voice: string
+  music: string
+  sfx: string
+  ambient: string
+}
+
 export interface MixAudioParams {
   voiceoverPath: string
   ambientPath: string
@@ -25,6 +35,7 @@ export interface MixAudioParams {
   musicMoodTags: string[]
   bedDb?: number              // default -22
   peakDb?: number             // default -12
+  stemPaths?: StemPaths       // when set, also persist the 4 layers as separate files
 }
 
 const DEFAULT_BED_DB = -22
@@ -33,11 +44,16 @@ const DEFAULT_PEAK_DB = -12
 // The music path previously reused bedDb here, so ambient loudness drifted with the music setting; both
 // paths now use this constant so ambient sits at the same level whether or not a music bed is present.
 const AMBIENT_DB = -20
-// SFX-bus lift. Cues sit at the designer's per-cue volumeDb, but under near-continuous narration they
-// were landing at/below the voice level and reading as "no sound effects" (owner feedback 2026-07-06).
-// A bus lift raises the whole SFX layer so effects clearly sit under the voice instead of buried — while
-// loudnorm (set by the continuous voiceover) keeps overall loudness on target.
-const SFX_BUS_DB = 6
+// How far ambient dips during a silenceDrop. Music hard-zeros in the drop; ambient must NOT (a dead,
+// perfectly silent dropout reads as an encode glitch, not tension) — so it ducks by this much and stays
+// alive. The SFX bus is left un-dipped so the climax hit punches through the quiet.
+const AMBIENT_SILENCE_DIP_DB = 12
+// SFX-bus lift. A small presence lift so effects aren't buried — but NOT so much that ambient/realism/dread
+// climb up near the voice. Owner (2026-07-10): the voiceover is the reference; music + ambient + non-climax
+// SFX must sit clearly UNDER it, and only the payoff hit (a +6dB cue) should exceed the voice. Was +6 (which
+// pushed a -8 realism cue to ~-2, nearly voice level); +2 keeps realism ~4-8dB under the voice and the +6
+// climax cue clearly loudest.
+const SFX_BUS_DB = 2
 
 // Final loudness normalization → render_qa requires -14 ±0.5 LUFS. ffmpeg's loudnorm (single- OR
 // two-pass) undershoots on speech-crest content: to honor the -1.5 dBTP ceiling it backs off the
@@ -45,6 +61,21 @@ const SFX_BUS_DB = 6
 // hold the peaks; the limiter shaves a little loudness, so we measure and apply one corrective gain.
 const TARGET_LUFS = -14
 const TRUE_PEAK = -1.5
+
+const dbToLin = (db: number): number => 10 ** (db / 20)
+
+// Ambient chain for input [1]. When a silenceDrop exists, ambient ducks (not zeros) inside the window so
+// the quiet reads as intentional, not as an audio bug. Loop is applied BEFORE the volume expression so
+// `t` runs on the reel timeline (looping first, then a time-varying volume, avoids the dip repeating each
+// loop of the source bed).
+function ambientFilter(silenceDrop: { atMs: number; durationMs: number } | null): string {
+  if (!silenceDrop) return `[1]volume=${AMBIENT_DB}dB,aloop=loop=-1:size=2e9[amb]`
+  const nom = dbToLin(AMBIENT_DB).toFixed(5)
+  const dip = dbToLin(AMBIENT_DB - AMBIENT_SILENCE_DIP_DB).toFixed(5)
+  const s = (silenceDrop.atMs / 1000).toFixed(3)
+  const en = ((silenceDrop.atMs + silenceDrop.durationMs) / 1000).toFixed(3)
+  return `[1]aloop=loop=-1:size=2e9,volume='if(between(t,${s},${en}),${dip},${nom})':eval=frame[amb]`
+}
 
 function parseIntegrated(stderr: string): number | null {
   const m = stderr.match(/"input_i"\s*:\s*"(-?\d+(?:\.\d+)?)"/)
@@ -94,9 +125,12 @@ async function encodeWithLoudnorm(inputs: string[], pre: string[], durationSec: 
     outputPath,
   ])
   if (i0 == null) return
-  // The limiter shaves a little integrated loudness — measure the result and correct in one pass.
-  const i1 = await measureFile(outputPath)
-  if (i1 != null && Math.abs(TARGET_LUFS - i1) > 0.25) {
+  // The limiter shaves integrated loudness — measure the result and correct. A single pass isn't always
+  // enough on crest-heavy mixes (a hot jumpscare stinger makes the limiter eat several LU; the corrective
+  // gain gets partially re-limited too), so iterate until within tolerance, max 3 passes.
+  for (let pass = 0; pass < 3; pass++) {
+    const i1 = await measureFile(outputPath)
+    if (i1 == null || Math.abs(TARGET_LUFS - i1) <= 0.25) break
     const corrected = `${outputPath}.norm.m4a`
     // Re-limit after the corrective gain. The correction is usually POSITIVE (the limiter left the mix
     // quieter than target), which would push peaks back above the true-peak ceiling the limiter just
@@ -107,6 +141,15 @@ async function encodeWithLoudnorm(inputs: string[], pre: string[], durationSec: 
     ])
     await rename(corrected, outputPath)
   }
+}
+
+// Encode one layer node (already bounded by -t) to an aac stem file.
+function stemOutputArgs(mapLabel: string, durationSec: number, path: string): string[] {
+  return ['-map', mapLabel, '-t', String(durationSec), '-c:a', 'aac', '-b:a', '192k', path]
+}
+
+async function writeSilenceStem(path: string, durationSec: number): Promise<void> {
+  await execFileAsync('ffmpeg', ['-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=mono', '-t', String(durationSec), '-c:a', 'aac', '-b:a', '192k', '-y', path])
 }
 
 export async function mixAudio(params: MixAudioParams): Promise<void> {
@@ -153,8 +196,8 @@ export async function mixAudio(params: MixAudioParams): Promise<void> {
     '-i', params.sfxPremixedPath,
   ]
   const pre = [
-    // ambient: volume-reduce + loop to cover full duration (fixed level, not the music bed level)
-    `[1]volume=${AMBIENT_DB}dB,aloop=loop=-1:size=2e9[amb]`,
+    // ambient: loop to cover full duration at a fixed level (dips inside a silenceDrop; see ambientFilter)
+    ambientFilter(params.timings.silenceDrop),
     // music: loop the bed to cover the reel → volume envelope
     `[2]aloop=loop=-1:size=2e9,volume='${gainExpr}':eval=frame[mus0]`,
     // sidechain duck: music dips under the voiceover, but stays PRESENT. ratio 6 held the bed ~8–10dB
@@ -169,7 +212,27 @@ export async function mixAudio(params: MixAudioParams): Promise<void> {
     `[base][musduck]amix=inputs=2:normalize=0[withmus]`,
     `[withmus][sfxb]amix=inputs=2:normalize=0[premaster]`,
   ]
-  await encodeWithLoudnorm(inputs, pre, params.timings.durationMs / 1000, params.outputPath)
+  const durationSec = params.timings.durationMs / 1000
+  await encodeWithLoudnorm(inputs, pre, durationSec, params.outputPath)
+
+  // Stems (separate run — keeps encodeWithLoudnorm's measure pass free of unconnected outputs). The 4
+  // layer nodes are rebuilt here and each mapped to its own file in ONE ffmpeg process.
+  if (params.stemPaths) {
+    const stemGraph = [
+      ambientFilter(params.timings.silenceDrop),
+      `[2]aloop=loop=-1:size=2e9,volume='${gainExpr}':eval=frame[mus0]`,
+      `[0]asplit=2[vox][voxkey]`,
+      `[mus0][voxkey]sidechaincompress=threshold=0.04:ratio=3:attack=20:release=400[musduck]`,
+      `[3]volume=${SFX_BUS_DB}dB[sfxb]`,
+    ].join(';')
+    await execFileAsync('ffmpeg', [
+      ...inputs, '-filter_complex', stemGraph, '-y',
+      ...stemOutputArgs('[vox]', durationSec, params.stemPaths.voice),
+      ...stemOutputArgs('[amb]', durationSec, params.stemPaths.ambient),
+      ...stemOutputArgs('[musduck]', durationSec, params.stemPaths.music),
+      ...stemOutputArgs('[sfxb]', durationSec, params.stemPaths.sfx),
+    ])
+  }
 }
 
 async function mixNoMusic(params: MixAudioParams): Promise<void> {
@@ -180,17 +243,36 @@ async function mixNoMusic(params: MixAudioParams): Promise<void> {
     '-i', params.sfxPremixedPath,
   ]
   const pre = [
-    `[1]volume=${AMBIENT_DB}dB,aloop=loop=-1:size=2e9[amb]`,
+    ambientFilter(params.timings.silenceDrop),
     `[2]volume=${SFX_BUS_DB}dB[sfxb]`,
     `[0][amb]amix=inputs=2:normalize=0[base]`,
     `[base][sfxb]amix=inputs=2:normalize=0[premaster]`,
   ]
-  await encodeWithLoudnorm(inputs, pre, params.timings.durationMs / 1000, params.outputPath)
+  const durationSec = params.timings.durationMs / 1000
+  await encodeWithLoudnorm(inputs, pre, durationSec, params.outputPath)
+
+  if (params.stemPaths) {
+    const stemGraph = [
+      ambientFilter(params.timings.silenceDrop),
+      `[2]volume=${SFX_BUS_DB}dB[sfxb]`,
+    ].join(';')
+    await execFileAsync('ffmpeg', [
+      ...inputs, '-filter_complex', stemGraph, '-y',
+      ...stemOutputArgs('0:a', durationSec, params.stemPaths.voice),
+      ...stemOutputArgs('[amb]', durationSec, params.stemPaths.ambient),
+      ...stemOutputArgs('[sfxb]', durationSec, params.stemPaths.sfx),
+    ])
+    // No music layer in this path → a silent music stem keeps the 4-stem contract constant.
+    await writeSilenceStem(params.stemPaths.music, durationSec)
+  }
 }
 
-// SFX pre-mix: place each SFX file at its timestamp into a silent base track
+// SFX pre-mix: place each SFX file at its timestamp into a silent base track. A sustained event
+// (endMs set) is LOOPED to fill [atMs, endMs] and faded in/out so the texture melts into the mix
+// instead of clicking on and off — this is what carries a heartbeat under a whole walk, or a corridor
+// tone under a scene, from a single ~10s seamless-loop clip.
 export async function premixSfx(params: {
-  sfxEvents: Array<{ storageKey: string; atMs: number; volumeDb: number }>
+  sfxEvents: Array<{ storageKey: string; atMs: number; volumeDb: number; endMs?: number | undefined }>
   durationMs: number
   outputPath: string
   tmpDir: string
@@ -212,7 +294,20 @@ export async function premixSfx(params: {
 
   params.sfxEvents.forEach((ev, i) => {
     inputs.push('-i', ev.storageKey)
-    delayFilters.push(`[${i}]volume=${ev.volumeDb}dB,adelay=${ev.atMs}|${ev.atMs}[sfx${i}]`)
+    if (ev.endMs != null && ev.endMs > ev.atMs) {
+      const spanSec = (ev.endMs - ev.atMs) / 1000
+      // Fades scale down for short spans so fade-in + fade-out never exceed the span itself.
+      const fadeIn = Math.min(1.5, spanSec / 4)
+      const fadeOut = Math.min(2.5, spanSec / 4)
+      const fadeOutStart = Math.max(0, spanSec - fadeOut)
+      delayFilters.push(
+        `[${i}]aloop=loop=-1:size=2e9,atrim=0:${spanSec.toFixed(3)},` +
+        `afade=t=in:d=${fadeIn.toFixed(2)},afade=t=out:st=${fadeOutStart.toFixed(2)}:d=${fadeOut.toFixed(2)},` +
+        `volume=${ev.volumeDb}dB,adelay=${ev.atMs}|${ev.atMs}[sfx${i}]`,
+      )
+    } else {
+      delayFilters.push(`[${i}]volume=${ev.volumeDb}dB,adelay=${ev.atMs}|${ev.atMs}[sfx${i}]`)
+    }
     mixInputs.push(`[sfx${i}]`)
   })
 

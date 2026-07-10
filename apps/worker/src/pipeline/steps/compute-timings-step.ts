@@ -62,13 +62,17 @@ export async function runComputeTimings(reelId: string): Promise<void> {
   }))
 
   // v3: vocal-SFX drop + proximity dedupe + late music build-start (sound-design hygiene, 2026-07-06).
-  const inputHash = buildInputHash('compute_timings.v3', {
+  // v4: sustained cues (endAnchor → endMs spans) + hash cue CONTENT, not count — a re-designed script
+  // with the same number of cues must re-time (anchors/spans change), which a bare count missed.
+  // v5: case-insensitive anchor fallback (LLM lowercases sentence-initial anchors).
+  // v6: climax ring-out room (extend the reel when a loud hit lands near the end, by the shortfall only).
+  const inputHash = buildInputHash('compute_timings.v6', {
     narration: story.body,
     // Alignment IS the master clock; a re-synthesized voiceover has new timestamps under a new row
     // (createdAt). Hash it so a voice/narration change busts the cache instead of reusing stale timings.
     voiceoverAt: voiceover.createdAt,
     sceneCount: sceneSpans.length,
-    sfxCount: audioScript.sfx.length,
+    sfxCues: audioScript.sfx.map((c) => `${c.anchor}@${c.offsetMs}>${c.endAnchor ?? ''}`).join('|'),
     opCues: operatorCues.map((c) => `${c.anchor}@${c.offsetMs}`).join('|'), // cue changes → re-run
     hasMusic: !!audioScript.music,
     hasSilence: !!audioScript.silenceDrop,

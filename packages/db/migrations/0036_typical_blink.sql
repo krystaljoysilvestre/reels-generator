@@ -1,0 +1,1 @@
+ALTER TYPE "asset_kind" ADD VALUE 'stem';

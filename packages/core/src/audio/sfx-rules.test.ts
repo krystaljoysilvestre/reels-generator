@@ -1,5 +1,19 @@
 import { describe, it, expect } from 'vitest'
-import { isVocalSfxPrompt, dropEventsNear } from './sfx-rules.js'
+import { isVocalSfxPrompt, isHarshSustainedTexture, dropEventsNear } from './sfx-rules.js'
+
+describe('isHarshSustainedTexture', () => {
+  it('flags harsh high-freq textures that hurt when looped', () => {
+    expect(isHarshSustainedTexture('fluorescent light hum, seamless loop')).toBe(true)
+    expect(isHarshSustainedTexture('electrical buzzing loop')).toBe(true)
+    expect(isHarshSustainedTexture('a high-pitched whine')).toBe(true)
+    expect(isHarshSustainedTexture('shrill insect cicadas')).toBe(true)
+  })
+  it('allows soft low sustained beds', () => {
+    expect(isHarshSustainedTexture('low pulsing dread drone, seamless loop')).toBe(false)
+    expect(isHarshSustainedTexture('slow steady heartbeat thump')).toBe(false)
+    expect(isHarshSustainedTexture('distant room tone and air')).toBe(false)
+  })
+})
 
 describe('isVocalSfxPrompt', () => {
   it('flags OVERT/verbal human sounds (the random-voices/laughter complaint)', () => {

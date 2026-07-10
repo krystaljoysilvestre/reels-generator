@@ -7,7 +7,16 @@ import type { AlignedChar, SfxResult, TtsProvider, TtsResult } from './types.js'
 import type { VoiceSettings } from '@reels/core'
 
 const TTS_COST_CENTS_PER_1K_CHARS = 30  // ElevenLabs Starter ~$0.30/1k chars
-const SFX_COST_CENTS_FLAT = 2
+// ElevenLabs text-to-sound-effects bills 25 credits/sec when duration_seconds is set. On the same credit
+// basis as TTS (~$0.30/1k chars ≈ $5 / 30k credits ≈ 0.0167¢/credit) that's ~0.42¢/s; rounded up so the
+// per-reel spend never under-counts a longer cue (checked 2026-07). Cost now scales with clip length.
+const SFX_COST_CENTS_PER_SEC = 0.5
+// Default prompt adherence. Higher = the clip sounds more like the literal prompt (good for specific
+// one-shots); lower leaves room for richer, more organic texture (ambience). Per-cue override via param.
+const SFX_DEFAULT_PROMPT_INFLUENCE = 0.5
+// ElevenLabs SFX prompt hard cap (~450 chars → 400 request). We cap under it so a long prompt truncates
+// instead of failing the reel.
+const SFX_PROMPT_MAX_CHARS = 420
 
 function getClient(): ElevenLabsClient {
   const apiKey = process.env['ELEVENLABS_API_KEY']
@@ -188,25 +197,42 @@ export async function generateSfx(params: {
   reelId: string
   anchorLabel: string
   durationSec?: number
+  promptInfluence?: number
+  // Sustained cue: ask ElevenLabs for a seamlessly loopable clip (the mixer loops it across a story span).
+  loop?: boolean
+  // Optional stable suffix appended AFTER the (truncated) anchor slug. Two cues whose anchors share a
+  // 40-char prefix — or a new design reusing an old anchor with a different sound — would otherwise map to
+  // the SAME storage key and silently collide; a per-cue suffix (e.g. a hash of anchor+prompt+duration)
+  // keeps each distinct cue on its own key.
+  slugSuffix?: string
 }): Promise<SfxResult> {
   const client = getClient()
+  const durationSec = params.durationSec ?? 2
+  // ElevenLabs text-to-sound-effects rejects prompts over ~450 chars with a 400 (which, un-caught, fails
+  // the whole reel). Cap defensively so no prompt — LLM or deterministic — can ever break a render.
+  const text = params.prompt.length > SFX_PROMPT_MAX_CHARS ? params.prompt.slice(0, SFX_PROMPT_MAX_CHARS) : params.prompt
 
   try {
-    // textToSoundEffects.convert returns a Readable stream
-    const stream = (await withProviderLimit('elevenlabs', () => client.textToSoundEffects.convert({
-      text: params.prompt,
-      duration_seconds: params.durationSec ?? 2,
-      prompt_influence: 0.3,
-    }, SFX_OPTS))) as Readable
+    // textToSoundEffects.convert returns a Readable stream. `loop` is supported by the API but missing
+    // from the installed SDK v1 body type, so it rides through a cast.
+    const body = {
+      text,
+      duration_seconds: durationSec,
+      prompt_influence: params.promptInfluence ?? SFX_DEFAULT_PROMPT_INFLUENCE,
+      ...(params.loop ? { loop: true } : {}),
+    } as Parameters<typeof client.textToSoundEffects.convert>[0]
+    const stream = (await withProviderLimit('elevenlabs', () => client.textToSoundEffects.convert(body, SFX_OPTS))) as Readable
 
     const audioBuffer = await readableToBuffer(stream)
     const slug = params.anchorLabel.toLowerCase().replace(/\s+/g, '-').slice(0, 40)
-    const storageKey = `reels/${params.reelId}/sfx/${slug}.mp3`
+    const suffix = params.slugSuffix ? `-${params.slugSuffix}` : ''
+    const storageKey = `reels/${params.reelId}/sfx/${slug}${suffix}.mp3`
     await uploadBuffer(storageKey, audioBuffer, 'audio/mpeg')
 
-    const durationMs = Math.ceil((params.durationSec ?? 2) * 1000)
+    const durationMs = Math.ceil(durationSec * 1000)
+    const costCents = Math.max(1, Math.ceil(durationSec * SFX_COST_CENTS_PER_SEC))
 
-    return { audioStorageKey: storageKey, durationMs, costCents: SFX_COST_CENTS_FLAT }
+    return { audioStorageKey: storageKey, durationMs, costCents }
   } catch (err) {
     if (Number((err as Record<string, unknown>)['statusCode']) === 429) {
       throw new ProviderRateLimitError('elevenlabs')

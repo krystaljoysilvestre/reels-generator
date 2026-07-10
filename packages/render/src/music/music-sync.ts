@@ -66,7 +66,11 @@ export function buildGainExpr(p: GainEnvelopeParams): string {
   const db = (x: number) => `pow(10,(${x.toFixed(3)})/20)`
   const a = p.startAnchorMs / 1000
   const pk = p.peakAnchorMs / 1000
-  const fadeIn = 2.0 // seconds
+  // Short fade only to avoid a click on the first sample — NOT a dramatic swell-up. A 2s fade made the
+  // opening read as silent (owner 2026-07-10: "feels so silent at the beginning" / wants intensity from
+  // frame one). The bed should be present within a few frames; tension comes from level + the sound
+  // designer's opening texture, not from ramping up out of silence.
+  const fadeIn = 0.25 // seconds
 
   // piecewise gain: fade-in → bed → linear rise → hold peak
   const piecewise =

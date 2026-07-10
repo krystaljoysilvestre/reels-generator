@@ -60,6 +60,12 @@ const DEFAULT_CONFIG: TimingConfig = {
   clampSfx: true,
 }
 
+// Climax ring-out (§4.7). A hit at/above this level is treated as the climax (realism cues sit negative);
+// it should have at least RING_OUT_MS of reel after it so its tail decays before the cut. Only an end-scare
+// (less room than this) triggers a reel extension, and only by the shortfall.
+const RING_OUT_HIT_THRESHOLD_DB = 3
+const RING_OUT_MS = 7000
+
 // ── Input ─────────────────────────────────────────────────────────────────────
 
 export interface SceneSpan {
@@ -96,7 +102,10 @@ function normalizeChar(cp: string): string {
   if (DOUBLE_QUOTES.has(cp)) return '"'
   if (DASHES.has(cp)) return '-'
   if (/\s/.test(cp)) return ' '
-  return cp
+  // Case-fold: the LLM routinely lowercases a sentence-initial anchor ("pag-angat" vs "Pag-angat"),
+  // which silently dropped cues / degraded sustained spans. Exact pass runs first, so this only
+  // rescues anchors that would otherwise fail entirely.
+  return cp.toLowerCase()
 }
 
 // All start indices where `pat` occurs in `hay` (code-point arrays). Tries an exact pass first; if that
@@ -232,7 +241,18 @@ export function computeTimings(input: ComputeTimingsInput): Timings {
         atMs = Math.max(0, Math.min(atMs, input.durationMs))
       }
     }
-    sfxEvents.push({ anchor: cue.anchor, prompt: cue.prompt, atMs, volumeDb: cue.volumeDb })
+    // Sustained cue: resolve the end of the span (the END of the endAnchor phrase). Soft — an
+    // unresolvable endAnchor degrades the cue to a point one-shot rather than dropping it.
+    let endMs: number | undefined
+    if (cue.endAnchor) {
+      const resolvedEnd = resolveAnchor(cps, input.alignment, cue.endAnchor, true)
+      if (resolvedEnd && resolvedEnd.endMs > atMs) {
+        endMs = Math.min(resolvedEnd.endMs, input.durationMs)
+      } else {
+        warnings.push(`SFX endAnchor unresolvable or before start, cue degraded to one-shot: "${cue.endAnchor}"`)
+      }
+    }
+    sfxEvents.push({ anchor: cue.anchor, prompt: cue.prompt, atMs, volumeDb: cue.volumeDb, ...(endMs != null ? { endMs } : {}) })
   }
 
   // §4.4 — Music anchors
@@ -293,8 +313,29 @@ export function computeTimings(input: ComputeTimingsInput): Timings {
   // §4.6 — Subtitle chunking
   const subtitles = buildSubtitles(input.narration, input.alignment, cps, cfg)
 
+  // §4.7 — Climax ring-out room. A loud climax HIT needs time for its tail to decay before the cut, or the
+  // scare is chopped off. This is NOT a blanket outro: it only extends the reel when the hit lands near the
+  // end with less than RING_OUT_MS after it (an end-scare), and only by the shortfall. A mid-story climax
+  // already rings out over the following narration → no change. Genre-agnostic: gated purely on there being
+  // a genuine loud hit (realism cues are negative dB), so a reflective non-scare ending is untouched. The
+  // extra time is a held final frame (last scene extends) under the decaying tail.
+  let durationMs = input.durationMs
+  if (sfxEvents.length > 0) {
+    const loudest = sfxEvents.reduce((a, b) => (b.volumeDb > a.volumeDb ? b : a))
+    if (loudest.volumeDb >= RING_OUT_HIT_THRESHOLD_DB) {
+      const roomAfter = durationMs - loudest.atMs
+      if (roomAfter < RING_OUT_MS) {
+        const extendMs = RING_OUT_MS - roomAfter
+        durationMs += extendMs
+        const last = sceneTimings[sceneTimings.length - 1]
+        if (last) last.endMs = durationMs
+        warnings.push(`Climax ring-out: reel extended ${extendMs}ms so the hit tail decays before the cut`)
+      }
+    }
+  }
+
   return {
-    durationMs: input.durationMs,
+    durationMs,
     scenes: sceneTimings,
     subtitles,
     sfxEvents,

@@ -8,6 +8,7 @@ import { getDb, reels, scenes, assets } from '@reels/db'
 import { generateVideo, buildInputHash, FalEngineSchema, downloadBuffer, llmCall } from '@reels/providers'
 import { TimingsSchema } from '@reels/core'
 import { buildVideoQAPrompt, VIDEO_QA_V1_VERSION, VideoQASchema } from '../../prompts-bridge.js'
+import { spotFoleyForReel } from './foley-spot.js'
 import { runStep } from '../harness.js'
 
 // animate_scenes — step 8 (docs/02 §4)
@@ -198,4 +199,8 @@ export async function animateScenes(reelId: string): Promise<void> {
       )
     }
   }
+
+  // Foley spotting: now that every video clip exists, watch each and lay sound on its visible motion.
+  // Fail-soft and idempotent per clip take — never blocks the render.
+  await spotFoleyForReel(reelId)
 }

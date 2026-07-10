@@ -253,6 +253,13 @@
       "when": 1783144513730,
       "tag": "0035_fantastic_penance",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1783657254364,
+      "tag": "0036_typical_blink",
+      "breakpoints": true
     }
   ]
 }

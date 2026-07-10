@@ -239,13 +239,15 @@ export async function renderStep(reelId: string): Promise<void> {
         await uploadBuffer(visualKey, await readFile(gradedPath), 'video/mp4')
       }
 
-      // ── Mux graded visual + audio → final reel (pure -c:v copy; fast even on the reuse path) ────────
+      // ── Mux graded visual + audio → final reel (pure stream copy; fast even on the reuse path) ────────
+      // Audio is COPIED, not re-encoded: mix.m4a is already loudness-normalized AAC, and a second AAC
+      // encode shifted integrated loudness enough to fail render_qa's -14 ±0.5 gate on crest-heavy mixes.
       const outputPath = join(tmp, 'reel.mp4')
       await execFileAsync('ffmpeg', [
         '-i', gradedPath,
         '-i', mixPath,
         '-c:v', 'copy',
-        '-c:a', 'aac', '-b:a', '192k',
+        '-c:a', 'copy',
         '-shortest',
         '-movflags', '+faststart',
         '-y', outputPath,
