@@ -3,7 +3,7 @@
 // step (to flag references that resolve to nothing).
 
 import type { WorldBible } from '../types/channel.js'
-import type { BibleEntity, StoryBible } from '../types/story-bible.js'
+import type { BibleEntity, StoryBible, JourneyLeg } from '../types/story-bible.js'
 
 // Normalize a free-form name/id to a comparison key: lowercase, unicode-aware, punctuation → hyphen.
 // "The Mirror" / "the_mirror" / "the-mirror" all collapse to "the-mirror".
@@ -144,4 +144,31 @@ export function isDepictableEntity(e: BibleEntity): boolean {
 export function sceneEntities(bible: StoryBible, refs: EntityRefs): BibleEntity[] {
   const { resolved } = resolveEntities(bible, refs)
   return resolved.filter(isDepictableEntity)
+}
+
+// Validate the JOURNEY as a state machine over adjacent legs (not each leg in isolation) — catch the
+// narrator "teleporting". CONSERVATIVE by design: flag only the physically-IMPOSSIBLE, never stylistic
+// compression. A legitimate cut (approaching → inside, with no explicit "entering" leg) is fine and must
+// NOT be flagged. Returns human-readable issues (empty = OK); the analyzer feeds them into one repair round.
+export function validateJourneyTransitions(journey: JourneyLeg[]): string[] {
+  const issues: string[] = []
+  for (let i = 1; i < journey.length; i++) {
+    const prev = journey[i - 1]!
+    const cur = journey[i]!
+    // The one clearly-impossible case: cut straight from INSIDE one place to INSIDE a DIFFERENT place with
+    // no leaving/transit leg between them. In a continuous narration that means a movement beat was skipped.
+    // Requires BOTH legs explicitly `inside` + both entity-located + different → rare to hit legitimately.
+    if (
+      prev.occupancyState === 'inside' &&
+      cur.occupancyState === 'inside' &&
+      prev.locationEntityId &&
+      cur.locationEntityId &&
+      prev.locationEntityId !== cur.locationEntityId
+    ) {
+      issues.push(
+        `Journey leg ${i + 1} jumps straight from INSIDE "${prev.locationEntityId}" to INSIDE "${cur.locationEntityId}" with no leaving/transit leg between — the narrator can't teleport. Insert the movement (a "leaving ${prev.locationEntityId}" leg and/or a transit leg with locationEntityId=null) between them.`,
+      )
+    }
+  }
+  return issues
 }

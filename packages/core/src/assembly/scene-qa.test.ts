@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { reviewSceneBreakdown, type SceneQAScene } from './scene-qa.js'
+import { reviewSceneBreakdown, estimateNarrationSec, MAX_SCENE_SEC, type SceneQAScene } from './scene-qa.js'
+import type { BibleEntity, JourneyLeg } from '../types/story-bible.js'
+
+// A 44-word span ≈ 17.6s at 2.5 wps — just over the MAX_SCENE_SEC limit, so a single scene holding it
+// should error (the undersplit failure: one still frozen ~18s reads as a dead frame).
+const LONG_SPAN =
+  'Naglakad ako papunta sa banyo dahil naiihi ako nang gabing iyon habang tulog ang lahat sa bahay at tanging ang malamig na hangin lamang ang kasama ko sa madilim na pasilyo na parang walang katapusan at patuloy na humahaba habang lumalakad ako patungo doon.'
 
 // A clean baseline that should raise NO errors and NO warnings.
 const NARRATION =
@@ -127,5 +133,103 @@ describe('reviewSceneBreakdown', () => {
     const scenes: SceneQAScene[] = [scene({ narrationText: 'x', tier: 'video' }), scene({ narrationText: 'y' }), scene({ narrationText: 'z' })]
     const r = reviewSceneBreakdown({ narration: 'x y z', peakMoment: '', minScenes: 5, maxScenes: 8, scenes })
     expect(r.warnings.some((w) => w.includes('below the suggested minimum'))).toBe(true)
+  })
+
+  it('errors when a single scene covers more than the max duration (undersplit)', () => {
+    const scenes: SceneQAScene[] = [
+      scene({ narrationText: LONG_SPAN, tier: 'video' }),
+      scene({ narrationText: ' Tapos may narinig ako.' }),
+    ]
+    const r = reviewSceneBreakdown({ narration: LONG_SPAN + ' Tapos may narinig ako.', peakMoment: '', minScenes: 1, maxScenes: 8, scenes })
+    expect(r.errors.some((e) => e.includes('Scene 1') && e.includes(`${MAX_SCENE_SEC}s limit`))).toBe(true)
+  })
+
+  it('errors on an overlong scene even when the total scene count is healthy', () => {
+    // The count check alone is fooled: a reel can hit its target count yet still bury one long monologue in
+    // a single shot. The per-scene duration guard catches that where the count range cannot.
+    const scenes: SceneQAScene[] = [
+      scene({ narrationText: 'Maikli ito.', tier: 'video' }),
+      scene({ narrationText: ' Maikli rin.' }),
+      scene({ narrationText: ' ' + LONG_SPAN }), // the buried monologue
+      scene({ narrationText: ' Wakas.' }),
+    ]
+    const r = reviewSceneBreakdown({ narration: 'Maikli ito. Maikli rin. ' + LONG_SPAN + ' Wakas.', peakMoment: '', minScenes: 3, maxScenes: 6, scenes })
+    expect(r.warnings.some((w) => w.includes('below the suggested minimum'))).toBe(false) // count is fine
+    expect(r.errors.some((e) => e.includes('Scene 3') && e.includes('looks static'))).toBe(true)
+  })
+
+  it('does not flag scenes at or under the max duration', () => {
+    const scenes: SceneQAScene[] = [
+      scene({ narrationText: 'Isa dalawa tatlo apat lima anim pito walo siyam sampu.', tier: 'video' }), // 10 words ≈ 4s
+      scene({ narrationText: ' Labing-isa labindalawa.' }),
+    ]
+    const r = reviewSceneBreakdown({ narration: 'x', peakMoment: '', minScenes: 1, maxScenes: 8, scenes })
+    expect(r.errors.some((e) => e.includes('looks static'))).toBe(false)
+  })
+})
+
+describe('estimateNarrationSec', () => {
+  it('estimates spoken length from word count at 2.5 wps', () => {
+    expect(estimateNarrationSec('isa dalawa tatlo apat lima')).toBeCloseTo(2, 5) // 5 words / 2.5
+  })
+
+  it('treats the LONG_SPAN sample as just over the limit', () => {
+    expect(estimateNarrationSec(LONG_SPAN)).toBeGreaterThan(MAX_SCENE_SEC)
+  })
+
+  it('returns 0 for empty / whitespace text', () => {
+    expect(estimateNarrationSec('   ')).toBe(0)
+  })
+})
+
+describe('reviewSceneBreakdown — journey-grounded (Phase 2A)', () => {
+  const NARR = 'Naglakad kami sa hallway. Pumasok ako sa CR. May babae sa tabi ko.'
+  const BIBLE: BibleEntity[] = [
+    { id: 'narrator', kind: 'character', description: 'a teenage girl in a school uniform' },
+    { id: 'best-friend', kind: 'character', description: 'a teenage girl with a ponytail' },
+    { id: 'the-figure', kind: 'character', role: 'threat', description: 'a pale ghostly figure' },
+    { id: 'school-hallway', kind: 'location', description: 'a dim school hallway with lockers' },
+    { id: 'school-restroom', kind: 'location', description: 'a tiled school restroom with sinks and mirrors' },
+  ]
+  const JOURNEY: JourneyLeg[] = [
+    { span: 'Naglakad kami sa hallway.', locationLabel: 'school hallway', locationEntityId: 'school-hallway', present: ['narrator', 'best-friend'], visible: [], occupancyState: 'inside', isReflection: false },
+    { span: 'Pumasok ako sa CR.', locationLabel: 'school restroom', locationEntityId: 'school-restroom', present: ['narrator'], visible: [], occupancyState: 'inside', isReflection: false },
+    { span: 'May babae sa tabi ko.', locationLabel: 'school restroom', locationEntityId: 'school-restroom', present: ['narrator', 'the-figure'], visible: ['narrator', 'the-figure'], occupancyState: 'inside', isReflection: true },
+  ]
+  const base = (scenes: SceneQAScene[]) => ({ narration: NARR, peakMoment: 'May babae sa tabi ko.', minScenes: 1, maxScenes: 8, scenes, bibleEntities: BIBLE, narratorEntityId: 'narrator', journey: JOURNEY })
+
+  it('errors when a scene tags a location the journey says it is NOT in', () => {
+    const r = reviewSceneBreakdown(base([scene({ narrationText: 'Naglakad kami sa hallway.', location: 'school hallway', primaryEntity: 'narrator', supportingEntities: ['best-friend', 'school-restroom'], imagePrompt: 'the two friends walk down a hallway, reaching a corner' })]))
+    expect(r.errors.some((e) => e.includes('tags location "school-restroom"'))).toBe(true)
+  })
+
+  it('errors on invented cast (a character the leg says is not present)', () => {
+    const r = reviewSceneBreakdown(base([scene({ narrationText: 'Pumasok ako sa CR.', location: 'school restroom', primaryEntity: 'narrator', supportingEntities: ['best-friend'], imagePrompt: 'the narrator steps into the restroom, pushing the door open' })]))
+    expect(r.errors.some((e) => e.includes('character "best-friend"'))).toBe(true)
+  })
+
+  it('does NOT flag the narrator as invented cast (POV, always present)', () => {
+    const r = reviewSceneBreakdown(base([scene({ narrationText: 'Pumasok ako sa CR.', location: 'school restroom', primaryEntity: 'narrator', supportingEntities: ['narrator'], imagePrompt: 'over the shoulder, the narrator pushing the restroom door open' })]))
+    expect(r.errors.some((e) => e.includes('character "narrator"'))).toBe(false)
+  })
+
+  it('reflection reveal errors when the threat is not primaryEntity', () => {
+    const r = reviewSceneBreakdown(base([scene({ narrationText: 'May babae sa tabi ko.', location: 'school restroom', tier: 'video', primaryEntity: 'narrator', supportingEntities: ['narrator'], subjectMotion: 'her smile widens', imagePrompt: 'the narrator stares into the mirror' })]))
+    expect(r.errors.some((e) => e.includes('primaryEntity'))).toBe(true)
+  })
+
+  it('reflection reveal passes with threat primary + narrator in supporting', () => {
+    const r = reviewSceneBreakdown(base([scene({ narrationText: 'May babae sa tabi ko.', location: 'school restroom', tier: 'video', primaryEntity: 'the-figure', supportingEntities: ['narrator'], subjectMotion: 'her smile slowly widens', imagePrompt: 'in the mirror, the pale figure reflected beside the narrator' })]))
+    expect(r.errors.some((e) => e.includes('reflection reveal'))).toBe(false)
+  })
+
+  it('errors when a video reveal beat has empty subjectMotion', () => {
+    const r = reviewSceneBreakdown(base([scene({ narrationText: 'May babae sa tabi ko.', location: 'school restroom', tier: 'video', primaryEntity: 'the-figure', supportingEntities: ['narrator'], subjectMotion: '', imagePrompt: 'in the mirror, the pale figure reflected beside the narrator' })]))
+    expect(r.errors.some((e) => e.includes('subjectMotion is empty'))).toBe(true)
+  })
+
+  it('warns on a static, camera-facing person (no action/gaze verb)', () => {
+    const r = reviewSceneBreakdown(base([scene({ narrationText: 'Pumasok ako sa CR.', location: 'school restroom', primaryEntity: 'narrator', supportingEntities: ['narrator'], imagePrompt: 'a girl in the restroom' })]))
+    expect(r.warnings.some((w) => w.includes('static, camera-facing'))).toBe(true)
   })
 })

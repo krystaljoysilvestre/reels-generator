@@ -1,9 +1,14 @@
 import { eq } from 'drizzle-orm'
+import type { z } from 'zod'
 import { getDb, reels, stories, scenes, channels } from '@reels/db'
 import { llmCall, buildInputHash } from '@reels/providers'
-import { ScenesOutputSchema, WorldBibleSchema, StoryBibleSchema, EMPTY_STORY_BIBLE, resolveEntities, reviewSceneBreakdown, MOTION_BUDGET, cameraMovePrompt, animatorMotionPrompt, slug } from '@reels/core'
+import { ScenesOutputSchema, WorldBibleSchema, StoryBibleSchema, EMPTY_STORY_BIBLE, resolveEntities, reviewSceneBreakdown, MOTION_BUDGET, estimateNarrationSec, retileToNarration, cameraMovePrompt, animatorMotionPrompt, slug } from '@reels/core'
 import { buildScenesPrompt, SCENES_V1_VERSION, buildPeakExtractPrompt, PEAK_EXTRACT_V1_VERSION, PeakExtractSchema } from '../../prompts-bridge.js'
 import { runStep } from '../harness.js'
+
+// The breakdown LLM returns the schema's INPUT shape (defaulted fields are still optional pre-parse); this
+// is what llmCall hands back as `.data`. Type the best-of-N plumbing against it so mutations line up.
+type BreakdownData = z.input<typeof ScenesOutputSchema>
 
 // breakdown_scenes — step 3 (docs/02 §4)
 // Scenes emit full contiguous narration substrings [M9].
@@ -47,11 +52,20 @@ export async function breakdownScenes(reelId: string): Promise<void> {
 
   // Scene count is BEAT-driven, not clock-driven: give the director a length-scaled range
   // (~1 scene / 9-16s) and let the story's dramatic beats decide the exact number within it.
-  // The peak line (story.twistAnchor = the LLM's peakMoment) is passed so the climax always
-  // gets its own dedicated shot. All bounds stay inside the schema's hard 3-16 range.
-  const seconds = channel.targetSeconds ?? 75
+  // The RANGE must scale to how much narration is actually on screen, NOT the channel's nominal target:
+  // a 60s-target channel whose story ran long (335 words ≈ 134s) was getting a 3-7 budget built for 60s,
+  // so 6 scenes stretched over ~167s → ~28s dead stills. Derive from the estimated spoken length of THIS
+  // story (words ÷ 2.5/s, the shared rate), floored at the target so a rare short story still gets enough.
+  // The peak line (story.twistAnchor = the LLM's peakMoment) is passed so the climax always gets its own
+  // dedicated shot. All bounds stay inside the schema's hard 3-16 range; MAX_SCENE_SEC in scene-qa then
+  // hard-caps any single shot's span (repairable) so a long story can't hide a 51s monologue in one frame.
+  const seconds = Math.max(channel.targetSeconds ?? 75, estimateNarrationSec(story.body))
   const minScenes = Math.max(3, Math.floor(seconds / 16))
-  const maxScenes = Math.min(16, Math.max(minScenes + 1, Math.ceil(seconds / 9)))
+  // Cap the prompt TARGET at 14, two below the schema's hard max of 16 (ScenesOutputSchema). The model
+  // occasionally overshoots the ceiling it's given by a scene or two; if that ceiling IS the schema max,
+  // the overshoot fails validation and — after llmCall's single repair — throws, failing the whole reel.
+  // Leaving two scenes of headroom turns a rare overshoot into a valid breakdown instead of a crash.
+  const maxScenes = Math.min(14, Math.max(minScenes + 1, Math.ceil(seconds / 9)))
 
   // Peak line drives the climax scene (here) + the music swell/sting (compute_timings reads twist_anchor).
   // Generated stories carry it; BYO/legacy stories don't, so extract one and persist it so BOTH consumers
@@ -90,6 +104,7 @@ export async function breakdownScenes(reelId: string): Promise<void> {
     maxScenes,
     peakMoment,
     maxVideoTiers: MOTION_BUDGET, // motion budget → subscription-derived later
+    journey: storyBible.continuity.journey, // world-state ground truth (where/who per leg) — obeyed by the director
   })
 
   // Bible folded into the hash: editing the bible (or re-analysis) re-triggers the breakdown.
@@ -98,84 +113,95 @@ export async function breakdownScenes(reelId: string): Promise<void> {
   const result = await runStep(
     { reelId, stepName: 'breakdown_scenes', inputHash },
     async () => {
-      const llm = await llmCall({
-        templateVersion: SCENES_V1_VERSION,
-        schema: ScenesOutputSchema,
-        system,
-        messages: [{ role: 'user', content: userMessage }],
-      })
-
-      // QA the breakdown. Two severities: tiling errors (gaps/coverage) + structural QA errors (peak
-      // split, too many video tiers) earn ONE LLM repair round; warnings (image-prompt hygiene, soft
-      // misses) are logged for observability, never block.
-      const qaInput = (s: typeof llm.data.scenes) => ({
+      const qaInput = (s: BreakdownData['scenes']) => ({
         narration: story.body,
         peakMoment,
         minScenes,
         maxScenes,
-        scenes: s.map((x) => ({ narrationText: x.narrationText, imagePrompt: x.imagePrompt, tier: x.tier, location: x.location, primaryEntity: x.primaryEntity ?? null, supportingEntities: x.supportingEntities ?? [] })),
+        scenes: s.map((x) => ({ narrationText: x.narrationText, imagePrompt: x.imagePrompt, tier: x.tier, location: x.location, primaryEntity: x.primaryEntity ?? null, supportingEntities: x.supportingEntities ?? [], subjectMotion: x.subjectMotion ?? '', sceneIntent: x.sceneIntent ?? null })),
+        // Journey-grounded checks (location/cast vs the world-state) — fail-soft: empty journey → skipped.
+        bibleEntities: storyBible.entities,
+        narratorEntityId: analyzed?.continuity.narratorEntityId ?? null,
+        journey: storyBible.continuity.journey,
       })
-      const tilingError = validateSceneTiling(story.body, llm.data.scenes.map((s) => s.narrationText))
-      const qa = reviewSceneBreakdown(qaInput(llm.data.scenes))
-      const errors = [tilingError, ...qa.errors].filter((e): e is string => Boolean(e))
 
-      let final = llm.data
-      let cost = llm.costCents
-      if (errors.length > 0) {
-        const repairLlm = await llmCall({
-          templateVersion: SCENES_V1_VERSION,
-          schema: ScenesOutputSchema,
-          system,
-          messages: [
-            { role: 'user', content: userMessage },
-            { role: 'assistant', content: JSON.stringify(llm.data) },
-            {
-              role: 'user',
-              content: `Fix these issues with the scene breakdown, then return the corrected JSON only:\n- ${errors.join('\n- ')}\nEvery narrationText must be a verbatim copy-paste from the narration (no ellipsis); together they must tile the entire narration with no gaps or overlaps.`,
-            },
-          ],
-        })
-        final = repairLlm.data
-        cost += repairLlm.costCents
-      }
-
-      // Safety net for character consistency. In a first-person reel the narrator's own body edges most POV
-      // frames, and scenes.v1 says to reference the narrator entity so their face plate locks the look — but
-      // the LLM sometimes omits it, leaving the character to be invented fresh each render (they look like a
-      // different person every scene). If a scene's image prompt clearly shows the narrator (a hand/arm/
-      // shoulder, the back of their head, their face/body, or their reflection) and the narrator entity isn't
-      // already referenced, attach it. Deterministic backstop — cheaper and more reliable than another repair
-      // round. Only depictable when analysis ran and named an embodied narrator entity.
+      // Character-consistency backstop: in a first-person reel the narrator's own body/reflection edges most
+      // POV frames, and the LLM often forgets to reference the narrator entity, so they render as a different
+      // person each scene. Attach the narrator entity to any shot whose prompt clearly shows their body.
       const narratorId = analyzed?.continuity.narratorEntityId
-      if (narratorId && analyzed?.continuity.narratorPerspective === 'first_person') {
+      const applyNarratorBackstop = (scenes: BreakdownData['scenes']): void => {
+        if (!(narratorId && analyzed?.continuity.narratorPerspective === 'first_person')) return
         const BODY_CUE = /\b(hands?|arms?|forearms?|shoulders?|reflection|reflected|(?:her|his|their)\s+(?:face|body|head))\b/i
         const narratorSlug = slug(narratorId)
-        for (const s of final.scenes) {
+        for (const s of scenes) {
           const refs = [...(s.primaryEntity ? [s.primaryEntity] : []), ...(s.supportingEntities ?? [])].map(slug)
           if (refs.includes(narratorSlug)) continue
           if (BODY_CUE.test(s.imagePrompt)) s.supportingEntities = [...(s.supportingEntities ?? []), narratorId]
         }
       }
 
-      // Log residual notes (post-repair) so real failures accumulate without blocking the render.
-      const residualTiling = validateSceneTiling(story.body, final.scenes.map((s) => s.narrationText))
-      const finalQa = reviewSceneBreakdown(qaInput(final.scenes))
-      // Continuity observability: a scene that references a bible id the assembler can't resolve loses its
-      // splice SILENTLY (the prompt still renders). Surface those misses as a note rather than a silent drop.
-      const unresolvedRefs = analyzed
-        ? [...new Set(final.scenes.flatMap((s) => resolveEntities(storyBible, { primaryEntity: s.primaryEntity ?? null, supportingEntities: s.supportingEntities ?? [] }).unresolved))]
-        : []
-      const notes = [
-        ...(residualTiling ? [residualTiling] : []),
-        ...finalQa.errors,
-        ...finalQa.warnings,
-        ...(unresolvedRefs.length ? [`unresolved bible refs: ${unresolvedRefs.join(', ')}`] : []),
-      ]
-      if (notes.length > 0) {
-        console.warn(`[scene-qa] ${reelId.slice(0, 8)} ${notes.length} note(s):\n  - ${notes.join('\n  - ')}`)
+      // Deterministic tiling guarantee (see retileToNarration): snap each scene to the exact narration
+      // substring so the set tiles gaplessly + verbatim; a dropped span folds into the preceding scene.
+      // Returns false only when the scenes can't be aligned at all → raw LLM text kept (likely a residual gap).
+      const applyRetile = (scenes: BreakdownData['scenes']): boolean => {
+        const retiled = retileToNarration(story.body, scenes.map((s) => s.narrationText))
+        if (!retiled) return false
+        scenes.forEach((s, i) => { s.narrationText = retiled[i]! })
+        return true
       }
 
-      return { output: final, costCents: cost + peakCost }
+      // Best-of-N. The breakdown is only correct if it (a) tiles the WHOLE narration — a gap is fatal, as
+      // compute_timings throws on any uncovered span — AND (b) keeps every shot under the duration limit.
+      // Both used to be best-effort (one repair, then persist regardless), which let fatal gaps and 28s
+      // "visually dead" shots through — a bigger risk now that we cut more, shorter scenes. So we roll up to
+      // N times, score each AFTER the deterministic retile (tiling + duration + structural QA), feed the
+      // failures back to the next roll, and keep the BEST. Most reels pass on the first roll and break out.
+      const MAX_ATTEMPTS = 3
+      let cost = peakCost
+      let best: { output: BreakdownData; violations: number; notes: string[] } | null = null
+      let prev: BreakdownData | null = null
+      let prevErrors: string[] = []
+
+      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+        const messages: { role: 'user' | 'assistant'; content: string }[] = attempt === 0 || !prev
+          ? [{ role: 'user', content: userMessage }]
+          : [
+              { role: 'user', content: userMessage },
+              { role: 'assistant', content: JSON.stringify(prev) },
+              { role: 'user', content: `Fix these issues, then return the corrected JSON only:\n- ${prevErrors.join('\n- ')}\nEvery narrationText must be a VERBATIM copy-paste from the narration (no ellipsis, no paraphrase); together they must tile the ENTIRE narration with no gaps or overlaps. Keep every scene under ~16 seconds (~40 words). Stay within ${minScenes}–${maxScenes} scenes — never exceed ${maxScenes}.` },
+            ]
+        // Up to 16 scenes, each with a 45-75 word imagePrompt, overruns the 4096 default → truncated JSON.
+        const llm = await llmCall({ templateVersion: SCENES_V1_VERSION, schema: ScenesOutputSchema, system, messages, maxTokens: 8192 })
+        cost += llm.costCents
+        const output = llm.data
+
+        applyNarratorBackstop(output.scenes)
+        const tiled = applyRetile(output.scenes)
+
+        const tilingError = validateSceneTiling(story.body, output.scenes.map((s) => s.narrationText))
+        const qa = reviewSceneBreakdown(qaInput(output.scenes))
+        const errors = [...(tilingError ? [tilingError] : []), ...qa.errors]
+        // A bailed retile means a probable un-fixable gap → weight it heavily so a tiled roll always wins.
+        const violations = errors.length + (tiled ? 0 : 3)
+        const unresolvedRefs = analyzed
+          ? [...new Set(output.scenes.flatMap((s) => resolveEntities(storyBible, { primaryEntity: s.primaryEntity ?? null, supportingEntities: s.supportingEntities ?? [] }).unresolved))]
+          : []
+        const notes = [...errors, ...qa.warnings, ...(unresolvedRefs.length ? [`unresolved bible refs: ${unresolvedRefs.join(', ')}`] : [])]
+
+        if (!best || violations < best.violations) best = { output, violations, notes }
+        if (violations === 0) break
+        prev = output
+        prevErrors = errors
+      }
+
+      const chosen = best!
+      if (chosen.violations > 0) {
+        console.warn(`[scene-qa] ${reelId.slice(0, 8)} kept best of ${MAX_ATTEMPTS} rolls (violations=${chosen.violations}):\n  - ${chosen.notes.join('\n  - ')}`)
+      } else if (chosen.notes.length > 0) {
+        console.warn(`[scene-qa] ${reelId.slice(0, 8)} ${chosen.notes.length} note(s):\n  - ${chosen.notes.join('\n  - ')}`)
+      }
+
+      return { output: chosen.output, costCents: cost }
     },
   )
 

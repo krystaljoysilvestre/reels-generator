@@ -8,6 +8,7 @@ import {
   normalizeCanon,
   mergeBible,
   preserveLockedEntities,
+  validateJourneyTransitions,
   type StoryBible,
 } from '@reels/core'
 import { buildStoryAnalyzerPrompt, STORY_ANALYZER_V1_VERSION } from '../../prompts-bridge.js'
@@ -68,12 +69,32 @@ export async function analyzeStory(reelId: string): Promise<void> {
           system,
           messages: [{ role: 'user', content: userMessage }],
         })
+        cost = llm.costCents
         // Re-parse to recover the resolved output type (defaults applied) — zod's input type is loose
         // because of the schema defaults, so the generic on llmCall infers the optional-fields shape.
-        const analyzed: StoryBible = StoryBibleSchema.parse(llm.data)
+        let analyzed: StoryBible = StoryBibleSchema.parse(llm.data)
+
+        // Journey transition validation → ONE repair round (mirrors the breakdown's repair). Catches the
+        // narrator "teleporting" between enclosed spaces with no movement leg. Conservative — usually no-op.
+        const journeyIssues = validateJourneyTransitions(analyzed.continuity.journey)
+        if (journeyIssues.length > 0) {
+          console.warn(`[analyze-story] ${reelId.slice(0, 8)} journey has ${journeyIssues.length} transition issue(s) → repair`)
+          const repair = await llmCall({
+            templateVersion: STORY_ANALYZER_V1_VERSION,
+            schema: StoryBibleSchema,
+            system,
+            messages: [
+              { role: 'user', content: userMessage },
+              { role: 'assistant', content: JSON.stringify(llm.data) },
+              { role: 'user', content: `Fix these journey continuity problems, then return the corrected FULL JSON only:\n- ${journeyIssues.join('\n- ')}\nInsert the missing movement legs so the narrator never teleports; keep everything else unchanged.` },
+            ],
+          })
+          cost += repair.costCents
+          analyzed = StoryBibleSchema.parse(repair.data)
+        }
+
         // Resolve the final bible: channel canon + this story's extraction (analyzer wins on shared ids).
         bible = mergeBible(channelCanon, analyzed)
-        cost = llm.costCents
       } catch (err) {
         console.warn(`[analyze-story] ${reelId.slice(0, 8)} analysis failed, persisting canon-only bible: ${err instanceof Error ? err.message : String(err)}`)
         bible = mergeBible(channelCanon, EMPTY_STORY_BIBLE)
