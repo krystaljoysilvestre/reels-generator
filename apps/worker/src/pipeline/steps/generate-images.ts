@@ -32,6 +32,13 @@ const IMAGE_QA_MODEL = 'claude-haiku-4-5-20251001' // vision QA runs on Claude (
 // still fails, the image is kept and the verdict is flagged on meta.qaIssues for the operator to act on.
 const MAX_QA_REROLLS = 1
 
+// The reflective surfaces where a FIRST-PERSON narrator's own FACE can appear on screen. These are the ONLY
+// beats where her locked look must be spliced/conditioned (see the visibility rule in processScene) — on
+// every other first-person beat she's the unseen camera, and splicing her full description draws a
+// third-person figure of her facing the lens (the #1 POV failure). Kept deliberately tight (the proven set)
+// so an incidental "phone screen"/"glass of water" doesn't wrongly pull her face into a shot.
+const NARRATOR_FACE_SURFACE = /\b(mirror|reflection|reflected|glass)\b/i
+
 // Claude vision (QA) needs the real media_type; sniff it from magic bytes rather than trusting the
 // stored extension (the generated format isn't guaranteed to match the .webp key).
 function sniffMediaType(buf: Buffer): 'image/webp' | 'image/jpeg' | 'image/png' {
@@ -171,11 +178,35 @@ export async function generateImages(reelId: string): Promise<void> {
   const isQATarget = (s: (typeof pending)[number]) => s.tier === 'video' || (peak !== '' && s.narrationText.includes(peak)) || featuresPerson(s)
 
   const processScene = async (scene: (typeof pending)[number]) => {
+    // FIRST-PERSON NARRATOR VISIBILITY — decide the narrator's splice HERE, deterministically, from whether
+    // her FACE is on-screen, NOT from the breakdown's tags (which mark her "present" on nearly every POV
+    // beat). In a first-person reel she IS the camera; splicing her full character description into a POV
+    // shot is exactly what makes the model render a third-person figure of her staring into the lens (the
+    // dominant POV failure). Her face only ever appears in a reflective surface (see NARRATOR_FACE_SURFACE),
+    // so re-add her ONLY on those beats — to lock her look for the payoff — and strip her (from both the tag
+    // and any reference plate) everywhere else. This ONE visibility rule replaces the old scare-beat
+    // narrator-drop AND the reflection special-case: a "reflection reveal" is simply the one beat where her
+    // face is visible, nothing categorically special. (Third-person reels skip this — there she's a shown
+    // character, tagged and spliced normally.)
+    const narratorId = storyBible?.continuity.narratorEntityId ?? null
+    const firstPerson = storyBible?.continuity.narratorPerspective === 'first_person'
+    const narratorFaceShown = NARRATOR_FACE_SURFACE.test(`${scene.visualPrompt ?? ''} ${scene.sceneIntent ?? ''}`)
+    let refPrimary = scene.primaryEntity
+    let refSupporting = scene.supportingEntities ?? []
+    if (firstPerson && narratorId) {
+      const isNarrator = (id: string) => slug(id) === slug(narratorId)
+      if (refPrimary && isNarrator(refPrimary)) refPrimary = null
+      refSupporting = refSupporting.filter((id) => !isNarrator(id))
+      if (narratorFaceShown) refSupporting = [...refSupporting, narratorId]
+    }
+
     // Entities this scene features (narrator suppressed for reference PLATES via sceneEntities, the same
-    // resolver the prompt assembler uses). Non-empty plate set → reference-conditioned edit on fal; empty →
-    // text-to-image. Entities without a minted plate simply don't contribute a reference.
+    // resolver the prompt assembler uses), resolved from the visibility-adjusted refs above so a POV beat
+    // neither splices the narrator's description NOR conditions on her plate (both would draw her figure).
+    // Non-empty plate set → reference-conditioned edit on fal; empty → text-to-image. Entities without a
+    // minted plate simply don't contribute a reference.
     const sceneEnts = storyBible
-      ? sceneEntities(storyBible, { primaryEntity: scene.primaryEntity, supportingEntities: scene.supportingEntities })
+      ? sceneEntities(storyBible, { primaryEntity: refPrimary, supportingEntities: refSupporting })
       : []
     const referenceImageKeys = sceneEnts.map((e) => e.referenceImageKey).filter((k): k is string => Boolean(k))
 
@@ -191,20 +222,9 @@ export async function generateImages(reelId: string): Promise<void> {
     const sceneEngine = isScareBeat ? OPENAI_IMAGE_ENGINE : imageEngine
 
     // Server-side prompt assembly — the LLM never sees this. Style suffix + (when analyzed) the scene's bible
-    // entities expanded to their frozen descriptions. On a SCARE beat, DROP the narrator from the splice: the
-    // reveal must frame ONLY the threat (extreme close on its shadowed form). Splicing the narrator's full
-    // description makes the model render a balanced TWO-figure medium shot instead of the close-up — the
-    // narrator is at most a sliver, which the scene prompt itself can mention inline if needed.
-    // EXCEPTION — a mirror/reflection REVEAL is a deliberate TWO-subject shot (narrator + threat as
-    // reflections); dropping the narrator there destroys the payoff. So keep her spliced when the beat is a
-    // reflection, so she renders as the reflection beside the ghost.
-    const isReflectionReveal = /\b(mirror|reflection|reflected|glass)\b/i.test(`${scene.visualPrompt ?? ''} ${scene.sceneIntent ?? ''}`)
-    const narratorId = storyBible?.continuity.narratorEntityId
-    const promptSupporting = isScareBeat && narratorId && !isReflectionReveal
-      ? (scene.supportingEntities ?? []).filter((id) => slug(id) !== slug(narratorId))
-      : scene.supportingEntities
+    // entities expanded to their frozen descriptions (narrator resolved by the visibility rule above).
     const expansion = storyBible
-      ? { bible: storyBible, primaryEntity: scene.primaryEntity, supportingEntities: promptSupporting }
+      ? { bible: storyBible, primaryEntity: refPrimary, supportingEntities: refSupporting }
       : undefined
     const finalPrompt = assembleImagePrompt(scene.visualPrompt!, channel.stylePreset, expansion, lighting, cast)
     const negativePrompt = assembleNegativePrompt({ genreCategory: channel.genreCategory })
@@ -380,9 +400,10 @@ async function generateImageWithRetry(params: ImageGenAttemptParams) {
           templateVersion: REPHRASE_V1_VERSION,
           schema: z.union([
             z.string(),
+            z.object({ imagePrompt: z.string() }).transform((o) => o.imagePrompt), // the shape rephrase.v1.1 asks for
             z.object({ image_prompt: z.string() }).transform((o) => o.image_prompt),
-            z.object({ imagePrompt: z.string() }).transform((o) => o.imagePrompt),
             z.object({ prompt: z.string() }).transform((o) => o.prompt),
+            z.object({ description: z.string() }).transform((o) => o.description), // observed fallback shape
           ]),
           system,
           messages: [{ role: 'user', content: userMessage }],
@@ -393,20 +414,37 @@ async function generateImageWithRetry(params: ImageGenAttemptParams) {
         console.warn(`[rephrase] ${params.reelId.slice(0, 8)} scene${params.sceneIdx} rephrase failed → mood-only: ${e instanceof Error ? e.message : String(e)}`)
       }
 
-      if (rephrased) {
+      if (rephrased && attempt < MAX_REPHRASE_ATTEMPTS - 1) {
+        // Got a softened rewrite and still have an attempt left → try it next iteration.
         currentPrompt = rephrased
-      }
-      if (!rephrased || attempt === MAX_REPHRASE_ATTEMPTS - 1) {
-        // Rephrase failed, OR final attempt → mood-only downgrade. Drop the (rejected) subject but KEEP the
-        // channel style so the fallback still looks like the rest of the reel; drop the references too so it's
-        // a clean text-to-image atmosphere plate, not reference-locked to the filtered entity.
+      } else {
+        // Rephrase failed, OR this was the final attempt → mood-only downgrade. Drop the (rejected) subject
+        // but KEEP the channel style so the fallback still looks like the rest of the reel; drop the
+        // references too so it's a clean text-to-image atmosphere plate, not reference-locked to the filtered
+        // entity. Break out and RENDER it below — do NOT keep looping (a softened prompt that keeps getting
+        // refused just burns attempts and never falls back).
         currentPrompt = assembleImagePrompt(
           `${params.mood.join(', ')} atmosphere, empty scene, abstract shapes, deep shadow, negative space`,
           params.stylePreset,
         )
         refKeys = []
+        break
       }
     }
   }
-  throw new Error(`Image generation failed after ${MAX_REPHRASE_ATTEMPTS} rephrase attempts`)
+
+  // All rephrase attempts were refused by the safety filter → currentPrompt is now the mood-only atmosphere
+  // downgrade (abstract, subject-free). RENDER it rather than throwing: a scare beat that trips moderation
+  // must degrade to a plain atmosphere plate, never fail the whole reel. (Previously the fallback prompt was
+  // set on the final loop iteration but the loop exited before rendering it, so the scene crashed the step.)
+  const fallback = await renderImage(params.engine, {
+    prompt: currentPrompt,
+    negativePrompt: params.negativePrompt,
+    reelId: params.reelId,
+    sceneIdx: params.sceneIdx,
+    aspect: params.aspect,
+    referenceImageKeys: refKeys,
+  })
+  console.warn(`[generate-images] ${params.reelId.slice(0, 8)} scene${params.sceneIdx} exhausted safety-filter rephrases → mood-only atmosphere fallback`)
+  return { ...fallback, provider, costCents: fallback.costCents + totalCost }
 }

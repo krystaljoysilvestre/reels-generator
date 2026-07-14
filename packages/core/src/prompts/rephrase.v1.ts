@@ -1,6 +1,6 @@
 // rephrase.v1 — content-filter retry template (docs/04 §4.3)
 
-export const REPHRASE_V1_VERSION = 'rephrase.v1'
+export const REPHRASE_V1_VERSION = 'rephrase.v1.1'
 
 export function buildRephrasePrompt(
   originalPrompt: string,
@@ -21,6 +21,8 @@ export function buildRephrasePrompt(
 
 "${originalPrompt}"
 
-${guidance} Return only the rewritten prompt text, no JSON wrapper.`,
+${guidance}
+
+Respond with ONLY this JSON object and nothing else: {"imagePrompt": "<the rewritten prompt>"}`,
   }
 }
