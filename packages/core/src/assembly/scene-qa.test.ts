@@ -213,14 +213,14 @@ describe('reviewSceneBreakdown — journey-grounded (Phase 2A)', () => {
     expect(r.errors.some((e) => e.includes('character "narrator"'))).toBe(false)
   })
 
-  it('reflection reveal errors when the threat is not primaryEntity', () => {
+  it('reveal errors when the threat (present in the peak leg) is not primaryEntity', () => {
     const r = reviewSceneBreakdown(base([scene({ narrationText: 'May babae sa tabi ko.', location: 'school restroom', tier: 'video', primaryEntity: 'narrator', supportingEntities: ['narrator'], subjectMotion: 'her smile widens', imagePrompt: 'the narrator stares into the mirror' })]))
-    expect(r.errors.some((e) => e.includes('primaryEntity'))).toBe(true)
+    expect(r.errors.some((e) => e.includes('must OPEN on the threat'))).toBe(true)
   })
 
-  it('reflection reveal passes with threat primary + narrator in supporting', () => {
-    const r = reviewSceneBreakdown(base([scene({ narrationText: 'May babae sa tabi ko.', location: 'school restroom', tier: 'video', primaryEntity: 'the-figure', supportingEntities: ['narrator'], subjectMotion: 'her smile slowly widens', imagePrompt: 'in the mirror, the pale figure reflected beside the narrator' })]))
-    expect(r.errors.some((e) => e.includes('reflection reveal'))).toBe(false)
+  it('reveal passes when the threat is primaryEntity (narrator splice handled at render, not required here)', () => {
+    const r = reviewSceneBreakdown(base([scene({ narrationText: 'May babae sa tabi ko.', location: 'school restroom', tier: 'video', primaryEntity: 'the-figure', supportingEntities: [], subjectMotion: 'her smile slowly widens', imagePrompt: 'in the mirror, the pale figure reflected beside the narrator' })]))
+    expect(r.errors.some((e) => e.includes('must OPEN on the threat'))).toBe(false)
   })
 
   it('errors when a video reveal beat has empty subjectMotion', () => {
@@ -231,5 +231,20 @@ describe('reviewSceneBreakdown — journey-grounded (Phase 2A)', () => {
   it('warns on a static, camera-facing person (no action/gaze verb)', () => {
     const r = reviewSceneBreakdown(base([scene({ narrationText: 'Pumasok ako sa CR.', location: 'school restroom', primaryEntity: 'narrator', supportingEntities: ['narrator'], imagePrompt: 'a girl in the restroom' })]))
     expect(r.warnings.some((w) => w.includes('static, camera-facing'))).toBe(true)
+  })
+
+  it('errors (Check E) when a first-person beat draws the narrator as a standing figure', () => {
+    const r = reviewSceneBreakdown(base([scene({ narrationText: 'Pumasok ako sa CR.', location: 'school restroom', primaryEntity: 'narrator', supportingEntities: ['narrator'], imagePrompt: 'The narrator stands in the restroom, facing forward, her posture tense' })]))
+    expect(r.errors.some((e) => e.includes('FIRST-PERSON'))).toBe(true)
+  })
+
+  it('Check E does NOT fire on a POV hands beat (no figure of the narrator)', () => {
+    const r = reviewSceneBreakdown(base([scene({ narrationText: 'Pumasok ako sa CR.', location: 'school restroom', primaryEntity: null, supportingEntities: [], imagePrompt: "close-up of the narrator's hands pushing the restroom door open, seen over her shoulder" })]))
+    expect(r.errors.some((e) => e.includes('FIRST-PERSON'))).toBe(false)
+  })
+
+  it('Check E is exempt on a reflection beat (narrator legitimately shown + re-anchored)', () => {
+    const r = reviewSceneBreakdown(base([scene({ narrationText: 'May babae sa tabi ko.', location: 'school restroom', tier: 'video', primaryEntity: 'the-figure', supportingEntities: [], subjectMotion: 'her grin widens', imagePrompt: 'in the mirror, the narrator stands reflected beside a pale figure' })]))
+    expect(r.errors.some((e) => e.includes('FIRST-PERSON'))).toBe(false)
   })
 })

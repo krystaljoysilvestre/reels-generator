@@ -135,12 +135,12 @@ export function isDepictableEntity(e: BibleEntity): boolean {
   return desc.length > 0 && slug(desc) !== slug(e.id)
 }
 
-// The entities that apply to a scene, in splice order. The first-person narrator is NO LONGER suppressed:
-// she's the main character and needs a reference plate + conditioning so her face stays consistent when
-// she IS shown (a reflection, her back, her hands) — suppressing her left her unanchored and drifting to a
-// random figure. Keeping her out of pure-POV shots as a full front-facing figure is now the breakdown's job
-// (the scenes.v1 POV rules compose her as a reflection/back/partial). Only depictability filters here
-// (label-only entities excluded — see isDepictableEntity).
+// The entities that apply to a scene, in splice order. This resolver does NOT decide narrator visibility —
+// generate_images applies the first-person VISIBILITY rule upstream (strip the narrator from the refs on a
+// POV beat, re-add her only when her face is on-screen in a reflective surface) BEFORE calling this, so by
+// the time refs reach here the narrator is present only on beats where she should genuinely be spliced. That
+// keeps her out of pure-POV shots as a full front-facing figure while still locking her look for a reflection
+// payoff. Only depictability filters here (label-only entities excluded — see isDepictableEntity).
 export function sceneEntities(bible: StoryBible, refs: EntityRefs): BibleEntity[] {
   const { resolved } = resolveEntities(bible, refs)
   return resolved.filter(isDepictableEntity)

@@ -136,6 +136,12 @@ const PERSON_NOUN_RE = /\b(boy|man|men|woman|women|girl|child|children|kid|figur
 // Action / gaze verbs (stemmed, no trailing boundary so conjugations match). Their ABSENCE next to a person
 // signals a static, likely camera-facing pose.
 const ACTION_VERB_RE = /\b(reach|turn|step|grip|lean|wip|look|gaz|glanc|star|walk|run|hold|push|pull|open|clos|enter|exit|kneel|crouch|bend|point|cover|clutch|trembl|freez|frozen|rais|lower|tilt|hunch|flinch|creep|approach|peer|lift|drop|grab|touch|press|reel|back)\w*/i
+// FIRST-PERSON narrator drawn as a full/standing FIGURE (not POV). "The narrator stands/walks/sits/faces …"
+// draws her as a visible person; on a non-reflection beat her look is stripped at render (the visibility
+// rule), so she renders UN-ANCHORED → her wardrobe drifts shot-to-shot. Catch the pattern so the breakdown
+// re-rolls the beat as true POV (what she sees / her hands / her back), where she isn't drawn as a figure at
+// all. The [0,48]-char window keeps "the narrator's hand pushes …" (POV) from matching.
+const NARRATOR_FIGURE_RE = /\bthe narrator\b[^.]{0,48}\b(stands?|standing|stood|walk(?:s|ing)?|sits?|sitting|sat|faces?|facing|poses?|posing|full[- ]?body|full figure)\b/i
 
 export function reviewSceneBreakdown(input: SceneQAInput): SceneQAResult {
   const errors: string[] = []
@@ -245,7 +251,6 @@ export function reviewSceneBreakdown(input: SceneQAInput): SceneQAResult {
   const narratorSlug = input.narratorEntityId ? slug(input.narratorEntityId) : null
   const journey = input.journey ?? []
   const refsOf = (s: SceneQAScene): string[] => [...(s.primaryEntity ? [s.primaryEntity] : []), ...(s.supportingEntities ?? [])]
-  const isReflectionText = (s: SceneQAScene): boolean => /\b(mirror|reflection|reflected|glass)\b/i.test(`${s.imagePrompt} ${s.sceneIntent ?? ''}`)
   const peakScene = peak && narration.includes(peak) ? scenes.find((s) => s.narrationText.includes(peak)) : undefined
 
   scenes.forEach((s, i) => {
@@ -295,20 +300,30 @@ export function reviewSceneBreakdown(input: SceneQAInput): SceneQAResult {
     if (input.bibleEntities && mentionsPerson && !ACTION_VERB_RE.test(s.imagePrompt)) {
       warnings.push(`Scene ${n} shows a person but no clear action/gaze verb — risk of a static, camera-facing pose. Give them a mid-action and an off-camera gaze.`)
     }
+
+    // Check E — first-person narrator drawn as a full figure (error). In a first-person reel (narratorEntityId
+    // set) the narrator is the CAMERA, not a subject; describing her as a standing/walking/facing figure draws
+    // her body, but her look is stripped at render on non-reflection beats → she renders un-anchored and her
+    // wardrobe drifts between shots. A reflection beat is the ONE place she's legitimately shown (and gets
+    // re-anchored), so it's exempt. Force a POV re-roll instead.
+    const isReflectionBeat = /\b(mirror|reflection|reflected|glass)\b/i.test(`${s.imagePrompt} ${s.sceneIntent ?? ''}`)
+    if (narratorSlug && !isReflectionBeat && NARRATOR_FIGURE_RE.test(s.imagePrompt)) {
+      errors.push(`Scene ${n} draws the narrator as a visible standing/facing figure, but this is a FIRST-PERSON reel — she is the camera. Rewrite as POV: what she SEES (the space, a detail) or her hands/the back of her head in the near foreground, never a full figure of her facing the frame. (Outside a reflection her look isn't locked, so a figure here renders as a different person each shot.)`)
+    }
   })
 
-  // ── Check B — reflection-reveal blocking (error) ───────────────────────────
-  // On the peak scene, ONLY when it's a reflection beat: the threat must be the subject and the narrator
-  // must be present (both are seen as reflections). Genre-agnostic (fires only on an actual reflection beat).
-  if (peakScene && isReflectionText(peakScene) && (input.bibleEntities?.length ?? 0) > 0) {
+  // ── Check B — the reveal opens on the threat (error) ───────────────────────
+  // A reveal leads with its threat. When the peak scene's journey leg has the threat PRESENT (the peak IS the
+  // threat's appearance), the threat must be the primaryEntity — the shot opens on it, never on the room or
+  // the narrator (which splices the wrong subject and loses the payoff). Journey-grounded and general — fires
+  // on ANY threat reveal, not just mirror beats; the narrator's own splice on a reflection reveal is handled
+  // deterministically at render (the visibility rule in generate_images).
+  if (peakScene && journey.length && (input.bibleEntities?.length ?? 0) > 0) {
     const threat = input.bibleEntities!.find((e) => e.role === 'threat')
-    if (threat) {
-      if (resolve(peakScene.primaryEntity)?.role !== 'threat') {
-        errors.push(`The reflection reveal (peak scene) must have the threat ("${threat.id}") as primaryEntity — it's the subject of the reflection.`)
-      }
-      if (narratorSlug && !(peakScene.supportingEntities ?? []).some((r) => slug(r) === narratorSlug)) {
-        errors.push(`The reflection reveal (peak scene) must include the narrator in supportingEntities — both are seen as reflections (her back/shoulders anchor the foreground).`)
-      }
+    const peakLeg = legForScene(peakScene, journey, narration)
+    const threatPresent = !!threat && !!peakLeg && (peakLeg.present ?? []).some((p) => slug(p) === slug(threat!.id))
+    if (threat && threatPresent && resolve(peakScene.primaryEntity)?.role !== 'threat') {
+      errors.push(`The reveal (peak scene) has the threat ("${threat.id}") present but not as primaryEntity — the payoff must OPEN on the threat. Set primaryEntity to the threat so the shot leads with it, not the room or the narrator.`)
     }
   }
 
