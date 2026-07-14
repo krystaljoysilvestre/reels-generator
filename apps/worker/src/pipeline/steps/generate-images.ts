@@ -1,6 +1,6 @@
 import { eq, and, sql } from 'drizzle-orm'
 import { getDb, reels, scenes, assets, channels, stories } from '@reels/db'
-import { generateImage, generateImageFal, imageEngineForGenre, FLUX_IMAGE_ENGINE, buildInputHash, ContentFilterError, llmCall, downloadBuffer, SCENE_IMAGE_MODEL, SCENE_IMAGE_QUALITY, type ImageEngine } from '@reels/providers'
+import { generateImage, generateImageFal, imageEngineForGenre, FLUX_IMAGE_ENGINE, OPENAI_IMAGE_ENGINE, buildInputHash, ContentFilterError, llmCall, downloadBuffer, SCENE_IMAGE_MODEL, SCENE_IMAGE_QUALITY, type ImageEngine } from '@reels/providers'
 import { assembleImagePrompt, assembleNegativePrompt, assembleReferencePrompt, castNationality, reelLightingDirective, sceneEntities, slug, PLATFORM_PRESETS, StoryBibleSchema } from '@reels/core'
 import { z } from 'zod'
 import { buildRephrasePrompt, REPHRASE_V1_VERSION, buildImageQAPrompt, IMAGE_QA_V1_VERSION, ImageQASchema, buildFilterSafePrompt, FILTER_SAFE_V1_VERSION, FilterSafeSchema } from '../../prompts-bridge.js'
@@ -156,28 +156,58 @@ export async function generateImages(reelId: string): Promise<void> {
 
   const pending = reelScenes.filter((s) => s.visualPrompt && !s.imageAssetId) // skip already-generated (idempotency)
 
-  // QA targets: the hero (tier:'video') beats that get animated/showcased, plus the peak scene (the climax
-  // may be a still). These get the vision QA + re-roll; the rest generate once, keeping QA cost bounded.
+  // QA targets: the hero (tier:'video') beats + the peak scene, PLUS any scene that features a PERSON —
+  // where the model can invent an extra, swap the narrator's identity, or render a static camera-facing pose
+  // (the CAST + static checks in image-qa.v1.1 catch these, but only if the scene is QA'd). Pure-environment
+  // stills stay unQA'd to keep cost bounded. A person is "featured" when the scene tags a character entity or
+  // names a person in its prose.
   const peak = story?.twistAnchor?.trim() ?? ''
-  const isQATarget = (s: (typeof pending)[number]) => s.tier === 'video' || (peak !== '' && s.narrationText.includes(peak))
+  const characterIds = new Set((storyBible?.entities ?? []).filter((e) => e.kind === 'character').map((e) => slug(e.id)))
+  const PERSON_NOUN = /\b(boy|man|men|woman|women|girl|child|children|kid|figure|hand|hands|person|people|bystander|stranger|guard|nurse|doctor|teacher|classmate|friend)\b/i
+  const featuresPerson = (s: (typeof pending)[number]) => {
+    const refs = [...(s.primaryEntity ? [s.primaryEntity] : []), ...(s.supportingEntities ?? [])]
+    return refs.some((r) => characterIds.has(slug(r))) || PERSON_NOUN.test(s.visualPrompt ?? '')
+  }
+  const isQATarget = (s: (typeof pending)[number]) => s.tier === 'video' || (peak !== '' && s.narrationText.includes(peak)) || featuresPerson(s)
 
   const processScene = async (scene: (typeof pending)[number]) => {
-    // Server-side assembly — the LLM never sees this. Style suffix + (when analyzed) the scene's bible
-    // entities expanded to their frozen canonical descriptions, so recurring elements don't drift.
+    // Entities this scene features (narrator suppressed for reference PLATES via sceneEntities, the same
+    // resolver the prompt assembler uses). Non-empty plate set → reference-conditioned edit on fal; empty →
+    // text-to-image. Entities without a minted plate simply don't contribute a reference.
+    const sceneEnts = storyBible
+      ? sceneEntities(storyBible, { primaryEntity: scene.primaryEntity, supportingEntities: scene.supportingEntities })
+      : []
+    const referenceImageKeys = sceneEnts.map((e) => e.referenceImageKey).filter((k): k is string => Boolean(k))
+
+    // Per-scene engine: a horror SCARE beat (any shot featuring the role:'threat' entity) renders on
+    // gpt-image-1 (OpenAI) at moderation:'low', NOT the reel's default (Gemini/nano-banana). Gemini's edit
+    // model beautifies the gaunt, hollow-eyed threat into a pretty, normal face; Flux HARD-refuses corpse-face
+    // content (content_policy) even at max tolerance and silently falls back to nano-banana — same soft result.
+    // gpt-image-1 at low moderation renders the dread AND the extreme close-up (the scare-beat hybrid
+    // config.ts anticipates). text→image (its edit corrupts identity), so the threat is drawn fresh from its
+    // spliced inline description; fine for the 1-2 shots a threat appears in. Non-scare beats stay on the
+    // owner-preferred default engine for continuity.
+    const isScareBeat = channel.genreCategory === 'horror' && sceneEnts.some((e) => e.role === 'threat')
+    const sceneEngine = isScareBeat ? OPENAI_IMAGE_ENGINE : imageEngine
+
+    // Server-side prompt assembly — the LLM never sees this. Style suffix + (when analyzed) the scene's bible
+    // entities expanded to their frozen descriptions. On a SCARE beat, DROP the narrator from the splice: the
+    // reveal must frame ONLY the threat (extreme close on its shadowed form). Splicing the narrator's full
+    // description makes the model render a balanced TWO-figure medium shot instead of the close-up — the
+    // narrator is at most a sliver, which the scene prompt itself can mention inline if needed.
+    // EXCEPTION — a mirror/reflection REVEAL is a deliberate TWO-subject shot (narrator + threat as
+    // reflections); dropping the narrator there destroys the payoff. So keep her spliced when the beat is a
+    // reflection, so she renders as the reflection beside the ghost.
+    const isReflectionReveal = /\b(mirror|reflection|reflected|glass)\b/i.test(`${scene.visualPrompt ?? ''} ${scene.sceneIntent ?? ''}`)
+    const narratorId = storyBible?.continuity.narratorEntityId
+    const promptSupporting = isScareBeat && narratorId && !isReflectionReveal
+      ? (scene.supportingEntities ?? []).filter((id) => slug(id) !== slug(narratorId))
+      : scene.supportingEntities
     const expansion = storyBible
-      ? { bible: storyBible, primaryEntity: scene.primaryEntity, supportingEntities: scene.supportingEntities }
+      ? { bible: storyBible, primaryEntity: scene.primaryEntity, supportingEntities: promptSupporting }
       : undefined
     const finalPrompt = assembleImagePrompt(scene.visualPrompt!, channel.stylePreset, expansion, lighting, cast)
     const negativePrompt = assembleNegativePrompt({ genreCategory: channel.genreCategory })
-
-    // Reference plates of the entities this scene features (narrator suppression applied via sceneEntities,
-    // same resolver the prompt assembler uses). Non-empty → reference-conditioned edit on fal; empty →
-    // text-to-image on OpenAI. Entities without a minted plate simply don't contribute a reference.
-    const referenceImageKeys = storyBible
-      ? sceneEntities(storyBible, { primaryEntity: scene.primaryEntity, supportingEntities: scene.supportingEntities })
-          .map((e) => e.referenceImageKey)
-          .filter((k): k is string => Boolean(k))
-      : []
 
     const inputHash = buildInputHash('generate_images.v1', {
       finalPrompt,
@@ -186,7 +216,7 @@ export async function generateImages(reelId: string): Promise<void> {
       model: SCENE_IMAGE_MODEL,
       quality: SCENE_IMAGE_QUALITY, // in the hash so a recipe change busts the cache + regenerates
       referenceImageKeys, // re-render when a scene's references change (gained/lost a plate)
-      engine: `${imageEngine.imageModel}|${imageEngine.editModel}`, // switching genre engine busts the cache
+      engine: `${sceneEngine.imageModel}|${sceneEngine.editModel}`, // switching engine (incl. scare→Flux) busts the cache
     })
 
     await runStep(
@@ -212,7 +242,7 @@ export async function generateImages(reelId: string): Promise<void> {
             stylePreset: channel.stylePreset,
             genreCategory: channel.genreCategory,
             referenceImageKeys,
-            engine: imageEngine,
+            engine: sceneEngine,
           })
           totalCost += result.costCents
           chosen = result
@@ -337,21 +367,28 @@ async function generateImageWithRetry(params: ImageGenAttemptParams) {
     } catch (err) {
       if (!(err instanceof ContentFilterError)) throw err
 
-      // rephrase.v1 retry [docs/04 §4.3]. The rephrase LLM occasionally returns an object instead of a bare
-      // string, which fails schema validation and threw — turning a recoverable content-filter into a HARD
-      // scene failure. Guard it: if rephrase fails (or returns a non-string), don't crash — fall straight to
-      // the mood-only downgrade so the scene still renders.
+      // rephrase.v1 retry [docs/04 §4.3]. The rephrase LLM often wraps its answer in an object
+      // ({image_prompt|imagePrompt|prompt: "..."}) instead of a bare string; with a strict z.string() schema
+      // that threw → the recoverable content-filter collapsed to the mood-only downgrade, which strips the
+      // shot's framing/detail (the horror reveal ends up a generic dark blob). Accept either shape and unwrap
+      // to the string so a filter-safe rephrase actually survives — critical for scare beats that trip the
+      // filter on the threat's description but must keep their extreme-close framing.
       let rephrased: string | null = null
       try {
         const { system, userMessage } = buildRephrasePrompt(currentPrompt, { genreCategory: params.genreCategory })
         const rephrase = await llmCall({
           templateVersion: REPHRASE_V1_VERSION,
-          schema: z.string(),
+          schema: z.union([
+            z.string(),
+            z.object({ image_prompt: z.string() }).transform((o) => o.image_prompt),
+            z.object({ imagePrompt: z.string() }).transform((o) => o.imagePrompt),
+            z.object({ prompt: z.string() }).transform((o) => o.prompt),
+          ]),
           system,
           messages: [{ role: 'user', content: userMessage }],
         })
         totalCost += rephrase.costCents
-        rephrased = typeof rephrase.data === 'string' ? rephrase.data : null
+        rephrased = typeof rephrase.data === 'string' && rephrase.data.trim() ? rephrase.data : null
       } catch (e) {
         console.warn(`[rephrase] ${params.reelId.slice(0, 8)} scene${params.sceneIdx} rephrase failed → mood-only: ${e instanceof Error ? e.message : String(e)}`)
       }
