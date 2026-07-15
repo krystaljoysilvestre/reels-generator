@@ -1,6 +1,6 @@
 import { eq, and, sql } from 'drizzle-orm'
 import { getDb, reels, scenes, assets, channels, stories } from '@reels/db'
-import { generateImage, generateImageFal, imageEngineForGenre, FLUX_IMAGE_ENGINE, buildInputHash, ContentFilterError, llmCall, downloadBuffer, SCENE_IMAGE_MODEL, SCENE_IMAGE_QUALITY, type ImageEngine } from '@reels/providers'
+import { generateImage, generateImageFal, imageEngineForGenre, FLUX_IMAGE_ENGINE, buildInputHash, ContentFilterError, llmCall, downloadBuffer, uploadBuffer, SCENE_IMAGE_MODEL, SCENE_IMAGE_QUALITY, type ImageEngine } from '@reels/providers'
 import { assembleImagePrompt, assembleNegativePrompt, assembleReferencePrompt, castNationality, reelLightingDirective, sceneEntities, slug, PLATFORM_PRESETS, StoryBibleSchema } from '@reels/core'
 import { z } from 'zod'
 import { buildRephrasePrompt, REPHRASE_V1_VERSION, buildImageQAPrompt, IMAGE_QA_V1_VERSION, ImageQASchema, buildFilterSafePrompt, FILTER_SAFE_V1_VERSION, FilterSafeSchema } from '../../prompts-bridge.js'
@@ -245,6 +245,12 @@ export async function generateImages(reelId: string): Promise<void> {
         let chosen: Awaited<ReturnType<typeof generateImageWithRetry>> | undefined
         let extraNeg = '' // targeted negatives added across re-rolls to push the model off the flagged failure
         let lastIssues: string[] = [] // QA verdict of the kept image ([] = passed / not QA'd)
+        // KEEP THE BEST ATTEMPT, not the last. Attempts overwrite the same storage key, so without this a
+        // near-miss roll (failed QA on one nit) gets clobbered by a later, WORSE roll — observed live: a
+        // reveal's attempt 0 drew the story's contradiction almost right, got re-rolled, and attempt 1 (a
+        // studio portrait) was what shipped. Track each attempt's bytes + issue count and restore the best
+        // after the loop when the final roll didn't win. Fewest QA issues = best (a pass is 0).
+        let best: { buffer: Buffer; issues: string[]; attempt: number } | undefined
 
         // Each attempt re-generates (gpt-image-1 is non-deterministic, so a re-roll is a genuinely
         // different render) and overwrites the same storage key, so stopping at the first pass leaves the
@@ -267,9 +273,11 @@ export async function generateImages(reelId: string): Promise<void> {
 
           if (!qa) break
 
-          const { verdict, costCents } = await imageQA(result.asset.storageKey, scene.visualPrompt!)
+          const buffer = await downloadBuffer(result.asset.storageKey)
+          const { verdict, costCents } = await imageQA(buffer, scene.visualPrompt!)
           totalCost += costCents
           lastIssues = verdict.issues
+          if (!best || verdict.issues.length < best.issues.length) best = { buffer, issues: verdict.issues, attempt }
           if (verdict.pass) {
             lastIssues = []
             if (attempt > 0) console.log(`[image-qa] ${reelId.slice(0, 8)} scene${scene.idx} passed on re-roll ${attempt}`)
@@ -281,8 +289,16 @@ export async function generateImages(reelId: string): Promise<void> {
           if (/third.person|full body|\bfigure\b|perspective|\bpov\b|eye.?line|looking down/i.test(verdict.issues.join(' '))) {
             extraNeg = 'third person, full body shot, visible person, figure in frame, camera looking down at a person'
           }
-          const tag = attempt < MAX_QA_REROLLS ? 're-rolling' : 'keeping (no pass)'
+          const tag = attempt < MAX_QA_REROLLS ? 're-rolling' : 'keeping best attempt'
           console.warn(`[image-qa] ${reelId.slice(0, 8)} scene${scene.idx} attempt ${attempt} failed → ${tag}: ${verdict.issues.join('; ')}`)
+        }
+
+        // The canonical key holds the LAST attempt's bytes; if an earlier attempt scored better (fewer QA
+        // issues), restore its bytes so the kept image is the closest roll to the brief.
+        if (qa && best && best.issues.length < lastIssues.length) {
+          await uploadBuffer(chosen!.asset.storageKey, best.buffer, sniffMediaType(best.buffer))
+          lastIssues = best.issues
+          console.log(`[image-qa] ${reelId.slice(0, 8)} scene${scene.idx} restored attempt ${best.attempt} (fewest issues: ${best.issues.length})`)
         }
 
         // Persist asset + link to scene. QA verdict rides on meta (qaPass / qaIssues) so a later storyboard
@@ -326,10 +342,10 @@ export async function generateImages(reelId: string): Promise<void> {
   await runPool(pending, IMAGE_CONCURRENCY, processScene)
 }
 
-// Vision QA: does the render match the brief's checkable intent? Sniffs the real media type so it works
-// regardless of fal's output format. Cheap (Haiku); only called on hero/peak scenes.
-async function imageQA(storageKey: string, visualPrompt: string): Promise<{ verdict: z.infer<typeof ImageQASchema>; costCents: number }> {
-  const buf = await downloadBuffer(storageKey)
+// Vision QA: does the render match the brief's checkable intent? Takes the image BYTES (the caller
+// downloads once and reuses the buffer for best-attempt tracking). Sniffs the real media type so it works
+// regardless of fal's output format. Cheap (Haiku); only called on QA-target scenes.
+async function imageQA(buf: Buffer, visualPrompt: string): Promise<{ verdict: z.infer<typeof ImageQASchema>; costCents: number }> {
   const { system, userMessage } = buildImageQAPrompt(visualPrompt)
   const r = await llmCall({
     templateVersion: IMAGE_QA_V1_VERSION,
