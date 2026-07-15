@@ -62,6 +62,7 @@ export interface VideoGenParams {
   imageStorageKey: string
   motionPrompt: string
   durationSec?: number
+  aspect?: string // '9:16' (default — the reel frame) or '16:9' (long-form); Kling takes it verbatim
   reelId: string
   sceneIdx: number
   variationIdx: number
@@ -79,8 +80,8 @@ export async function generateVideo(params: VideoGenParams): Promise<ProviderRes
     const imgBuf = await downloadBuffer(params.imageStorageKey)
     const imgBase64 = `data:image/webp;base64,${imgBuf.toString('base64')}`
 
-    // Kling v2.5 takes duration as a STRING enum ("5"/"10") + an aspect_ratio.
-    const input = { image_url: imgBase64, prompt: params.motionPrompt, duration: String(durationSec), aspect_ratio: '9:16' }
+    // Kling v2.5 takes duration as a STRING enum ("5"/"10") + an aspect_ratio ("9:16"/"16:9"/"1:1").
+    const input = { image_url: imgBase64, prompt: params.motionPrompt, duration: String(durationSec), aspect_ratio: params.aspect ?? '9:16' }
 
     // abortSignal is the only enforced deadline (the SDK's `timeout` is a no-op) — without it a stalled
     // queue hangs the job and holds a fal slot indefinitely. Abort → rejects → slot released → job retries.

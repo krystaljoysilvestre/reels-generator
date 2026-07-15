@@ -57,6 +57,10 @@ export async function generateMusicStep(reelId: string): Promise<void> {
   // Where the story's emotional peak sits (fraction of the reel) — so the bed builds toward the same beat
   // the mixer's volume envelope swells to. Fall back to a late peak when there's no music timing.
   const peakFrac = timings.music ? timings.music.peakAnchorMs / timings.durationMs : 0.8
+  const lengthMs = clampMusicLengthMs(timings.durationMs)
+  // Long-form: the provider caps one generation at 5 min; a longer video loops the bed (mixer aloop),
+  // so ask for a seamless cycle and let the volume envelope carry the video-level build.
+  const loops = timings.durationMs > lengthMs
   const prompt = buildMusicPrompt({
     audioMood: audioPacks.audioMood,
     toneIntensity: tone.intensity,
@@ -65,8 +69,8 @@ export async function generateMusicStep(reelId: string): Promise<void> {
     ...(moodPrompt ? { moodPrompt } : {}),
     ...(audioScript.music?.type ? { musicType: audioScript.music.type } : {}),
     peakFrac,
+    loops,
   })
-  const lengthMs = clampMusicLengthMs(timings.durationMs)
   // v4: evolving bed (was v3: steady wash). Prompt now carries the arc, so the hash changes and re-composes.
   const inputHash = buildInputHash('generate_music.v4', { prompt, lengthMs, reelId })
 

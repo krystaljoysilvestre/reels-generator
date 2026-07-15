@@ -8,13 +8,14 @@ import {
   ChannelDerivationSchema,
   CHANNEL_V1_VERSION,
 } from '@reels/core/prompts/channel.v1'
+import { TargetPlatformSchema } from '@reels/core'
 import { getSession } from '@/lib/auth'
 
 const InputSchema = z.object({
   name: z.string().trim().min(1).max(80),
   nicheDescription: z.string().trim().min(20).max(8000),
   languages: z.array(z.string().trim().min(1)).min(1).max(6),
-  targetPlatform: z.enum(['tiktok', 'youtube_shorts', 'facebook_reels', 'all']).default('all'),
+  targetPlatform: TargetPlatformSchema.default('all'),
 })
 
 // Idempotency cache: a derive is a pure function of its inputs, so a retry with the SAME inputs

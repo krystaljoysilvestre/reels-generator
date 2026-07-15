@@ -35,6 +35,9 @@ export interface RemotionRenderInput {
   captionStyle: CaptionStyle
   captionSafeZonePct: number
   durationMs: number
+  // Output frame (platform preset). Absent → the registered composition default (1080×1920 vertical).
+  width?: number
+  height?: number
   grain: number
   vignette: number
   watermark?: { dataUri: string; opacity: number } | null // roaming channel logo overlay; null = none
@@ -214,7 +217,15 @@ export async function renderReelWithRemotion(input: RemotionRenderInput): Promis
     })
 
     await renderMedia({
-      composition: { ...composition, durationInFrames: totalFrames },
+      // Frame + duration are per-render (the composition registers defaults): duration from the mix,
+      // width/height from the channel's platform preset (16:9 long-form vs 9:16 reels). Every overlay
+      // reads useVideoConfig(), so the composition adapts to whatever is set here.
+      composition: {
+        ...composition,
+        durationInFrames: totalFrames,
+        width: input.width ?? composition.width,
+        height: input.height ?? composition.height,
+      },
       serveUrl: bundleUrl,
       codec: 'h264',
       outputLocation: input.outputPath,

@@ -2,7 +2,7 @@ import { getDb, channels } from '@reels/db'
 import { eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { requireAuth } from '@/lib/auth'
-import { ToneConfigSchema, WorldBibleSchema, CaptionStyleSchema, AudioPacksSchema } from '@reels/core'
+import { ToneConfigSchema, WorldBibleSchema, CaptionStyleSchema, AudioPacksSchema, TargetPlatformSchema } from '@reels/core'
 import { ChannelSettings } from './ChannelSettings'
 
 export const dynamic = 'force-dynamic'
@@ -23,7 +23,7 @@ export default async function ChannelSettingsPage({ params }: { params: Promise<
         description: channel.description ?? '',
         nicheDescription: channel.nicheDescription,
         tagline: channel.tagline ?? '',
-        targetPlatform: (channel.targetPlatform ?? 'all') as 'tiktok' | 'youtube_shorts' | 'facebook_reels' | 'all',
+        targetPlatform: TargetPlatformSchema.catch('all').parse(channel.targetPlatform ?? 'all'),
         targetSeconds: channel.targetSeconds ?? 75,
         stylePreset: channel.stylePreset ?? '',
         styleImageKey: channel.styleImageKey ?? null,

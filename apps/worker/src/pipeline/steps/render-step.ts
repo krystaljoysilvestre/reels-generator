@@ -99,6 +99,7 @@ export async function renderStep(reelId: string): Promise<void> {
     lut: lutConfig.lutPath ?? '',
     watermark: channel.watermarkKey ?? DEFAULT_WATERMARK_KEY,
     platform: channel.targetPlatform ?? 'all',
+    frame: `${platformPreset.width}x${platformPreset.height}`, // output dims (belt-and-suspenders to platform)
   })
 
   // The render step re-runs when the visual OR the audio changes; INSIDE, the expensive Remotion pass is
@@ -154,9 +155,9 @@ export async function renderStep(reelId: string): Promise<void> {
           if (imageAsset) {
             await writeFile(imagePath, await downloadBuffer(imageAsset.storageKey))
           } else {
-            // Black placeholder frame
+            // Black placeholder frame, at the platform's output dims
             await execFileAsync('ffmpeg', [
-              '-f', 'lavfi', '-i', 'color=black:s=1080x1920',
+              '-f', 'lavfi', '-i', `color=black:s=${platformPreset.width}x${platformPreset.height}`,
               '-frames:v', '1', '-y', imagePath,
             ])
           }
@@ -216,6 +217,8 @@ export async function renderStep(reelId: string): Promise<void> {
           captionStyle,
           captionSafeZonePct,
           durationMs: timings.durationMs,
+          width: platformPreset.width,
+          height: platformPreset.height,
           grain: lutConfig.grain,
           vignette: lutConfig.vignette,
           watermark,

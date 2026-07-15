@@ -1,7 +1,7 @@
 // story.v1 — story generation template (docs/04 §2.1)
 // Versioned source code. Never edit after a reel ships on this version — bump to v2.
 
-export const STORY_V1_VERSION = 'story.v1.1'
+export const STORY_V1_VERSION = 'story.v1.2'
 
 export interface StoryPromptVars {
   channelName: string
@@ -21,7 +21,9 @@ export interface StoryPromptVars {
 }
 
 export function buildStoryPrompt(v: StoryPromptVars): { system: string; userMessage: string } {
-  const system = `You are the head writer for "${v.channelName}", a short-form video channel.
+  // >180s = long-form (matches CHAPTER_THRESHOLD_SEC — the breakdown chapters at the same line).
+  const isLongForm = v.targetSeconds > 180
+  const system = `You are the head writer for "${v.channelName}", a ${isLongForm ? 'long-form' : 'short-form'} video channel.
 Niche: ${v.nicheDescription}
 
 Tone calibration (0–10 scales): ${v.toneConfig}
@@ -50,15 +52,24 @@ GUARDS:
 - Keep it platform-safe: no graphic gore or sexual content, and never harm to minors as subject matter — imply intensity through restraint, not explicit detail.
 - Original work only — do not retell known films, books, or copypastas.`
 
-  const userMessage = `Write one original ${v.language} narrated reel script for a ${v.targetSeconds}-second reel (≈${v.targetWords} words at natural narration pace). Make it feel like a real reel on THIS channel — match the niche, tone, and the reference scripts' voice.
+  // Long-form (multi-minute) scripts hold attention differently from a sub-3-minute reel: the open has
+  // more room, and the middle must keep EARNING the runtime. Structure guidance only — what each movement
+  // contains, where its turns land, and how many it wants remain the story's call (never a quota).
+  const hookRule = isLongForm
+    ? `COLD OPEN = the first few sentences (~15–30 seconds spoken): open mid-tension or on the story's central unresolvable question — the promise the whole video pays off. Never open with setting description or a greeting.
+- A long video must EARN its length: let the story move in a few natural movements/chapters, and end each one pulling the viewer forward — a new question, a turn, a decision, a door literally or figuratively opening. If a stretch exists only to fill time, cut it; write the story the length IT wants within the target.`
+    : `HOOK = the first 1–2 sentences (≤3 seconds spoken): open mid-tension or on a curiosity gap / unresolvable detail. Never open with setting description or a greeting.`
+  const opener = isLongForm ? 'COLD OPEN' : 'HOOK'
+
+  const userMessage = `Write one original ${v.language} narrated script for a ${v.targetSeconds}-second ${isLongForm ? 'long-form video' : 'reel'} (≈${v.targetWords} words at natural narration pace). Make it feel like a real ${isLongForm ? 'video' : 'reel'} on THIS channel — match the niche, tone, and the reference scripts' voice.
 
 Shape it to the niche — do NOT force a fiction twist onto a channel that isn't narrative:
-- Narrative / story niches: HOOK, then a grounded, sensory, specific build (real textures of daily life before anything unusual), escalation or development, and a satisfying ending that pays off something established earlier — a twist, a punchline, a moral, or an emotional turn, whatever the niche wants. Not a flat stop.
-- Informational niches: HOOK, then 2–4 vivid concrete points, end on a satisfying payoff.
-- Persuasive / monologue niches: HOOK, develop one sharp idea with a concrete example, close on a memorable line.
+- Narrative / story niches: ${opener}, then a grounded, sensory, specific build (real textures of daily life before anything unusual), escalation or development, and a satisfying ending that pays off something established earlier — a twist, a punchline, a moral, or an emotional turn, whatever the niche wants. Not a flat stop.
+- Informational niches: ${opener}, then ${isLongForm ? 'the concrete points the topic actually needs, each developed with a vivid example' : '2–4 vivid concrete points'}, end on a satisfying payoff.
+- Persuasive / monologue niches: ${opener}, develop one sharp idea with a concrete example, close on a memorable line.
 
 Craft:
-- HOOK = the first 1–2 sentences (≤3 seconds spoken): open mid-tension or on a curiosity gap / unresolvable detail. Never open with setting description or a greeting.
+- ${hookRule}
 - Point of view + register follow what the niche naturally wants (first-hand account, retold legend, reported, explainer, direct second-person address) — do NOT default to a first-person confession.
 - Write it the way it is SPOKEN — short lines, roughly one beat per line — for natural narration cadence.
 - Grounded and specific; stay consistent with the world and its canonical names.

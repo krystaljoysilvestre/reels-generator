@@ -1,6 +1,6 @@
 // rephrase.v1 — content-filter retry template (docs/04 §4.3)
 
-export const REPHRASE_V1_VERSION = 'rephrase.v1.1'
+export const REPHRASE_V1_VERSION = 'rephrase.v1.2'
 
 export function buildRephrasePrompt(
   originalPrompt: string,
@@ -16,7 +16,7 @@ export function buildRephrasePrompt(
       ? 'Rewrite it to keep the SAME level of dread and menace, softening only the single most explicit element (open wounds, gore, a mutilated body) into implication and aftermath — a dark stain, a half-seen shape, an unnatural silhouette, a wrong detail in shadow. It must stay genuinely frightening; do not make it calm, safe, or pretty. Avoid only the most graphic literal terms — everything else unsettling stays.'
       : 'Rewrite it to convey the same dread through atmosphere, framing, and absence (shadow, doorway, aftermath, implied presence) with zero violent or graphic terms.'
   return {
-    system: 'You are a storyboard director for vertical (9:16) narrated reels.',
+    system: 'You are a storyboard director for narrated videos.',
     userMessage: `This image prompt was rejected by a safety filter:
 
 "${originalPrompt}"

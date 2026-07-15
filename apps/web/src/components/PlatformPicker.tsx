@@ -20,12 +20,22 @@ const TikTokIcon = (
 )
 
 // YouTube — red rounded rect with the play as negative space (simple-icons, CC0).
+const YOUTUBE_PATH =
+  'M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12z'
+
 const YouTubeIcon = (
   <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden>
-    <path
-      fill="#FF0000"
-      d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12z"
-    />
+    <path fill="#FF0000" d={YOUTUBE_PATH} />
+  </svg>
+)
+
+// YouTube long-form — the same mark inside a widescreen frame, i.e. "the big-screen upload".
+const YouTubeLongIcon = (
+  <svg viewBox="0 0 34 24" width="34" height="24" aria-hidden>
+    <rect x="0.75" y="2.75" width="32.5" height="18.5" rx="3" fill="none" stroke="currentColor" strokeOpacity="0.35" strokeWidth="1.5" />
+    <g transform="translate(11 6) scale(0.5)">
+      <path fill="#FF0000" d={YOUTUBE_PATH} />
+    </g>
   </svg>
 )
 
@@ -59,6 +69,7 @@ const PLATFORMS: Plat[] = [
   { value: 'tiktok', label: 'TikTok', sub: 'up to 3 min', icon: TikTokIcon },
   { value: 'youtube_shorts', label: 'YouTube Shorts', sub: 'up to 60s', icon: YouTubeIcon },
   { value: 'facebook_reels', label: 'Facebook Reels', sub: 'up to 90s', icon: FacebookIcon },
+  { value: 'youtube_long', label: 'YouTube long-form', sub: 'widescreen · up to 10 min', icon: YouTubeLongIcon },
   { value: 'all', label: 'All platforms', sub: 'safe everywhere', icon: AllIcon },
 ]
 
@@ -72,7 +83,7 @@ export function PlatformPicker({
   const preset = PLATFORM_PRESETS[value] ?? PLATFORM_PRESETS.all
   return (
     <div>
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
         {PLATFORMS.map((p) => {
           const selected = value === p.value
           return (
@@ -102,7 +113,7 @@ export function PlatformPicker({
         })}
       </div>
       <p className="mt-2.5 text-xs text-muted">
-        Up to <span className="font-medium text-ink">{preset.maxSeconds}s</span> · 9:16 vertical · captions kept clear of the {preset.label} UI.
+        Up to <span className="font-medium text-ink">{preset.maxSeconds >= 120 ? `${Math.round(preset.maxSeconds / 60)} min` : `${preset.maxSeconds}s`}</span> · {preset.aspect === '16:9' ? '16:9 widescreen' : '9:16 vertical'} · captions kept clear of the {preset.label} UI.
       </p>
     </div>
   )

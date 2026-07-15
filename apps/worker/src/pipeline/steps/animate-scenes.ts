@@ -4,9 +4,9 @@ import { promisify } from 'node:util'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { mkdir, writeFile, readFile, rm } from 'node:fs/promises'
-import { getDb, reels, scenes, assets } from '@reels/db'
+import { getDb, reels, scenes, assets, channels } from '@reels/db'
 import { generateVideo, buildInputHash, FalEngineSchema, downloadBuffer, llmCall } from '@reels/providers'
-import { TimingsSchema } from '@reels/core'
+import { TimingsSchema, PLATFORM_PRESETS } from '@reels/core'
 import { buildVideoQAPrompt, VIDEO_QA_V1_VERSION, VideoQASchema } from '../../prompts-bridge.js'
 import { spotFoleyForReel } from './foley-spot.js'
 import { runStep } from '../harness.js'
@@ -81,6 +81,10 @@ export async function animateScenes(reelId: string): Promise<void> {
   const reel = await db.query.reels.findFirst({ where: eq(reels.id, reelId) })
   if (!reel) throw new Error(`Reel not found: ${reelId}`)
 
+  // Clip aspect must match the channel's output frame (the scene stills are already generated in it).
+  const channel = await db.query.channels.findFirst({ where: eq(channels.id, reel.channelId) })
+  const aspect = (PLATFORM_PRESETS[(channel?.targetPlatform ?? 'all') as keyof typeof PLATFORM_PRESETS] ?? PLATFORM_PRESETS.all).aspect
+
   // Scene spans (from timings) decide clip length. Null/unparseable → every clip falls back to 5s.
   const timings = reel.timings ? TimingsSchema.safeParse(reel.timings) : null
   const spanSecByIdx = new Map<number, number>()
@@ -125,6 +129,7 @@ export async function animateScenes(reelId: string): Promise<void> {
         imageKey: imageAsset.storageKey,
         motionPrompt: scene.motionPrompt ?? '',
         durationSec,
+        aspect,
         variationIdx: v,
         reelId,
         sceneIdx: scene.idx,
@@ -144,6 +149,7 @@ export async function animateScenes(reelId: string): Promise<void> {
               imageStorageKey: imageAsset.storageKey,
               motionPrompt: scene.motionPrompt ?? 'slow cinematic drift',
               durationSec,
+              aspect,
               reelId,
               sceneIdx: scene.idx,
               variationIdx: v,

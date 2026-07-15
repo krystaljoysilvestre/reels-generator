@@ -137,6 +137,76 @@ async function readableToBuffer(readable: Readable): Promise<Buffer> {
 
 // ── TTS synthesis ─────────────────────────────────────────────────────────────
 
+// eleven_multilingual_v2 caps one request at ~10k chars. Long-form narrations (a 10-min video ≈ 9k
+// chars, and BYO scripts can exceed it) are synthesized in chunks whose CONCATENATION IS BYTE-IDENTICAL
+// to the narration, so the merged alignment stays 1:1 with Array.from(narration) [M10]. Chunk seams cut
+// at sentence/whitespace boundaries (never mid-word, never mid-surrogate).
+const TTS_CHUNK_THRESHOLD_CHARS = 9_500
+const TTS_CHUNK_MAX_CHARS = 9_000
+
+export function splitNarrationForTts(narration: string, maxChars: number = TTS_CHUNK_MAX_CHARS): string[] {
+  if (narration.length <= maxChars) return [narration]
+  const chunks: string[] = []
+  let start = 0
+  while (start < narration.length) {
+    if (narration.length - start <= maxChars) {
+      chunks.push(narration.slice(start))
+      break
+    }
+    const window = narration.slice(start, start + maxChars)
+    // Prefer the last sentence end in the window; a boundary in the front half wastes half the request
+    // budget, so fall back to the last whitespace (then a hard cut, guarding the surrogate pair).
+    let cut = -1
+    const re = /[.!?…]+["»”')\]]*\s/g
+    for (let m = re.exec(window); m; m = re.exec(window)) cut = m.index + m[0].length
+    if (cut < maxChars * 0.5) {
+      const ws = window.search(/\s\S*$/) // last whitespace run's start
+      cut = ws > 0 ? ws + 1 : -1
+    }
+    if (cut <= 0) {
+      cut = maxChars
+      const cu = narration.charCodeAt(start + cut)
+      if (cu >= 0xdc00 && cu <= 0xdfff) cut-- // don't split a surrogate pair
+    }
+    chunks.push(narration.slice(start, start + cut))
+    start += cut
+  }
+  return chunks
+}
+
+// Exact audio length of a CBR MPEG-1 Layer III stream (ElevenLabs mp3_44100_128): walk the frame
+// headers and sum samples. Chunk alignments are offset by the REAL audio length of the chunks before
+// them — the alignment's own last-char end understates the file by the encoder tail, and that error
+// would accumulate across seams as caption/scene drift. Returns null on anything unparseable.
+const MPEG1_L3_BITRATES = [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320] // kbps
+const MPEG1_SAMPLE_RATES = [44100, 48000, 32000]
+export function mp3DurationMs(buf: Buffer): number | null {
+  let i = 0
+  if (buf.length >= 10 && buf[0] === 0x49 && buf[1] === 0x44 && buf[2] === 0x33) {
+    // Skip an ID3v2 tag (syncsafe 28-bit size)
+    i = 10 + (((buf[6]! & 0x7f) << 21) | ((buf[7]! & 0x7f) << 14) | ((buf[8]! & 0x7f) << 7) | (buf[9]! & 0x7f))
+  }
+  let samples = 0
+  let sampleRate = 44100
+  let frames = 0
+  while (i + 4 <= buf.length) {
+    if (buf[i] !== 0xff || (buf[i + 1]! & 0xe0) !== 0xe0) { i++; continue }
+    const versionBits = (buf[i + 1]! >> 3) & 0x03
+    const layerBits = (buf[i + 1]! >> 1) & 0x03
+    if (versionBits !== 3 || layerBits !== 1) { i++; continue } // MPEG-1 Layer III only
+    const bitrate = MPEG1_L3_BITRATES[(buf[i + 2]! >> 4) & 0x0f]
+    const sr = MPEG1_SAMPLE_RATES[(buf[i + 2]! >> 2) & 0x03]
+    if (!bitrate || !sr) { i++; continue }
+    const frameLen = Math.floor((144_000 * bitrate) / sr) + ((buf[i + 2]! >> 1) & 0x01)
+    if (frameLen <= 0) { i++; continue }
+    samples += 1152
+    sampleRate = sr
+    frames++
+    i += frameLen
+  }
+  return frames > 0 ? Math.round((samples / sampleRate) * 1000) : null
+}
+
 export class ElevenLabsTtsProvider implements TtsProvider {
   async synthesize(params: {
     narration: string
@@ -147,29 +217,56 @@ export class ElevenLabsTtsProvider implements TtsProvider {
     const client = getClient()
 
     try {
-      // convertWithTimestamps returns AudioWithTimestampsResponse (not a stream)
-      // narration submitted verbatim — no pre-processing [M10]
-      const response = await withProviderLimit('elevenlabs', () => client.textToSpeech.convertWithTimestamps(params.voiceId, {
-        text: params.narration,
-        model_id: 'eleven_multilingual_v2',
-        output_format: 'mp3_44100_128',
-        // Per-reel delivery derived from the story's mood (omitted → ElevenLabs defaults).
-        ...(params.voiceSettings ? { voice_settings: params.voiceSettings } : {}),
-      }, TTS_OPTS))
+      // Narration over the model's single-request cap synthesizes in chunks that concatenate back to
+      // the verbatim text (see splitNarrationForTts) [M10]. One chunk = today's single-request path.
+      const chunks = params.narration.length > TTS_CHUNK_THRESHOLD_CHARS
+        ? splitNarrationForTts(params.narration)
+        : [params.narration]
 
-      const { audio_base64, alignment } = response
+      const audioBuffers: Buffer[] = []
+      const alignedChars: AlignedChar[] = []
+      let offsetMs = 0
 
-      if (!alignment) {
-        throw new ProviderError('elevenlabs', 'No alignment data in TTS response')
+      for (let i = 0; i < chunks.length; i++) {
+        const chunk = chunks[i]!
+        // convertWithTimestamps returns AudioWithTimestampsResponse (not a stream)
+        // chunk text submitted verbatim — no pre-processing [M10]
+        const response = await withProviderLimit('elevenlabs', () => client.textToSpeech.convertWithTimestamps(params.voiceId, {
+          text: chunk,
+          model_id: 'eleven_multilingual_v2',
+          output_format: 'mp3_44100_128',
+          // Per-reel delivery derived from the story's mood (omitted → ElevenLabs defaults).
+          ...(params.voiceSettings ? { voice_settings: params.voiceSettings } : {}),
+          // Prosody continuity across chunk seams: the model hears what surrounds this chunk.
+          ...(i > 0 ? { previous_text: chunks[i - 1]!.slice(-300) } : {}),
+          ...(i < chunks.length - 1 ? { next_text: chunks[i + 1]!.slice(0, 300) } : {}),
+        }, TTS_OPTS))
+
+        const { audio_base64, alignment } = response
+        if (!alignment) {
+          throw new ProviderError('elevenlabs', `No alignment data in TTS response (chunk ${i + 1}/${chunks.length})`)
+        }
+
+        const audioBuffer = Buffer.from(audio_base64, 'base64')
+        const chunkChars = toAlignedChars(
+          chunk,
+          alignment.characters,
+          alignment.character_start_times_seconds,
+          alignment.character_end_times_seconds,
+        )
+        for (const c of chunkChars) {
+          alignedChars.push({ ...c, startMs: c.startMs + offsetMs, endMs: c.endMs + offsetMs })
+        }
+        audioBuffers.push(audioBuffer)
+        // Offset the NEXT chunk by this chunk's real audio length (frame-walked). The alignment's own
+        // last-char end understates the file by the encoder tail — an error that would accumulate at
+        // every seam as caption/scene drift. Fall back to the alignment end if the frames don't parse.
+        offsetMs += mp3DurationMs(audioBuffer) ?? (chunkChars[chunkChars.length - 1]?.endMs ?? 0)
       }
 
-      const audioBuffer = Buffer.from(audio_base64, 'base64')
-      const alignedChars = toAlignedChars(
-        params.narration,
-        alignment.characters,
-        alignment.character_start_times_seconds,
-        alignment.character_end_times_seconds,
-      )
+      // MP3 frames concatenate cleanly (each ElevenLabs response is a fresh CBR stream, and seams sit
+      // in the silence of a sentence boundary); everything downstream decodes through ffmpeg anyway.
+      const audioBuffer = audioBuffers.length === 1 ? audioBuffers[0]! : Buffer.concat(audioBuffers)
 
       const lastChar = alignedChars[alignedChars.length - 1]
       const durationMs = lastChar?.endMs ?? 0

@@ -62,12 +62,16 @@ export async function analyzeStory(reelId: string): Promise<void> {
     async () => {
       let bible: StoryBible
       let cost = 0
+      // Long-form: the journey's verbatim leg spans together approach the narration's own length, so a
+      // multi-minute story overruns the 4096 default mid-journey. Scale headroom with the input.
+      const analyzerMaxTokens = story.body.length > 5000 ? 8192 : 4096
       try {
         const llm = await llmCall({
           templateVersion: STORY_ANALYZER_V1_VERSION,
           schema: StoryBibleSchema,
           system,
           messages: [{ role: 'user', content: userMessage }],
+          maxTokens: analyzerMaxTokens,
         })
         cost = llm.costCents
         // Re-parse to recover the resolved output type (defaults applied) — zod's input type is loose
@@ -88,6 +92,7 @@ export async function analyzeStory(reelId: string): Promise<void> {
               { role: 'assistant', content: JSON.stringify(llm.data) },
               { role: 'user', content: `Fix these journey continuity problems, then return the corrected FULL JSON only:\n- ${journeyIssues.join('\n- ')}\nInsert the missing movement legs so the narrator never teleports; keep everything else unchanged.` },
             ],
+            maxTokens: analyzerMaxTokens,
           })
           cost += repair.costCents
           analyzed = StoryBibleSchema.parse(repair.data)

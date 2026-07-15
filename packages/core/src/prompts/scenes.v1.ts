@@ -7,7 +7,7 @@
 // LLM-derived bucket stored at channel creation (channel.v1). `classifyGenre` is the keyword fallback,
 // used when a channel predates the column (or the value is unrecognized).
 
-export const SCENES_V1_VERSION = 'scenes.v1.39'
+export const SCENES_V1_VERSION = 'scenes.v1.40'
 
 export type GenreModule = 'horror' | 'informational' | 'lifestyle' | 'general'
 
@@ -22,6 +22,7 @@ export interface ScenesPromptVars {
   regionDescriptor: string
   nicheDescription: string // the channel's genre/niche — drives the visual language
   genreCategory?: string // LLM-derived bucket stored on the channel; falls back to classifyGenre(niche)
+  aspect?: '9:16' | '16:9' // the channel's output frame (platform preset) — 9:16 when absent
   narration: string
   // Beat-driven count: a length-scaled range the director picks WITHIN by cutting on dramatic beats.
   minScenes: number
@@ -40,6 +41,16 @@ export interface ScenesPromptVars {
     occupancyState?: string | undefined
     isReflection?: boolean | undefined
   }[]
+  // Chaptered breakdown (long-form, see specs/long-form.md): this call storyboards ONE chapter of a
+  // longer story — `narration` above is just that chapter's span. Context only; every scene rule is
+  // unchanged. Absent for whole-reel (single-call) breakdowns.
+  chapter?: {
+    idx: number // 1-based
+    count: number
+    logline: string // one-line whole-story summary so the director knows the arc this chapter serves
+    prevLocation?: string | undefined // where the previous chapter's last scene is set ('' for chapter 1)
+    prevNarration?: string | undefined // the previous chapter's closing narration line, for continuity
+  }
 }
 
 // Coarse genre bucket from the niche text — picks which module loads. Deterministic + free.
@@ -68,7 +79,8 @@ DARKNESS: night beats are shadow-DOMINATED — ceiling, far corners and deep bac
 }
 
 export function buildScenesPrompt(v: ScenesPromptVars): { system: string; userMessage: string } {
-  const system = `You are a storyboard director for vertical (9:16) narrated reels.
+  const frame = v.aspect === '16:9' ? 'widescreen (16:9) narrated videos' : 'vertical (9:16) narrated reels'
+  const system = `You are a storyboard director for ${frame}.
 
 CHANNEL GENRE / NICHE: ${v.nicheDescription}
 Compose every shot in the visual language of THIS genre — show what it shows, imply what it implies. Do NOT import conventions from other genres. Match the genre.
@@ -120,7 +132,17 @@ Era: ${v.era}. Region look: ${v.regionDescriptor}.`
         .join('\n')}\nFor EACH scene: tag ONLY the location entity of the leg its narration falls in (or none, for a transit leg); include ONLY the characters that leg lists as present; NEVER add a person who isn't there. A leg marked REVEAL is the payoff — it is ALWAYS its own scene, opening on the threat (primaryEntity = the threat).`
     : ''
 
-  const userMessage = `Cut the narration into scenes on its DRAMATIC BEATS — start a new scene at each real shift in location, time, focus, or tension, NOT at even time intervals. Use between ${v.minScenes} and ${v.maxScenes} scenes; let the story's structure decide the exact number. Each scene covers a contiguous span of narration with no gaps and no overlaps, in order. Keep every scene SHORT: no single scene should cover more than ~16 seconds of spoken narration (roughly 40 words) — one image or clip held longer than that goes visually DEAD on a phone (the #1 pacing failure). If a beat's narration is long, CUT IT into consecutive shots that each advance the visual (a new angle, tighter framing, the next action, a telling detail), never restating the same frame. On a longer story this means favouring the UPPER end of the ${v.minScenes}–${v.maxScenes} range so no shot drags — but NEVER produce more than ${v.maxScenes} scenes. ONE PHYSICAL MOVEMENT PER SCENE: each scene is a single beat of action in a single place — do NOT collapse an approach and the arrival into one shot. "Walking toward a room" and "inside that room" are SEPARATE scenes; give the journey (leaving one place, moving through another, entering the next) its own beats instead of jumping straight to the destination.${peakBlock}
+  // Chapter context (long-form): the director sees the arc + where the last chapter left the world, so
+  // the seam cuts CONTINUOUS instead of re-opening the video. Chapter 1 opens the video as usual.
+  const chapterBlock = v.chapter
+    ? `CHAPTER ${v.chapter.idx} of ${v.chapter.count}: the narration below is ONE chapter of a longer story — whole-story arc, for context only: "${v.chapter.logline}". Storyboard ONLY this chapter's narration.${
+        v.chapter.idx > 1
+          ? ` The previous chapter ended ${v.chapter.prevLocation ? `at "${v.chapter.prevLocation}"` : 'mid-story'}${v.chapter.prevNarration ? ` on the line "${v.chapter.prevNarration}"` : ''} — this chapter continues from that exact world-state. Cut its first scene as a CONTINUATION (the next beat of the same moment, or the story's own next move), never as a fresh title-style opening of the whole video.`
+          : ' This chapter OPENS the video.'
+      }\n\n`
+    : ''
+
+  const userMessage = `${chapterBlock}Cut the narration into scenes on its DRAMATIC BEATS — start a new scene at each real shift in location, time, focus, or tension, NOT at even time intervals. Use between ${v.minScenes} and ${v.maxScenes} scenes; let the story's structure decide the exact number. Each scene covers a contiguous span of narration with no gaps and no overlaps, in order. Keep every scene SHORT: no single scene should cover more than ~16 seconds of spoken narration (roughly 40 words) — one image or clip held longer than that goes visually DEAD on a phone (the #1 pacing failure). If a beat's narration is long, CUT IT into consecutive shots that each advance the visual (a new angle, tighter framing, the next action, a telling detail), never restating the same frame. On a longer story this means favouring the UPPER end of the ${v.minScenes}–${v.maxScenes} range so no shot drags — but NEVER produce more than ${v.maxScenes} scenes. ONE PHYSICAL MOVEMENT PER SCENE: each scene is a single beat of action in a single place — do NOT collapse an approach and the arrival into one shot. "Walking toward a room" and "inside that room" are SEPARATE scenes; give the journey (leaving one place, moving through another, entering the next) its own beats instead of jumping straight to the destination.${peakBlock}
 
 Narration:
 """${v.narration}"""${journeyBlock}
@@ -133,7 +155,7 @@ For each scene write:
 - sceneIntent: a short phrase for what the audience should NOTICE first in this shot (e.g. "the reflection before the woman", "the shadow under the door").
 - cameraMove: the ONE camera move that best fits this beat — choose from: drift (slow, subtle), push_in, pull_out, pan_left, pan_right, tilt_up, tilt_down, handheld (loose, immediate), locked (almost still). Match it to the beat: push_in for emphasis, pull_out for a reveal, locked for observation/stillness, drift for atmosphere, handheld for immediacy, pan/tilt to follow or discover.
 - subjectMotion: OPTIONAL, and only meaningful when this beat is tier "video". What the SUBJECT itself DOES on screen — above all a horror scare/reveal, where the THREAT is what moves. Write ONE short, concrete, SLOW motion (e.g. "her blank dead stare slowly splits into an impossibly wide grin, too many teeth baring", "the tall figure looms slowly closer, swelling to fill the frame", "her head tilts slowly, unnaturally, to one side, eyes never blinking"). One motion only — never a list, never frantic; the slowness is the dread. Leave it "" for any beat where only the CAMERA moves (an establishing shot, an atmosphere beat, and every "still" beat). On a scare/reveal beat DO fill it, and pair it with cameraMove:push_in so the frame closes in as the threat moves.
-- tier: "video" for up to ${v.maxVideoTiers} of the most visually DYNAMIC beats — always include the opening; "still" otherwise. At most ${v.maxVideoTiers} video.
+- tier: "video" for up to ${v.maxVideoTiers} of the most visually DYNAMIC beats — ${!v.chapter || v.chapter.idx === 1 ? 'always include the opening; ' : ''}"still" otherwise. At most ${v.maxVideoTiers} video.
 - mood: 2–3 words for ambient/grade hints.
 - location: a short canonical label for WHERE this scene is (e.g. "rented bedroom"). Same label for the same place; a new label only when the place actually changes.
 

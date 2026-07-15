@@ -167,6 +167,10 @@ export async function generateStory(reelId: string, channelId: string, language:
   const toneConfig = ToneConfigSchema.parse(channel.toneConfig)
   const targetSeconds = channel.targetSeconds ?? 75 // per-channel reel length (derived per niche)
   const targetWords = Math.round(targetSeconds * 2.5) // ~2.5 words/sec narration pace
+  // A long-form draft (up to ~1500 words of narration + the JSON envelope) overruns the 4096 default and
+  // truncates mid-story. ~4 tokens/word is generous headroom (Taglish tokenizes heavier than English);
+  // 16384 is gpt-4o's output ceiling.
+  const storyMaxTokens = Math.min(16384, Math.max(4096, targetWords * 4))
 
   const basePromptVars = {
     channelName: channel.name,
@@ -212,6 +216,7 @@ export async function generateStory(reelId: string, channelId: string, language:
             system,
             messages: [{ role: 'user', content: buildStoryPrompt({ ...basePromptVars, angleDirective: angle.directive }).userMessage }],
             temperature: CANDIDATE_TEMPERATURE,
+            maxTokens: storyMaxTokens,
           }),
         ),
       )

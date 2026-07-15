@@ -11,6 +11,9 @@ export interface QaParams {
   durationMs: number
   subtitleCount: number     // number of expected subtitle chunks
   sfxAnchorCount: number    // number of sfx events that should be resolved
+  // Platform length ceiling (ms). Absent → the legacy 180s short-form cap. Callers pass the channel's
+  // platform preset cap (+ margin for the climax ring-out extension) so long-form isn't hard-failed.
+  maxDurationMs?: number
 }
 
 export interface QaResult {
@@ -22,7 +25,7 @@ export interface QaResult {
 }
 
 const MIN_DURATION_MS = 30_000   // 30s minimum
-const MAX_DURATION_MS = 180_000  // 180s maximum (3 minutes) — matches Instagram Reels & YouTube Shorts caps
+const DEFAULT_MAX_DURATION_MS = 180_000  // legacy short-form default — matches Instagram Reels & YouTube Shorts caps
 const TARGET_LUFS = -14
 const LUFS_TOLERANCE = 0.5       // ±0.5 LUFS (docs/07 §5)
 
@@ -62,11 +65,12 @@ export async function runRenderQa(params: QaParams): Promise<QaResult> {
         `Duration mismatch: expected ${params.durationMs}ms, got ${measuredDurationMs}ms (delta ${delta}ms > 2000ms tolerance)`,
       )
     }
+    const maxDurationMs = params.maxDurationMs ?? DEFAULT_MAX_DURATION_MS
     if (measuredDurationMs < MIN_DURATION_MS) {
       failures.push(`Render too short: ${measuredDurationMs}ms < ${MIN_DURATION_MS}ms minimum`)
     }
-    if (measuredDurationMs > MAX_DURATION_MS) {
-      failures.push(`Render too long: ${measuredDurationMs}ms > ${MAX_DURATION_MS}ms maximum`)
+    if (measuredDurationMs > maxDurationMs) {
+      failures.push(`Render too long: ${measuredDurationMs}ms > ${maxDurationMs}ms maximum`)
     }
   }
 

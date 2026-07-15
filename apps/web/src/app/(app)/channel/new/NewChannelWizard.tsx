@@ -247,7 +247,7 @@ export function NewChannelWizard({
         if (typeof d.description === 'string') setDescription(d.description)
         if (typeof d.niche === 'string') setNiche(d.niche)
         if (Array.isArray(d.languages) && d.languages.length) setLanguages(d.languages)
-        if (['tiktok', 'youtube_shorts', 'facebook_reels', 'all'].includes(d.targetPlatform)) setTargetPlatform(d.targetPlatform)
+        if (['tiktok', 'youtube_shorts', 'facebook_reels', 'youtube_long', 'all'].includes(d.targetPlatform)) setTargetPlatform(d.targetPlatform)
         if (d.presetId === null || typeof d.presetId === 'string') setPresetId(d.presetId)
         if (typeof d.avatarKey === 'string') {
           setAvatarKey(d.avatarKey)

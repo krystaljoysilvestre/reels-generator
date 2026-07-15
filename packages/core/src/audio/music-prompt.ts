@@ -23,9 +23,18 @@ export const MUSIC_CONSTRAINT =
 // Every arc opens with IMMEDIATE presence — the intensity must be felt within the first second (owner
 // direction 2026-07-06: a sparse/near-silent intro reads as "no music" and loses the viewer before the
 // story starts). The build is in texture and tightness, not in fading up from nothing.
-function musicArc(musicType: string | undefined, peakFrac: number): string {
-  const pct = Math.round(Math.min(0.95, Math.max(0.3, peakFrac)) * 100)
+//
+// `loops` = the video outruns the provider's max generation (300s) and the mixer will aloop this bed
+// to cover the tail. That's a hard execution constraint, not taste: a bed with a terminal peak resets
+// audibly at the seam, so a looping bed keeps its evolution CYCLICAL (resolving back toward its own
+// opening) and leaves the video-level build to the mixer's volume envelope, which still swells toward
+// the actual climax.
+function musicArc(musicType: string | undefined, peakFrac: number, loops: boolean): string {
   const openPresent = ' It must be clearly present and set the tension from the VERY FIRST SECOND — no slow fade-in from silence, no sparse empty intro.'
+  if (loops) {
+    return `${openPresent} This piece will LOOP under a longer video, so keep its evolution cyclical: the texture breathes, shifts and returns toward where it opened, with no terminal climax and no fade-out — the end must flow back into the beginning without a noticeable seam.`
+  }
+  const pct = Math.round(Math.min(0.95, Math.max(0.3, peakFrac)) * 100)
   switch (musicType) {
     case 'riser_sting':
       return `${openPresent} Shape it as a continuous build: taut from the open, layering in and tightening, mounting toward an emotional peak around ${pct}% of the way through, then pull back.`
@@ -57,6 +66,7 @@ export function buildMusicPrompt(params: {
   instruction?: string | undefined
   musicType?: string | undefined  // designer's chosen movement (low_drone | drone_swell | riser_sting)
   peakFrac?: number | undefined   // where the story's emotional peak sits (0..1 of the reel)
+  loops?: boolean | undefined     // the bed is shorter than the video and will be aloop'd — ask for a seamless cycle
 }): string {
   const base =
     params.audioMood?.prompt?.trim() ||
@@ -67,7 +77,7 @@ export function buildMusicPrompt(params: {
   const mood = params.moodPrompt?.trim()
     ? ` ${params.moodPrompt.trim()}`
     : params.moodTags.length ? ` Lean ${params.moodTags.join(', ')} for this story.` : ''
-  const arc = musicArc(params.musicType, params.peakFrac ?? 0.8)
+  const arc = musicArc(params.musicType, params.peakFrac ?? 0.8, params.loops ?? false)
   const steer = params.instruction?.trim() ? ` ${params.instruction.trim()}` : ''
   // Operator steer stays the last, strongest directive before the hard constraints.
   return base + mood + arc + steer + MUSIC_CONSTRAINT

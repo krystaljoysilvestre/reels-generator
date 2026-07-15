@@ -2,17 +2,23 @@ import { eq } from 'drizzle-orm'
 import type { z } from 'zod'
 import { getDb, reels, stories, scenes, channels } from '@reels/db'
 import { llmCall, buildInputHash } from '@reels/providers'
-import { ScenesOutputSchema, WorldBibleSchema, StoryBibleSchema, EMPTY_STORY_BIBLE, resolveEntities, reviewSceneBreakdown, MOTION_BUDGET, estimateNarrationSec, retileToNarration, cameraMovePrompt, animatorMotionPrompt, slug } from '@reels/core'
+import { ScenesOutputSchema, WorldBibleSchema, StoryBibleSchema, EMPTY_STORY_BIBLE, resolveEntities, reviewSceneBreakdown, MOTION_BUDGET, motionBudgetForSeconds, estimateNarrationSec, retileToNarration, cameraMovePrompt, animatorMotionPrompt, slug, planChapters, legsForChapter, CHAPTER_THRESHOLD_SEC, PLATFORM_PRESETS, type StoryChapter, type StoryBible } from '@reels/core'
 import { buildScenesPrompt, SCENES_V1_VERSION, buildPeakExtractPrompt, PEAK_EXTRACT_V1_VERSION, PeakExtractSchema } from '../../prompts-bridge.js'
 import { runStep } from '../harness.js'
 
 // The breakdown LLM returns the schema's INPUT shape (defaulted fields are still optional pre-parse); this
 // is what llmCall hands back as `.data`. Type the best-of-N plumbing against it so mutations line up.
 type BreakdownData = z.input<typeof ScenesOutputSchema>
+type BreakdownScenes = BreakdownData['scenes']
 
 // breakdown_scenes — step 3 (docs/02 §4)
 // Scenes emit full contiguous narration substrings [M9].
 // Style suffix is NOT in the prompt — injected server-side in generate_images (the system owns the look).
+//
+// Long-form (see specs/long-form.md): a story past CHAPTER_THRESHOLD_SEC is storyboarded per CHAPTER —
+// chapters are cut deterministically (planChapters, journey-leg-aligned offsets), each chapter runs the
+// same prompt + best-of-N QA loop as a whole short reel, and the scenes are stitched back in narration
+// order. Chapters tile the narration by construction, so the M9 tiling invariant survives the seams.
 
 function validateSceneTiling(narration: string, sceneTexts: string[]): string | null {
   // Verify scenes tile the narration gaplessly (same check as compute_timings will do)
@@ -31,6 +37,39 @@ function validateSceneTiling(narration: string, sceneTexts: string[]): string | 
   return null
 }
 
+// Beat-driven scene-count range for a span of narration (~1 scene / 9-16s): the director picks WITHIN it
+// by cutting on dramatic beats. Bounds stay inside the schema's hard 3-16 range; the prompt TARGET is
+// capped at 14 (two below the max) so a rare overshoot still validates instead of crashing the reel.
+function sceneCountRange(seconds: number): { minScenes: number; maxScenes: number } {
+  const minScenes = Math.max(3, Math.floor(seconds / 16))
+  const maxScenes = Math.min(14, Math.max(minScenes + 1, Math.ceil(seconds / 9)))
+  return { minScenes, maxScenes }
+}
+
+// i2v allocation across chapters: 1 each as the floor, +1 to the opening chapter (the video's first
+// impression) and +1 to the peak's chapter (the payoff), extras to the longest chapters, all trimmed to
+// the duration-scaled global budget. Deterministic — this is a cost lever, not a taste decision.
+function allocateVideoTiers(chapters: StoryChapter[], peakChapterIdx: number, globalBudget: number): number[] {
+  const alloc = chapters.map(() => 1)
+  if (alloc.length > 0) alloc[0]! += 1
+  if (peakChapterIdx >= 0 && alloc[peakChapterIdx] !== undefined) alloc[peakChapterIdx]! += 1
+  // Over budget → peel the bonuses first (opening before peak), then the floor from the tail.
+  const sum = () => alloc.reduce((a, b) => a + b, 0)
+  if (sum() > globalBudget && alloc.length > 0 && alloc[0]! > 1) alloc[0]! -= 1
+  if (sum() > globalBudget && peakChapterIdx >= 0 && (alloc[peakChapterIdx] ?? 0) > 1) alloc[peakChapterIdx]! -= 1
+  for (let i = alloc.length - 1; sum() > globalBudget && i >= 0; i--) {
+    if (alloc[i]! > 0) alloc[i]! -= 1
+  }
+  // Under budget → spend the remainder on the longest chapters (most narration = most beats to animate).
+  const byLength = chapters
+    .map((c, i) => ({ i, sec: c.estSec }))
+    .sort((a, b) => b.sec - a.sec || a.i - b.i)
+  for (let k = 0; sum() < globalBudget && k < byLength.length * 4; k++) {
+    alloc[byLength[k % byLength.length]!.i]! += 1
+  }
+  return alloc
+}
+
 export async function breakdownScenes(reelId: string): Promise<void> {
   const db = getDb()
 
@@ -44,28 +83,25 @@ export async function breakdownScenes(reelId: string): Promise<void> {
   if (!story || !channel) throw new Error('Story or channel not found')
 
   const worldBible = WorldBibleSchema.parse(channel.worldBible)
+  const platformPreset = PLATFORM_PRESETS[(channel.targetPlatform ?? 'all') as keyof typeof PLATFORM_PRESETS] ?? PLATFORM_PRESETS.all
 
   // Story Bible (from analyze_story). null = not analyzed → fail-soft: the director describes entities
   // inline (pre-bible behavior) and we skip the perspective override + unresolved-ref QA.
   const analyzed = reel.storyBible ? StoryBibleSchema.parse(reel.storyBible) : null
-  const storyBible = analyzed ?? EMPTY_STORY_BIBLE
+  const storyBible: StoryBible = analyzed ?? EMPTY_STORY_BIBLE
 
-  // Scene count is BEAT-driven, not clock-driven: give the director a length-scaled range
-  // (~1 scene / 9-16s) and let the story's dramatic beats decide the exact number within it.
   // The RANGE must scale to how much narration is actually on screen, NOT the channel's nominal target:
-  // a 60s-target channel whose story ran long (335 words ≈ 134s) was getting a 3-7 budget built for 60s,
-  // so 6 scenes stretched over ~167s → ~28s dead stills. Derive from the estimated spoken length of THIS
-  // story (words ÷ 2.5/s, the shared rate), floored at the target so a rare short story still gets enough.
-  // The peak line (story.twistAnchor = the LLM's peakMoment) is passed so the climax always gets its own
-  // dedicated shot. All bounds stay inside the schema's hard 3-16 range; MAX_SCENE_SEC in scene-qa then
-  // hard-caps any single shot's span (repairable) so a long story can't hide a 51s monologue in one frame.
+  // derive from the estimated spoken length of THIS story (words ÷ 2.5/s, the shared rate), floored at
+  // the target so a rare short story still gets enough. MAX_SCENE_SEC in scene-qa then hard-caps any
+  // single shot's span (repairable) so a long story can't hide a 51s monologue in one frame.
   const seconds = Math.max(channel.targetSeconds ?? 75, estimateNarrationSec(story.body))
-  const minScenes = Math.max(3, Math.floor(seconds / 16))
-  // Cap the prompt TARGET at 14, two below the schema's hard max of 16 (ScenesOutputSchema). The model
-  // occasionally overshoots the ceiling it's given by a scene or two; if that ceiling IS the schema max,
-  // the overshoot fails validation and — after llmCall's single repair — throws, failing the whole reel.
-  // Leaving two scenes of headroom turns a rare overshoot into a valid breakdown instead of a crash.
-  const maxScenes = Math.min(14, Math.max(minScenes + 1, Math.ceil(seconds / 9)))
+
+  // Past the single-call comfort zone the story is storyboarded per chapter; each chapter's scene range
+  // comes from ITS OWN narration length. planChapters returns one whole-story chapter for short reels.
+  const chaptered = estimateNarrationSec(story.body) > CHAPTER_THRESHOLD_SEC
+  const chapters: StoryChapter[] = chaptered
+    ? planChapters(story.body, storyBible.continuity.journey)
+    : [{ idx: 1, text: story.body, startOffset: 0, endOffset: story.body.length, estSec: seconds }]
 
   // Peak line drives the climax scene (here) + the music swell/sting (compute_timings reads twist_anchor).
   // Generated stories carry it; BYO/legacy stories don't, so extract one and persist it so BOTH consumers
@@ -90,118 +126,182 @@ export async function breakdownScenes(reelId: string): Promise<void> {
     }
   }
 
-  const { system, userMessage } = buildScenesPrompt({
-    bibleEntitiesJson: JSON.stringify(storyBible.entities, null, 2),
-    // Authoritative perspective only when analysis actually ran; else let the director detect it.
-    narratorPerspective: analyzed ? analyzed.continuity.narratorPerspective : undefined,
-    directorNotes: storyBible.constraints.directorNotes,
-    era: worldBible.era,
-    regionDescriptor: worldBible.region,
-    nicheDescription: channel.nicheDescription ?? '',
-    genreCategory: channel.genreCategory ?? undefined, // LLM-derived bucket; builder keyword-classifies if absent
-    narration: story.body,
-    minScenes,
-    maxScenes,
-    peakMoment,
-    maxVideoTiers: MOTION_BUDGET, // motion budget → subscription-derived later
-    journey: storyBible.continuity.journey, // world-state ground truth (where/who per leg) — obeyed by the director
-  })
+  const peakChapterIdx = peakMoment ? chapters.findIndex((c) => c.text.includes(peakMoment)) : -1
+  const globalBudget = chaptered ? motionBudgetForSeconds(seconds) : MOTION_BUDGET
+  const videoAlloc = chaptered ? allocateVideoTiers(chapters, peakChapterIdx, globalBudget) : [MOTION_BUDGET]
 
-  // Bible folded into the hash: editing the bible (or re-analysis) re-triggers the breakdown.
-  const inputHash = buildInputHash(SCENES_V1_VERSION, { narration: story.body, channelId: channel.id, minScenes, maxScenes, peakMoment, storyBible })
+  // Bible folded into the hash: editing the bible (or re-analysis) re-triggers the breakdown. The chapter
+  // plan + budget are part of the recipe — a re-cut story re-runs even at the same prompt version.
+  const inputHash = buildInputHash(SCENES_V1_VERSION, {
+    narration: story.body,
+    channelId: channel.id,
+    peakMoment,
+    storyBible,
+    chapters: chapters.map((c) => `${c.startOffset}-${c.endOffset}`).join('|'),
+    videoAlloc: videoAlloc.join(','),
+  })
 
   const result = await runStep(
     { reelId, stepName: 'breakdown_scenes', inputHash },
     async () => {
-      const qaInput = (s: BreakdownData['scenes']) => ({
-        narration: story.body,
-        peakMoment,
-        minScenes,
-        maxScenes,
-        scenes: s.map((x) => ({ narrationText: x.narrationText, imagePrompt: x.imagePrompt, tier: x.tier, location: x.location, primaryEntity: x.primaryEntity ?? null, supportingEntities: x.supportingEntities ?? [], subjectMotion: x.subjectMotion ?? '', sceneIntent: x.sceneIntent ?? null })),
-        // Journey-grounded checks (location/cast vs the world-state) — fail-soft: empty journey → skipped.
-        bibleEntities: storyBible.entities,
-        narratorEntityId: analyzed?.continuity.narratorEntityId ?? null,
-        journey: storyBible.continuity.journey,
-      })
+      let cost = peakCost
 
       // Character-consistency backstop: in a first-person reel the narrator's own body/reflection edges most
       // POV frames, and the LLM often forgets to reference the narrator entity, so they render as a different
       // person each scene. Attach the narrator entity to any shot whose prompt clearly shows their body.
       const narratorId = analyzed?.continuity.narratorEntityId
-      const applyNarratorBackstop = (scenes: BreakdownData['scenes']): void => {
+      const applyNarratorBackstop = (chapterScenes: BreakdownScenes): void => {
         if (!(narratorId && analyzed?.continuity.narratorPerspective === 'first_person')) return
         const BODY_CUE = /\b(hands?|arms?|forearms?|shoulders?|reflection|reflected|(?:her|his|their)\s+(?:face|body|head))\b/i
         const narratorSlug = slug(narratorId)
-        for (const s of scenes) {
+        for (const s of chapterScenes) {
           const refs = [...(s.primaryEntity ? [s.primaryEntity] : []), ...(s.supportingEntities ?? [])].map(slug)
           if (refs.includes(narratorSlug)) continue
           if (BODY_CUE.test(s.imagePrompt)) s.supportingEntities = [...(s.supportingEntities ?? []), narratorId]
         }
       }
 
-      // Deterministic tiling guarantee (see retileToNarration): snap each scene to the exact narration
-      // substring so the set tiles gaplessly + verbatim; a dropped span folds into the preceding scene.
-      // Returns false only when the scenes can't be aligned at all → raw LLM text kept (likely a residual gap).
-      const applyRetile = (scenes: BreakdownData['scenes']): boolean => {
-        const retiled = retileToNarration(story.body, scenes.map((s) => s.narrationText))
-        if (!retiled) return false
-        scenes.forEach((s, i) => { s.narrationText = retiled[i]! })
-        return true
+      // One chapter's breakdown: the same best-of-N roll → deterministic retile → structural QA loop a
+      // whole short reel gets, scoped to the chapter's narration. Returns the best roll's scenes + notes.
+      const rollChapter = async (chapter: StoryChapter, prevChapterScenes: BreakdownScenes | null): Promise<BreakdownScenes> => {
+        const { minScenes, maxScenes } = sceneCountRange(chapter.estSec)
+        const chapterPeak = peakMoment && chapter.text.includes(peakMoment) ? peakMoment : ''
+        const maxVideoTiers = videoAlloc[chapter.idx - 1] ?? 1
+        const prevScene = prevChapterScenes?.[prevChapterScenes.length - 1]
+
+        const { system, userMessage } = buildScenesPrompt({
+          bibleEntitiesJson: JSON.stringify(storyBible.entities, null, 2),
+          // Authoritative perspective only when analysis actually ran; else let the director detect it.
+          narratorPerspective: analyzed ? analyzed.continuity.narratorPerspective : undefined,
+          directorNotes: storyBible.constraints.directorNotes,
+          era: worldBible.era,
+          regionDescriptor: worldBible.region,
+          nicheDescription: channel.nicheDescription ?? '',
+          genreCategory: channel.genreCategory ?? undefined, // LLM-derived bucket; builder keyword-classifies if absent
+          aspect: platformPreset.aspect,
+          narration: chapter.text,
+          minScenes,
+          maxScenes,
+          peakMoment: chapterPeak,
+          maxVideoTiers,
+          // World-state ground truth (where/who per leg), narrowed to the legs this chapter touches.
+          journey: chaptered
+            ? legsForChapter(story.body, storyBible.continuity.journey, chapter)
+            : storyBible.continuity.journey,
+          ...(chaptered
+            ? {
+                chapter: {
+                  idx: chapter.idx,
+                  count: chapters.length,
+                  logline: story.logline ?? '',
+                  prevLocation: prevScene?.location ?? '',
+                  prevNarration: prevScene ? prevScene.narrationText.trim().slice(-160) : '',
+                },
+              }
+            : {}),
+        })
+
+        const qaInput = (s: BreakdownScenes) => ({
+          narration: chapter.text,
+          fullNarration: story.body,
+          peakMoment: chapterPeak,
+          minScenes,
+          maxScenes,
+          maxVideoTiers,
+          isOpening: chapter.idx === 1,
+          scenes: s.map((x) => ({ narrationText: x.narrationText, imagePrompt: x.imagePrompt, tier: x.tier, location: x.location, primaryEntity: x.primaryEntity ?? null, supportingEntities: x.supportingEntities ?? [], subjectMotion: x.subjectMotion ?? '', sceneIntent: x.sceneIntent ?? null })),
+          // Journey-grounded checks (location/cast vs the world-state) — fail-soft: empty journey → skipped.
+          bibleEntities: storyBible.entities,
+          narratorEntityId: analyzed?.continuity.narratorEntityId ?? null,
+          journey: storyBible.continuity.journey,
+        })
+
+        // Deterministic tiling guarantee (see retileToNarration): snap each scene to the exact narration
+        // substring so the set tiles gaplessly + verbatim; a dropped span folds into the preceding scene.
+        // Returns false only when the scenes can't be aligned at all → raw LLM text kept (likely a residual gap).
+        const applyRetile = (chapterScenes: BreakdownScenes): boolean => {
+          const retiled = retileToNarration(chapter.text, chapterScenes.map((s) => s.narrationText))
+          if (!retiled) return false
+          chapterScenes.forEach((s, i) => { s.narrationText = retiled[i]! })
+          return true
+        }
+
+        // Best-of-N. The breakdown is only correct if it (a) tiles the WHOLE span — a gap is fatal, as
+        // compute_timings throws on any uncovered span — AND (b) keeps every shot under the duration limit.
+        // Roll up to N times, score each AFTER the deterministic retile, feed the failures back to the next
+        // roll, and keep the BEST. Most chapters pass on the first roll and break out.
+        const MAX_ATTEMPTS = 3
+        let best: { scenes: BreakdownScenes; violations: number; notes: string[] } | null = null
+        let prev: BreakdownData | null = null
+        let prevErrors: string[] = []
+
+        for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+          const messages: { role: 'user' | 'assistant'; content: string }[] = attempt === 0 || !prev
+            ? [{ role: 'user', content: userMessage }]
+            : [
+                { role: 'user', content: userMessage },
+                { role: 'assistant', content: JSON.stringify(prev) },
+                { role: 'user', content: `Fix these issues, then return the corrected JSON only:\n- ${prevErrors.join('\n- ')}\nEvery narrationText must be a VERBATIM copy-paste from the narration (no ellipsis, no paraphrase); together they must tile the ENTIRE narration with no gaps or overlaps. Keep every scene under ~16 seconds (~40 words). Stay within ${minScenes}–${maxScenes} scenes — never exceed ${maxScenes}.` },
+              ]
+          // Up to 16 scenes, each with a 45-75 word imagePrompt, overruns the 4096 default → truncated JSON.
+          const llm = await llmCall({ templateVersion: SCENES_V1_VERSION, schema: ScenesOutputSchema, system, messages, maxTokens: 8192 })
+          cost += llm.costCents
+          const output = llm.data
+
+          applyNarratorBackstop(output.scenes)
+          const tiled = applyRetile(output.scenes)
+
+          const tilingError = validateSceneTiling(chapter.text, output.scenes.map((s) => s.narrationText))
+          const qa = reviewSceneBreakdown(qaInput(output.scenes))
+          const errors = [...(tilingError ? [tilingError] : []), ...qa.errors]
+          // A bailed retile means a probable un-fixable gap → weight it heavily so a tiled roll always wins.
+          const violations = errors.length + (tiled ? 0 : 3)
+          const unresolvedRefs = analyzed
+            ? [...new Set(output.scenes.flatMap((s) => resolveEntities(storyBible, { primaryEntity: s.primaryEntity ?? null, supportingEntities: s.supportingEntities ?? [] }).unresolved))]
+            : []
+          const notes = [...errors, ...qa.warnings, ...(unresolvedRefs.length ? [`unresolved bible refs: ${unresolvedRefs.join(', ')}`] : [])]
+
+          if (!best || violations < best.violations) best = { scenes: output.scenes, violations, notes }
+          if (violations === 0) break
+          prev = output
+          prevErrors = errors
+        }
+
+        const chosen = best!
+        const tag = chaptered ? ` ch${chapter.idx}/${chapters.length}` : ''
+        if (chosen.violations > 0) {
+          console.warn(`[scene-qa] ${reelId.slice(0, 8)}${tag} kept best of ${MAX_ATTEMPTS} rolls (violations=${chosen.violations}):\n  - ${chosen.notes.join('\n  - ')}`)
+        } else if (chosen.notes.length > 0) {
+          console.warn(`[scene-qa] ${reelId.slice(0, 8)}${tag} ${chosen.notes.length} note(s):\n  - ${chosen.notes.join('\n  - ')}`)
+        }
+        return chosen.scenes
       }
 
-      // Best-of-N. The breakdown is only correct if it (a) tiles the WHOLE narration — a gap is fatal, as
-      // compute_timings throws on any uncovered span — AND (b) keeps every shot under the duration limit.
-      // Both used to be best-effort (one repair, then persist regardless), which let fatal gaps and 28s
-      // "visually dead" shots through — a bigger risk now that we cut more, shorter scenes. So we roll up to
-      // N times, score each AFTER the deterministic retile (tiling + duration + structural QA), feed the
-      // failures back to the next roll, and keep the BEST. Most reels pass on the first roll and break out.
-      const MAX_ATTEMPTS = 3
-      let cost = peakCost
-      let best: { output: BreakdownData; violations: number; notes: string[] } | null = null
-      let prev: BreakdownData | null = null
-      let prevErrors: string[] = []
-
-      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-        const messages: { role: 'user' | 'assistant'; content: string }[] = attempt === 0 || !prev
-          ? [{ role: 'user', content: userMessage }]
-          : [
-              { role: 'user', content: userMessage },
-              { role: 'assistant', content: JSON.stringify(prev) },
-              { role: 'user', content: `Fix these issues, then return the corrected JSON only:\n- ${prevErrors.join('\n- ')}\nEvery narrationText must be a VERBATIM copy-paste from the narration (no ellipsis, no paraphrase); together they must tile the ENTIRE narration with no gaps or overlaps. Keep every scene under ~16 seconds (~40 words). Stay within ${minScenes}–${maxScenes} scenes — never exceed ${maxScenes}.` },
-            ]
-        // Up to 16 scenes, each with a 45-75 word imagePrompt, overruns the 4096 default → truncated JSON.
-        const llm = await llmCall({ templateVersion: SCENES_V1_VERSION, schema: ScenesOutputSchema, system, messages, maxTokens: 8192 })
-        cost += llm.costCents
-        const output = llm.data
-
-        applyNarratorBackstop(output.scenes)
-        const tiled = applyRetile(output.scenes)
-
-        const tilingError = validateSceneTiling(story.body, output.scenes.map((s) => s.narrationText))
-        const qa = reviewSceneBreakdown(qaInput(output.scenes))
-        const errors = [...(tilingError ? [tilingError] : []), ...qa.errors]
-        // A bailed retile means a probable un-fixable gap → weight it heavily so a tiled roll always wins.
-        const violations = errors.length + (tiled ? 0 : 3)
-        const unresolvedRefs = analyzed
-          ? [...new Set(output.scenes.flatMap((s) => resolveEntities(storyBible, { primaryEntity: s.primaryEntity ?? null, supportingEntities: s.supportingEntities ?? [] }).unresolved))]
-          : []
-        const notes = [...errors, ...qa.warnings, ...(unresolvedRefs.length ? [`unresolved bible refs: ${unresolvedRefs.join(', ')}`] : [])]
-
-        if (!best || violations < best.violations) best = { output, violations, notes }
-        if (violations === 0) break
-        prev = output
-        prevErrors = errors
+      // Chapters run SEQUENTIALLY (each seam needs the previous chapter's closing world-state), then the
+      // scenes stitch in narration order. Chapter spans tile the narration, so the stitched set does too.
+      const stitched: BreakdownScenes = []
+      let prevChapterScenes: BreakdownScenes | null = null
+      for (const chapter of chapters) {
+        const chapterScenes = await rollChapter(chapter, prevChapterScenes)
+        stitched.push(...chapterScenes)
+        prevChapterScenes = chapterScenes
       }
 
-      const chosen = best!
-      if (chosen.violations > 0) {
-        console.warn(`[scene-qa] ${reelId.slice(0, 8)} kept best of ${MAX_ATTEMPTS} rolls (violations=${chosen.violations}):\n  - ${chosen.notes.join('\n  - ')}`)
-      } else if (chosen.notes.length > 0) {
-        console.warn(`[scene-qa] ${reelId.slice(0, 8)} ${chosen.notes.length} note(s):\n  - ${chosen.notes.join('\n  - ')}`)
+      // Global backstops across the seams (single-call path: both no-op by construction).
+      const globalTiling = validateSceneTiling(story.body, stitched.map((s) => s.narrationText))
+      if (globalTiling) console.warn(`[scene-qa] ${reelId.slice(0, 8)} stitched tiling issue: ${globalTiling}`)
+      // The per-chapter allocation already bounds each chapter; enforce the global i2v ceiling anyway —
+      // demote from the END (the opening + peak chapters sit earliest/are protected by allocation).
+      let videoCount = stitched.filter((s) => s.tier === 'video').length
+      for (let i = stitched.length - 1; videoCount > globalBudget && i >= 0; i--) {
+        const s = stitched[i]!
+        if (s.tier === 'video' && !(peakMoment && s.narrationText.includes(peakMoment))) {
+          s.tier = 'still'
+          videoCount--
+        }
       }
 
-      return { output: chosen.output, costCents: cost }
+      return { output: { scenes: stitched } as BreakdownData, costCents: cost }
     },
   )
 

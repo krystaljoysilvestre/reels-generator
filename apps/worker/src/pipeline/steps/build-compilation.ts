@@ -12,6 +12,7 @@ import {
   TimingsSchema,
   DEFAULT_BUDGET_CAPS_CENTS,
   assertBudget,
+  PLATFORM_PRESETS,
 } from '@reels/core'
 import { buildCompilationPrompt, COMPILATION_V1_VERSION } from '../../prompts-bridge.js'
 
@@ -92,6 +93,10 @@ export async function buildCompilation(compilationId: string): Promise<void> {
   const voiceId = (channel.voicePool as Array<{ id: string; providerId: string }>)[0]?.providerId ?? ''
   if (!voiceId) throw new Error('No voice configured for channel')
 
+  // Connective black segments must match the constituent reels' frame (the channel's platform preset).
+  const preset = PLATFORM_PRESETS[(channel.targetPlatform ?? 'all') as keyof typeof PLATFORM_PRESETS] ?? PLATFORM_PRESETS.all
+  const frame = `${preset.width}x${preset.height}`
+
   const tmp = join(tmpdir(), `compilation-${compilationId}`)
   await mkdir(tmp, { recursive: true })
   try {
@@ -124,7 +129,7 @@ export async function buildCompilation(compilationId: string): Promise<void> {
 
   // Intro TTS only (no video for connective tissue in Phase 1 — text overlay or black frame)
   const introVideoPath = join(tmp, 'intro_segment.mp4')
-  await makeAudioOnlySegment(introPath, introVideoPath)
+  await makeAudioOnlySegment(introPath, introVideoPath, frame)
   concatParts.push(introVideoPath)
 
   for (let i = 0; i < orderedReels.length; i++) {
@@ -141,14 +146,14 @@ export async function buildCompilation(compilationId: string): Promise<void> {
     // Transition between reels (not after the last one)
     if (i < orderedReels.length - 1 && transitionPaths[i]) {
       const trVideoPath = join(tmp, `transition_segment_${i}.mp4`)
-      await makeAudioOnlySegment(transitionPaths[i]!, trVideoPath)
+      await makeAudioOnlySegment(transitionPaths[i]!, trVideoPath, frame)
       concatParts.push(trVideoPath)
     }
   }
 
   // Outro
   const outroVideoPath = join(tmp, 'outro_segment.mp4')
-  await makeAudioOnlySegment(outroPath, outroVideoPath)
+  await makeAudioOnlySegment(outroPath, outroVideoPath, frame)
   concatParts.push(outroVideoPath)
 
   // Concatenate all parts
@@ -208,9 +213,9 @@ export async function buildCompilation(compilationId: string): Promise<void> {
 }
 
 // Creates a black-frame video segment with audio-only narration (connective tissue)
-async function makeAudioOnlySegment(audioPath: string, outputPath: string): Promise<void> {
+async function makeAudioOnlySegment(audioPath: string, outputPath: string, frame: string): Promise<void> {
   await execFileAsync('ffmpeg', [
-    '-f', 'lavfi', '-i', 'color=black:s=1080x1920:r=30',
+    '-f', 'lavfi', '-i', `color=black:s=${frame}:r=30`,
     '-i', audioPath,
     '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28',
     '-c:a', 'copy',

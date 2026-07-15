@@ -113,7 +113,7 @@ export async function generateImages(reelId: string): Promise<void> {
   // frozen canonical descriptions, spliced identically across scenes (see specs/story-bible.md).
   const storyBible = reel.storyBible ? StoryBibleSchema.parse(reel.storyBible) : null
 
-  // Generate at the channel's platform aspect (reels are 9:16) so scene images fill the frame.
+  // Generate at the channel's platform aspect (9:16 reels; 16:9 long-form) so scene images fill the frame.
   const aspect = (PLATFORM_PRESETS[(channel.targetPlatform ?? 'all') as keyof typeof PLATFORM_PRESETS] ?? PLATFORM_PRESETS.all).aspect
 
   // Reel-level lighting (from the bible's time-of-day cues). Forces night/darkness into every scene + every

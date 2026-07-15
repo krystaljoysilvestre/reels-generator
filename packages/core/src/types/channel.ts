@@ -33,17 +33,21 @@ export const LutConfigSchema = z.object({
 export type LutConfig = z.infer<typeof LutConfigSchema>
 
 // ── Target platform ───────────────────────────────────────────────────────────
-// Where this channel's reels are published. All are vertical 9:16, but each has a
-// different length cap, caption-safe zone (platform UI overlay), hook convention, and
-// watermark norm. This is the SINGLE source of truth: the channel.v1 derivation reads
-// the hints to tailor caption + length now; the renderer/story-gen read aspect / safe
-// zone / watermark / hook when video creation is built.
-export const TargetPlatformSchema = z.enum(['tiktok', 'youtube_shorts', 'facebook_reels', 'all'])
+// Where this channel's videos are published. Each preset carries the frame (aspect +
+// pixel dimensions), length cap, caption-safe zone (platform UI overlay), hook
+// convention, and watermark norm. This is the SINGLE source of truth: the channel.v1
+// derivation reads the hints to tailor caption + length; image/video generation and
+// the renderer read aspect/width/height; render QA reads maxSeconds.
+export const TargetPlatformSchema = z.enum(['tiktok', 'youtube_shorts', 'facebook_reels', 'youtube_long', 'all'])
 export type TargetPlatform = z.infer<typeof TargetPlatformSchema>
+
+export type AspectRatio = '9:16' | '16:9'
 
 export interface PlatformPreset {
   label: string
-  aspect: '9:16'
+  aspect: AspectRatio
+  width: number                  // output frame px (Remotion composition + ffmpeg)
+  height: number
   maxSeconds: number              // hard cap (export must fit this)
   sweetSpot: [number, number]     // recommended length range
   captionHint: string            // platform caption convention (derivation input)
@@ -55,28 +59,38 @@ export interface PlatformPreset {
 
 export const PLATFORM_PRESETS: Record<TargetPlatform, PlatformPreset> = {
   tiktok: {
-    label: 'TikTok', aspect: '9:16', maxSeconds: 180, sweetSpot: [21, 60],
+    label: 'TikTok', aspect: '9:16', width: 1080, height: 1920, maxSeconds: 180, sweetSpot: [21, 60],
     captionHint: 'big, bold, centered, word-by-word (pop/hype/impact) — high energy, reads on mute',
     lengthHint: '21–60s sweet spot (up to 180s allowed); keep it punchy',
     hookHint: 'instant pattern-interrupt in the first 1–2s with a bold on-screen text hook',
     safeZoneBottomPct: 18, watermark: false,
   },
   youtube_shorts: {
-    label: 'YouTube Shorts', aspect: '9:16', maxSeconds: 60, sweetSpot: [25, 55],
+    label: 'YouTube Shorts', aspect: '9:16', width: 1080, height: 1920, maxSeconds: 60, sweetSpot: [25, 55],
     captionHint: 'clean and legible, sitting a little higher to clear the bottom title/CTA UI',
     lengthHint: '60s hard cap; 25–55s ideal',
     hookHint: 'a clear curiosity/value promise in the first 3s, spoken and on-screen',
     safeZoneBottomPct: 14, watermark: false,
   },
   facebook_reels: {
-    label: 'Facebook Reels', aspect: '9:16', maxSeconds: 90, sweetSpot: [20, 60],
+    label: 'Facebook Reels', aspect: '9:16', width: 1080, height: 1920, maxSeconds: 90, sweetSpot: [20, 60],
     captionHint: 'large, very high-contrast (older/mixed audience, almost always muted)',
     lengthHint: '90s cap; 20–60s ideal',
     hookHint: 'a relatable, story-led hook in the first 3s',
     safeZoneBottomPct: 20, watermark: false,
   },
+  // Long-form YouTube (regular horizontal uploads, not Shorts). The 600s cap keeps the
+  // narration near ElevenLabs' single-request comfort zone (see specs/long-form.md);
+  // raise deliberately, with a listen test, not casually.
+  youtube_long: {
+    label: 'YouTube', aspect: '16:9', width: 1920, height: 1080, maxSeconds: 600, sweetSpot: [300, 480],
+    captionHint: 'restrained cinematic subtitles on a subtle bar — long-form viewers usually have sound ON, so captions support rather than perform',
+    lengthHint: '5–10 minutes; give the story room to breathe and escalate in chapters',
+    hookHint: 'a cold-open hook in the first 20–30s that promises the payoff, then a fresh pull every minute or two',
+    safeZoneBottomPct: 8, watermark: false,
+  },
   all: {
-    label: 'All platforms', aspect: '9:16', maxSeconds: 60, sweetSpot: [20, 55],
+    label: 'All platforms', aspect: '9:16', width: 1080, height: 1920, maxSeconds: 60, sweetSpot: [20, 55],
     captionHint: 'safe, legible, centered — must read well on every platform',
     lengthHint: 'keep ≤60s so it fits Shorts everywhere; 20–55s ideal',
     hookHint: 'a strong, universal hook in the first 2–3s',

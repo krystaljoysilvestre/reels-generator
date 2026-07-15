@@ -6,7 +6,7 @@
 
 import { z } from 'zod'
 
-export const REVISE_SCENE_V1_VERSION = 'revise-scene.v4'
+export const REVISE_SCENE_V1_VERSION = 'revise-scene.v5'
 
 // `intent` lets the system silently pick how to regenerate: "refine" = the operator wants to IMPROVE or
 // ADJUST the same scene, so we keep the existing composition and apply the change off the current image
@@ -26,7 +26,7 @@ export const ReviseSceneSchema = z.object({
 export function buildReviseScenePrompt(
   currentPrompt: string,
   instruction: string,
-  opts?: { genreCategory?: string; entities?: { id: string; description: string }[] },
+  opts?: { genreCategory?: string; entities?: { id: string; description: string }[]; aspect?: '9:16' | '16:9' },
 ): { system: string; userMessage: string } {
   // Horror channels need the fear rendered as CONCRETE physical wrongness — the image model only draws what
   // is literally described, so a mild adjective ("creepy", "unsettling grin") renders as a pretty, normal
@@ -37,7 +37,7 @@ export function buildReviseScenePrompt(
 
 This is a HORROR channel. When the change asks for something frightening, uncanny, or "creepy", do NOT settle for mood adjectives ("eerie", "unsettling", "a creepy smile") — the image model renders only concrete detail, so vague fear-words come out pretty and normal. Translate the fear into specific, visible WRONGNESS: a smile stretched unnaturally past the corners of the mouth baring too many teeth, eyes open too wide in a dead unblinking stare, bloodless waxy skin, a head or limb at a subtly wrong angle, a reflection that doesn't match the body, a figure half-swallowed by shadow. Name the physical detail, never just the feeling. Keep it genuinely disturbing — do not soften it into something tasteful or beautiful. (Refer to the threat with non-person words — see FILTER-SAFE PHRASING above.)`
       : ''
-  const system = `You are a storyboard director for vertical (9:16) narrated reels. You revise ONE scene's image prompt.
+  const system = `You are a storyboard director for ${opts?.aspect === '16:9' ? 'widescreen (16:9) narrated videos' : 'vertical (9:16) narrated reels'}. You revise ONE scene's image prompt.
 
 An image prompt is CONTENT ONLY — it describes WHAT IS SEEN. Never include style or medium words ("cinematic", "photo", "painting", colour-grade or lens terms); the system owns the look. Lead with the key VISIBLE subject, then shot size + camera angle, one foreground element for depth, the light source + its direction, a touch of atmosphere. Use concrete nouns and a plain present-tense description of the frame — never meta-instructions like "show", "change", "instead", "make it". ~30–50 words.
 

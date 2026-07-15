@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
       const sceneEnts = storyBible
         ? sceneEntities(storyBible, { primaryEntity: scene.primaryEntity, supportingEntities: scene.supportingEntities }).map((e) => ({ id: e.id, description: e.description }))
         : []
-      const { system, userMessage } = buildReviseScenePrompt(basePrompt, tweak, { genreCategory: channel.genreCategory, entities: sceneEnts })
+      const { system, userMessage } = buildReviseScenePrompt(basePrompt, tweak, { genreCategory: channel.genreCategory, entities: sceneEnts, aspect })
       const revised = await llmCall({ templateVersion: REVISE_SCENE_V1_VERSION, schema: ReviseSceneSchema, system, messages: [{ role: 'user', content: userMessage }] })
       contentPrompt = revised.data.imagePrompt.trim() || basePrompt
       reviseReplace = revised.data.intent === 'replace'

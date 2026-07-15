@@ -28,6 +28,10 @@ export interface SceneQAScene {
 
 export interface SceneQAInput {
   narration: string
+  // Chaptered breakdown: `narration` is the CHAPTER's text (drives count/duration checks), while the
+  // journey legs live in the whole story — pass it here so journey grounding still resolves. Absent →
+  // narration (whole-reel callers unchanged).
+  fullNarration?: string
   peakMoment: string // '' when the reel has no designated peak
   minScenes: number
   maxScenes: number
@@ -37,6 +41,12 @@ export interface SceneQAInput {
   bibleEntities?: BibleEntity[]
   narratorEntityId?: string | null
   journey?: JourneyLeg[]
+  // Video-tier cap for THIS set of scenes (a chapter gets its per-chapter allocation; a whole short reel
+  // gets the flat budget). Absent → MOTION_BUDGET, so legacy callers are unchanged.
+  maxVideoTiers?: number
+  // False when these scenes are a mid-story chapter — "the opening scene should be video" only applies
+  // to the scenes that actually open the video. Absent → true (legacy whole-reel callers).
+  isOpening?: boolean
 }
 
 export interface SceneQAResult {
@@ -49,6 +59,14 @@ export interface SceneQAResult {
 // than a constant. Single source for both the cap enforced here and the "at most N video" line in the
 // scenes prompt (breakdown passes it into buildScenesPrompt).
 export const MOTION_BUDGET = 3
+
+// Duration-scaled budget: short reels keep the flat 3; past 3 minutes a flat 3 starves the runtime of
+// motion (3 clips across 10 minutes reads as a slideshow), so scale ~1 clip / 90s, capped at 8 (~$2.80
+// of i2v) as the cost ceiling. Deterministic — the breakdown allocates these across chapters.
+export function motionBudgetForSeconds(seconds: number): number {
+  if (seconds <= 180) return MOTION_BUDGET
+  return Math.min(8, Math.round(seconds / 90))
+}
 
 // A scene's shot stays on screen for as long as its narration is spoken. Estimate that span from the word
 // count at the project's canonical speaking rate (the same 2.5 wps the music/timing estimators use) so QA
@@ -148,6 +166,9 @@ export function reviewSceneBreakdown(input: SceneQAInput): SceneQAResult {
   const warnings: string[] = []
   const { scenes } = input
   const narration = input.narration.trim()
+  // Journey legs (and scene positions relative to them) resolve against the WHOLE story's text — on a
+  // chaptered breakdown that's wider than the chapter narration driving the pacing checks above.
+  const groundText = (input.fullNarration ?? input.narration).trim()
 
   // ── Peak placement (error) ───────────────────────────────────────────────
   // The peak line must sit WITHIN a single scene so it lands as its own beat. If it's a real substring
@@ -167,11 +188,12 @@ export function reviewSceneBreakdown(input: SceneQAInput): SceneQAResult {
   }
 
   // ── Tier discipline ──────────────────────────────────────────────────────
+  const videoBudget = input.maxVideoTiers ?? MOTION_BUDGET
   const videoCount = scenes.filter((s) => s.tier === 'video').length
-  if (videoCount > MOTION_BUDGET) {
-    errors.push(`${videoCount} scenes are marked "video"; at most ${MOTION_BUDGET} are allowed (cost + render time). Keep the ${MOTION_BUDGET} most visually dynamic beats as video, the rest "still".`)
+  if (videoCount > videoBudget) {
+    errors.push(`${videoCount} scenes are marked "video"; at most ${videoBudget} are allowed (cost + render time). Keep the ${videoBudget} most visually dynamic beats as video, the rest "still".`)
   }
-  if (scenes.length > 0 && scenes[0]!.tier !== 'video') {
+  if ((input.isOpening ?? true) && scenes.length > 0 && scenes[0]!.tier !== 'video') {
     warnings.push('The opening scene is not "video" — the first beat usually benefits from motion.')
   }
 
@@ -255,7 +277,7 @@ export function reviewSceneBreakdown(input: SceneQAInput): SceneQAResult {
 
   scenes.forEach((s, i) => {
     const n = i + 1
-    const leg = journey.length ? legForScene(s, journey, narration) : null
+    const leg = journey.length ? legForScene(s, journey, groundText) : null
     const locEnts = refsOf(s).map(resolve).filter((e): e is BibleEntity => !!e && e.kind === 'location')
 
     // Location: a scene may only tag the place it's physically IN.
@@ -320,7 +342,7 @@ export function reviewSceneBreakdown(input: SceneQAInput): SceneQAResult {
   // deterministically at render (the visibility rule in generate_images).
   if (peakScene && journey.length && (input.bibleEntities?.length ?? 0) > 0) {
     const threat = input.bibleEntities!.find((e) => e.role === 'threat')
-    const peakLeg = legForScene(peakScene, journey, narration)
+    const peakLeg = legForScene(peakScene, journey, groundText)
     const threatPresent = !!threat && !!peakLeg && (peakLeg.present ?? []).some((p) => slug(p) === slug(threat!.id))
     if (threat && threatPresent && resolve(peakScene.primaryEntity)?.role !== 'threat') {
       errors.push(`The reveal (peak scene) has the threat ("${threat.id}") present but not as primaryEntity — the payoff must OPEN on the threat. Set primaryEntity to the threat so the shot leads with it, not the room or the narrator.`)

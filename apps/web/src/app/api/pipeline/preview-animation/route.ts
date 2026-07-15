@@ -1,9 +1,9 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
-import { getDb, scenes, assets, reels } from '@reels/db'
+import { getDb, scenes, assets, reels, channels } from '@reels/db'
 import { eq, and, sql } from 'drizzle-orm'
 import { generateVideo, FalEngineSchema, ContentFilterError, ProviderRateLimitError } from '@reels/providers'
-import { resolveMotionSettings } from '@reels/core'
+import { resolveMotionSettings, PLATFORM_PRESETS } from '@reels/core'
 import { getSession } from '@/lib/auth'
 
 // Best-effort in-flight guard (B5): a fast double-click would otherwise launch two paid clips before
@@ -58,6 +58,9 @@ export async function POST(req: NextRequest) {
 
   const engine = FalEngineSchema.parse({})
   const motion = resolveMotionSettings(scene.motionSettings)
+  // Preview clips must match the channel's output frame — render reuses them as variation 0.
+  const channel = await db.query.channels.findFirst({ where: eq(channels.id, reel.channelId) })
+  const aspect = (PLATFORM_PRESETS[(channel?.targetPlatform ?? 'all') as keyof typeof PLATFORM_PRESETS] ?? PLATFORM_PRESETS.all).aspect
   let costAdded = 0
 
   try {
@@ -67,6 +70,7 @@ export async function POST(req: NextRequest) {
         imageStorageKey: imageAsset.storageKey,
         motionPrompt: scene.motionPrompt ?? 'slow cinematic drift',
         durationSec: motion.durationSec,
+        aspect,
         reelId,
         sceneIdx,
         variationIdx: v,

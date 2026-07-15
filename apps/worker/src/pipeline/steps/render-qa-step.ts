@@ -2,9 +2,9 @@ import { eq, and, desc } from 'drizzle-orm'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { mkdir, writeFile, rm } from 'node:fs/promises'
-import { getDb, reels, assets } from '@reels/db'
+import { getDb, reels, assets, channels } from '@reels/db'
 import { downloadBuffer, buildInputHash } from '@reels/providers'
-import { TimingsSchema } from '@reels/core'
+import { TimingsSchema, PLATFORM_PRESETS } from '@reels/core'
 import { runRenderQa } from '@reels/render/qa/render-qa'
 import { runStep, setReelStatus } from '../harness.js'
 
@@ -15,6 +15,14 @@ export async function renderQaStep(reelId: string): Promise<void> {
   if (!reel?.timings || !reel.renderUrl) throw new Error(`Reel missing timings or renderUrl: ${reelId}`)
 
   const timings = TimingsSchema.parse(reel.timings)
+  // Length ceiling = the channel's platform cap + 10% headroom (compute_timings may extend a reel
+  // slightly for the climax ring-out), floored at the legacy 180s so this only ever RAISES the ceiling
+  // for long-form — never tightens it for short-form. Stories routinely overrun their target (a 60s
+  // channel can produce ~134s of narration; see breakdown-scenes), and those used to pass at <180s;
+  // keying the gate straight to the 60s cap would newly hard-fail them. Long-form (600s) → 660s.
+  const channel = await db.query.channels.findFirst({ where: eq(channels.id, reel.channelId) })
+  const platformPreset = PLATFORM_PRESETS[(channel?.targetPlatform ?? 'all') as keyof typeof PLATFORM_PRESETS] ?? PLATFORM_PRESETS.all
+  const maxDurationMs = Math.max(180_000, Math.round(platformPreset.maxSeconds * 1000 * 1.1))
   // The render key is constant per reel, so hashing renderUrl alone let QA SKIP a re-render (validating a
   // stale cut). Hash the render asset's createdAt too — it's bumped on every render → QA re-runs each time.
   const renderAsset = await db.query.assets.findFirst({
@@ -43,6 +51,7 @@ export async function renderQaStep(reelId: string): Promise<void> {
         durationMs: timings.durationMs,
         subtitleCount: timings.subtitles.length,
         sfxAnchorCount: timings.sfxEvents.length,
+        maxDurationMs,
       })
 
       if (!qa.passed) {

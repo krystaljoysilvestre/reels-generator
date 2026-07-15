@@ -20,7 +20,7 @@ const InputSchema = z.object({
   voiceSearchKeyword: z.string().trim().max(80).default(''), // AI-derived genre tag for voice matching
   stylePreset: z.string().trim().min(1),
   styleImageKey: z.string().trim().min(1).nullish(), // previewed style image, if the operator rendered one
-  targetSeconds: z.number().int().min(15).max(180).default(75), // per-channel reel length
+  targetSeconds: z.number().int().min(15).max(600).default(75), // per-channel video length (long-form allows minutes; clamped to the platform cap below)
   captionStyle: CaptionStyleSchema.default({}), // burned-in caption look
   worldBible: WorldBibleSchema,
   // Visual-language bucket from channel.v1; falls back to keyword classification if absent.
