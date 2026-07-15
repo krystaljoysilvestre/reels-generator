@@ -33,22 +33,34 @@ function initFal() {
   fal.config({ credentials: key })
 }
 
+// Refusal phrasing nano-banana (gemini) uses in a 422 ValidationError's detail[].msg when it declines to
+// generate — no content_policy code is attached, but it IS a content refusal ("The model did not generate
+// the expected output for this prompt. This may occur for several reasons, including unsafe content, …").
+// Without matching it, the refusal escapes the ContentFilterError path and fails the whole scene instead of
+// degrading via rephrase → mood-only.
+const FAL_REFUSAL_MSG_RE = /did not generate the expected output|unsafe content/i
+
 function isFalContentFilter(err: unknown): boolean {
   if (!err || typeof err !== 'object') return false
   const e = err as Record<string, unknown>
   // The content-policy code can be top-level (e.type) OR nested in the fal ValidationError body as
-  // body.detail[].type (which is where flux-2-pro reports content_policy_violation). Collect both.
+  // body.detail[].type (which is where flux-2-pro reports content_policy_violation). Collect both, plus
+  // detail[].msg text (where gemini/nano-banana signals refusals without any code).
   const codes: string[] = [String(e['type'] ?? e['error_type'] ?? '')]
+  const msgs: string[] = []
   const body = e['body']
   if (body && typeof body === 'object') {
     const detail = (body as Record<string, unknown>)['detail']
     if (Array.isArray(detail)) {
       for (const d of detail) {
-        if (d && typeof d === 'object') codes.push(String((d as Record<string, unknown>)['type'] ?? ''))
+        if (d && typeof d === 'object') {
+          codes.push(String((d as Record<string, unknown>)['type'] ?? ''))
+          msgs.push(String((d as Record<string, unknown>)['msg'] ?? ''))
+        }
       }
     }
   }
-  return codes.some((c) => FAL_CONTENT_FILTER_CODES.has(c))
+  return codes.some((c) => FAL_CONTENT_FILTER_CODES.has(c)) || msgs.some((m) => FAL_REFUSAL_MSG_RE.test(m))
 }
 
 function isFalRateLimit(err: unknown): boolean {
@@ -192,8 +204,12 @@ export async function generateImageFal(params: FalImageGenParams): Promise<Provi
     if (err instanceof ContentFilterError || err instanceof ProviderError) throw err
     // Surface fal's validation detail (which field it rejected) — otherwise it's an opaque "Unprocessable Entity".
     // Carry the HTTP status so a deterministic 4xx fails fast in the dispatcher instead of being re-billed.
+    // TRUNCATE the body: a reference-conditioned request echoes its input in the validation detail, which can
+    // embed megabytes of base64 image data — an untruncated message floods every log it passes through.
     const body = err && typeof err === 'object' ? (err as Record<string, unknown>)['body'] : undefined
     const status = err && typeof err === 'object' ? Number((err as Record<string, unknown>)['status'] ?? 0) : 0
-    throw new ProviderError('fal', body ? `${String(err)}: ${JSON.stringify(body)}` : String(err), status || undefined)
+    const bodyStr = body ? JSON.stringify(body) : ''
+    const detail = bodyStr.length > 2000 ? `${bodyStr.slice(0, 2000)}… [truncated ${bodyStr.length - 2000} chars]` : bodyStr
+    throw new ProviderError('fal', detail ? `${String(err)}: ${detail}` : String(err), status || undefined)
   }
 }
