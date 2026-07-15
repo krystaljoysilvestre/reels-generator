@@ -45,11 +45,14 @@ export const STYLE_PRESETS: StylePreset[] = [
   {
     id: 'cinematic-horror',
     label: 'Cinematic Dread',
-    description: 'Photoreal horror film still — deep shadows, cold palette, heavy stillness. The scary default for horror.',
+    description: 'Photoreal horror film still — deep shadows, cold palette, a worn, lived-in world. The scary default for horror.',
     genres: ['horror'],
     heroFor: ['horror'], // horror channels lead with this, not the neutral universal Cinematic
+    // The worn-surfaces run (owner decision 2026-07-15): horror worlds read used, never showroom-new.
+    // Surfaces-only wording keeps people/wardrobe clean; nouns stay generic (no tile/taps) so the clause
+    // can't conjure fixtures into scenes that lack them.
     stylePreset:
-      'photograph, grainy 35mm horror film still, low-key chiaroscuro lighting with the key subject clearly exposed, deep shadows pooling at the edges and background, cold desaturated teal-and-amber palette, humid atmospheric haze, shallow depth of field, large areas of shadowed negative space, analog film grain texture',
+      'photograph, grainy 35mm horror film still, low-key chiaroscuro lighting with the key subject clearly exposed, deep shadows pooling at the edges and background, cold desaturated teal-and-amber palette, humid atmospheric haze, shallow depth of field, large areas of shadowed negative space, analog film grain texture, well-used lived-in surfaces with visible age, scuffed paint, faint water stains along edges, worn fittings, smudged glass, thin grime settled into seams and corners',
   },
   {
     id: 'analog-film',
