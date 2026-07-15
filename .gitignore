@@ -20,3 +20,6 @@ Thumbs.db
 uploads/
 renders/
 .cache/
+
+# A/B experiment output (generated; never committed)
+apps/worker/scripts/ab-out/

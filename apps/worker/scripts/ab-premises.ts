@@ -141,15 +141,19 @@ void (async () => {
   const blindPath = join(outDir, `ab-premises-${stamp}-blind.md`)
   const keyPath = join(outDir, `ab-premises-${stamp}-key.json`)
 
+  // Compare the ONE artifact both arms actually produce: the logline (one sentence each). The
+  // planner's richer `premise` field is planner-only, so showing it made the arms incomparable.
   writeFileSync(blindPath, [
-    `# Blind premise review — ${channel.name} (${entries.length} premises, ${rounds} rounds/arm)`,
+    `# Blind logline review — ${channel.name} (${entries.length} loglines, ${rounds} rounds/arm)`,
     '',
-    'Score each premise 1–5 on: would you greenlight this story for the channel? (freshness + pull).',
-    'Do NOT open the key file until every premise is scored.',
+    'Score each 1–5 on: would you greenlight this story for the channel? (freshness + pull).',
+    'One sentence each, both arms — apples to apples. Do NOT open the key until every one is scored.',
     '',
-    ...shuffled.map((e, i) => `${i + 1}. ${e.premise}\n   Score: __`),
+    ...shuffled.map((e, i) => `${i + 1}. ${e.logline}\n   Score: __`),
   ].join('\n'))
   writeFileSync(keyPath, JSON.stringify(shuffled.map((e, i) => ({ n: i + 1, arm: e.arm, round: e.round })), null, 2))
+  // Durable raw data (premise + logline + arm), so scoring/analysis never needs a re-run.
+  writeFileSync(join(outDir, `ab-premises-${stamp}-raw.json`), JSON.stringify(shuffled.map((e, i) => ({ n: i + 1, ...e })), null, 2))
 
   console.log(`\nDONE — total cost $${(totalCents / 100).toFixed(2)}`)
   console.log(`blind sheet: ${blindPath}`)
