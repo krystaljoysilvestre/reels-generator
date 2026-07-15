@@ -7,6 +7,29 @@ export {
   StoryCriticSchema,
   DEFAULT_TASTE_RUBRIC,
 } from '@reels/core/prompts/story-critic.v1'
+// ── Studio pipeline (story-writer-v2 pivot, 2026-07-15): Planner → Writer → Editor → Naturalizer → Gate ──
+export { buildStoryWriterPrompt, STORY_V2_VERSION } from '@reels/core/prompts/story.v2'
+export {
+  buildStoryPlannerPrompt,
+  STORY_PLANNER_V1_VERSION,
+  StoryPlanSchema,
+  resolvePlannerGenre,
+  type StoryPlan,
+} from '@reels/core/prompts/story-planner.v1'
+export {
+  STORY_ELEMENTS_V1_VERSION,
+  StoryElementsSchema,
+  elementFingerprint,
+  type StoryElements,
+} from '@reels/core/prompts/story-elements.v1'
+export { buildStoryEditorPrompt, STORY_EDITOR_V1_VERSION, StoryEditSchema } from '@reels/core/prompts/story-editor.v1'
+export { buildStoryNaturalizerPrompt, STORY_NATURALIZER_V1_VERSION, StoryNaturalizeSchema } from '@reels/core/prompts/story-naturalizer.v1'
+export {
+  buildStoryGatePrompt,
+  STORY_CRITIC_V2_VERSION,
+  StoryGateSchema,
+  defaultTasteRubric,
+} from '@reels/core/prompts/story-critic.v2'
 export { buildSoundDesignerPrompt, SOUND_DESIGNER_V1_VERSION, SoundDesignSchema, type DesignerScene } from '@reels/core/prompts/sound-designer.v1'
 export { buildScenesPrompt, SCENES_V1_VERSION } from '@reels/core/prompts/scenes.v1'
 export { buildStoryAnalyzerPrompt, STORY_ANALYZER_V1_VERSION } from '@reels/core/prompts/story-analyzer.v1'

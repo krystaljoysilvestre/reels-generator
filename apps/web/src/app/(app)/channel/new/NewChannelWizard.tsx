@@ -8,6 +8,7 @@ import { avatarGradient, avatarInitials } from '@/components/ChannelAvatar'
 import { CaptionPreview } from '@/components/CaptionPreview'
 import { PlatformPicker } from '@/components/PlatformPicker'
 import { type CaptionPreset, type CaptionStyle, type TargetPlatform, type AudioMood, resolveCaptionStyle, CaptionStyleSchema, PLATFORM_PRESETS, PRESET_BEDS, rankPresets, presetsForGenre, stylePresetThumbKey } from '@reels/core'
+import { type GenreModule, asGenreModule } from '@reels/core/prompts/scenes.v1'
 
 // v2: caption persistence changed from preset+highlight to a resolved captionStyle object.
 // Bumping the key drops pre-v2 drafts (which would otherwise fall back to the default
@@ -93,7 +94,7 @@ interface Derived {
     vocabulary: Record<string, string>
   }
   voiceSearchKeyword: string
-  genreCategory: 'horror' | 'informational' | 'lifestyle' | 'general'
+  genreCategory: GenreModule
   audioMood: AudioMood
 }
 
@@ -174,9 +175,9 @@ export function NewChannelWizard({
   const [showAllVoices, setShowAllVoices] = useState(false)
   const [voiceGender, setVoiceGender] = useState<'any' | 'female' | 'male'>('any')
   const [voiceSearchKeyword, setVoiceSearchKeyword] = useState('')
-  // AI-derived visual-language bucket → picks the scene-prompt genre module. '' until derived; the
-  // create route keyword-classifies the niche as a fallback when this is empty.
-  const [genreCategory, setGenreCategory] = useState<'' | 'horror' | 'informational' | 'lifestyle' | 'general'>('')
+  // AI-derived genre bucket → picks the writer identity + scene-prompt genre module. '' until derived;
+  // the create route keyword-classifies the niche as a fallback when this is empty.
+  const [genreCategory, setGenreCategory] = useState<'' | GenreModule>('')
   const [tagline, setTagline] = useState('') // AI-derived one-line positioning (persisted on the channel)
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -270,7 +271,7 @@ export function NewChannelWizard({
         if (Array.isArray(d.selectedVoices)) setSelectedVoices(d.selectedVoices)
         if (Array.isArray(d.recommended)) setRecommended(d.recommended)
         if (typeof d.voiceSearchKeyword === 'string') setVoiceSearchKeyword(d.voiceSearchKeyword)
-        if (d.genreCategory === 'horror' || d.genreCategory === 'informational' || d.genreCategory === 'lifestyle' || d.genreCategory === 'general') setGenreCategory(d.genreCategory)
+        { const g = asGenreModule(typeof d.genreCategory === 'string' ? d.genreCategory : null); if (g) setGenreCategory(g) }
         if (typeof d.tagline === 'string') setTagline(d.tagline)
         if (typeof d.derivedSig === 'string') setDerivedSig(d.derivedSig)
         if (typeof d.sampleScript === 'string') setSampleScript(d.sampleScript)
@@ -785,6 +786,7 @@ export function NewChannelWizard({
           targetPlatform,
           worldBible: worldBiblePayload(),
           voiceStyle: selectedVoices[0]?.description,
+          ...(genreCategory ? { genreCategory } : {}),
           ...(promptHint.trim() ? { promptHint: promptHint.trim() } : {}),
         }),
       })

@@ -8,10 +8,12 @@ import { StoryGenerating } from '@/components/StoryGenerating'
 import { Typewriter } from '@/components/Typewriter'
 import { phaseTicker, type ChannelMood } from '@/lib/pipeline-phases'
 
-// Best-of-N summary for the story card: why the shown draft won, plus the takes it beat.
+// Summary for the story card: why the shown draft won (+ the takes it beat, legacy best-of-N),
+// and the story's composition chips (studio: what parts it's made of).
 export interface CriticSummary {
   rationale: string
   runnersUp: Array<{ title: string; logline: string | null; note: string }>
+  elements: string[]
 }
 
 interface StoryStudioProps {
@@ -22,7 +24,15 @@ interface StoryStudioProps {
   genre?: string | undefined
   initialStatus: string
   initialCostCents: number
-  story: { title: string; body: string; logline: string | null; subgenreTags: string[]; language: string } | null
+  story: {
+    id: string
+    title: string
+    body: string
+    logline: string | null
+    subgenreTags: string[]
+    language: string
+    isReference: boolean
+  } | null
   critic: CriticSummary | null
 }
 
@@ -36,6 +46,22 @@ export function StoryStudio({ reelId, channelId, channelName, mood, genre, initi
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const [startedAt] = useState(() => Date.now())
+  const [isReference, setIsReference] = useState(story?.isReference ?? false)
+  const [refBusy, setRefBusy] = useState(false)
+
+  // Flag this story as a voice reference — it joins the set future stories learn their voice from.
+  async function toggleReference() {
+    if (!story) return
+    setRefBusy(true)
+    const next = !isReference
+    const res = await fetch('/api/story/toggle-reference', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ storyId: story.id, isReference: next }),
+    })
+    if (res.ok) setIsReference(next)
+    setRefBusy(false)
+  }
 
   // Poll only while a draft is being written; the hook refreshes the server (new story) at the boundary.
   const status = usePipelineStatus(reelId, { enabled: generating, intervalMs: 2200 })
@@ -180,12 +206,33 @@ export function StoryStudio({ reelId, channelId, channelName, mood, genre, initi
               <span className="text-faint">·</span>
               <span className="font-mono tabular-nums text-ink">${(costCents / 100).toFixed(2)}</span>
               <span>so far</span>
+              <button
+                onClick={toggleReference}
+                disabled={refBusy}
+                title="Voice references teach future stories how this channel sounds."
+                className={`ml-auto rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset transition-colors ${
+                  isReference
+                    ? 'bg-accent/10 text-accent ring-accent/30'
+                    : 'bg-surface text-muted ring-border hover:text-ink'
+                }`}
+              >
+                {isReference ? '✓ Voice reference' : 'Make it a voice reference'}
+              </button>
             </div>
             {critic && (
               <div className="border-t border-border px-5 py-3">
+                {critic.elements.length > 0 && (
+                  <div className="mb-2.5 flex flex-wrap gap-1.5">
+                    {critic.elements.map((e, i) => (
+                      <span key={i} className="badge bg-subtle text-muted ring-1 ring-inset ring-border">{e}</span>
+                    ))}
+                  </div>
+                )}
+                {critic.rationale && (
                 <p className="text-xs leading-relaxed text-muted">
                   <span className="font-medium text-ink">Why this one:</span> {critic.rationale}
                 </p>
+                )}
                 {critic.runnersUp.length > 0 && (
                   <details className="mt-2 group">
                     <summary className="cursor-pointer select-none text-xs font-medium text-muted transition-colors hover:text-ink">

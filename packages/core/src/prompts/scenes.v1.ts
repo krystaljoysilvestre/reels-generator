@@ -9,7 +9,28 @@
 
 export const SCENES_V1_VERSION = 'scenes.v1.40'
 
-export type GenreModule = 'horror' | 'informational' | 'lifestyle' | 'general'
+export type GenreModule =
+  | 'horror'
+  | 'informational'
+  | 'lifestyle'
+  | 'drama'
+  | 'commentary'
+  | 'reddit_story'
+  | 'comedy'
+  | 'general'
+
+// Single source of truth for the bucket values — the wizard/settings validators import this
+// instead of hand-writing `v === '…' || v === '…'` chains that drift.
+export const GENRE_MODULE_VALUES = [
+  'horror',
+  'informational',
+  'lifestyle',
+  'drama',
+  'commentary',
+  'reddit_story',
+  'comedy',
+  'general',
+] as const satisfies readonly GenreModule[]
 
 export interface ScenesPromptVars {
   // The reel's Story Bible entities (id, kind, description) as JSON. The breakdown REFERENCES these by id;
@@ -60,12 +81,16 @@ export function classifyGenre(niche: string): GenreModule {
   if (/horror|thriller|paranormal|aswang|multo|kulam|true[- ]?crime|creepy|scary|ghost|haunt|spooky|nightmare|eerie/.test(n)) return 'horror'
   if (/news|explain|educat|tutorial|histor|science|finance|document|how[- ]?to|fact|tech|business|review/.test(n)) return 'informational'
   if (/cook|food|recipe|travel|vlog|lifestyle|fashion|beauty|fitness|product|diy|craft|makeup/.test(n)) return 'lifestyle'
+  if (/reddit|aita|tifu|confession|storytime/.test(n)) return 'reddit_story'
+  if (/opinion|rant|hot[- ]?take|commentary|react/.test(n)) return 'commentary'
+  if (/drama|relationship|hugot|heartbreak|romance|family|love[- ]?stor/.test(n)) return 'drama'
+  if (/comedy|funny|joke|humor|prank/.test(n)) return 'comedy'
   return 'general'
 }
 
 // Coerce a stored/derived string to a known module, defaulting unknown values to 'general'.
 export function asGenreModule(v: string | null | undefined): GenreModule | null {
-  return v === 'horror' || v === 'informational' || v === 'lifestyle' || v === 'general' ? v : null
+  return (GENRE_MODULE_VALUES as readonly string[]).includes(v ?? '') ? (v as GenreModule) : null
 }
 
 // One genre MODULE is appended to the core (only the matched one is sent).
@@ -75,6 +100,13 @@ THE REVEAL — SHOW THE CONTRADICTION, NOT THE CREATURE. The threat is the story
 DARKNESS: night beats are shadow-DOMINATED — ceiling, far corners and deep background fall to black, NOT lit like an evening room. But the shot's KEY SUBJECT must stay clearly READABLE: the ONE light source (a weak lamp, a candle, a phone screen) actually lands on the subject and the nearest surfaces so the focal action reads at a glance, with darkness closing in AROUND it — a pool of light eaten by shadow, never a frame that's black where the subject is. Deep rural night has NO usable moonlight, so every window/opening is a near-BLACK rectangle, nothing visible outside (a glowing 3 AM window is the #1 mistake).`,
   informational: `GENRE — INFORMATIONAL / NEWS / EDUCATIONAL: clarity first. The key subject is sharp and prominent (centred or on a third), legible at a glance; neutral, even lighting; clean, uncluttered framing. Show the actual thing being explained — the object, place, person, or data — not mood for its own sake.`,
   lifestyle: `GENRE — LIFESTYLE / FOOD / TRAVEL: bright, inviting, aspirational. Natural or warm light; the subject hero-lit, fresh and appealing (appetizing food, scenic place); vibrant but not garish; clean negative space.`,
+  // New writing genres (2026-07-15). Visual-language modules deliberately EMPTY for now — they render
+  // with the same niche-driven core as 'general' until a dedicated module is authored (see plan:
+  // "visual modules for new genres = later"). Empty string = prompt text unchanged, so no version bump.
+  drama: ``,
+  commentary: ``,
+  reddit_story: ``,
+  comedy: ``,
   general: ``,
 }
 

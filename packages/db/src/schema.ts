@@ -93,9 +93,10 @@ export const channels = pgTable('channels', {
   targetSeconds: integer('target_seconds').notNull().default(75),  // per-channel reel length (AI-derived per niche, operator-adjustable)
   targetPlatform: text('target_platform').notNull().default('all'),  // tiktok | youtube_shorts | facebook_reels | all — shapes caption/length now, render presets later
   worldBible: jsonb('world_bible').notNull().default({}),
-  // Visual-language bucket (horror | informational | lifestyle | general) — LLM-derived at creation
-  // (channel.v1), picks which genre module the scene-prompt builder loads. Defaults to 'general' so
-  // pre-existing channels stay neutral; the scene builder keyword-classifies as a secondary fallback.
+  // Genre bucket (horror | informational | lifestyle | drama | commentary | reddit_story | comedy |
+  // general) — LLM-derived at creation (channel.v1). Picks the WRITER identity for story generation
+  // AND which genre module the scene-prompt builder loads. Defaults to 'general' so pre-existing
+  // channels stay neutral; consumers keyword-classify (classifyGenre) as a secondary fallback.
   genreCategory: text('genre_category').notNull().default('general'),
   lutConfig: jsonb('lut_config').notNull().default({}),
   captionStyle: jsonb('caption_style').notNull().default({}),  // per-channel burned-in caption look (resolved CaptionStyle)
@@ -138,6 +139,11 @@ export const stories = pgTable(
     logline: text('logline'),
     twistAnchor: text('twist_anchor'),
     subgenreTags: text('subgenre_tags').array().notNull().default([]),
+    // Story-elements labels the planner recorded for this story (structure/pov/role/setting/
+    // anchor/trigger/turn/aftereffect/tensionCurve — see story-elements.v1). Planner METADATA
+    // for variety + analytics; never a Writer instruction. Nullable: pre-elements + BYO stories
+    // are null and simply don't participate in the fingerprint avoid-list.
+    elements: jsonb('elements'),
     performanceScore: integer('performance_score').notNull().default(0),
     isReference: boolean('is_reference').notNull().default(false),
     createdAt: timestamp('created_at').notNull().defaultNow(),

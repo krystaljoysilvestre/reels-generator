@@ -260,6 +260,13 @@
       "when": 1783657254364,
       "tag": "0036_typical_blink",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1784114566447,
+      "tag": "0037_illegal_black_knight",
+      "breakpoints": true
     }
   ]
 }

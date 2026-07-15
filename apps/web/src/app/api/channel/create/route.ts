@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { eq } from 'drizzle-orm'
 import { getDb, channels, stories } from '@reels/db'
 import { ToneConfigSchema, WorldBibleSchema, ChannelVoiceSchema, VoiceModeSchema, CaptionStyleSchema, TargetPlatformSchema, PLATFORM_PRESETS, MusicIntensitySchema, MusicModeSchema, AudioMoodSchema, peakFracForType } from '@reels/core'
-import { classifyGenre } from '@reels/core/prompts/scenes.v1'
+import { classifyGenre, GENRE_MODULE_VALUES } from '@reels/core/prompts/scenes.v1'
 import { getSession } from '@/lib/auth'
 
 const InputSchema = z.object({
@@ -23,8 +23,8 @@ const InputSchema = z.object({
   targetSeconds: z.number().int().min(15).max(600).default(75), // per-channel video length (long-form allows minutes; clamped to the platform cap below)
   captionStyle: CaptionStyleSchema.default({}), // burned-in caption look
   worldBible: WorldBibleSchema,
-  // Visual-language bucket from channel.v1; falls back to keyword classification if absent.
-  genreCategory: z.enum(['horror', 'informational', 'lifestyle', 'general']).optional(),
+  // Genre bucket from channel.v1; falls back to keyword classification if absent.
+  genreCategory: z.enum(GENRE_MODULE_VALUES).optional(),
   voiceMode: VoiceModeSchema,
   voicePool: z.array(ChannelVoiceSchema).max(8), // empty allowed for per_story (chosen at render)
   sampleScript: z.string().trim().max(20000).nullish(), // Step-2 narration → first reference story.

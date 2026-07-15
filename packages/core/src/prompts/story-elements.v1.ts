@@ -1,0 +1,163 @@
+// story-elements.v1 — the story-composition ontology: the dimensions a FINISHED story can be
+// DESCRIBED along. A supporting asset for the PLANNER (like story-mechanics), used for structural
+// variety + analytics. Complementary to mechanics: mechanics = WHY a story works (emotional
+// psychology — dread, guilt, obsession); elements = WHAT PARTS/SHAPE it has.
+//
+// ── TWO PERMANENT INVARIANTS (see plan; enforced here + in the planner/writer) ──
+// 1. The Writer writes from an IDEA, never from elements. Elements are planner metadata; they must
+//    NOT reach the Writer prompt unless a future experiment validates it. If they do, the beat-sheet
+//    stage the whole design avoided has been rebuilt.
+// 2. Story quality DOMINATES element diversity. Elements prevent ACCIDENTAL structural convergence,
+//    they don't maximize novelty. A "diverse" story that reads weird has failed.
+//
+// Authored under .claude/skills/unbiased-design: describe-don't-prescribe — palettes are examples to
+// reason from, never menus or quotas; a dimension may be empty. HARD CAP ~10 dimensions (anti-bloat).
+// Versioned source code: ANY edit bumps STORY_ELEMENTS_V1_VERSION (rides into the planner version).
+
+import { z } from 'zod'
+import type { GenreModule } from './scenes.v1.js'
+
+export const STORY_ELEMENTS_V1_VERSION = 'elements.v1'
+
+// The labels the planner records about the idea it ALREADY committed to. Short free-text strings —
+// palettes below are guidance, not enums, so a planner can always name its own value. `pov` and
+// `anchor` optional (pov is often implied by structure; anchor is empty for many non-horror stories).
+export const StoryElementsSchema = z.object({
+  structure: z.string().min(1), // build archetype (story-angles vocabulary)
+  pov: z.string().optional(), // narrative vantage — inferred from structure when structure implies one
+  role: z.string().min(1), // the protagonist's narrative role
+  setting: z.string().min(1), // the MICRO-location (bathroom, hallway, jeepney) — not the macro place
+  anchor: z.string().optional(), // the ordinary thing/routine the story contaminates or hangs on
+  trigger: z.string().min(1), // the inciting detail/anomaly that starts it
+  turn: z.string().min(1), // the reveal/reversal TYPE
+  aftereffect: z.string().min(1), // what the viewer carries away
+  tensionCurve: z.string().min(1), // the pacing shape only (emotion belongs to mechanics)
+})
+export type StoryElements = z.infer<typeof StoryElementsSchema>
+
+// One-line description of each dimension, shown to the planner. Genre-neutral names; genre-specific
+// FLAVOR lives in the palettes below.
+const DIMENSION_DESCRIPTIONS: Array<{ key: keyof StoryElements; desc: string }> = [
+  { key: 'structure', desc: 'the build archetype — how the telling is shaped' },
+  { key: 'pov', desc: 'narrative vantage; leave blank if your structure already implies one' },
+  { key: 'role', desc: "the protagonist's role in life (who this happens to) — same event, different person = a different story" },
+  { key: 'setting', desc: 'the MICRO-location it happens in (a specific room/place), not the general building' },
+  { key: 'anchor', desc: 'the ordinary thing or routine the story contaminates or hangs on; blank if the story has none' },
+  { key: 'trigger', desc: 'the inciting detail that sets it off' },
+  { key: 'turn', desc: 'the TYPE of reveal/reversal at the peak' },
+  { key: 'aftereffect', desc: 'what the viewer is left carrying' },
+  { key: 'tensionCurve', desc: 'the pacing shape only — where it rises, holds, releases (not the emotion)' },
+]
+
+// Per-dimension, per-genre palettes: suggestive vocabularies to reason from. `structure`, `pov`, and
+// `turn` share cross-genre values (structure/pov reuse the story-angles vocabulary; horror `turn`
+// reuses the analyzer's contradiction vocabulary so elements + reveal system speak one language).
+// Empty array = no suggestions for that genre → the planner names its own. General stays minimal.
+type Palette = Partial<Record<keyof StoryElements, string[]>>
+
+const STRUCTURE_VALUES = ['cold_open', 'witness_account', 'retold_legend', 'mundane_wrong', 'second_person', 'slow_dread', 'outsider_pov', 'artifact']
+const POV_VALUES = ['first-person', 'witness', 'outsider', 'second-person', 'retold']
+
+const PALETTES: Record<GenreModule, Palette> = {
+  horror: {
+    role: ['student', 'call-center agent', 'nurse', 'security guard', 'delivery rider', 'saleslady', 'tricycle driver', 'househelp', 'OFW on leave', 'barangay tanod'],
+    setting: ['CR/bathroom', 'hallway', 'elevator', 'parking basement', 'jeepney', 'kitchen at 3AM', 'stairwell', 'province bedroom', 'rooftop', 'sari-sari store at closing'],
+    anchor: ['a mirror', 'earphones', 'the rice cooker', 'a baby monitor', 'the stairs', 'a group-chat notification', 'a helmet', 'the CCTV feed', 'a childhood photo', 'the aircon'],
+    trigger: ['a sound with no source', 'an object moved since last night', 'a reply that shouldn\'t come', 'a reflection that\'s wrong', 'wet footprints', 'a smell', 'a name being called'],
+    // Reuse the analyzer's contradiction taxonomy (see scenes.v1 REVEAL rules).
+    turn: ['spatial contradiction', 'identity contradiction', 'temporal contradiction', 'causal contradiction', 'behavioral contradiction', 'moral contradiction'],
+    aftereffect: ['a contaminated routine', 'a new rule to live by', 'lingering uncertainty', 'an irreversible loss', 'a thing you can never look at the same way'],
+    tensionCurve: ['calm→unease→dread→still', 'dread-from-line-one, sustained', 'quiet→quiet→sudden→cut', 'slow domestic build→late detonation'],
+  },
+  drama: {
+    role: ['a daughter', 'an estranged brother', 'a widow', 'a breadwinner', 'a former lover', 'a caregiver', 'a father who left'],
+    setting: ['a hospital waiting room', 'the family dinner table', 'a childhood bedroom', 'a bus terminal', 'a wake', 'a rented apartment'],
+    trigger: ['a returning face', 'an unsent message found', 'a diagnosis', 'an inheritance', 'a photograph', 'a phone call after years'],
+    turn: ['recognition', 'a hidden sacrifice revealed', 'a misunderstanding uncovered', 'a truth arriving too late'],
+    aftereffect: ['a permanent loss', 'a reconciliation that costs something', 'an unanswered "what if"', 'forgiveness that comes too late'],
+    tensionCurve: ['restraint→swell→quiet break', 'warm→crack→ache', 'steady→reveal→release'],
+  },
+  commentary: {
+    role: ['someone who used to believe the opposite', 'an insider', 'a frustrated regular person', 'a former true-believer'],
+    setting: ['no scene — direct address', 'a specific incident being dissected'],
+    trigger: ['a viral take', 'a double standard spotted', 'a personal experience that broke the belief'],
+    turn: ['the concession that flips into the knife', 'the receipt nobody expected', 'naming the unsaid'],
+    aftereffect: ['a side taken', 'a comfortable belief made uncomfortable', 'a line worth quoting'],
+    tensionCurve: ['claim→concede→turn→land', 'escalating certainty'],
+  },
+  reddit_story: {
+    role: ['the poster (AITA)', 'the sibling', 'the roommate', 'the coworker', 'the in-law', 'the neighbor'],
+    setting: ['a group chat', 'the office pantry', 'a family reunion', 'a shared apartment', 'a wedding'],
+    trigger: ['a message screenshot', 'a petty rule broken', 'money owed', 'a boundary crossed'],
+    turn: ['the reframe', 'the update that flips sympathy', 'the detail the poster reveals about themselves'],
+    aftereffect: ['a side taken', 'a "you\'re the one who\'s wrong" gut-punch', 'an unresolved judgment'],
+    tensionCurve: ['calm setup→petty escalation→breaking point', 'reasonable→unreasonable→verdict'],
+  },
+  comedy: {
+    role: ['the overconfident one', 'the deadpan narrator', 'the one thing keeps happening to', 'the straight man'],
+    setting: ['a wedding', 'a job interview', 'a family group chat', 'a jeepney', 'a office party'],
+    trigger: ['a tiny lie that grows', 'a misread situation', 'one wrong assumption', 'a plan that overcommits'],
+    turn: ['expectation subverted', 'a callback detonating', 'escalation reaching its absurd logical end'],
+    aftereffect: ['a punchline that recontextualizes it all', 'a "this is us" recognition', 'a groan-laugh'],
+    tensionCurve: ['setup→build→snap', 'straight→straighter→break'],
+  },
+  informational: {
+    role: [],
+    setting: ['no scene — direct explanation', 'anchored on one vivid case'],
+    trigger: ['a surprising fact', 'a common misconception', 'a "wait, why?" question'],
+    turn: ['the misconception flip', 'the felt-scale reveal', 'the so-what that lands'],
+    aftereffect: ['an idea the viewer can re-explain', 'a changed assumption'],
+    tensionCurve: ['hook→build→payoff'],
+  },
+  lifestyle: {
+    role: [],
+    setting: ['a kitchen', 'a market', 'a travel spot', 'a home corner'],
+    trigger: ['the payoff moment shown first', 'an insider secret', 'a sensory hook'],
+    turn: ['the reveal of how it\'s really done', 'the attainable first step'],
+    aftereffect: ['a want + a belief it\'s doable', 'a saved idea'],
+    tensionCurve: ['payoff→how→invitation'],
+  },
+  general: {},
+}
+
+// Structure/pov are cross-genre — merge the shared vocab into every genre's palette at render time.
+function paletteFor(genre: GenreModule, key: keyof StoryElements): string[] {
+  if (key === 'structure') return STRUCTURE_VALUES
+  if (key === 'pov') return POV_VALUES
+  return PALETTES[genre]?.[key] ?? []
+}
+
+// Prompt fragment: the element palette for this genre. Describe-don't-prescribe framing.
+export function renderElementPalette(genre: GenreModule): string {
+  const lines = DIMENSION_DESCRIPTIONS.map(({ key, desc }) => {
+    const vals = paletteFor(genre, key)
+    const egs = vals.length ? ` — e.g. ${vals.join(', ')}` : ''
+    return `- ${key}: ${desc}${egs}`
+  })
+  return `STORY ELEMENTS — the dimensions a finished story on this channel can be DESCRIBED along. These are labels for the idea you commit to, not a form to fill before deciding, and NOT instructions to the writer. Examples are a palette to reason from — pick what fits THIS story or name your own; a dimension may be empty (especially anchor/pov). Never pick a value just to fill a slot.
+${lines.join('\n')}`
+}
+
+// The four highest-signal, always-present dimensions. role + anchor ride in the differ-rule text
+// (not this hard key) so their nullability/optionality can't break dedup. Normalized: lowercased,
+// trimmed, non-alphanumerics collapsed — so "CR/bathroom" and "cr bathroom" collide as intended.
+export function elementFingerprint(el: Pick<StoryElements, 'structure' | 'setting' | 'trigger' | 'turn'>): string {
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+  return [el.structure, el.setting, el.trigger, el.turn].map(norm).join(' | ')
+}
+
+// Prompt fragment: what the channel has already used recently, so the planner can steer clear.
+export function formatRecentElements(recent: StoryElements[]): string {
+  if (recent.length === 0) return '(nothing yet — the catalog is young)'
+  const fps = recent.map((e) => `  • ${elementFingerprint(e)}`)
+  const roles = [...new Set(recent.map((e) => e.role.trim()).filter(Boolean))]
+  const anchors = [...new Set(recent.map((e) => e.anchor?.trim()).filter((s): s is string => !!s))]
+  return [
+    'Recent fingerprints (structure | setting | trigger | turn):',
+    ...fps,
+    roles.length ? `Recent roles: ${roles.join(', ')}` : '',
+    anchors.length ? `Recent anchors: ${anchors.join(', ')}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n')
+}

@@ -6,8 +6,8 @@ import { ToneConfigSchema, WorldBibleSchema, TargetPlatformSchema, PLATFORM_PRES
 import {
   buildChannelSamplePrompt,
   ChannelSampleSchema,
-  CHANNEL_SAMPLE_V1_VERSION,
-} from '@reels/core/prompts/channel-sample.v1'
+  CHANNEL_SAMPLE_V2_VERSION,
+} from '@reels/core/prompts/channel-sample.v2'
 import { getSession } from '@/lib/auth'
 
 const InputSchema = z.object({
@@ -20,6 +20,7 @@ const InputSchema = z.object({
   voiceStyle: z.string().trim().optional(),
   targetPlatform: TargetPlatformSchema.default('all'),
   promptHint: z.string().trim().max(8000).optional(), // optional operator steer — can be a long, detailed brief
+  genreCategory: z.string().trim().optional(), // derived bucket → picks the writer identity (niche keywords as fallback)
 })
 
 export async function POST(req: NextRequest) {
@@ -39,13 +40,14 @@ export async function POST(req: NextRequest) {
     worldJson: JSON.stringify(c.worldBible),
     targetSeconds: c.targetSeconds,
     hookHint: PLATFORM_PRESETS[c.targetPlatform].hookHint,
+    ...(c.genreCategory ? { genreCategory: c.genreCategory } : {}),
     ...(c.voiceStyle ? { voiceStyle: c.voiceStyle } : {}),
     ...(c.promptHint ? { promptHint: c.promptHint } : {}),
   })
 
   try {
     const result = await llmCall({
-      templateVersion: CHANNEL_SAMPLE_V1_VERSION,
+      templateVersion: CHANNEL_SAMPLE_V2_VERSION,
       schema: ChannelSampleSchema,
       system,
       messages: [{ role: 'user', content: userMessage }],
