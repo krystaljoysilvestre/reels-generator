@@ -8,7 +8,7 @@
 // Versioned source code; craft + identities versions ride along.
 
 import { z } from 'zod'
-import { STORY_CRAFT_CORE, STORY_CRAFT_V1_VERSION, taglishRegisterBlock } from './story-craft.v1.js'
+import { STORY_CRAFT_CORE, STORY_CRAFT_V1_VERSION, spokenRegisterBlock } from './story-craft.v1.js'
 import { WRITER_IDENTITIES, renderIdentity, WRITER_IDENTITIES_V1_VERSION } from './writer-identities.v1.js'
 import { asGenreModule, classifyGenre } from './scenes.v1.js'
 
@@ -46,7 +46,7 @@ ${renderIdentity(identity)}
 The bar you edit against:
 ${STORY_CRAFT_CORE}
 
-Language: ${v.language}${taglishRegisterBlock(v.language, v.audienceDescriptor)}
+Language: ${v.language}${spokenRegisterBlock(v.language, v.audienceDescriptor)}
 
 YOUR JOB — an actual editing pass, line by line:
 - Interrogate EVERY line: would a person say this out loud? does it earn its place? is the feeling shown or merely reported? A first draft that survives an honest pass untouched is vanishingly rare — if you're returning the script unchanged, you almost certainly skimmed instead of edited.

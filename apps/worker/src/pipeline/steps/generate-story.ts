@@ -20,6 +20,7 @@ import {
   // Studio pipeline (story-writer-v2 pivot, 2026-07-15)
   buildStoryWriterPrompt,
   STORY_V2_VERSION,
+  defaultAudienceDescriptor,
   buildStoryPlannerPrompt,
   STORY_PLANNER_V1_VERSION,
   StoryPlanSchema,
@@ -271,7 +272,7 @@ export async function generateStory(reelId: string, channelId: string, language:
     nicheDescription: channel.nicheDescription,
     toneConfig: JSON.stringify(toneConfig),
     language,
-    audienceDescriptor: 'young Filipino adult',
+    audienceDescriptor: defaultAudienceDescriptor(language),
     worldBibleJson: JSON.stringify(worldBible, null, 2),
     fewshotStories: formatFewShot(fewShot),
     targetSeconds,

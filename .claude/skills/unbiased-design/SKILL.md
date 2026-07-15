@@ -1,6 +1,6 @@
 ---
 name: unbiased-design
-description: Keep LLM prompts and creative pipeline heuristics UNBIASED and GENRE-AGNOSTIC — let the model's judgment decide what fits each story and moment, instead of hardcoding forced quotas or single-texture genre defaults. Use when writing or reviewing any prompt, creative heuristic, or genre-conditional logic (sound design, music, scenes, effects, voice, motion, captions, etc.).
+description: Keep LLM prompts and creative pipeline heuristics UNBIASED — genre-agnostic AND language-agnostic — let the model's judgment decide what fits each story, moment, and language, instead of hardcoding forced quotas, single-texture genre defaults, or one language's conventions as the default. Use when writing or reviewing any prompt, creative heuristic, or genre/language-conditional logic (sound design, music, scenes, effects, voice, motion, captions, prose, etc.).
 ---
 
 # Design for judgment, not bias
@@ -26,6 +26,7 @@ Firm up constraints. Never harden a choice into a rule.
 | `if genre === 'horror'` → inject "a slow heartbeat under a low drone" into the music prompt | Pass genre as *context*; let the model choose the bed's character (drone, pulse, sparse tones, or none). Don't default to one texture. |
 | "ALWAYS punctuate the peak with a riser→hit." | "A sting *can* detonate a moment; silence *can* be the loudest choice. Use what the moment earns." |
 | "Generate 4–7 SFX." (a quota) | "Use only what the story needs — any layer may be empty. When in doubt, leave it out." |
+| Register/voice guidance only for one language (e.g. a Taglish block, `''` for everything else) | Universal "sound like a real person saying this out loud in *this* language" for ANY language; language-specific nuance added per language as a documented block, never one baked as the default. |
 
 ## Rules of thumb
 
@@ -34,6 +35,12 @@ Firm up constraints. Never harden a choice into a rule.
 3. **Any layer may be empty.** Silence, no music, no voice, no effect — all valid outputs. Say so explicitly, or the model over-produces to fill the schema.
 4. **Frame as judgment, not command.** Prefer "candidate / if it fits / you choose / when it earns it / any of these may be empty" over "ALWAYS / EACH / must / place N".
 5. **Give context, not conclusions.** Tell the model *what the moment is* (hero beat, mood, location, the story's pivot) and let it decide the response — don't pre-decide the response for it.
+
+## Language: agnostic by default, not one language baked in
+
+The pipeline must not assume a language. Register/voice guidance should be **universal** — "write it the way a real person actually says this OUT LOUD in *this* language; never translate word-for-word from another language" applies to every language, and every language deserves that guidance (don't hand one language a rich block and everything else an empty string). The channel's language enters as **context**, never a hardcoded default. Same for audience: don't bake a nationality/culture ("young Filipino adult") into a shared prompt — derive it from the channel/language.
+
+Mixed-code-switching languages (today only **Taglish**) legitimately get extra, language-specific nuance — but as a **documented per-language addendum layered on the universal guidance**, exactly like the per-genre tuning exception below: it's an owner-set default for a real, known audience, it can be overridden, and adding another mixed language means adding another block, not rewriting the default. And even there, never *force* the mix — "let it fall where it naturally falls" is judgment, not a quota.
 
 ## The legitimate exception — deterministic, owner-set tuning
 
@@ -48,5 +55,6 @@ Some genre-specific defaults are **not** creative bias — they're calibrated, o
 - [ ] Language is **judgment-framed** ("if it fits", "you choose"), not imperative ("always", "each", "must").
 - [ ] Genre/mood is passed as **context to reason from**, not a pre-baked conclusion.
 - [ ] Any genre-specific default is deliberate, owner-set **tuning** (see exception above), and documented.
+- [ ] **Language is not assumed**: register guidance works for any language, no nationality/culture baked into a shared prompt, and any mixed-language nuance is a documented per-language addendum on top of universal guidance.
 
-When reviewing existing code, scan prompts/heuristics for `ALWAYS`, `EACH`, `must`, `if genre ===`, fixed counts, and per-genre creative literals — each is a candidate to convert from rule to judgment.
+When reviewing existing code, scan prompts/heuristics for `ALWAYS`, `EACH`, `must`, `if genre ===`, `=== 'taglish'`, hardcoded audience/culture literals, fixed counts, and per-genre/per-language creative literals — each is a candidate to convert from rule to judgment.

@@ -11,7 +11,7 @@
 import { z } from 'zod'
 import { asGenreModule, classifyGenre, type GenreModule } from './scenes.v1.js'
 
-export const STORY_CRITIC_V2_VERSION = 'story-critic.v2.0'
+export const STORY_CRITIC_V2_VERSION = 'story-critic.v2.1'
 
 export const StoryGateSchema = z.object({
   pass: z.boolean(),
@@ -176,7 +176,8 @@ Niche: ${v.nicheDescription}
 A finished ${v.language} narration script is about to ship. You answer ONE question: should this ship — yes or no?
 
 How you judge:
-- THE CREDIBILITY TEST comes first: read it as a skeptical listener who instantly smells over-polished, constructed, or AI-flavored writing. If you would not believe a real person said this out loud${v.language.toLowerCase() === 'taglish' ? ' — including whether the Taglish is how people actually talk, not textbook code-switching' : ''}, it fails.
+- THE CREDIBILITY TEST comes first: read it as a skeptical listener who instantly smells over-polished, constructed, or AI-flavored writing. If you would not believe a real person said this out loud, it fails.
+- LANGUAGE NATURALNESS (any language) is a hard fail: any line that reads like a sentence translated word-for-word from another language, any garbled or grammatically-wrong phrase, or a title in the wrong language, = FAIL — name the exact line in your reason so the rewrite can fix it.${v.language.toLowerCase() === 'taglish' ? '\n- For this Taglish channel specifically: textbook/literary Tagalog or forced, perfectly-balanced code-switching also fails — it should read as natural, contemporary spoken Taglish.' : ''}
 - Then the channel's rubric below. A clear violation of a rubric line fails; judge against the rubric, not your personal taste.
 - You do not rewrite, rank, or score. Pass or fail, with ONE blunt sentence of reason. On fail, the reason must point at the text (what fails and where), because it steers exactly one rewrite.
 - Bar check: a good-enough story passes. This gate exists to catch real failures, not to chase perfection — most competent scripts should pass.`

@@ -5,13 +5,13 @@
 // mechanics behind it (mechanics are for planning; this writer writes someone who lived it).
 // Versioned source code. Never edit after a reel ships on this version — bump.
 
-import { STORY_CRAFT_CORE, STORY_CRAFT_V1_VERSION, taglishRegisterBlock } from './story-craft.v1.js'
+import { STORY_CRAFT_CORE, STORY_CRAFT_V1_VERSION, spokenRegisterBlock } from './story-craft.v1.js'
 import { WRITER_IDENTITIES, renderIdentity, WRITER_IDENTITIES_V1_VERSION } from './writer-identities.v1.js'
 import { asGenreModule, classifyGenre } from './scenes.v1.js'
 
 // Craft + identities are baked into the prompt text, so their versions ride along: editing either
 // asset file (and bumping its constant) visibly re-versions this writer and busts the inputHash.
-export const STORY_V2_VERSION = `story.v2.0+${STORY_CRAFT_V1_VERSION}+${WRITER_IDENTITIES_V1_VERSION}`
+export const STORY_V2_VERSION = `story.v2.1+${STORY_CRAFT_V1_VERSION}+${WRITER_IDENTITIES_V1_VERSION}`
 
 export interface StoryWriterVars {
   channelName: string
@@ -50,7 +50,7 @@ ${renderIdentity(identity)}
 ${STORY_CRAFT_CORE}
 
 Tone calibration (0–10 scales): ${v.toneConfig}
-Language for this story: ${v.language}${taglishRegisterBlock(v.language, v.audienceDescriptor)}
+Language for this story: ${v.language}${spokenRegisterBlock(v.language, v.audienceDescriptor)}
 
 WORLD BIBLE — stay consistent with this world:
 ${v.worldBibleJson}
@@ -97,7 +97,7 @@ ${
   }
 OUTPUT (JSON only):
 {
-  "title": "",
+  "title": "",                   // in ${v.language} — short and casual, how a person would name this story to a friend ("Yung Katok", "May Kausap sa CR"), NEVER an English title on a non-English channel and NEVER a literary/translated title
   "language": "",
   "narration": "",
   "logline": "",                 // one-line summary of the reel

@@ -9,6 +9,7 @@ export {
 } from '@reels/core/prompts/story-critic.v1'
 // ── Studio pipeline (story-writer-v2 pivot, 2026-07-15): Planner → Writer → Editor → Naturalizer → Gate ──
 export { buildStoryWriterPrompt, STORY_V2_VERSION } from '@reels/core/prompts/story.v2'
+export { defaultAudienceDescriptor } from '@reels/core/prompts/story-craft.v1'
 export {
   buildStoryPlannerPrompt,
   STORY_PLANNER_V1_VERSION,

@@ -6,7 +6,7 @@
 // v1 stays untouched for shipped channels.
 
 import { z } from 'zod'
-import { STORY_CRAFT_CORE, STORY_CRAFT_V1_VERSION, taglishRegisterBlock } from './story-craft.v1.js'
+import { STORY_CRAFT_CORE, STORY_CRAFT_V1_VERSION, spokenRegisterBlock, defaultAudienceDescriptor } from './story-craft.v1.js'
 import { WRITER_IDENTITIES, renderIdentity, WRITER_IDENTITIES_V1_VERSION } from './writer-identities.v1.js'
 import { asGenreModule, classifyGenre } from './scenes.v1.js'
 
@@ -50,7 +50,7 @@ Tone calibration (0–10 scales): ${v.toneJson}
 World bible (stay consistent with it):
 ${v.worldJson}${v.voiceStyle ? `\n\nLead narrator delivery: ${v.voiceStyle}` : ''}
 
-Language for this sample: ${v.language}${taglishRegisterBlock(v.language, 'young Filipino adult')}
+Language for this sample: ${v.language}${spokenRegisterBlock(v.language, defaultAudienceDescriptor(v.language))}
 
 GUARDS: fictionalize specific real places and people; no graphic gore or sexual content; never harm to minors as subject matter; original work only.
 This is a SAMPLE that demonstrates the channel's voice — make it self-contained and complete. It becomes the channel's first reference story, so every future story learns its voice from this one.`
