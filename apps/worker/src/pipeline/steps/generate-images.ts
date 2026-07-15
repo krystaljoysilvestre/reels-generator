@@ -1,6 +1,6 @@
 import { eq, and, sql } from 'drizzle-orm'
 import { getDb, reels, scenes, assets, channels, stories } from '@reels/db'
-import { generateImage, generateImageFal, imageEngineForGenre, FLUX_IMAGE_ENGINE, OPENAI_IMAGE_ENGINE, buildInputHash, ContentFilterError, llmCall, downloadBuffer, SCENE_IMAGE_MODEL, SCENE_IMAGE_QUALITY, type ImageEngine } from '@reels/providers'
+import { generateImage, generateImageFal, imageEngineForGenre, FLUX_IMAGE_ENGINE, buildInputHash, ContentFilterError, llmCall, downloadBuffer, SCENE_IMAGE_MODEL, SCENE_IMAGE_QUALITY, type ImageEngine } from '@reels/providers'
 import { assembleImagePrompt, assembleNegativePrompt, assembleReferencePrompt, castNationality, reelLightingDirective, sceneEntities, slug, PLATFORM_PRESETS, StoryBibleSchema } from '@reels/core'
 import { z } from 'zod'
 import { buildRephrasePrompt, REPHRASE_V1_VERSION, buildImageQAPrompt, IMAGE_QA_V1_VERSION, ImageQASchema, buildFilterSafePrompt, FILTER_SAFE_V1_VERSION, FilterSafeSchema } from '../../prompts-bridge.js'
@@ -210,16 +210,14 @@ export async function generateImages(reelId: string): Promise<void> {
       : []
     const referenceImageKeys = sceneEnts.map((e) => e.referenceImageKey).filter((k): k is string => Boolean(k))
 
-    // Per-scene engine: a horror SCARE beat (any shot featuring the role:'threat' entity) renders on
-    // gpt-image-1 (OpenAI) at moderation:'low', NOT the reel's default (Gemini/nano-banana). Gemini's edit
-    // model beautifies the gaunt, hollow-eyed threat into a pretty, normal face; Flux HARD-refuses corpse-face
-    // content (content_policy) even at max tolerance and silently falls back to nano-banana — same soft result.
-    // gpt-image-1 at low moderation renders the dread AND the extreme close-up (the scare-beat hybrid
-    // config.ts anticipates). text→image (its edit corrupts identity), so the threat is drawn fresh from its
-    // spliced inline description; fine for the 1-2 shots a threat appears in. Non-scare beats stay on the
-    // owner-preferred default engine for continuity.
-    const isScareBeat = channel.genreCategory === 'horror' && sceneEnts.some((e) => e.role === 'threat')
-    const sceneEngine = isScareBeat ? OPENAI_IMAGE_ENGINE : imageEngine
+    // One engine for every scene, scare beats included. The gpt-image-1 scare-beat special-case existed
+    // because the old fully-detailed corpse-face archetype needed moderation:'low' to render at all — and it
+    // still refused intermittently, collapsing the payoff to a fallback. The chiaroscuro threat archetype
+    // (story-analyzer.v1.15: shadow-native form + ONE lit anomaly) is tame to moderation by construction, so
+    // the reveal renders on the reel's default engine like everything else — reference-conditioned (the
+    // narrator's + threat's plates lock both identities in the mirror), cheaper, zero refusals in the A/B
+    // (2026-07-15, reel d86ccd48 scene 6: nano-banana first-try vs gpt-image-1 3-refusals→fallback).
+    const sceneEngine = imageEngine
 
     // Server-side prompt assembly — the LLM never sees this. Style suffix + (when analyzed) the scene's bible
     // entities expanded to their frozen descriptions (narrator resolved by the visibility rule above).
