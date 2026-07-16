@@ -11,12 +11,9 @@ import {
   buildInputHash,
 } from '@reels/providers'
 import {
+  // story.v1 kept only as the planner-failure fallback draft (a single direct draft on the angle).
   STORY_V1_VERSION,
   buildStoryPrompt,
-  STORY_CRITIC_V1_VERSION,
-  buildStoryCriticPrompt,
-  StoryCriticSchema,
-  DEFAULT_TASTE_RUBRIC,
   // Studio pipeline (story-writer-v2 pivot, 2026-07-15)
   buildStoryWriterPrompt,
   STORY_V2_VERSION,
@@ -47,60 +44,17 @@ import {
 } from '../../assembly-bridge.js'
 import { runStep, setReelStatus } from '../harness.js'
 
-// ── Planning mode ─────────────────────────────────────────────────────────────
-// 'studio' (default): Planner → Genre Writer ×1 → Editor → Naturalizer → binary Gate.
-//   ~5 LLM calls, ONE full-length prose generation. The Writer is the product.
-// 'bestofn' (legacy): 6 angle-pinned drafts → ranking critic. Kept selectable for the blind
-//   premise A/B (scripts/ab-premises.ts) — HYPOTHESIS: the Planner's internal idea exploration
-//   matches 6-draft sampling. Don't delete this path until the A/B decides.
-type PlanningMode = 'studio' | 'bestofn'
-function planningMode(): PlanningMode {
-  return process.env.STORY_PLANNING_MODE === 'bestofn' ? 'bestofn' : 'studio'
-}
-
-// Legacy best-of-N knobs (bestofn mode only)
-const BEST_OF_N = 6
-const CANDIDATE_TEMPERATURE = 1.0
-const GENERATE_STORY_STEP_VERSION = 'generate_story.bestofn.v1'
+// The story pipeline: Planner → Genre Writer ×1 → Editor → Naturalizer → binary Gate.
+// ~5 LLM calls, ONE full-length prose generation. The Writer is the product.
+// (The legacy best-of-6 path was retired 2026-07-16 after the blind premise A/B: the single
+// Planner won on freshness/pull, so write-6-and-rank is gone. History is in git if ever needed.)
+const CANDIDATE_TEMPERATURE = 1.0 // temperature for the planner-failure fallback draft (story.v1)
 // Studio recipe version: keys the input hash alongside every stage/asset version.
 const GENERATE_STORY_STUDIO_VERSION = 'generate_story.studio.v1'
 // How many recent stories feed the Planner's premise avoid-list (the mirror-×6 fix).
 const RECENT_PREMISES_LIMIT = 15
 const WRITER_TEMPERATURE = 1.0
 const REWRITE_TEMPERATURE = 0.7 // editor + naturalizer: refinement, not invention
-
-interface CandidateEntry {
-  angleId: string
-  story: StoryOutput
-}
-
-type CriticRecord =
-  | {
-      status: 'ok'
-      version: string
-      rationale: string
-      winnerLabel: string
-      verdicts: Array<{
-        label: string
-        candidateIdx: number
-        total: number
-        note: string
-        scores: { hook: number; build: number; payoff: number; voice: number; freshness: number }
-      }>
-    }
-  | { status: 'skipped'; reason: 'single_survivor' }
-  | { status: 'failed'; error: string }
-
-// Persisted as pipeline_steps.output (legacy bestofn mode) — the winner is duplicated into the
-// stories row; losers + verdicts live here for the story-gate UI + audit.
-interface BestOfNOutput {
-  v: 2
-  winner: StoryOutput
-  winnerIdx: number
-  candidates: CandidateEntry[]
-  critic: CriticRecord
-  generationFailures: number
-}
 
 type RewriteStatus = 'ok' | 'failed' | 'discarded_wordcount' | 'discarded_peak'
 
@@ -123,31 +77,6 @@ interface StudioOutput {
   peakResolution: 'stage' | 'writer_restored' | 'dropped'
 }
 
-type GenerateStoryOutput = BestOfNOutput | StudioOutput
-
-// Deterministic shuffle for critic presentation order (position-bias defense): seeded on
-// reelId+nonce so retries of the same round present candidates identically (stable step output).
-function seededShuffle<T>(items: T[], seedText: string): T[] {
-  let seed = 5381
-  for (let i = 0; i < seedText.length; i++) seed = ((seed << 5) + seed + seedText.charCodeAt(i)) >>> 0
-  const rand = () => {
-    // mulberry32
-    seed = (seed + 0x6d2b79f5) >>> 0
-    let t = seed
-    t = Math.imul(t ^ (t >>> 15), t | 1)
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
-  const out = [...items]
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(rand() * (i + 1))
-    ;[out[i], out[j]] = [out[j]!, out[i]!]
-  }
-  return out
-}
-
-const CANDIDATE_LABELS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
-
 function wordCount(s: string): number {
   return s.trim().split(/\s+/).filter(Boolean).length
 }
@@ -165,7 +94,6 @@ export function resolvePeak(narration: string, candidates: Array<string | undefi
 
 export async function generateStory(reelId: string, channelId: string, language: string = 'tagalog') {
   const db = getDb()
-  const mode = planningMode()
 
   const channel = await db.query.channels.findFirst({ where: eq(channels.id, channelId) })
   if (!channel) throw new Error(`Channel not found: ${channelId}`)
@@ -252,12 +180,9 @@ export async function generateStory(reelId: string, channelId: string, language:
     const prevStep = await db.query.pipelineSteps.findFirst({
       where: and(eq(pipelineSteps.reelId, reelId), eq(pipelineSteps.stepName, 'generate_story')),
     })
-    const prev = prevStep?.output as Partial<GenerateStoryOutput> | null | undefined
-    if (prev && prev.v === 2 && Array.isArray(prev.candidates) && typeof prev.winnerIdx === 'number') {
-      prevWinnerAngleId = prev.candidates[prev.winnerIdx]?.angleId
-    } else if (prev && prev.v === 3 && typeof prev.angleId === 'string') {
-      prevWinnerAngleId = prev.angleId
-    }
+    const prev = prevStep?.output as Partial<StudioOutput> | null | undefined
+    if (prev && prev.v === 3 && typeof prev.angleId === 'string') prevWinnerAngleId = prev.angleId
+    // (older reels may carry a legacy v:2 output; its angle isn't reused — a fresh angle is fine.)
   }
 
   const worldBible = WorldBibleSchema.parse(channel.worldBible)
@@ -284,47 +209,35 @@ export async function generateStory(reelId: string, channelId: string, language:
     regenerationNonce,
   }
 
-  const result =
-    mode === 'bestofn'
-      ? await runBestOfN({
-          reelId,
-          channel: { name: channel.name, nicheDescription: channel.nicheDescription, tasteRubric: channel.tasteRubric },
-          basePromptVars,
-          targetSeconds,
-          storyMaxTokens,
-          regenerationNonce,
-          operatorFeedback,
-          prevWinnerAngleId,
-        })
-      : await runStudio({
-          reelId,
-          channel: {
-            name: channel.name,
-            nicheDescription: channel.nicheDescription,
-            tasteRubric: channel.tasteRubric,
-            genreCategory: channel.genreCategory,
-            narrativeStyle: channel.narrativeStyle,
-            narrativeVoice: channel.narrativeVoice,
-            styleInfluence: channel.styleInfluence,
-          },
-          basePromptVars,
-          worldBible,
-          targetSeconds,
-          storyMaxTokens,
-          regenerationNonce,
-          operatorFeedback,
-          prevWinnerAngleId,
-          recentPremises,
-          recentElements,
-          rotationOffset,
-          language,
-        })
+  const result = await runStudio({
+    reelId,
+    channel: {
+      name: channel.name,
+      nicheDescription: channel.nicheDescription,
+      tasteRubric: channel.tasteRubric,
+      genreCategory: channel.genreCategory,
+      narrativeStyle: channel.narrativeStyle,
+      narrativeVoice: channel.narrativeVoice,
+      styleInfluence: channel.styleInfluence,
+    },
+    basePromptVars,
+    worldBible,
+    targetSeconds,
+    storyMaxTokens,
+    regenerationNonce,
+    operatorFeedback,
+    prevWinnerAngleId,
+    recentPremises,
+    recentElements,
+    rotationOffset,
+    language,
+  })
 
   if (!result.skipped) {
     const winner = result.output.winner
-    // Story-elements labels (studio only) → persisted for the cross-reel shape avoid-list + analytics.
-    // Planner metadata, NOT a Writer instruction (invariant 1). null for bestofn/BYO.
-    const elements = result.output.v === 3 ? (result.output.plan?.elements ?? null) : null
+    // Story-elements labels → persisted for the cross-reel shape avoid-list + analytics.
+    // Planner metadata, NOT a Writer instruction (invariant 1). null for BYO.
+    const elements = result.output.plan?.elements ?? null
 
     // Persist the winning story to the stories table
     const [story] = await db
@@ -409,6 +322,10 @@ async function runStudio(a: StudioArgs) {
   const styleInfluence = (['light', 'medium', 'full'] as const).includes(a.channel.styleInfluence as StyleInfluence)
     ? (a.channel.styleInfluence as StyleInfluence)
     : 'medium'
+  // WRITER MODEL: gpt-4o (the standing "OpenAI writes prose" decision). A 2026-07-16 blind writer
+  // A/B found Claude's Taglish arguably more natural, but the owner kept OpenAI for Taglish on a
+  // second read. The gpt-4o-vs-Claude writer A/B harness (scripts/taglish-ab.ts) remains for other
+  // languages/channels (e.g. an English channel) if we revisit the model choice there.
   // ONE structural seed per round, rotated by an offset that ADVANCES every reel (rotationOffset =
   // channel story count + nonce), and never the angle the operator just rejected. This is the fix
   // for the fresh-reel sameness: keying on regenerationNonce alone froze every fresh reel to angle #0.
@@ -671,156 +588,4 @@ async function runStudio(a: StudioArgs) {
     }
     return { output, costCents }
   })
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// LEGACY BEST-OF-N — 6 angle-pinned drafts → ranking critic. ~12–15¢/reel.
-// Selectable via STORY_PLANNING_MODE=bestofn; kept until the premise A/B decides.
-// ────────────────────────────────────────────────────────────────────────────
-
-interface BestOfNArgs {
-  reelId: string
-  channel: { name: string; nicheDescription: string; tasteRubric: string | null }
-  basePromptVars: StudioArgs['basePromptVars']
-  targetSeconds: number
-  storyMaxTokens: number
-  regenerationNonce: number
-  operatorFeedback: string | undefined
-  prevWinnerAngleId: string | undefined
-}
-
-async function runBestOfN(a: BestOfNArgs) {
-  const angles = selectAngles(BEST_OF_N, a.regenerationNonce, a.prevWinnerAngleId)
-  const { system, userMessage } = buildStoryPrompt(a.basePromptVars)
-  const tasteRubric = a.channel.tasteRubric?.trim() || DEFAULT_TASTE_RUBRIC
-
-  // One hash for the whole best-of-N round. Prompt text carries nonce + operator feedback; the
-  // angle slate, N, and rubric are part of the recipe, so editing any of them re-runs the step.
-  const inputHash = buildInputHash(GENERATE_STORY_STEP_VERSION, {
-    storyVersion: STORY_V1_VERSION,
-    criticVersion: STORY_CRITIC_V1_VERSION,
-    system,
-    userMessage,
-    angles: angles.map((x) => x.id),
-    n: BEST_OF_N,
-    rubric: tasteRubric,
-  })
-
-  return runStep<BestOfNOutput>(
-    { reelId: a.reelId, stepName: 'generate_story', inputHash },
-    async () => {
-      // ── Fan out: one draft per angle ─────────────────────────────────────
-      // Promise.allSettled (not runPool): partial failure is tolerated — we rank the survivors.
-      // The provider limiter (openai cap 8) is the concurrency throttle.
-      const settled = await Promise.allSettled(
-        angles.map((angle) =>
-          llmCall({
-            templateVersion: STORY_V1_VERSION,
-            schema: StoryOutputSchema,
-            system,
-            messages: [{ role: 'user', content: buildStoryPrompt({ ...a.basePromptVars, angleDirective: angle.directive }).userMessage }],
-            temperature: CANDIDATE_TEMPERATURE,
-            maxTokens: a.storyMaxTokens,
-          }),
-        ),
-      )
-
-      let costCents = 0
-      const candidates: CandidateEntry[] = []
-      settled.forEach((s, i) => {
-        if (s.status === 'fulfilled') {
-          costCents += s.value.costCents
-          // zod applies the newCanon default at parse time; re-assert it for the output type
-          candidates.push({ angleId: angles[i]!.id, story: { ...s.value.data, newCanon: s.value.data.newCanon ?? [] } })
-        } else {
-          console.warn(`[generate_story] candidate ${angles[i]!.id} failed: ${String(s.reason)}`)
-        }
-      })
-      const generationFailures = angles.length - candidates.length
-
-      if (candidates.length === 0) {
-        const firstErr = settled.find((s): s is PromiseRejectedResult => s.status === 'rejected')
-        throw new Error(`all ${angles.length} story candidates failed; first error: ${String(firstErr?.reason ?? 'unknown')}`)
-      }
-
-      // ── Rank survivors ───────────────────────────────────────────────────
-      let winnerIdx = 0
-      let critic: CriticRecord
-
-      if (candidates.length === 1) {
-        critic = { status: 'skipped', reason: 'single_survivor' }
-      } else {
-        try {
-          // Deterministic shuffle → labels carry no position information for the critic.
-          const order = seededShuffle(
-            candidates.map((_, idx) => idx),
-            `${a.reelId}:${a.regenerationNonce}`,
-          )
-          const labelToIdx = new Map<string, number>()
-          const candidatesBlock = order
-            .map((candidateIdx, pos) => {
-              const label = CANDIDATE_LABELS[pos]!
-              labelToIdx.set(label, candidateIdx)
-              const c = candidates[candidateIdx]!
-              return `--- CANDIDATE ${label} ---\nTitle: ${c.story.title}\nLogline: ${c.story.logline}\nNarration:\n${c.story.narration}`
-            })
-            .join('\n\n')
-
-          const criticPrompt = buildStoryCriticPrompt({
-            channelName: a.channel.name,
-            nicheDescription: a.channel.nicheDescription,
-            tasteRubric,
-            targetSeconds: a.targetSeconds,
-            operatorFeedback: a.operatorFeedback,
-            candidatesBlock,
-          })
-
-          const criticRes = await llmCall({
-            templateVersion: STORY_CRITIC_V1_VERSION,
-            schema: StoryCriticSchema,
-            system: criticPrompt.system,
-            messages: [{ role: 'user', content: criticPrompt.userMessage }],
-            provider: 'anthropic',
-            maxTokens: 2048,
-          })
-          costCents += criticRes.costCents
-
-          const picked = labelToIdx.get(criticRes.data.winnerLabel.trim().toUpperCase())
-          if (picked === undefined) {
-            throw new Error(`critic picked unknown label "${criticRes.data.winnerLabel}"`)
-          }
-          winnerIdx = picked
-          critic = {
-            status: 'ok',
-            version: STORY_CRITIC_V1_VERSION,
-            rationale: criticRes.data.rationale,
-            winnerLabel: criticRes.data.winnerLabel,
-            verdicts: criticRes.data.verdicts.map((x) => ({
-              label: x.label,
-              candidateIdx: labelToIdx.get(x.label.trim().toUpperCase()) ?? -1,
-              total: x.total,
-              note: x.note,
-              scores: x.scores,
-            })),
-          }
-        } catch (err) {
-          // Never fail the step over the critic — the candidates are already paid for and the
-          // story gate (or auto-mode) still needs a story. Candidate 0 leads the slate.
-          console.warn(`[generate_story] critic failed, falling back to candidate 0: ${String(err)}`)
-          winnerIdx = 0
-          critic = { status: 'failed', error: String(err) }
-        }
-      }
-
-      const output: BestOfNOutput = {
-        v: 2,
-        winner: candidates[winnerIdx]!.story,
-        winnerIdx,
-        candidates,
-        critic,
-        generationFailures,
-      }
-      return { output, costCents }
-    },
-  )
 }
