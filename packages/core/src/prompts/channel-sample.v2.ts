@@ -8,9 +8,11 @@
 import { z } from 'zod'
 import { STORY_CRAFT_CORE, STORY_CRAFT_V1_VERSION, spokenRegisterBlock, defaultAudienceDescriptor } from './story-craft.v1.js'
 import { WRITER_IDENTITIES, renderIdentity, WRITER_IDENTITIES_V1_VERSION } from './writer-identities.v1.js'
+import { STORY_STYLES_V1_VERSION, resolveStyle, renderStyleTellingForWriter, type StyleInfluence } from './story-styles.v1.js'
+import { STORY_VOICES_V1_VERSION, resolveVoice, renderVoice } from './story-voices.v1.js'
 import { asGenreModule, classifyGenre } from './scenes.v1.js'
 
-export const CHANNEL_SAMPLE_V2_VERSION = `channel-sample.v2.0+${STORY_CRAFT_V1_VERSION}+${WRITER_IDENTITIES_V1_VERSION}`
+export const CHANNEL_SAMPLE_V2_VERSION = `channel-sample.v2.1+${STORY_CRAFT_V1_VERSION}+${WRITER_IDENTITIES_V1_VERSION}+${STORY_STYLES_V1_VERSION}+${STORY_VOICES_V1_VERSION}`
 
 export const ChannelSampleSchema = z.object({
   title: z.string(),
@@ -27,7 +29,10 @@ export interface ChannelSampleVars {
   worldJson: string // JSON-stringified world bible
   targetSeconds: number // the channel's reel length — the sample should match it
   genreCategory?: string | undefined // channel bucket → picks the writer identity (niche keywords as fallback)
-  voiceStyle?: string // delivery style of the lead narrator, if any
+  narrativeStyle?: string | undefined // storytelling tradition (story-styles); '' = pure genre
+  narrativeVoice?: string | undefined // narrator's written sound (story-voices); '' = identity default
+  styleInfluence?: StyleInfluence | undefined // how hard to lean into the style; default medium
+  voiceStyle?: string // delivery style of the lead narrator, if any (TTS-ish hint; distinct from narrativeVoice)
   hookHint?: string // target-platform hook convention (shapes the opening line)
   promptHint?: string // optional operator steer for what THIS sample should be about
 }
@@ -37,13 +42,18 @@ export function buildChannelSamplePrompt(v: ChannelSampleVars): {
   userMessage: string
 } {
   const targetWords = Math.round(v.targetSeconds * 2.5) // ~2.5 words/sec narration pace
-  const identity = WRITER_IDENTITIES[asGenreModule(v.genreCategory ?? null) ?? classifyGenre(v.nicheDescription)]
+  const genre = asGenreModule(v.genreCategory ?? null) ?? classifyGenre(v.nicheDescription)
+  const identity = WRITER_IDENTITIES[genre]
+  const styleSpec = resolveStyle(genre, v.narrativeStyle)
+  const styleBlock = styleSpec ? `\n${renderStyleTellingForWriter(styleSpec, v.styleInfluence ?? 'medium')}\n` : ''
+  const voiceSpec = resolveVoice(v.narrativeVoice)
+  const voiceBlock = voiceSpec ? `\n${renderVoice(voiceSpec)}\n` : ''
 
   const system = `You are ${identity.label} — the writer behind "${v.name}", a short-form video channel.
 Niche: ${v.nicheDescription}
 
 ${renderIdentity(identity)}
-
+${styleBlock}${voiceBlock}
 ${STORY_CRAFT_CORE}
 
 Tone calibration (0–10 scales): ${v.toneJson}

@@ -4,6 +4,8 @@ import { z } from 'zod'
 import { eq } from 'drizzle-orm'
 import { getDb, channels } from '@reels/db'
 import { ToneConfigSchema, WorldBibleSchema, CaptionStyleSchema, TargetPlatformSchema, PLATFORM_PRESETS, AudioPacksSchema, MusicMoodSchema } from '@reels/core'
+import { STYLE_VALUES } from '@reels/core/prompts/story-styles.v1'
+import { VOICE_VALUES } from '@reels/core/prompts/story-voices.v1'
 import { getSession } from '@/lib/auth'
 
 // Edit a channel's creative bible after creation. Only the fields below are editable here;
@@ -26,6 +28,10 @@ const UpdateSchema = z
     generationMode: z.enum(['review', 'auto']),
     musicMood: MusicMoodSchema.nullable(), // channel-default background-music mood; null = auto (fall back to audioMood). Lives in audioPacks jsonb.
     tasteRubric: z.string().trim().max(4000).nullish(), // story-critic rubric; null/empty clears → default rubric
+    // PROSE dimensions (story-styles / story-voices) — '' allowed (pure genre / default voice).
+    narrativeStyle: z.union([z.literal(''), z.enum(STYLE_VALUES)]),
+    narrativeVoice: z.union([z.literal(''), z.enum(VOICE_VALUES)]),
+    styleInfluence: z.enum(['light', 'medium', 'full']),
   })
   .partial()
   .strict()

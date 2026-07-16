@@ -267,6 +267,13 @@
       "when": 1784114566447,
       "tag": "0037_illegal_black_knight",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1784132316060,
+      "tag": "0038_abnormal_vampiro",
+      "breakpoints": true
     }
   ]
 }

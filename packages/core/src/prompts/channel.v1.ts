@@ -5,8 +5,10 @@
 
 import { z } from 'zod'
 import { ToneConfigSchema, WorldBibleSchema, PLATFORM_PRESETS, type TargetPlatform } from '../types/channel.js'
+import { STYLE_VALUES, STORY_STYLES } from './story-styles.v1.js'
+import { VOICE_VALUES } from './story-voices.v1.js'
 
-export const CHANNEL_V1_VERSION = 'channel.v1.3'
+export const CHANNEL_V1_VERSION = 'channel.v1.4'
 
 // The full derived profile returned by the LLM. Narrator voices are NOT derived
 // — the operator picks real ElevenLabs voices in the UI. We derive an audioMood
@@ -24,6 +26,10 @@ export const ChannelDerivationSchema = z.object({
   captionFontScale: z.number().min(0.85).max(1.25), // size multiplier on the preset's base
   worldBible: WorldBibleSchema,
   genreCategory: z.enum(['horror', 'informational', 'lifestyle', 'drama', 'commentary', 'reddit_story', 'comedy', 'general']), // genre bucket → picks the writer identity + scene-prompt genre module
+  // PROSE dimensions (story-styles / story-voices) — a SUGGESTED default the operator can override.
+  // Optional: `general` has no styles, and the create route re-validates the style against the genre.
+  narrativeStyle: z.enum(STYLE_VALUES).optional(), // storytelling tradition within the genre ('' = pure genre)
+  narrativeVoice: z.enum(VOICE_VALUES).optional(), // the narrator's written sound (NOT the TTS voice)
   voiceSearchKeyword: z.string(), // 1–2 word genre/topic tag for matching narrator voices
   audioMood: z.object({
     prompt: z.string(), // text-to-music brief for the channel's signature background bed
@@ -53,6 +59,14 @@ Principles:
 - Fictionalize specifics so nothing maps to a real person or exact real place; a real region/era is fine.`
 
   const p = PLATFORM_PRESETS[v.targetPlatform] ?? PLATFORM_PRESETS.all
+  // Valid styles per genre + the voice menu, generated from the catalogs so this never drifts.
+  const styleMenu = Object.entries(STORY_STYLES)
+    .map(([genre, byId]) => {
+      const ids = Object.keys(byId)
+      return `     - ${genre}: ${ids.length ? ids.join(', ') : '(none — use general/no style)'}`
+    })
+    .join('\n')
+  const voiceMenu = VOICE_VALUES.join(', ')
   const userMessage = `Design the creative bible for this channel.
 
 CHANNEL NAME: ${v.name}
@@ -120,6 +134,8 @@ Produce JSON with exactly these fields:
      - reddit_story: reddit-style first-person confession/AITA/TIFU storytime — must read as a REAL post by a real person
      - comedy: punchline-driven, skits, absurd/funny storytelling — setup, expectation, subversion
      - general: anything that doesn't clearly fit the above (faith, general storytelling) — neutral composition, no genre-specific rules",
+  "narrativeStyle": "the storytelling TRADITION this channel works in — pick ONE valid for the genreCategory you chose (a suggested default the creator can change); OMIT for 'general' or if none fits. Valid styles per genre:\n${styleMenu}",
+  "narrativeVoice": "how the NARRATOR sounds in the prose (NOT the audio/TTS voice) — pick the ONE that fits this channel best from: ${voiceMenu}",
   "voiceSearchKeyword": "1–2 word genre/topic tag for finding fitting narrator voices, e.g. 'horror', 'true crime', 'motivation', 'meditation'",
   "audioMood": {
     "prompt": "a text-to-music brief for the channel's SIGNATURE BACKGROUND BED that plays under narration — describe instruments/texture, tempo, and feel; it must be INSTRUMENTAL, loopable, sparse, and non-distracting (no vocals, no strong melody hooks, no heavy percussion that fights speech). Tie it to THIS niche + tone, e.g. horror → 'slow, dread-soaked low drone, distant, sub-bass, sparse, no melody'; finance → 'minimal confident lo-fi beat, soft keys, steady, understated'; wellness → 'warm ambient pads, gentle, airy, calming'",

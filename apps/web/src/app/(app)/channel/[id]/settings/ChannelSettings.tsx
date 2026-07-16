@@ -15,9 +15,20 @@ import {
   MUSIC_MOOD_OPTIONS,
   resolveCaptionStyle,
 } from '@reels/core'
+import { asGenreModule } from '@reels/core/prompts/scenes.v1'
+import { stylesForGenre } from '@reels/core/prompts/story-styles.v1'
+import { STORY_VOICES } from '@reels/core/prompts/story-voices.v1'
 import { CaptionPreview } from '@/components/CaptionPreview'
 import { PlatformPicker } from '@/components/PlatformPicker'
+import { Dropdown } from '@/components/Dropdown'
 import { VisualStyle } from './VisualStyle'
+
+const SETTINGS_VOICE_OPTIONS = Object.entries(STORY_VOICES).map(([id, v]) => ({ value: id, label: v.label }))
+const SETTINGS_INFLUENCE_OPTIONS = [
+  { value: 'light', label: 'Light' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'full', label: 'Full' },
+]
 
 const TONE_KEYS: Array<keyof ToneConfig> = ['intensity', 'warmth', 'energy', 'pacing', 'humor']
 const CAPTION_ORDER: CaptionPreset[] = [
@@ -36,6 +47,9 @@ interface Initial {
   stylePreset: string
   styleImageKey: string | null
   genreCategory: string
+  narrativeStyle: string
+  narrativeVoice: string
+  styleInfluence: string
   toneConfig: ToneConfig
   worldBible: WorldBible
   captionStyle: CaptionStyle
@@ -67,6 +81,12 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
     Object.entries(initial.worldBible.vocabulary ?? {}).map(([term, value]) => ({ term, value })),
   )
   const [tasteRubric, setTasteRubric] = useState(initial.tasteRubric ?? '')
+  // PROSE dimensions (story-styles / story-voices) — editable post-creation (unlike genre).
+  const [narrativeStyle, setNarrativeStyle] = useState(initial.narrativeStyle)
+  const [narrativeVoice, setNarrativeVoice] = useState(initial.narrativeVoice)
+  const [styleInfluence, setStyleInfluence] = useState<'light' | 'medium' | 'full'>(
+    initial.styleInfluence === 'light' || initial.styleInfluence === 'full' ? initial.styleInfluence : 'medium',
+  )
   const [mining, setMining] = useState(false)
   const [rubricError, setRubricError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -112,6 +132,9 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
       generationMode,
       musicMood,
       tasteRubric: tasteRubric.trim() || null,
+      narrativeStyle,
+      narrativeVoice,
+      styleInfluence,
       worldBible: {
         region: region.trim(),
         era: era.trim(),
@@ -280,6 +303,38 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
             <span className="w-14 text-right font-mono text-xs tabular-nums text-ink">~{targetSeconds}s</span>
           </div>
           <p className="text-xs text-faint">Capped at {PLATFORM_PRESETS[targetPlatform].maxSeconds}s for {PLATFORM_PRESETS[targetPlatform].label}.</p>
+        </section>
+
+        {/* Storytelling style — the prose tradition + narrator voice (NOT the visual look or TTS voice) */}
+        <section className="card space-y-3 p-5">
+          <SectionLabel>Storytelling style</SectionLabel>
+          <p className="text-xs text-faint">The tradition this channel tells stories in and how the narrator sounds on the page.</p>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {stylesForGenre(asGenreModule(initial.genreCategory) ?? 'general').length > 0 && (
+              <label className="flex flex-col gap-1.5 text-xs font-medium text-muted">
+                Style
+                <Dropdown
+                  value={narrativeStyle}
+                  onChange={setNarrativeStyle}
+                  options={[{ value: '', label: 'Pure genre (no style)' }, ...stylesForGenre(asGenreModule(initial.genreCategory) ?? 'general').map((s) => ({ value: s.id, label: s.label }))]}
+                />
+              </label>
+            )}
+            <label className="flex flex-col gap-1.5 text-xs font-medium text-muted">
+              Narrator voice
+              <Dropdown
+                value={narrativeVoice}
+                onChange={setNarrativeVoice}
+                options={[{ value: '', label: 'Default (genre voice)' }, ...SETTINGS_VOICE_OPTIONS]}
+              />
+            </label>
+            {narrativeStyle && (
+              <label className="flex flex-col gap-1.5 text-xs font-medium text-muted">
+                Style strength
+                <Dropdown value={styleInfluence} onChange={(v) => setStyleInfluence(v as 'light' | 'medium' | 'full')} options={SETTINGS_INFLUENCE_OPTIONS} />
+              </label>
+            )}
+          </div>
         </section>
 
         {/* Captions */}

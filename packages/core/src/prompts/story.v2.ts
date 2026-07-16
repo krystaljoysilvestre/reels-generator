@@ -7,11 +7,12 @@
 
 import { STORY_CRAFT_CORE, STORY_CRAFT_V1_VERSION, spokenRegisterBlock } from './story-craft.v1.js'
 import { WRITER_IDENTITIES, renderIdentity, WRITER_IDENTITIES_V1_VERSION } from './writer-identities.v1.js'
+import { STORY_STYLES_V1_VERSION, resolveStyle, renderStyleTellingForWriter, type StyleInfluence } from './story-styles.v1.js'
+import { STORY_VOICES_V1_VERSION, resolveVoice, renderVoice } from './story-voices.v1.js'
 import { asGenreModule, classifyGenre } from './scenes.v1.js'
 
-// Craft + identities are baked into the prompt text, so their versions ride along: editing either
-// asset file (and bumping its constant) visibly re-versions this writer and busts the inputHash.
-export const STORY_V2_VERSION = `story.v2.1+${STORY_CRAFT_V1_VERSION}+${WRITER_IDENTITIES_V1_VERSION}`
+// Craft + identities + style/voice are baked into the prompt text, so their versions ride along.
+export const STORY_V2_VERSION = `story.v2.2+${STORY_CRAFT_V1_VERSION}+${WRITER_IDENTITIES_V1_VERSION}+${STORY_STYLES_V1_VERSION}+${STORY_VOICES_V1_VERSION}`
 
 export interface StoryWriterVars {
   channelName: string
@@ -24,6 +25,9 @@ export interface StoryWriterVars {
   targetSeconds: number
   targetWords: number
   genreCategory?: string | undefined // channel bucket → picks the writer identity (niche keywords as fallback)
+  narrativeStyle?: string | undefined // storytelling tradition (story-styles); '' = pure genre
+  narrativeVoice?: string | undefined // narrator's written sound (story-voices); '' = identity default
+  styleInfluence?: StyleInfluence | undefined // how hard to lean into the style; default medium
   // The Planner's committed idea (mechanics already stripped by the caller). Labeled free-text —
   // the planner phrases each field in the genre's own terms.
   plan: {
@@ -40,13 +44,19 @@ export interface StoryWriterVars {
 
 export function buildStoryWriterPrompt(v: StoryWriterVars): { system: string; userMessage: string } {
   const isLongForm = v.targetSeconds > 180 // matches CHAPTER_THRESHOLD_SEC
-  const identity = WRITER_IDENTITIES[asGenreModule(v.genreCategory ?? null) ?? classifyGenre(v.nicheDescription)]
+  const genre = asGenreModule(v.genreCategory ?? null) ?? classifyGenre(v.nicheDescription)
+  const identity = WRITER_IDENTITIES[genre]
+  // Style's telling conventions (after the identity); Voice overrides the identity's default sound.
+  const styleSpec = resolveStyle(genre, v.narrativeStyle)
+  const styleBlock = styleSpec ? `\n${renderStyleTellingForWriter(styleSpec, v.styleInfluence ?? 'medium')}\n` : ''
+  const voiceSpec = resolveVoice(v.narrativeVoice)
+  const voiceBlock = voiceSpec ? `\n${renderVoice(voiceSpec)}\n` : ''
 
   const system = `You are ${identity.label} — the writer behind "${v.channelName}", a ${isLongForm ? 'long-form' : 'short-form'} video channel.
 Niche: ${v.nicheDescription}
 
 ${renderIdentity(identity)}
-
+${styleBlock}${voiceBlock}
 ${STORY_CRAFT_CORE}
 
 Tone calibration (0–10 scales): ${v.toneConfig}

@@ -21,6 +21,9 @@ const InputSchema = z.object({
   targetPlatform: TargetPlatformSchema.default('all'),
   promptHint: z.string().trim().max(8000).optional(), // optional operator steer — can be a long, detailed brief
   genreCategory: z.string().trim().optional(), // derived bucket → picks the writer identity (niche keywords as fallback)
+  narrativeStyle: z.string().trim().optional(), // prose style (story-styles); resolves within genre or falls back
+  narrativeVoice: z.string().trim().optional(), // prose narrator voice (story-voices)
+  styleInfluence: z.enum(['light', 'medium', 'full']).optional(),
 })
 
 export async function POST(req: NextRequest) {
@@ -41,6 +44,9 @@ export async function POST(req: NextRequest) {
     targetSeconds: c.targetSeconds,
     hookHint: PLATFORM_PRESETS[c.targetPlatform].hookHint,
     ...(c.genreCategory ? { genreCategory: c.genreCategory } : {}),
+    ...(c.narrativeStyle ? { narrativeStyle: c.narrativeStyle } : {}),
+    ...(c.narrativeVoice ? { narrativeVoice: c.narrativeVoice } : {}),
+    ...(c.styleInfluence ? { styleInfluence: c.styleInfluence } : {}),
     ...(c.voiceStyle ? { voiceStyle: c.voiceStyle } : {}),
     ...(c.promptHint ? { promptHint: c.promptHint } : {}),
   })

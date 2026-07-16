@@ -11,10 +11,11 @@
 import { z } from 'zod'
 import { STORY_MECHANICS_V1_VERSION, renderMechanics } from './story-mechanics.v1.js'
 import { STORY_ELEMENTS_V1_VERSION, StoryElementsSchema, renderElementPalette, formatRecentElements, type StoryElements } from './story-elements.v1.js'
+import { STORY_STYLES_V1_VERSION, resolveStyle, renderStyleForPlanner, type StyleInfluence } from './story-styles.v1.js'
 import { WRITER_IDENTITIES } from './writer-identities.v1.js'
 import { asGenreModule, classifyGenre, type GenreModule } from './scenes.v1.js'
 
-export const STORY_PLANNER_V1_VERSION = `planner.v1.1+${STORY_MECHANICS_V1_VERSION}+${STORY_ELEMENTS_V1_VERSION}`
+export const STORY_PLANNER_V1_VERSION = `planner.v1.2+${STORY_MECHANICS_V1_VERSION}+${STORY_ELEMENTS_V1_VERSION}+${STORY_STYLES_V1_VERSION}`
 
 // The committed idea. `mechanics` + `elements` are planner METADATA — the caller STRIPS them before
 // the Writer sees the plan (INVARIANT 1: the Writer writes from the idea, never from labels).
@@ -45,6 +46,8 @@ export interface StoryPlannerVars {
   operatorFeedback?: string | undefined // THIS reel's latest rejection → re-plan, not re-word
   regenerationNonce?: number | undefined // must land in prompt text so the inputHash changes
   recentElements?: StoryElements[] | undefined // last ~15 stories' element labels → structural avoid
+  narrativeStyle?: string | undefined // the channel's storytelling tradition (story-styles); '' = pure genre
+  styleInfluence?: StyleInfluence | undefined // how hard to lean into the style; default medium
 }
 
 export function resolvePlannerGenre(genreCategory: string | null | undefined, niche: string): GenreModule {
@@ -57,13 +60,16 @@ export function buildStoryPlannerPrompt(v: StoryPlannerVars): { system: string; 
   const mechanics = renderMechanics(genre)
   const elementPalette = renderElementPalette(genre)
   const recentEls = v.recentElements ?? []
+  // Style layer: biases the plan's element/mechanic choices (never owns them). '' → pure genre.
+  const styleSpec = resolveStyle(genre, v.narrativeStyle)
+  const styleBlock = styleSpec ? `\n${renderStyleForPlanner(styleSpec, v.styleInfluence ?? 'medium')}\n` : ''
 
   const system = `You are the story planner for "${v.channelName}" — the creative subconscious of ${identity.label}.
 Niche: ${v.nicheDescription}
 Tone calibration (0–10 scales): ${v.toneConfig}
 
 You do not write prose. You decide WHAT story deserves to exist next on this channel. The writer who executes your idea is always asking: ${identity.questionsAsked.join(' ')} Plan ideas that give those questions great answers.
-${mechanics ? `\n${mechanics}\n` : ''}
+${mechanics ? `\n${mechanics}\n` : ''}${styleBlock}
 WORLD BIBLE — ideas must fit this world (reuse canonical names; don't invent recurring elements):
 ${v.worldBibleJson}
 

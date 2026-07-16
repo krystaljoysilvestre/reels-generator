@@ -5,7 +5,9 @@ import { z } from 'zod'
 import { eq } from 'drizzle-orm'
 import { getDb, channels, stories } from '@reels/db'
 import { ToneConfigSchema, WorldBibleSchema, ChannelVoiceSchema, VoiceModeSchema, CaptionStyleSchema, TargetPlatformSchema, PLATFORM_PRESETS, MusicIntensitySchema, MusicModeSchema, AudioMoodSchema, peakFracForType } from '@reels/core'
-import { classifyGenre, GENRE_MODULE_VALUES } from '@reels/core/prompts/scenes.v1'
+import { classifyGenre, GENRE_MODULE_VALUES, asGenreModule } from '@reels/core/prompts/scenes.v1'
+import { STYLE_VALUES, resolveStyle } from '@reels/core/prompts/story-styles.v1'
+import { VOICE_VALUES, resolveVoice } from '@reels/core/prompts/story-voices.v1'
 import { getSession } from '@/lib/auth'
 
 const InputSchema = z.object({
@@ -25,6 +27,11 @@ const InputSchema = z.object({
   worldBible: WorldBibleSchema,
   // Genre bucket from channel.v1; falls back to keyword classification if absent.
   genreCategory: z.enum(GENRE_MODULE_VALUES).optional(),
+  // PROSE dimensions (story-styles / story-voices) — operator-selectable. Re-validated against the
+  // genre below. NOT the TTS voice (voicePool) or visual style (stylePreset).
+  narrativeStyle: z.enum(STYLE_VALUES).optional(),
+  narrativeVoice: z.enum(VOICE_VALUES).optional(),
+  styleInfluence: z.enum(['light', 'medium', 'full']).optional(),
   voiceMode: VoiceModeSchema,
   voicePool: z.array(ChannelVoiceSchema).max(8), // empty allowed for per_story (chosen at render)
   sampleScript: z.string().trim().max(20000).nullish(), // Step-2 narration → first reference story.
@@ -103,6 +110,14 @@ export async function POST(req: NextRequest) {
     worldBible: c.worldBible,
     // Prefer the LLM-derived bucket; fall back to keyword classification so the column is never 'general' by accident.
     genreCategory: c.genreCategory ?? classifyGenre(c.nicheDescription),
+    // Prose dimensions: keep narrativeStyle only if it's actually valid for the resolved genre
+    // (resolveStyle → null on mismatch); '' otherwise. Voice is genre-agnostic. Influence default 'medium'.
+    narrativeStyle:
+      c.narrativeStyle && resolveStyle(asGenreModule(c.genreCategory ?? classifyGenre(c.nicheDescription)) ?? 'general', c.narrativeStyle)
+        ? c.narrativeStyle
+        : '',
+    narrativeVoice: c.narrativeVoice && resolveVoice(c.narrativeVoice) ? c.narrativeVoice : '',
+    styleInfluence: c.styleInfluence ?? 'medium',
     voiceMode: c.voiceMode,
     voiceSearchKeyword: c.voiceSearchKeyword,
     voicePool, // real ElevenLabs voices selected by the operator

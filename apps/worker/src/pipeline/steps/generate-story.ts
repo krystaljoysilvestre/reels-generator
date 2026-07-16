@@ -36,6 +36,7 @@ import {
   STORY_CRITIC_V2_VERSION,
   StoryGateSchema,
   defaultTasteRubric,
+  type StyleInfluence,
 } from '../../prompts-bridge.js'
 import {
   selectFewShot,
@@ -109,6 +110,7 @@ interface StudioOutput {
   v: 3
   mode: 'studio'
   angleId: string
+  prose: { style: string; voice: string; influence: StyleInfluence } // resolved prose dimensions (attribution)
   plannerStatus: 'ok' | 'failed_fell_back_to_v1_draft'
   plan: StoryPlan | null // includes whyThisStory + mechanics (audit only — the Writer never saw them)
   winner: StoryOutput // FINAL story (post edit + naturalize + peak chain) — the one persisted
@@ -301,6 +303,9 @@ export async function generateStory(reelId: string, channelId: string, language:
             nicheDescription: channel.nicheDescription,
             tasteRubric: channel.tasteRubric,
             genreCategory: channel.genreCategory,
+            narrativeStyle: channel.narrativeStyle,
+            narrativeVoice: channel.narrativeVoice,
+            styleInfluence: channel.styleInfluence,
           },
           basePromptVars,
           worldBible,
@@ -359,7 +364,15 @@ export async function generateStory(reelId: string, channelId: string, language:
 
 interface StudioArgs {
   reelId: string
-  channel: { name: string; nicheDescription: string; tasteRubric: string | null; genreCategory: string | null }
+  channel: {
+    name: string
+    nicheDescription: string
+    tasteRubric: string | null
+    genreCategory: string | null
+    narrativeStyle: string | null
+    narrativeVoice: string | null
+    styleInfluence: string | null
+  }
   basePromptVars: {
     channelName: string
     nicheDescription: string
@@ -390,6 +403,12 @@ async function runStudio(a: StudioArgs) {
   const v = a.basePromptVars
   const genreCategory = a.channel.genreCategory ?? undefined
   const tasteRubric = a.channel.tasteRubric?.trim() || defaultTasteRubric(genreCategory, a.channel.nicheDescription)
+  // PROSE dimensions (story-styles / story-voices). '' → pure genre / identity-default voice.
+  const narrativeStyle = a.channel.narrativeStyle || undefined
+  const narrativeVoice = a.channel.narrativeVoice || undefined
+  const styleInfluence = (['light', 'medium', 'full'] as const).includes(a.channel.styleInfluence as StyleInfluence)
+    ? (a.channel.styleInfluence as StyleInfluence)
+    : 'medium'
   // ONE structural seed per round, rotated by an offset that ADVANCES every reel (rotationOffset =
   // channel story count + nonce), and never the angle the operator just rejected. This is the fix
   // for the fresh-reel sameness: keying on regenerationNonce alone froze every fresh reel to angle #0.
@@ -401,6 +420,8 @@ async function runStudio(a: StudioArgs) {
     toneConfig: v.toneConfig,
     worldBibleJson: v.worldBibleJson,
     genreCategory,
+    narrativeStyle,
+    styleInfluence,
     targetSeconds: a.targetSeconds,
     angleDirective: angle.directive,
     avoidList: a.recentPremises,
@@ -423,6 +444,11 @@ async function runStudio(a: StudioArgs) {
     fewshot: v.fewshotStories,
     rubric: tasteRubric,
     angleId: angle.id,
+    // narrativeVoice only shapes the WRITER (not the planner prompt text), so hash it explicitly;
+    // style/influence ride in via plannerSystem but are listed for a legible cache key.
+    narrativeStyle: narrativeStyle ?? '',
+    narrativeVoice: narrativeVoice ?? '',
+    styleInfluence,
   })
 
   return runStep<StudioOutput>({ reelId: a.reelId, stepName: 'generate_story', inputHash }, async () => {
@@ -463,6 +489,9 @@ async function runStudio(a: StudioArgs) {
           targetSeconds: v.targetSeconds,
           targetWords: v.targetWords,
           genreCategory,
+          narrativeStyle,
+          narrativeVoice,
+          styleInfluence,
           // Mechanics deliberately stripped: the Writer writes someone who lived this — it never
           // "executes false_safety + delayed_realization" (see writer-identities.v1 header).
           plan: {
@@ -630,6 +659,7 @@ async function runStudio(a: StudioArgs) {
       v: 3,
       mode: 'studio',
       angleId: angle.id,
+      prose: { style: narrativeStyle ?? '', voice: narrativeVoice ?? '', influence: styleInfluence },
       plannerStatus,
       plan,
       winner,

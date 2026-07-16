@@ -9,6 +9,16 @@ import { CaptionPreview } from '@/components/CaptionPreview'
 import { PlatformPicker } from '@/components/PlatformPicker'
 import { type CaptionPreset, type CaptionStyle, type TargetPlatform, type AudioMood, resolveCaptionStyle, CaptionStyleSchema, PLATFORM_PRESETS, PRESET_BEDS, rankPresets, presetsForGenre, stylePresetThumbKey } from '@reels/core'
 import { type GenreModule, asGenreModule } from '@reels/core/prompts/scenes.v1'
+import { stylesForGenre } from '@reels/core/prompts/story-styles.v1'
+import { STORY_VOICES } from '@reels/core/prompts/story-voices.v1'
+
+type StyleInfluence = 'light' | 'medium' | 'full'
+const VOICE_OPTIONS = Object.entries(STORY_VOICES).map(([id, v]) => ({ id, label: v.label }))
+const INFLUENCE_OPTIONS: Array<{ id: StyleInfluence; label: string }> = [
+  { id: 'light', label: 'Light — a hint of the style' },
+  { id: 'medium', label: 'Medium — clearly in the style' },
+  { id: 'full', label: 'Full — commit hard to the style' },
+]
 
 // v2: caption persistence changed from preset+highlight to a resolved captionStyle object.
 // Bumping the key drops pre-v2 drafts (which would otherwise fall back to the default
@@ -95,6 +105,8 @@ interface Derived {
   }
   voiceSearchKeyword: string
   genreCategory: GenreModule
+  narrativeStyle?: string
+  narrativeVoice?: string
   audioMood: AudioMood
 }
 
@@ -178,6 +190,11 @@ export function NewChannelWizard({
   // AI-derived genre bucket → picks the writer identity + scene-prompt genre module. '' until derived;
   // the create route keyword-classifies the niche as a fallback when this is empty.
   const [genreCategory, setGenreCategory] = useState<'' | GenreModule>('')
+  // PROSE dimensions (story-styles / story-voices) — derived as a default, operator-overridable.
+  // NOT the visual `style`/`stylePreset` or the TTS voice. '' = pure genre / identity-default voice.
+  const [narrativeStyle, setNarrativeStyle] = useState('')
+  const [narrativeVoice, setNarrativeVoice] = useState('')
+  const [styleInfluence, setStyleInfluence] = useState<StyleInfluence>('medium')
   const [tagline, setTagline] = useState('') // AI-derived one-line positioning (persisted on the channel)
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -272,6 +289,9 @@ export function NewChannelWizard({
         if (Array.isArray(d.recommended)) setRecommended(d.recommended)
         if (typeof d.voiceSearchKeyword === 'string') setVoiceSearchKeyword(d.voiceSearchKeyword)
         { const g = asGenreModule(typeof d.genreCategory === 'string' ? d.genreCategory : null); if (g) setGenreCategory(g) }
+        if (typeof d.narrativeStyle === 'string') setNarrativeStyle(d.narrativeStyle)
+        if (typeof d.narrativeVoice === 'string') setNarrativeVoice(d.narrativeVoice)
+        if (d.styleInfluence === 'light' || d.styleInfluence === 'medium' || d.styleInfluence === 'full') setStyleInfluence(d.styleInfluence)
         if (typeof d.tagline === 'string') setTagline(d.tagline)
         if (typeof d.derivedSig === 'string') setDerivedSig(d.derivedSig)
         if (typeof d.sampleScript === 'string') setSampleScript(d.sampleScript)
@@ -307,7 +327,7 @@ export function NewChannelWizard({
     return {
       phase, name, committedName, description, niche, languages, targetPlatform, presetId,
       avatarKey, costCents, tone, style, region, era, locations, objects, vocab,
-      voiceMode, selectedVoices, recommended, voiceSearchKeyword, genreCategory, tagline, derivedSig,
+      voiceMode, selectedVoices, recommended, voiceSearchKeyword, genreCategory, narrativeStyle, narrativeVoice, styleInfluence, tagline, derivedSig,
       targetSeconds, captionStyle, sampleScript, sampleIsAi, extraSampleScripts,
       audioMood, musicChoice, selectedPresetIds, presetPickedManually, uploadedMusic,
       styleProposals, selectedStyleIdx, uploadedStyleIdx, stylePreviews: previewKeys,
@@ -323,7 +343,7 @@ export function NewChannelWizard({
     } catch {
       /* storage full / unavailable — non-fatal */
     }
-  }, [hydrated, phase, name, committedName, description, niche, languages, targetPlatform, presetId, avatarKey, costCents, tone, targetSeconds, style, region, era, locations, objects, vocab, voiceMode, selectedVoices, recommended, voiceSearchKeyword, genreCategory, tagline, derivedSig, captionStyle, sampleScript, sampleIsAi, extraSampleScripts, audioMood, musicChoice, selectedPresetIds, presetPickedManually, uploadedMusic, styleProposals, selectedStyleIdx, uploadedStyleIdx, stylePreviews, draftChannelId])
+  }, [hydrated, phase, name, committedName, description, niche, languages, targetPlatform, presetId, avatarKey, costCents, tone, targetSeconds, style, region, era, locations, objects, vocab, voiceMode, selectedVoices, recommended, voiceSearchKeyword, genreCategory, narrativeStyle, narrativeVoice, styleInfluence, tagline, derivedSig, captionStyle, sampleScript, sampleIsAi, extraSampleScripts, audioMood, musicChoice, selectedPresetIds, presetPickedManually, uploadedMusic, styleProposals, selectedStyleIdx, uploadedStyleIdx, stylePreviews, draftChannelId])
 
   // ── Unsaved-progress guard ──────────────────────────────────────────────────
   // The draft autosaves, but leaving mid-flow still deserves a heads-up so the operator
@@ -737,6 +757,8 @@ export function NewChannelWizard({
       setVocab(Object.entries(d.worldBible.vocabulary ?? {}).map(([term, value]) => ({ term, value })))
       setVoiceSearchKeyword(d.voiceSearchKeyword ?? '')
       setGenreCategory(d.genreCategory ?? '')
+      setNarrativeStyle(d.narrativeStyle ?? '')
+      setNarrativeVoice(d.narrativeVoice ?? '')
       setTagline(d.tagline ?? '')
       setAudioMood(d.audioMood ?? null)
       setCostCents(json.costCents ?? 0)
@@ -787,6 +809,9 @@ export function NewChannelWizard({
           worldBible: worldBiblePayload(),
           voiceStyle: selectedVoices[0]?.description,
           ...(genreCategory ? { genreCategory } : {}),
+          ...(narrativeStyle ? { narrativeStyle } : {}),
+          ...(narrativeVoice ? { narrativeVoice } : {}),
+          styleInfluence,
           ...(promptHint.trim() ? { promptHint: promptHint.trim() } : {}),
         }),
       })
@@ -925,6 +950,9 @@ export function NewChannelWizard({
           toneConfig: tone,
           voiceSearchKeyword,
           ...(genreCategory ? { genreCategory } : {}), // omit when not derived → create route keyword-classifies
+          ...(narrativeStyle ? { narrativeStyle } : {}),
+          ...(narrativeVoice ? { narrativeVoice } : {}),
+          styleInfluence,
           targetSeconds,
           captionStyle,
           stylePreset: style.trim(),
@@ -1129,6 +1157,45 @@ export function NewChannelWizard({
         {phase === 'script' && (
           <div className="animate-fade-in flex flex-col gap-6">
             <Recap name={name} description={description} language={language} avatarPreview={avatarPreview} />
+
+            {genreCategory && (
+              <div className="card p-5">
+                <SectionLabel>Storytelling style</SectionLabel>
+                <p className="mt-1 text-xs text-faint">
+                  How this channel tells its stories — the tradition it works in and how the narrator sounds. We picked a fit; change it anytime.
+                </p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                  {stylesForGenre(genreCategory).length > 0 && (
+                    <label className="flex flex-col gap-1.5 text-xs font-medium text-muted">
+                      Style
+                      <Dropdown
+                        value={narrativeStyle}
+                        onChange={setNarrativeStyle}
+                        options={[{ value: '', label: 'Pure genre (no style)' }, ...stylesForGenre(genreCategory).map((s) => ({ value: s.id, label: s.label }))]}
+                      />
+                    </label>
+                  )}
+                  <label className="flex flex-col gap-1.5 text-xs font-medium text-muted">
+                    Narrator voice
+                    <Dropdown
+                      value={narrativeVoice}
+                      onChange={setNarrativeVoice}
+                      options={[{ value: '', label: 'Default (genre voice)' }, ...VOICE_OPTIONS.map((v) => ({ value: v.id, label: v.label }))]}
+                    />
+                  </label>
+                  {narrativeStyle && (
+                    <label className="flex flex-col gap-1.5 text-xs font-medium text-muted">
+                      Style strength
+                      <Dropdown
+                        value={styleInfluence}
+                        onChange={(v) => setStyleInfluence(v as StyleInfluence)}
+                        options={INFLUENCE_OPTIONS.map((o) => ({ value: o.id, label: o.label }))}
+                      />
+                    </label>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div className="card p-5">
               <SectionLabel>Your channel&apos;s voice</SectionLabel>

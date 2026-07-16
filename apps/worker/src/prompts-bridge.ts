@@ -23,6 +23,18 @@ export {
   elementFingerprint,
   type StoryElements,
 } from '@reels/core/prompts/story-elements.v1'
+export {
+  STORY_STYLES_V1_VERSION,
+  resolveStyle,
+  renderStyleForPlanner,
+  renderStyleTellingForWriter,
+  type StyleInfluence,
+} from '@reels/core/prompts/story-styles.v1'
+export {
+  STORY_VOICES_V1_VERSION,
+  resolveVoice,
+  renderVoice,
+} from '@reels/core/prompts/story-voices.v1'
 export { buildStoryEditorPrompt, STORY_EDITOR_V1_VERSION, StoryEditSchema } from '@reels/core/prompts/story-editor.v1'
 export { buildStoryNaturalizerPrompt, STORY_NATURALIZER_V1_VERSION, StoryNaturalizeSchema } from '@reels/core/prompts/story-naturalizer.v1'
 export {

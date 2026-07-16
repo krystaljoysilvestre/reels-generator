@@ -98,6 +98,15 @@ export const channels = pgTable('channels', {
   // AND which genre module the scene-prompt builder loads. Defaults to 'general' so pre-existing
   // channels stay neutral; consumers keyword-classify (classifyGenre) as a secondary fallback.
   genreCategory: text('genre_category').notNull().default('general'),
+  // PROSE dimensions (story-writer-v2): the storytelling TRADITION + the narrator's written SOUND,
+  // layered on genre by the Planner/Writer. Per-channel, operator-selectable. NOT the TTS/audio voice
+  // (voiceId/voiceMode/voicePool/voiceSearchKeyword) and NOT the visual look (stylePreset/lutConfig).
+  // narrativeStyle is scoped to the genre (see story-styles.v1); empty = pure genre. narrativeVoice is
+  // cross-genre (story-voices.v1); empty = the genre writer-identity's default sound. styleInfluence
+  // scales how hard to lean into the style (ignored when narrativeStyle is empty).
+  narrativeStyle: text('narrative_style').notNull().default(''),
+  narrativeVoice: text('narrative_voice').notNull().default(''),
+  styleInfluence: text('style_influence').notNull().default('medium'), // light | medium | full
   lutConfig: jsonb('lut_config').notNull().default({}),
   captionStyle: jsonb('caption_style').notNull().default({}),  // per-channel burned-in caption look (resolved CaptionStyle)
   voiceMode: text('voice_mode').notNull().default('single'),  // 'single' | 'per_story'
