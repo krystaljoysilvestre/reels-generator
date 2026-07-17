@@ -12,6 +12,7 @@ import { type GenreModule, asGenreModule } from '@reels/core/prompts/scenes.v1'
 import { stylesForGenre } from '@reels/core/prompts/story-styles.v1'
 import { STORY_VOICES } from '@reels/core/prompts/story-voices.v1'
 import { GENRE_OPTIONS } from '@/lib/genre-labels'
+import { getTrendingNiches, type TrendingNiche } from '@/lib/trending-niches'
 
 type StyleInfluence = 'light' | 'medium' | 'full'
 const VOICE_OPTIONS = Object.entries(STORY_VOICES).map(([id, v]) => ({ id, label: v.label }))
@@ -208,7 +209,7 @@ export function NewChannelWizard({
   const [clarifyHandledText, setClarifyHandledText] = useState('')
   // "Trending now" rail — live web-searched niches (server caches for a day; hidden when empty/unavailable).
   // Sits ABOVE the static presets, so a skeleton holds its space while loading (no layout jump).
-  const [trending, setTrending] = useState<Array<{ label: string; blurb: string; description: string; rpm: 'high' | 'mid'; whyNow: string; language: string }>>([])
+  const [trending, setTrending] = useState<TrendingNiche[]>([])
   const [trendingLoading, setTrendingLoading] = useState(true)
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -396,16 +397,13 @@ export function NewChannelWizard({
     return () => window.removeEventListener('keydown', onKey)
   }, [leaveTo])
 
-  // "Trending now" rail: fetch once on mount (server caches for a day, so this is near-free).
-  // Best-effort — on any failure the rail simply doesn't render.
+  // "Trending now" rail: reuse the fetch the "Create channel" click already started (see
+  // lib/trending-niches — the in-flight promise survives client-side navigation). Direct loads
+  // (deep link / refresh / draft resume) start it here instead. Best-effort — empty hides the rail.
   useEffect(() => {
     let cancelled = false
-    fetch('/api/channel/trending-niches')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((json: { niches?: typeof trending } | null) => {
-        if (!cancelled && Array.isArray(json?.niches)) setTrending(json.niches)
-      })
-      .catch(() => { /* rail is a bonus, never a blocker */ })
+    getTrendingNiches()
+      .then((niches) => { if (!cancelled) setTrending(niches) })
       .finally(() => { if (!cancelled) setTrendingLoading(false) })
     return () => { cancelled = true }
   }, [])
