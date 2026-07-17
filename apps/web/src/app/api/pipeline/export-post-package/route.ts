@@ -1,10 +1,12 @@
-// POST package export — video + caption.txt + AI-disclosure note, zipped.
+// POST package export — video + thumbnail + caption.txt + AI-disclosure note, zipped.
 // Downloaded from the dashboard for manual posting (Phase 1).
 import type { NextRequest} from 'next/server';
 import { NextResponse } from 'next/server'
-import { getDb, reels, assets, stories, channels } from '@reels/db'
-import { eq } from 'drizzle-orm'
-import { downloadBuffer } from '@reels/providers'
+import { getDb, reels, assets, scenes, channels } from '@reels/db'
+import { eq, and, asc, sql } from 'drizzle-orm'
+import { downloadBuffer, llmCall } from '@reels/providers'
+import { PostMetaSchema, PostingRulesSchema, formatPostCaption, type PostMeta } from '@reels/core'
+import { buildPostMetaPrompt, PostMetaLlmSchema, POST_META_V1_VERSION } from '@reels/core/prompts/post-meta.v1'
 import { getSession } from '@/lib/auth'
 
 // Minimal ZIP builder without native deps (zip is just stored entries)
@@ -82,10 +84,51 @@ function crc32Table(): Uint32Array {
   return t
 }
 
-const HASHTAGS_BY_LANGUAGE: Record<string, string[]> = {
-  tagalog: ['#kwentongaswang', '#pilipinohorror', '#gabingmisteryo', '#aswangfiles', '#totallyspookystories'],
-  taglish: ['#kwentongaswang', '#pilipinohorror', '#gabingmisteryo', '#horrorstories', '#aswangfiles'],
-  english: ['#filipinohorror', '#horrorstories', '#aswangfiles', '#spookystories'],
+// The reel's post metadata: prefer what the generate_post_meta step wrote (operator-editable); for
+// reels that predate the step, generate once here and persist — never ship placeholder hashtags.
+async function resolvePostMeta(
+  reel: { id: string; postMeta: unknown; language: string },
+  story: { title: string; logline: string | null; body: string } | null,
+  channel: { name: string; nicheDescription: string | null; genreCategory: string; postingRules: unknown } | null,
+): Promise<PostMeta | null> {
+  const existing = PostMetaSchema.safeParse(reel.postMeta)
+  if (existing.success) return existing.data
+  if (!story || !channel) return null
+
+  const postingRules = PostingRulesSchema.parse(channel.postingRules ?? {})
+  const { system, userMessage } = buildPostMetaPrompt({
+    channelName: channel.name,
+    nicheDescription: channel.nicheDescription ?? '',
+    language: reel.language,
+    platforms: postingRules.platforms,
+    genreCategory: channel.genreCategory,
+    title: story.title,
+    logline: story.logline ?? '',
+    narration: story.body,
+  })
+  try {
+    const llm = await llmCall({
+      templateVersion: POST_META_V1_VERSION,
+      schema: PostMetaLlmSchema,
+      system,
+      messages: [{ role: 'user', content: userMessage }],
+      temperature: 0.8,
+      maxTokens: 800,
+    })
+    const meta = PostMetaSchema.parse({ ...PostMetaLlmSchema.parse(llm.data), v: 1, language: reel.language })
+    const db = getDb()
+    // Atomic cost increment — an export could race a pipeline step's own cost write.
+    await db.update(reels)
+      .set({
+        postMeta: meta,
+        ...(llm.costCents > 0 ? { costCents: sql`${reels.costCents} + ${llm.costCents}` } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(reels.id, reel.id))
+    return meta
+  } catch {
+    return null // fall back to the logline-only caption below
+  }
 }
 
 export async function GET(req: NextRequest) {
@@ -109,14 +152,46 @@ export async function GET(req: NextRequest) {
   // Download the render
   const videoBuf = await downloadBuffer(renderAsset.storageKey)
 
-  // Build caption
+  // Thumbnail: prefer the composited one (hero frame + title, made at render); else fall back to the
+  // first hero scene's raw still, else the opening frame. Best-effort — a reel with no scene images
+  // still exports.
+  let thumb: { name: string; data: Buffer } | null = null
+  try {
+    const composited = reelAssets.find(
+      (a) => a.kind === 'image' && (a.meta as { role?: string } | null)?.role === 'thumbnail',
+    )
+    if (composited) {
+      thumb = { name: 'thumbnail.jpg', data: await downloadBuffer(composited.storageKey) }
+    }
+  } catch { /* fall through to the raw hero frame */ }
+  if (!thumb) try {
+    const heroScene =
+      (await db.query.scenes.findFirst({
+        where: and(eq(scenes.reelId, reelId), eq(scenes.isHero, true)),
+        orderBy: [asc(scenes.idx)],
+        columns: { imageAssetId: true },
+      })) ??
+      (await db.query.scenes.findFirst({
+        where: eq(scenes.reelId, reelId),
+        orderBy: [asc(scenes.idx)],
+        columns: { imageAssetId: true },
+      }))
+    if (heroScene?.imageAssetId) {
+      const imgAsset = await db.query.assets.findFirst({ where: eq(assets.id, heroScene.imageAssetId) })
+      if (imgAsset) {
+        const ext = imgAsset.storageKey.split('.').pop()?.toLowerCase()
+        const safeExt = ext && ['jpg', 'jpeg', 'png', 'webp'].includes(ext) ? ext : 'jpg'
+        thumb = { name: `thumbnail.${safeExt}`, data: await downloadBuffer(imgAsset.storageKey) }
+      }
+    }
+  } catch { /* the thumbnail is a bonus, never a blocker */ }
+
+  // Build the caption from the reel's post package (title/hook/caption/hashtags).
   const story = reel.story
-  const hashtags = (HASHTAGS_BY_LANGUAGE[reel.language] ?? HASHTAGS_BY_LANGUAGE['tagalog']!).join(' ')
-  const caption = [
-    story?.logline ?? story?.title ?? '',
-    '',
-    hashtags,
-  ].join('\n')
+  const meta = await resolvePostMeta(reel, story, channel ?? null)
+  const caption = meta
+    ? [`TITLE: ${meta.title}`, '', formatPostCaption(meta)].join('\n')
+    : (story?.logline ?? story?.title ?? '')
 
   // AI disclosure note (required by platform policies)
   const disclosure = [
@@ -125,19 +200,20 @@ export async function GET(req: NextRequest) {
     'This content was created with AI assistance.',
     'Platform labels: "AI-generated content" or "Synthetic media"',
     '',
-    `Channel: ${channel?.name ?? 'Aswang Files'}`,
+    `Channel: ${channel?.name ?? 'Unknown channel'}`,
     `Reel ID: ${reelId}`,
     `Created: ${new Date().toISOString()}`,
     '',
     'POSTING CHECKLIST:',
-    '[ ] Add AI disclosure label in FB/IG/YT upload settings',
+    '[ ] Add AI disclosure label in the platform upload settings',
     '[ ] Cross-post as separate native uploads (never repost identical files)',
-    '[ ] Schedule at 9PM PHT for best reach',
-    '[ ] Reply to first 5 comments within the hour',
+    `[ ] Post around ${String(PostingRulesSchema.parse(channel?.postingRules ?? {}).scheduleUtcHour).padStart(2, '0')}:00 UTC (your channel's posting slot)`,
+    '[ ] Reply to the first few comments within the hour',
   ].join('\n')
 
   const zip = buildZip([
     { name: 'reel.mp4', data: videoBuf },
+    ...(thumb ? [thumb] : []),
     { name: 'caption.txt', data: Buffer.from(caption, 'utf8') },
     { name: 'AI-DISCLOSURE.txt', data: Buffer.from(disclosure, 'utf8') },
   ])

@@ -1,5 +1,5 @@
 import { getDb, channels, reels } from '@reels/db'
-import { and, desc, eq, count } from 'drizzle-orm'
+import { and, desc, eq, count, gte, sum } from 'drizzle-orm'
 import Link from 'next/link'
 import { CreateChannelButton } from './CreateChannelButton'
 import { ChannelAvatar } from '@/components/ChannelAvatar'
@@ -18,15 +18,30 @@ export default async function DashboardPage() {
   const activeRows = channelRows.filter((ch) => ch.status !== 'draft')
   const draftRows = channelRows.filter((ch) => ch.status === 'draft')
 
-  // Per-channel reel + published counts (active only; drafts have none). Low N — one query each is fine.
-  const stats: Record<string, { reels: number; published: number }> = {}
+  // Per-channel reel + published counts, ready-to-post, and month-to-date spend (active only; drafts
+  // have none). Low N — a few queries each is fine.
+  const monthStart = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1))
+  const stats: Record<string, { reels: number; published: number; ready: number; monthSpendCents: number }> = {}
   for (const ch of activeRows) {
     const [total] = await db.select({ n: count() }).from(reels).where(eq(reels.channelId, ch.id))
     const [pub] = await db
       .select({ n: count() })
       .from(reels)
       .where(and(eq(reels.channelId, ch.id), eq(reels.status, 'published')))
-    stats[ch.id] = { reels: total?.n ?? 0, published: pub?.n ?? 0 }
+    const [ready] = await db
+      .select({ n: count() })
+      .from(reels)
+      .where(and(eq(reels.channelId, ch.id), eq(reels.status, 'approved')))
+    const [spend] = await db
+      .select({ n: sum(reels.costCents) })
+      .from(reels)
+      .where(and(eq(reels.channelId, ch.id), gte(reels.createdAt, monthStart)))
+    stats[ch.id] = {
+      reels: total?.n ?? 0,
+      published: pub?.n ?? 0,
+      ready: ready?.n ?? 0,
+      monthSpendCents: Number(spend?.n ?? 0),
+    }
   }
 
   const isEmpty = activeRows.length === 0 && draftRows.length === 0
@@ -133,6 +148,14 @@ export default async function DashboardPage() {
                         <span><span className="font-mono tabular-nums text-ink">{stats[ch.id]?.reels ?? 0}</span> reels</span>
                         <span className="text-faint">·</span>
                         <span><span className="font-mono tabular-nums text-ink">{stats[ch.id]?.published ?? 0}</span> published</span>
+                        {(stats[ch.id]?.ready ?? 0) > 0 && (
+                          <span className="badge bg-accent-soft text-accent">{stats[ch.id]!.ready} to post</span>
+                        )}
+                        {(stats[ch.id]?.monthSpendCents ?? 0) > 0 && (
+                          <span className="ml-auto font-mono tabular-nums" title="What this month's reels cost to make">
+                            ${((stats[ch.id]?.monthSpendCents ?? 0) / 100).toFixed(2)}
+                          </span>
+                        )}
                       </div>
                     </Link>
                   ))}

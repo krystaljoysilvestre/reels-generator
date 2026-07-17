@@ -12,5 +12,6 @@ export * from './openai/image.js'
 export * from './openai/config.js'
 export * from './elevenlabs/client.js'
 export * from './elevenlabs/types.js'
+export * from './youtube/client.js'
 // Assembly helpers re-exported from core for convenience
 export { assembleImagePrompt, assembleNegativePrompt } from '@reels/core/assembly/imageprompt'

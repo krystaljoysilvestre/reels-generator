@@ -13,6 +13,7 @@ import { RenderingState } from '@/components/RenderingState'
 import { primeReelAlert } from '@/lib/reel-alert'
 import { MOOD_TINT, type ChannelMood } from '@/lib/pipeline-phases'
 import { useToast } from '@/components/Toast'
+import { PostCaptionButton, LogPerformanceButton, PostToYouTubeButton } from './PublishTools'
 
 type Scene = InferSelectModel<typeof scenes>
 type Story = InferSelectModel<typeof stories>
@@ -27,7 +28,7 @@ type PickerVoice = ChannelVoice & { reason?: string | undefined }
 const fmtSecs = (secs: number) => `${Math.round(secs * 10) / 10}s`
 
 interface StoryboardEditorProps {
-  reel: { id: string; status: string; voiceId: string | null; costCents: number; operatorMinutes: number; language: string }
+  reel: { id: string; status: string; voiceId: string | null; costCents: number; operatorMinutes: number; language: string; metricsViews: number | null; youtubeConfigured: boolean }
   story: Story | null
   scenes: Scene[]
   voicePool: Voice[]
@@ -1145,13 +1146,15 @@ export function StoryboardEditor({
                 </p>
                 <p className="text-xs text-muted">Download the package, upload to your platforms, then mark it published.</p>
               </div>
+              <PostCaptionButton reelId={reel.id} />
               <a href={`/api/pipeline/export-post-package?reelId=${reel.id}`} className="btn-secondary">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
                 </svg>
                 Download post package
               </a>
-              <button onClick={handlePublish} disabled={loading === 'publish'} className="btn-accent active:scale-[.98]">
+              {reel.youtubeConfigured && <PostToYouTubeButton reelId={reel.id} />}
+              <button onClick={handlePublish} disabled={loading === 'publish'} className={`active:scale-[.98] ${reel.youtubeConfigured ? 'btn-secondary' : 'btn-accent'}`}>
                 {loading === 'publish' ? 'Publishing…' : 'Mark published'}
               </button>
             </>
@@ -1167,6 +1170,8 @@ export function StoryboardEditor({
                 </p>
                 <p className="text-xs text-muted">Re-download the post package anytime.</p>
               </div>
+              {reel.status === 'published' && <LogPerformanceButton reelId={reel.id} initialViews={reel.metricsViews} />}
+              <PostCaptionButton reelId={reel.id} />
               <a href={`/api/pipeline/export-post-package?reelId=${reel.id}`} className="btn-secondary">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />

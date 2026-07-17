@@ -34,6 +34,7 @@
     "./prompts/video-qa.v1": "./src/prompts/video-qa.v1.ts",
     "./prompts/foley-spot.v1": "./src/prompts/foley-spot.v1.ts",
     "./prompts/filter-safe.v1": "./src/prompts/filter-safe.v1.ts",
+    "./prompts/post-meta.v1": "./src/prompts/post-meta.v1.ts",
     "./assembly/fewshot": "./src/assembly/fewshot.ts",
     "./assembly/avoidlist": "./src/assembly/avoidlist.ts",
     "./assembly/imageprompt": "./src/assembly/imageprompt.ts",

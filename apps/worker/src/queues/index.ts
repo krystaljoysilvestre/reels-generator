@@ -14,6 +14,7 @@ export type { QueueName, PipelineJobData } from '@reels/queue'
 // start per minute. Keep the provider entries only if/when those queues get their own workers.
 const RATE_LIMITS: Record<QueueName, RateLimiterOptions> = {
   [QUEUE.PIPELINE]:        { max: 50, duration: 60_000 },
+  [QUEUE.SCHEDULER]:       { max: 4,  duration: 60_000 },
   [QUEUE.LLM]:             { max: 40, duration: 60_000 },
   [QUEUE.FAL_IMAGE]:       { max: 30, duration: 60_000 },
   [QUEUE.FAL_VIDEO]:       { max: 5,  duration: 60_000 },

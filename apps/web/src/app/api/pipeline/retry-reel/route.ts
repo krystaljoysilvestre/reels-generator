@@ -10,6 +10,8 @@ import { getSession } from '@/lib/auth'
 // chain resumes from there. enqueueStep clears the stale failed job so the re-run actually fires.
 const STEP_RESET_STATUS: Record<string, string> = {
   generate_story: 'drafting',
+  analyze_story: 'storyboard',
+  generate_post_meta: 'storyboard',
   breakdown_scenes: 'storyboard',
   generate_images: 'storyboard',
   generate_tts: 'rendering',

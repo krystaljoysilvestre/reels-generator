@@ -274,6 +274,13 @@
       "when": 1784132316060,
       "tag": "0038_abnormal_vampiro",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1784183059288,
+      "tag": "0039_loving_bloodstorm",
+      "breakpoints": true
     }
   ]
 }

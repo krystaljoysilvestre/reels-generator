@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { eq } from 'drizzle-orm'
 import { getDb, channels } from '@reels/db'
-import { ToneConfigSchema, WorldBibleSchema, CaptionStyleSchema, TargetPlatformSchema, PLATFORM_PRESETS, AudioPacksSchema, MusicMoodSchema } from '@reels/core'
+import { ToneConfigSchema, WorldBibleSchema, CaptionStyleSchema, TargetPlatformSchema, PLATFORM_PRESETS, MAX_TARGET_SECONDS, AudioPacksSchema, MusicMoodSchema, PostingRulesSchema } from '@reels/core'
 import { STYLE_VALUES } from '@reels/core/prompts/story-styles.v1'
 import { VOICE_VALUES } from '@reels/core/prompts/story-voices.v1'
 import { getSession } from '@/lib/auth'
@@ -20,7 +20,8 @@ const UpdateSchema = z
     tagline: z.string().trim().max(200),
     targetPlatform: TargetPlatformSchema,
     toneConfig: ToneConfigSchema,
-    targetSeconds: z.number().int().min(15).max(180),
+    // Ceiling = the largest platform cap (long-form YouTube); clamped to the actual platform below.
+    targetSeconds: z.number().int().min(15).max(MAX_TARGET_SECONDS),
     stylePreset: z.string().trim().min(1),
     styleImageKey: z.string().trim().min(1).nullish(), // chosen style-sample image (preset thumb or custom render)
     captionStyle: CaptionStyleSchema,
@@ -32,6 +33,13 @@ const UpdateSchema = z
     narrativeStyle: z.union([z.literal(''), z.enum(STYLE_VALUES)]),
     narrativeVoice: z.union([z.literal(''), z.enum(VOICE_VALUES)]),
     styleInfluence: z.enum(['light', 'medium', 'full']),
+    // Auto-produce cadence (the consistency engine). Lives in the postingRules jsonb, merged below.
+    autoProduce: z.object({
+      enabled: z.boolean(),
+      reelsPerDay: z.number().int().min(1).max(8),
+      startHourUtc: z.number().int().min(0).max(23),
+      autoPublishYouTube: z.boolean(),
+    }),
   })
   .partial()
   .strict()
@@ -54,7 +62,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   const patch = parsed.data
   const updates: Record<string, unknown> = { updatedAt: new Date() }
   for (const [k, v] of Object.entries(patch)) {
-    if (k === 'musicMood') continue
+    if (k === 'musicMood' || k === 'autoProduce') continue
     if (k === 'description') updates[k] = v ?? null
     else if (k === 'tasteRubric') updates[k] = v || null // clearing the textarea reverts to the default rubric
     else if (v !== undefined) updates[k] = v
@@ -66,6 +74,13 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     if (patch.musicMood === null) delete packs.musicMood
     else packs.musicMood = patch.musicMood
     updates['audioPacks'] = packs
+  }
+
+  // Auto-produce cadence → merge into postingRules (the rest of the rules are untouched).
+  if (patch.autoProduce !== undefined) {
+    const rules = PostingRulesSchema.parse(existing.postingRules ?? {})
+    rules.autoProduce = patch.autoProduce
+    updates['postingRules'] = rules
   }
 
   // Keep length within the (possibly newly-chosen) platform's hard cap.

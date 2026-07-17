@@ -8,9 +8,10 @@ import { getSession } from '@/lib/auth'
 export async function POST(req: NextRequest) {
   if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { channelId, generationMode } = (await req.json().catch(() => ({}))) as {
+  const { channelId, generationMode, seed } = (await req.json().catch(() => ({}))) as {
     channelId?: string
     generationMode?: string
+    seed?: string
   }
   if (!channelId) return NextResponse.json({ error: 'channelId is required' }, { status: 400 })
 
@@ -29,6 +30,8 @@ export async function POST(req: NextRequest) {
     channelId: channel.id,
     status: 'drafting',
     language,
+    // Optional topic request ("make one about …") — the story planner honors it for this reel only.
+    ...(typeof seed === 'string' && seed.trim() ? { seedIdea: seed.trim().slice(0, 500) } : {}),
   }).returning()
 
   // Kick off the pipeline: generate_story runs, then the chain STOPS at the story_review gate

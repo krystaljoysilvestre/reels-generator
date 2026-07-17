@@ -5,7 +5,7 @@
 // Re-evaluate at M7 (SaaS go decision). [H6]
 
 import { bundle } from '@remotion/bundler'
-import { renderMedia, selectComposition, ensureBrowser } from '@remotion/renderer'
+import { renderMedia, renderStill, selectComposition, ensureBrowser } from '@remotion/renderer'
 import { readFile } from 'node:fs/promises'
 import { createReadStream, statSync } from 'node:fs'
 import { createServer } from 'node:http'
@@ -242,5 +242,37 @@ export async function renderReelWithRemotion(input: RemotionRenderInput): Promis
   } finally {
     await fileServer.close()  // release the loopback port whether the render succeeds or throws
   }
+}
+
+// Post thumbnail — one still of the Thumbnail composition (hero frame + composited title, 1280×720).
+// Reuses the process-level bundle + browser; a data-URI image needs no file server.
+export async function renderThumbnailStill(input: {
+  imagePath: string // local hero frame (webp from the image step)
+  title: string
+  outputPath: string // .jpeg
+}): Promise<void> {
+  const imageSrc = await toDataUri(input.imagePath, 'image/webp')
+  const props = { imageSrc, title: input.title }
+
+  const bundleUrl = await getBundleUrl()
+  await ensureBrowserOnce()
+
+  const composition = await selectComposition({
+    serveUrl: bundleUrl,
+    id: 'Thumbnail',
+    inputProps: props,
+    ...(browserExecutable ? { browserExecutable } : {}),
+  })
+
+  await renderStill({
+    composition,
+    serveUrl: bundleUrl,
+    output: input.outputPath,
+    inputProps: props,
+    imageFormat: 'jpeg',
+    jpegQuality: 90,
+    chromiumOptions: { disableWebSecurity: true }, // allow data URIs
+    ...(browserExecutable ? { browserExecutable } : {}),
+  })
 }
 

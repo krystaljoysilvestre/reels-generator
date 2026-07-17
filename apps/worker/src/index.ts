@@ -4,6 +4,9 @@ import { startBullBoard } from './monitoring/bull-board.js'
 import { makeWorker, QUEUE } from './queues/index.js'
 import { dispatchPipelineJob } from './pipeline/dispatcher.js'
 import { markReelFailed } from './pipeline/harness.js'
+import { registerAutoProduceSchedule, runAutoProduceTick, AUTO_PRODUCE_JOB } from './scheduler.js'
+import { registerDigestSchedule, runDailyDigest, DAILY_DIGEST_JOB } from './digest.js'
+import { registerMetricsPollSchedule, runMetricsPoll, METRICS_POLL_JOB } from './metrics-poll.js'
 
 initSentry()
 
@@ -35,6 +38,26 @@ pipelineWorker.on('failed', (job, err) => {
   }
 })
 
+// ── Scheduler: auto-produce ticks + the daily digest ─────────────────────────
+// Repeatable jobs registered on boot (idempotent). The auto-produce tick creates reels on each
+// channel's cadence (postingRules.autoProduce) — quota- and backlog-guarded, so extra ticks are
+// no-ops. The digest is one morning email of the shelf state (env-gated; skips silently when unset).
+const schedulerWorker = makeWorker(
+  QUEUE.SCHEDULER,
+  async (job) => {
+    if (job.name === AUTO_PRODUCE_JOB) await runAutoProduceTick()
+    else if (job.name === DAILY_DIGEST_JOB) await runDailyDigest()
+    else if (job.name === METRICS_POLL_JOB) await runMetricsPoll()
+  },
+  /* concurrency = */ 1,
+)
+schedulerWorker.on('failed', (job, err) => {
+  console.error(`[scheduler] ${job?.name ?? 'job'} failed:`, err.message)
+})
+void registerAutoProduceSchedule().catch((e) => console.error('[scheduler] could not register schedule:', e))
+void registerDigestSchedule().catch((e) => console.error('[scheduler] could not register digest:', e))
+void registerMetricsPollSchedule().catch((e) => console.error('[scheduler] could not register metrics poll:', e))
+
 // ── Bull Board UI ────────────────────────────────────────────────────────────
 const BULL_BOARD_PORT = parseInt(process.env['BULL_BOARD_PORT'] ?? '3001', 10)
 startBullBoard(BULL_BOARD_PORT)
@@ -43,6 +66,7 @@ startBullBoard(BULL_BOARD_PORT)
 async function shutdown() {
   console.log('Shutting down worker…')
   await pipelineWorker.close()
+  await schedulerWorker.close()
   process.exit(0)
 }
 process.on('SIGTERM', shutdown)

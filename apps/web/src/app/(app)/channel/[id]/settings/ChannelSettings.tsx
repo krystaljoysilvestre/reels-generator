@@ -57,6 +57,8 @@ interface Initial {
   musicMood: MusicMood | null // channel-default background-music mood; null = auto (from audioMood)
   musicMode: MusicMode // only AI-music channels expose a mood control
   tasteRubric: string | null // story-critic bar; null = built-in default for the genre
+  autoProduce: { enabled: boolean; reelsPerDay: number; startHourUtc: number; autoPublishYouTube: boolean } // the consistency engine cadence
+  youtubeConfigured: boolean // YOUTUBE_* env keys present → auto-publish is offerable
 }
 
 export function ChannelSettings({ id, initial }: { id: string; initial: Initial }) {
@@ -72,6 +74,7 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
   const [tone, setTone] = useState<ToneConfig>(initial.toneConfig)
   const [captionStyle, setCaptionStyle] = useState<CaptionStyle>(initial.captionStyle)
   const [generationMode, setGenerationMode] = useState<'review' | 'auto'>(initial.generationMode)
+  const [autoProduce, setAutoProduce] = useState(initial.autoProduce)
   const [musicMood, setMusicMood] = useState<MusicMood | null>(initial.musicMood)
   const [region, setRegion] = useState(initial.worldBible.region ?? '')
   const [era, setEra] = useState(initial.worldBible.era ?? '')
@@ -130,6 +133,7 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
       styleImageKey,
       captionStyle,
       generationMode,
+      autoProduce,
       musicMood,
       tasteRubric: tasteRubric.trim() || null,
       narrativeStyle,
@@ -213,6 +217,65 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
                 </span>
               </label>
             ))}
+          </div>
+
+          {/* Auto-produce cadence — the consistency engine */}
+          <div className="border-t border-border pt-3">
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                checked={autoProduce.enabled}
+                onChange={(e) => setAutoProduce((a) => ({ ...a, enabled: e.target.checked }))}
+                className="mt-0.5 h-4 w-4 flex-shrink-0 accent-accent"
+              />
+              <span>
+                <span className="block text-sm font-medium text-ink">Keep the shelf stocked</span>
+                <span className="mt-0.5 block text-xs text-muted">
+                  New reels start on their own, every day — no button to press.
+                  {generationMode === 'review'
+                    ? ' Each one waits for your story approval, so you’ll find drafts in the review queue.'
+                    : ' Each one runs all the way to a finished video, ready to download.'}
+                  {' '}Production pauses if unposted reels pile up.
+                </span>
+              </span>
+            </label>
+            {autoProduce.enabled && initial.youtubeConfigured && generationMode === 'auto' && (
+              <label className="mt-3 flex cursor-pointer items-start gap-3 pl-7">
+                <input
+                  type="checkbox"
+                  checked={autoProduce.autoPublishYouTube}
+                  onChange={(e) => setAutoProduce((a) => ({ ...a, autoPublishYouTube: e.target.checked }))}
+                  className="mt-0.5 h-4 w-4 flex-shrink-0 accent-accent"
+                />
+                <span>
+                  <span className="block text-sm font-medium text-ink">Post to YouTube on its own</span>
+                  <span className="mt-0.5 block text-xs text-muted">Finished reels go straight to your YouTube channel — title, caption, and AI label included.</span>
+                </span>
+              </label>
+            )}
+            {autoProduce.enabled && (
+              <div className="mt-3 grid gap-3 pl-7 sm:grid-cols-2">
+                <label className="flex flex-col gap-1.5 text-xs font-medium text-muted">
+                  Reels a day
+                  <Dropdown
+                    value={String(autoProduce.reelsPerDay)}
+                    onChange={(v) => setAutoProduce((a) => ({ ...a, reelsPerDay: Number(v) || 1 }))}
+                    options={[1, 2, 3, 4, 5, 6, 7, 8].map((n) => ({ value: String(n), label: n === 1 ? '1 reel' : `${n} reels` }))}
+                  />
+                </label>
+                <label className="flex flex-col gap-1.5 text-xs font-medium text-muted">
+                  Starting at
+                  <Dropdown
+                    value={String(autoProduce.startHourUtc)}
+                    onChange={(v) => setAutoProduce((a) => ({ ...a, startHourUtc: Number(v) || 0 }))}
+                    options={Array.from({ length: 24 }, (_, h) => ({
+                      value: String(h),
+                      label: new Date(Date.UTC(2000, 0, 1, h)).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
+                    }))}
+                  />
+                </label>
+              </div>
+            )}
           </div>
         </section>
 

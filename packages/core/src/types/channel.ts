@@ -57,6 +57,10 @@ export interface PlatformPreset {
   watermark: boolean             // burn the channel handle as a watermark (render, later)
 }
 
+// The absolute ceiling any channel's targetSeconds can take — the largest platform cap (YouTube
+// long-form). Route schemas validate against THIS; the per-platform clamp happens after.
+export const MAX_TARGET_SECONDS = 600
+
 export const PLATFORM_PRESETS: Record<TargetPlatform, PlatformPreset> = {
   tiktok: {
     label: 'TikTok', aspect: '9:16', width: 1080, height: 1920, maxSeconds: 180, sweetSpot: [21, 60],
@@ -407,5 +411,29 @@ export const PostingRulesSchema = z.object({
   platforms: z.array(z.enum(['fb', 'ig', 'yt', 'tiktok'])).default(['fb']),
   scheduleUtcHour: z.number().int().min(0).max(23).default(13), // 9PM PHT = 13:00 UTC
   qualityThreshold: z.number().min(0).max(10).default(0),       // 0 = no auto-filter in Phase 1
+  // The consistency engine: when enabled, the worker's hourly tick auto-creates reels on this cadence
+  // (one per tick until the day's quota is met, starting at startHourUtc). Gates still behave per the
+  // channel's generationMode — 'auto' runs to a finished render, 'review' queues stories for approval.
+  // Posting itself stays manual (see export-post-package).
+  autoProduce: z
+    .object({
+      enabled: z.boolean().default(false),
+      reelsPerDay: z.number().int().min(1).max(8).default(1),
+      startHourUtc: z.number().int().min(0).max(23).default(1), // 9AM PHT — drafts ready by the evening slot
+      // Opt-in last mile: when the reel reaches 'approved' on an auto channel, upload it to YouTube
+      // (needs the YOUTUBE_* env keys; silently stays manual without them). Default false — the
+      // standing "publishing stays manual" rule holds unless the operator flips this.
+      autoPublishYouTube: z.boolean().default(false),
+    })
+    .default({ enabled: false, reelsPerDay: 1, startHourUtc: 1, autoPublishYouTube: false }),
 })
 export type PostingRules = z.infer<typeof PostingRulesSchema>
+
+// Shared by the auto-produce scheduler (worker) and the channel page (web) so "paused" means the
+// same thing in both places: production pauses when this many unshipped reels pile up.
+export const UNSHIPPED_REEL_STATUSES = [
+  'drafting', 'story_review', 'storyboard', 'rendering', 'render_qa', 'spot_check', 'approved',
+] as const
+export function autoProduceBacklogCap(reelsPerDay: number): number {
+  return reelsPerDay * 3
+}

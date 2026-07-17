@@ -1,8 +1,8 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
-import { getDb, reels } from '@reels/db'
+import { getDb, reels, channels, publications } from '@reels/db'
 import { eq } from 'drizzle-orm'
-import { transition } from '@reels/core'
+import { transition, PostingRulesSchema } from '@reels/core'
 import { getSession } from '@/lib/auth'
 
 // Operator has posted the exported package to the platform(s) → 'published' (terminal).
@@ -28,6 +28,19 @@ export async function POST(req: NextRequest) {
     status: 'published',
     updatedAt: new Date(),
   }).where(eq(reels.id, reelId))
+
+  // One publications row per configured platform — the anchor for performance tracking (manual logs
+  // today via record-metrics; API metrics polling later). Idempotent: only on first publish.
+  const existingPubs = await db.query.publications.findMany({ where: eq(publications.reelId, reelId), columns: { id: true } })
+  if (existingPubs.length === 0) {
+    const channel = await db.query.channels.findFirst({ where: eq(channels.id, reel.channelId), columns: { postingRules: true } })
+    const platforms = PostingRulesSchema.parse(channel?.postingRules ?? {}).platforms
+    if (platforms.length) {
+      await db.insert(publications).values(
+        platforms.map((platform) => ({ reelId, platform, status: 'published', publishedAt: new Date() })),
+      )
+    }
+  }
 
   return NextResponse.json({ ok: true })
 }

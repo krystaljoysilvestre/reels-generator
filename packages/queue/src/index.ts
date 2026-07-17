@@ -17,6 +17,7 @@ export function getConnection() {
 
 export const QUEUE = {
   PIPELINE: 'pipeline',
+  SCHEDULER: 'scheduler', // the auto-produce tick (consistency engine) — see apps/worker/src/scheduler.ts
   LLM: 'llm',
   FAL_IMAGE: 'fal-image',
   FAL_VIDEO: 'fal-video',
@@ -78,7 +79,8 @@ export async function enqueueStep(data: PipelineJobData): Promise<void> {
 // Step → next step to auto-enqueue, or null to STOP (a human gate or terminal-before-human).
 export const PIPELINE_CHAIN: Record<string, string | null> = {
   generate_story: null,                  // → story_review (human approves)
-  analyze_story: 'breakdown_scenes',     // after story approval: build the Story Bible, then break down
+  analyze_story: 'generate_post_meta',   // after story approval: build the Story Bible…
+  generate_post_meta: 'breakdown_scenes', // …package the post (title/hook/caption/hashtags), then break down
   breakdown_scenes: 'generate_images',
   generate_images: null,                 // → storyboard (human edits + picks voice + triggers render)
   generate_tts: 'annotate_audio_script',

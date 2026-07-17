@@ -39,6 +39,7 @@ export async function POST(req: NextRequest) {
     status: 'rendering',
     voiceId,
     ...(voiceSettings ? { voiceSettings } : {}),
+    alertNote: null, // picking a voice + rendering resolves any needs-attention note (e.g. auto-mode voice stall)
     updatedAt: new Date(),
   }).where(eq(reels.id, reelId))
 

@@ -2,6 +2,7 @@ import { getDb, channels, reels } from '@reels/db'
 import { desc, eq } from 'drizzle-orm'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
+import { PostingRulesSchema, UNSHIPPED_REEL_STATUSES, autoProduceBacklogCap } from '@reels/core'
 import { requireAuth } from '@/lib/auth'
 import { ChannelAvatar } from '@/components/ChannelAvatar'
 import { CreateReelButton } from './CreateReelButton'
@@ -22,6 +23,19 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
     with: { story: { columns: { title: true } } },
   })
   const languages = channel.languages ?? []
+
+  // Production status strip: what's ready to post, and whether auto-produce is paused on backlog —
+  // the same math the scheduler uses, so "paused" here is exactly when the worker skips the channel.
+  const readyCount = reelRows.filter((r) => r.status === 'approved').length
+  const rules = PostingRulesSchema.safeParse(channel.postingRules ?? {})
+  const autoProduce = rules.success ? rules.data.autoProduce : null
+  const unshippedCount = reelRows.filter((r) => (UNSHIPPED_REEL_STATUSES as readonly string[]).includes(r.status)).length
+  const producePaused = !!autoProduce?.enabled && unshippedCount >= autoProduceBacklogCap(autoProduce.reelsPerDay)
+  // This month's spend across the channel's reels (channel creation cost excluded — that's one-time).
+  const monthStart = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1))
+  const monthSpendCents = reelRows
+    .filter((r) => r.createdAt >= monthStart)
+    .reduce((sum, r) => sum + r.costCents, 0)
 
   return (
     <div className="min-h-screen">
@@ -58,6 +72,32 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
       </header>
 
       <div className="mx-auto max-w-4xl p-8">
+        {/* Production status — pause warnings first, then the quiet facts */}
+        {producePaused && (
+          <div className="mb-4 flex items-start gap-3 rounded-lg border border-warning/30 bg-warning-soft px-4 py-3">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 flex-shrink-0 text-warning" aria-hidden>
+              <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+              <path d="M12 9v4M12 17h.01" />
+            </svg>
+            <p className="text-sm text-ink">
+              <span className="font-semibold">New reels are on hold</span> — {unshippedCount} are waiting to be posted.
+              Post or clear a few and production resumes on its own.
+            </p>
+          </div>
+        )}
+        {(readyCount > 0 || autoProduce?.enabled || monthSpendCents > 0) && (
+          <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-muted">
+            {readyCount > 0 && (
+              <span className="badge bg-accent-soft text-accent">{readyCount === 1 ? '1 reel ready to post' : `${readyCount} reels ready to post`}</span>
+            )}
+            {autoProduce?.enabled && !producePaused && (
+              <span className="badge bg-subtle text-muted">making {autoProduce.reelsPerDay === 1 ? '1 reel' : `${autoProduce.reelsPerDay} reels`} a day</span>
+            )}
+            {monthSpendCents > 0 && (
+              <span className="badge bg-subtle text-muted" title="What this month's reels cost to make">${(monthSpendCents / 100).toFixed(2)} this month</span>
+            )}
+          </div>
+        )}
         {/* Reels */}
         <section>
           {reelRows.length === 0 ? (
@@ -73,9 +113,12 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
               </div>
               <div className="card divide-y divide-border">
                 {reelRows.map((r) => (
-                  <Link key={r.id} href={reelHref(r.status, r.id)} className="flex items-center justify-between px-5 py-3 transition-colors hover:bg-subtle">
-                    <p className="truncate text-sm font-medium text-ink">{r.story?.title ?? 'Untitled'}</p>
-                    <span className={`badge ${r.status === 'failed' ? 'bg-danger-soft text-danger' : 'bg-subtle text-muted'}`}>{r.status.replace(/_/g, ' ')}</span>
+                  <Link key={r.id} href={reelHref(r.status, r.id)} className="flex items-center justify-between gap-3 px-5 py-3 transition-colors hover:bg-subtle">
+                    <p className="min-w-0 truncate text-sm font-medium text-ink">{r.story?.title ?? 'Untitled'}</p>
+                    <span className="flex flex-shrink-0 items-center gap-2">
+                      {r.alertNote && <span className="badge bg-warning-soft text-warning" title={r.alertNote}>needs attention</span>}
+                      <span className={`badge ${r.status === 'failed' ? 'bg-danger-soft text-danger' : 'bg-subtle text-muted'}`}>{r.status.replace(/_/g, ' ')}</span>
+                    </span>
                   </Link>
                 ))}
               </div>

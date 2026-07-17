@@ -12,6 +12,7 @@ import {
   generateStory,
   annotateAudioScript,
   analyzeStory,
+  generatePostMeta,
   breakdownScenes,
   generateTts,
   runComputeTimings,
@@ -46,6 +47,9 @@ export async function dispatchPipelineJob(job: Job<PipelineJobData>): Promise<vo
         break
       case 'analyze_story':
         await analyzeStory(reelId)
+        break
+      case 'generate_post_meta':
+        await generatePostMeta(reelId)
         break
       case 'breakdown_scenes':
         await breakdownScenes(reelId)

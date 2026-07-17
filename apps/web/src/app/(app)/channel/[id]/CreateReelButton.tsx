@@ -23,6 +23,7 @@ export function CreateReelButton({
   const [step, setStep] = useState<'idle' | 'mode' | 'byo'>('idle')
   const [showTextarea, setShowTextarea] = useState(false)
   const [byoText, setByoText] = useState('')
+  const [seedText, setSeedText] = useState('')
 
   async function create(generationMode?: 'review' | 'auto') {
     setLoading(true)
@@ -31,7 +32,11 @@ export function CreateReelButton({
       const res = await fetch('/api/pipeline/create-reel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ channelId, ...(generationMode ? { generationMode } : {}) }),
+        body: JSON.stringify({
+          channelId,
+          ...(generationMode ? { generationMode } : {}),
+          ...(seedText.trim() ? { seed: seedText.trim() } : {}),
+        }),
       })
       const json = await res.json().catch(() => null)
       if (!res.ok) throw new Error(json?.error ?? 'Could not create reel')
@@ -78,6 +83,7 @@ export function CreateReelButton({
     setStep('idle')
     setShowTextarea(false)
     setByoText('')
+    setSeedText('')
     setError('')
   }
 
@@ -122,6 +128,16 @@ export function CreateReelButton({
               <>
                 <h2 className="text-base font-semibold text-ink">Do you have a script for this reel?</h2>
                 <p className="mt-1 text-sm text-muted">Bring your own, or we&apos;ll write one you can review.</p>
+                <label className="mt-3 block">
+                  <span className="mb-1 block text-xs font-medium text-muted">Got a topic in mind? Optional.</span>
+                  <input
+                    value={seedText}
+                    onChange={(e) => setSeedText(e.target.value)}
+                    placeholder="e.g. a night-shift guard at a closed mall…"
+                    maxLength={500}
+                    className="input"
+                  />
+                </label>
                 <div className="mt-4 flex flex-col gap-2.5">
                   <OptionCard title="Write it for me" badge="Recommended" desc="We draft an original story in your channel's voice — you review it next, and can rewrite it if it's not right." onClick={() => void create('review')} />
                   {showTextarea ? (

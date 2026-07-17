@@ -3,6 +3,7 @@ import { and, desc, eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { requireAuth } from '@/lib/auth'
 import { type ChannelVoice, type VoiceSettings, moodToVoiceSettings, ToneConfigSchema, AudioPacksSchema, OperatorSfxSchema, PRESET_BEDS } from '@reels/core'
+import { isYouTubeConfigured } from '@reels/providers'
 import { channelMood, MOOD_TINT } from '@/lib/pipeline-phases'
 import { StoryboardEditor } from './StoryboardEditor'
 
@@ -115,6 +116,8 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
         costCents: reel.costCents,
         operatorMinutes: reel.operatorMinutes,
         language: reel.language,
+        metricsViews: (reel.metrics as { views?: number } | null)?.views ?? null,
+        youtubeConfigured: isYouTubeConfigured(),
       }}
       story={reel.story ?? null}
       scenes={reel.scenes.sort((a, b) => a.idx - b.idx)}

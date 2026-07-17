@@ -199,6 +199,19 @@ export const reels = pgTable(
     // effect ids (e.g. ['vhs','glitch']) = the operator's explicit choice, applied across the reel.
     videoEffects: jsonb('video_effects'),
     renderUrl: text('render_url'),
+    // Optional operator topic seed for THIS reel's story ("make one about the aswang sa palengke").
+    // Read by generate_story → planner; null = the planner explores freely. Never mutated after creation.
+    seedIdea: text('seed_idea'),
+    // Post metadata (PostMeta) — platform title, hook, caption, hashtags for this reel, written by the
+    // generate_post_meta step (regenerates when the story changes) and operator-editable. Consumed by
+    // the export post-package. Null = not yet generated (export falls back to a lazy generation).
+    postMeta: jsonb('post_meta'),
+    // Manually-logged platform performance (ReelMetrics: views/likes/comments + recordedAt). Feeds
+    // stories.performanceScore (channel-relative), which weights few-shot reference selection.
+    metrics: jsonb('metrics'),
+    // Needs-attention note shown on the channel page when an auto-mode reel stalls (e.g. no narrator
+    // voice could be auto-picked). Cleared when the operator resolves it (e.g. triggers the render).
+    alertNote: text('alert_note'),
     costCents: integer('cost_cents').notNull().default(0),
     operatorMinutes: integer('operator_minutes').notNull().default(0),
     createdAt: timestamp('created_at').notNull().defaultNow(),

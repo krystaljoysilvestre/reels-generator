@@ -6,8 +6,8 @@ import { join } from 'node:path'
 import { mkdir, writeFile, readFile, rm, copyFile } from 'node:fs/promises'
 import { getDb, reels, scenes, assets, channels } from '@reels/db'
 import { downloadBuffer, uploadBuffer, buildInputHash } from '@reels/providers'
-import { TimingsSchema, LutConfigSchema, CaptionStyleSchema, PLATFORM_PRESETS, effectsFromSelection, parseMotion } from '@reels/core'
-import { renderReelWithRemotion } from '@reels/render/remotion/render-remotion'
+import { TimingsSchema, LutConfigSchema, CaptionStyleSchema, PLATFORM_PRESETS, PostMetaSchema, effectsFromSelection, parseMotion } from '@reels/core'
+import { renderReelWithRemotion, renderThumbnailStill } from '@reels/render/remotion/render-remotion'
 import { runStep, setReelStatus } from '../harness.js'
 
 const execFileAsync = promisify(execFile)
@@ -275,6 +275,39 @@ export async function renderStep(reelId: string): Promise<void> {
         target: [assets.reelId, assets.storageKey],
         set: { meta, createdAt: new Date() },
       })
+
+      // ── Post thumbnail (best-effort): hero frame + composited title ──────
+      // 1280×720 for YouTube packaging; the export zip and publish flows prefer it over the raw frame.
+      // Skipped without complaint when there's no title or no hero image — never fails the render.
+      try {
+        const postMeta = PostMetaSchema.safeParse(reel.postMeta)
+        const heroScene =
+          reelScenes.find((s) => s.isHero && s.imageAssetId) ?? reelScenes.find((s) => s.imageAssetId)
+        const heroAsset = heroScene?.imageAssetId ? allAssets.find((a) => a.id === heroScene.imageAssetId) : null
+        if (postMeta.success && postMeta.data.title && heroAsset) {
+          const heroPath = join(tmp, 'thumb_hero.webp')
+          await writeFile(heroPath, await downloadBuffer(heroAsset.storageKey))
+          const thumbPath = join(tmp, 'thumbnail.jpg')
+          await renderThumbnailStill({ imagePath: heroPath, title: postMeta.data.title, outputPath: thumbPath })
+          const thumbKey = `reels/${reelId}/thumbnail.jpg`
+          await uploadBuffer(thumbKey, await readFile(thumbPath), 'image/jpeg')
+          const thumbMeta = { role: 'thumbnail', title: postMeta.data.title }
+          await db.insert(assets).values({
+            reelId,
+            channelId: reel.channelId,
+            kind: 'image',
+            storageKey: thumbKey,
+            provider: 'local',
+            costCents: 0,
+            meta: thumbMeta,
+          }).onConflictDoUpdate({
+            target: [assets.reelId, assets.storageKey],
+            set: { meta: thumbMeta, createdAt: new Date() },
+          })
+        }
+      } catch (err) {
+        console.warn(`[render] thumbnail skipped: ${err instanceof Error ? err.message : String(err)}`)
+      }
 
       return { output: { storageKey, reused }, costCents: 0 }
       } finally {

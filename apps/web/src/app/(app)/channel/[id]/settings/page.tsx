@@ -2,7 +2,8 @@ import { getDb, channels } from '@reels/db'
 import { eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { requireAuth } from '@/lib/auth'
-import { ToneConfigSchema, WorldBibleSchema, CaptionStyleSchema, AudioPacksSchema, TargetPlatformSchema } from '@reels/core'
+import { ToneConfigSchema, WorldBibleSchema, CaptionStyleSchema, AudioPacksSchema, TargetPlatformSchema, PostingRulesSchema } from '@reels/core'
+import { isYouTubeConfigured } from '@reels/providers'
 import { ChannelSettings } from './ChannelSettings'
 
 export const dynamic = 'force-dynamic'
@@ -38,6 +39,8 @@ export default async function ChannelSettingsPage({ params }: { params: Promise<
         musicMood: AudioPacksSchema.parse(channel.audioPacks ?? {}).musicMood ?? null,
         musicMode: AudioPacksSchema.parse(channel.audioPacks ?? {}).musicMode,
         tasteRubric: channel.tasteRubric ?? null,
+        autoProduce: PostingRulesSchema.parse(channel.postingRules ?? {}).autoProduce,
+        youtubeConfigured: isYouTubeConfigured(),
       }}
     />
   )
