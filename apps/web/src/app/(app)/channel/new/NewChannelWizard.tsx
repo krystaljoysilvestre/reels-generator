@@ -11,6 +11,7 @@ import { type CaptionPreset, type CaptionStyle, type TargetPlatform, type AudioM
 import { type GenreModule, asGenreModule } from '@reels/core/prompts/scenes.v1'
 import { stylesForGenre } from '@reels/core/prompts/story-styles.v1'
 import { STORY_VOICES } from '@reels/core/prompts/story-voices.v1'
+import { GENRE_OPTIONS } from '@/lib/genre-labels'
 
 type StyleInfluence = 'light' | 'medium' | 'full'
 const VOICE_OPTIONS = Object.entries(STORY_VOICES).map(([id, v]) => ({ id, label: v.label }))
@@ -1162,9 +1163,21 @@ export function NewChannelWizard({
               <div className="card p-5">
                 <SectionLabel>Storytelling style</SectionLabel>
                 <p className="mt-1 text-xs text-faint">
-                  How this channel tells its stories — the tradition it works in and how the narrator sounds. We picked a fit; change it anytime.
+                  How this channel tells its stories — the kind of story, the tradition it works in, and how the narrator sounds. We read your description and picked a fit; change anything.
+                  {' '}Mixing genres? Pick the dominant one — your description carries the blend into every reel.
                 </p>
-                <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <label className="flex flex-col gap-1.5 text-xs font-medium text-muted">
+                    Kind of story
+                    <Dropdown
+                      value={genreCategory}
+                      onChange={(v) => {
+                        setGenreCategory(v as GenreModule)
+                        setNarrativeStyle('') // styles are scoped to the genre — a switch resets to pure genre
+                      }}
+                      options={GENRE_OPTIONS}
+                    />
+                  </label>
                   {stylesForGenre(genreCategory).length > 0 && (
                     <label className="flex flex-col gap-1.5 text-xs font-medium text-muted">
                       Style

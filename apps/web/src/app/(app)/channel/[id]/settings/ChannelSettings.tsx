@@ -16,6 +16,7 @@ import {
   resolveCaptionStyle,
 } from '@reels/core'
 import { asGenreModule } from '@reels/core/prompts/scenes.v1'
+import { GENRE_OPTIONS } from '@/lib/genre-labels'
 import { stylesForGenre } from '@reels/core/prompts/story-styles.v1'
 import { STORY_VOICES } from '@reels/core/prompts/story-voices.v1'
 import { CaptionPreview } from '@/components/CaptionPreview'
@@ -84,7 +85,10 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
     Object.entries(initial.worldBible.vocabulary ?? {}).map(([term, value]) => ({ term, value })),
   )
   const [tasteRubric, setTasteRubric] = useState(initial.tasteRubric ?? '')
-  // PROSE dimensions (story-styles / story-voices) — editable post-creation (unlike genre).
+  // Genre (the kind of story) — derived by AI at creation, correctable here. Changing it re-scopes
+  // everything downstream (writer, registers, scene grammar, voice delivery, styles gallery).
+  const [genreCategory, setGenreCategory] = useState(initial.genreCategory)
+  // PROSE dimensions (story-styles / story-voices) — editable post-creation.
   const [narrativeStyle, setNarrativeStyle] = useState(initial.narrativeStyle)
   const [narrativeVoice, setNarrativeVoice] = useState(initial.narrativeVoice)
   const [styleInfluence, setStyleInfluence] = useState<'light' | 'medium' | 'full'>(
@@ -134,6 +138,7 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
       captionStyle,
       generationMode,
       autoProduce,
+      genreCategory,
       musicMood,
       tasteRubric: tasteRubric.trim() || null,
       narrativeStyle,
@@ -368,18 +373,32 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
           <p className="text-xs text-faint">Capped at {PLATFORM_PRESETS[targetPlatform].maxSeconds}s for {PLATFORM_PRESETS[targetPlatform].label}.</p>
         </section>
 
-        {/* Storytelling style — the prose tradition + narrator voice (NOT the visual look or TTS voice) */}
+        {/* Storytelling style — the kind of story + prose tradition + narrator voice (NOT the visual look or TTS voice) */}
         <section className="card space-y-3 p-5">
           <SectionLabel>Storytelling style</SectionLabel>
-          <p className="text-xs text-faint">The tradition this channel tells stories in and how the narrator sounds on the page.</p>
-          <div className="grid gap-3 sm:grid-cols-3">
-            {stylesForGenre(asGenreModule(initial.genreCategory) ?? 'general').length > 0 && (
+          <p className="text-xs text-faint">
+            The kind of story this channel tells, the tradition it works in, and how the narrator sounds on the page.
+            Mixing genres? Pick the dominant one — your channel description carries the blend.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <label className="flex flex-col gap-1.5 text-xs font-medium text-muted">
+              Kind of story
+              <Dropdown
+                value={asGenreModule(genreCategory) ?? 'general'}
+                onChange={(v) => {
+                  setGenreCategory(v)
+                  setNarrativeStyle('') // styles are scoped to the genre — a switch resets to pure genre
+                }}
+                options={GENRE_OPTIONS}
+              />
+            </label>
+            {stylesForGenre(asGenreModule(genreCategory) ?? 'general').length > 0 && (
               <label className="flex flex-col gap-1.5 text-xs font-medium text-muted">
                 Style
                 <Dropdown
                   value={narrativeStyle}
                   onChange={setNarrativeStyle}
-                  options={[{ value: '', label: 'Pure genre (no style)' }, ...stylesForGenre(asGenreModule(initial.genreCategory) ?? 'general').map((s) => ({ value: s.id, label: s.label }))]}
+                  options={[{ value: '', label: 'Pure genre (no style)' }, ...stylesForGenre(asGenreModule(genreCategory) ?? 'general').map((s) => ({ value: s.id, label: s.label }))]}
                 />
               </label>
             )}
@@ -420,7 +439,7 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
 
         {/* Visual style — preset gallery + opt-in custom generation */}
         <VisualStyle
-          genre={initial.genreCategory}
+          genre={genreCategory}
           niche={niche}
           tone={tone}
           worldBible={{
