@@ -30,7 +30,7 @@ compose up -d postgres redis >/dev/null
 # 3. Wait for Postgres to accept connections.
 for _ in $(seq 1 30); do
   if compose exec -T postgres pg_isready -U postgres >/dev/null 2>&1; then
-    echo "✓ Database is ready (postgres on :5433, redis on :6379)"
+    echo "✓ Database is ready (postgres on :5433, redis on :6380)"
     exit 0
   fi
   sleep 1
