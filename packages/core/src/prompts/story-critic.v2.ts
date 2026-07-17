@@ -11,7 +11,7 @@
 import { z } from 'zod'
 import { asGenreModule, classifyGenre, type GenreModule } from './scenes.v1.js'
 
-export const STORY_CRITIC_V2_VERSION = 'story-critic.v2.1'
+export const STORY_CRITIC_V2_VERSION = 'story-critic.v2.3'
 
 export const StoryGateSchema = z.object({
   pass: z.boolean(),
@@ -43,7 +43,7 @@ PAYOFF
 
 VOICE
 - Reads as SPOKEN confession, not written prose: short lines, hesitations, one beat per line.
-- Intimate 2AM register — telling a close friend, not narrating a documentary.
+- Committed to ONE register — intimate 2AM dread, coiled suspense, or kinetic shock all pass; a story that blends registers into mush fails. Loud is legitimate when the story earns it; gore never is.
 
 WORLD
 - Grounded in believable local texture (places, habits, objects people actually have); nothing generic-western pasted in.
@@ -65,7 +65,7 @@ PAYOFF
 - The ending leaves a mark — no clean bow, no moral spelled out.
 
 VOICE
-- Spoken, personal, specific; restraint at the biggest moment (the peak told smallest).
+- Spoken, personal, specific. The peak is CONTROLLED for its register: a quiet-ache story tells it smallest; a confrontation says it out loud and pays for it — either passes; melodrama (emotion announced, not carried) fails in both.
 
 NEVER
 - Tragedy the story didn't earn; grief as decoration.
@@ -178,6 +178,12 @@ A finished ${v.language} narration script is about to ship. You answer ONE quest
 How you judge:
 - THE CREDIBILITY TEST comes first: read it as a skeptical listener who instantly smells over-polished, constructed, or AI-flavored writing. If you would not believe a real person said this out loud, it fails.
 - LANGUAGE NATURALNESS (any language) is a hard fail: any line that reads like a sentence translated word-for-word from another language, any garbled or grammatically-wrong phrase, or a title in the wrong language, = FAIL — name the exact line in your reason so the rewrite can fix it.${v.language.toLowerCase() === 'taglish' ? '\n- For this Taglish channel specifically: textbook/literary Tagalog or forced, perfectly-balanced code-switching also fails — it should read as natural, contemporary spoken Taglish.' : ''}
+- STORY PHYSICS — where this script tells a story (someone lived something), four script-doctor checks. A clear miss on any is a fail worth naming:
+  · AGENCY: does the narrator DECIDE anything, or do things merely happen to a passive witness?
+  · CAUSALITY: do the beats force each other ("therefore/but"), or just follow each other ("and then")?
+  · THE DEBT: does the ending answer the question the opening planted — or twist from nowhere?
+  · THE CHANGE: is anything different at the end (in the narrator, their world, or the viewer's understanding) — or does it just stop?
+  (An explainer or argument answers these in its own terms: a claim advanced, a question paid off, an understanding changed.)
 - Then the channel's rubric below. A clear violation of a rubric line fails; judge against the rubric, not your personal taste.
 - You do not rewrite, rank, or score. Pass or fail, with ONE blunt sentence of reason. On fail, the reason must point at the text (what fails and where), because it steers exactly one rewrite.
 - Bar check: a good-enough story passes. This gate exists to catch real failures, not to chase perfection — most competent scripts should pass.`

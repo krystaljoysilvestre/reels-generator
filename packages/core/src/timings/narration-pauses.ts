@@ -12,7 +12,9 @@
 // already there and top it up ONLY by the shortfall — so beats land at a consistent, deliberate length on
 // any voice, and we never double-pause where the read already breathes.
 //
-// PURE: no I/O. Horror-tuned for now (a genre that lives on restraint + silence). Other genres get none.
+// PURE: no I/O. Per-genre pause PROFILES (deterministic owner-set tuning, like the voice envelopes):
+// horror lives on long dread holds; comedy needs exactly one thing — the hang before the snap; drama
+// takes a breath at the wound. Genres without a profile get no added pauses (their reads stay natural).
 
 import type { AlignedChar } from '../types/timings.js'
 
@@ -30,13 +32,24 @@ export interface NarrationPause {
   reason: string
 }
 
-// Target TOTAL silence per beat (ms). The voice's natural sentence pauses already reach ~1.2s, so the
-// dread beats are set clearly ABOVE that — otherwise they blend into the normal pacing and read as nothing.
-// The reveal is deliberately the single longest hold in the whole reel.
-const SCENE_BOUNDARY_TARGET = 600   // a clean break between beats (tops up only if the read rushes it)
-const PAYOFF_SENTENCE_TARGET = 900  // between sentences inside the final scene
-const PAYOFF_LEADIN_TARGET = 1200   // entering the final (payoff) scene
-const REVEAL_TARGET = 1800          // before the LAST sentence of the final scene (the reveal) — the big hang
+// Target TOTAL silence per beat (ms), per genre. The voice's natural sentence pauses already reach
+// ~1.2s, so beats meant to be FELT sit clearly above that — otherwise they blend in and read as nothing.
+// A 0 target skips that beat entirely (the read's natural gap stands).
+interface PauseProfile {
+  sceneBoundary: number   // a clean break between scenes (tops up only if the read rushes it)
+  payoffSentence: number  // between sentences inside the final scene
+  payoffLeadin: number    // entering the final (payoff) scene
+  reveal: number          // before the LAST sentence of the final scene — the big hang
+}
+const GENRE_PAUSE_PROFILES: Record<string, PauseProfile> = {
+  // The original horror tuning (restraint + silence); the reveal is the reel's single longest hold.
+  horror: { sceneBoundary: 600, payoffSentence: 900, payoffLeadin: 1200, reveal: 1800 },
+  // Comedy wants ONE thing: the beat of hang before the snap. Everything else stays quick — long
+  // gaps kill momentum, so scene boundaries and mid-scene sentences add nothing.
+  comedy: { sceneBoundary: 0, payoffSentence: 0, payoffLeadin: 700, reveal: 1000 },
+  // Drama: a breath at the wound — gentler than horror's dread holds, present enough to be felt.
+  drama: { sceneBoundary: 400, payoffSentence: 600, payoffLeadin: 900, reveal: 1300 },
+}
 
 const SENTENCE_END = /[.?!…]/
 const isWs = (cp: string): boolean => /\s/.test(cp)
@@ -74,7 +87,8 @@ function innerSentenceStarts(cps: string[], startCp: number, endCp: number): num
 // Plan dramatic beats for a reel's narration. `sceneTexts` are the scene narrationTexts in order (they
 // tile the narration gaplessly). Returns beats sorted by cpIndex, de-duped (largest target wins on a tie).
 export function planNarrationPauses(narration: string, sceneTexts: string[], genre?: string): NarrationBeat[] {
-  if (genre !== 'horror' || sceneTexts.length === 0) return []
+  const profile = genre ? GENRE_PAUSE_PROFILES[genre] : undefined
+  if (!profile || sceneTexts.length === 0) return []
 
   const cps = Array.from(narration)
   const starts = sceneStartIndices(cps, sceneTexts)
@@ -84,9 +98,11 @@ export function planNarrationPauses(narration: string, sceneTexts: string[], gen
   // A clean break before each non-first scene; the final scene gets a longer payoff lead-in.
   for (let i = 1; i < starts.length; i++) {
     if (starts[i]! <= 0) continue
+    const targetMs = i === lastIdx ? profile.payoffLeadin : profile.sceneBoundary
+    if (targetMs <= 0) continue // 0 = this genre skips the beat; the natural read stands
     raw.push({
       cpIndex: starts[i]!,
-      targetMs: i === lastIdx ? PAYOFF_LEADIN_TARGET : SCENE_BOUNDARY_TARGET,
+      targetMs,
       reason: i === lastIdx ? 'payoff-leadin' : 'scene-boundary',
     })
   }
@@ -95,9 +111,11 @@ export function planNarrationPauses(narration: string, sceneTexts: string[], gen
   const inner = innerSentenceStarts(cps, starts[lastIdx]!, cps.length)
   inner.forEach((cpIndex, k) => {
     const isReveal = k === inner.length - 1
+    const targetMs = isReveal ? profile.reveal : profile.payoffSentence
+    if (targetMs <= 0) return
     raw.push({
       cpIndex,
-      targetMs: isReveal ? REVEAL_TARGET : PAYOFF_SENTENCE_TARGET,
+      targetMs,
       reason: isReveal ? 'reveal' : 'payoff-sentence',
     })
   })

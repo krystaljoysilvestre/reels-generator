@@ -12,7 +12,20 @@ import { STORY_VOICES_V1_VERSION, resolveVoice, renderVoice } from './story-voic
 import { asGenreModule, classifyGenre } from './scenes.v1.js'
 
 // Craft + identities + style/voice are baked into the prompt text, so their versions ride along.
-export const STORY_V2_VERSION = `story.v2.2+${STORY_CRAFT_V1_VERSION}+${WRITER_IDENTITIES_V1_VERSION}+${STORY_STYLES_V1_VERSION}+${STORY_VOICES_V1_VERSION}`
+export const STORY_V2_VERSION = `story.v2.3+${STORY_CRAFT_V1_VERSION}+${WRITER_IDENTITIES_V1_VERSION}+${STORY_STYLES_V1_VERSION}+${STORY_VOICES_V1_VERSION}`
+
+// The story's physics — what makes a telling a STORY rather than a mood or a report. Sits beside the
+// six craft principles (which govern the sentences; these govern the chain). Authored under
+// .claude/skills/unbiased-design: quality constraints on structure, no quotas, no genre texture.
+const STORY_SHAPE = `THE SHAPE — four laws of the story itself. Length changes the compression, never the physics; at reel length these are compressed, not skipped. (A lived story obeys them through its narrator; an explainer or argument obeys them through its question — planted, tightening, paid off, changing what the viewer understands. Never invent a fake protagonist to satisfy a law.)
+
+1. CAUSE, NEVER SEQUENCE. Every beat exists because the previous one forced it — connected by "therefore" or "but", never "and then". Most turns should be forced by something the narrator DID: a choice, and its cost. If two beats could swap places without breaking anything, the story isn't moving — rebuild the chain.
+
+2. THE OPENING IS A DEBT. The first lines plant a question, and the peak must answer THAT question — recontextualizing what was planted, never twisting from nowhere. A plant that never pays is clutter; a payoff that was never planted is a cheat.
+
+3. SPEND THE WORDS UNEVENLY. Summarize ruthlessly so ONE moment can be lived in real time — the peak, rendered in scene: what was heard, what was said, the breath between. A story told entirely in summary is a report.
+
+4. END ON THE CHANGE. Something is different now — in the narrator, in their world, or in how the viewer understands their own. One beat past the turn, show the change still living, then stop. If nothing changed, it was an anecdote, not a story.`
 
 export interface StoryWriterVars {
   channelName: string
@@ -33,10 +46,13 @@ export interface StoryWriterVars {
   plan: {
     premise: string
     conflict: string
+    escalation: string // the middle's engine — choices and their costs between premise and turn
     twist: string
     ending: string
     emotionalDestination: string
   }
+  register?: string | undefined // the register the plan committed to (elements.register); absent → the writer picks from its own registers
+  platformHookHint?: string | undefined // the target platform's first-seconds grammar (PLATFORM_PRESETS.hookHint)
   operatorFeedback?: string | undefined // THIS reel's latest rejection (reason + note), for regeneration
   regenerationNonce?: number | undefined // 0 = first draft; must land in prompt text so inputHash changes
   qaFeedback?: string | undefined // believability-gate reason from the Critic → one bounded rewrite
@@ -59,6 +75,8 @@ ${renderIdentity(identity)}
 ${styleBlock}${voiceBlock}
 ${STORY_CRAFT_CORE}
 
+${STORY_SHAPE}
+
 Tone calibration (0–10 scales): ${v.toneConfig}
 Language for this story: ${v.language}${spokenRegisterBlock(v.language, v.audienceDescriptor)}
 
@@ -78,16 +96,17 @@ GUARDS:
   const hookRule = isLongForm
     ? `COLD OPEN = the first few sentences (~15–30 seconds spoken): open mid-tension or on the story's central unresolvable question — the promise the whole video pays off. Never open with setting description or a greeting.
 - A long video must EARN its length: let the story move in a few natural movements/chapters, and end each one pulling the viewer forward — a new question, a turn, a decision, a door literally or figuratively opening. If a stretch exists only to fill time, cut it; write the story the length IT wants within the target.`
-    : `HOOK = the first 1–2 sentences (≤3 seconds spoken): open mid-tension or on a curiosity gap / unresolvable detail. Never open with setting description or a greeting.`
+    : `HOOK = the first 1–2 sentences (≤3 seconds spoken): open mid-tension or on a curiosity gap / unresolvable detail. Never open with setting description or a greeting.${v.platformHookHint ? `\n- Where this will be watched, the first seconds work like this: ${v.platformHookHint}. Serve that instinct in this story's own voice — never as a formula.` : ''}`
 
   const userMessage = `The story is decided. Your job is the telling — write it so a person lived it.
 
 THE IDEA (from the planning room — its intent is fixed; every choice of scene, sensory detail, rhythm, and voice is yours):
 - Premise: ${v.plan.premise}
-- The tension at its heart: ${v.plan.conflict}
+- The conflict (who wants what, what's in the way): ${v.plan.conflict}
+- How it tightens (the middle's engine — choices and their costs): ${v.plan.escalation}
 - The turn: ${v.plan.twist}
 - The ending: ${v.plan.ending}
-- What the viewer should be left feeling: ${v.plan.emotionalDestination}
+- What the viewer should be left feeling: ${v.plan.emotionalDestination}${v.register?.trim() ? `\n- The register (committed): ${v.register.trim()} — this is the telling's temperature; commit to it fully from first line to last.` : ''}
 
 Write it as one original ${v.language} narrated script for a ${v.targetSeconds}-second ${isLongForm ? 'long-form video' : 'reel'} (≈${v.targetWords} words at natural narration pace) on THIS channel — its niche, its tone, the reference scripts' voice.
 

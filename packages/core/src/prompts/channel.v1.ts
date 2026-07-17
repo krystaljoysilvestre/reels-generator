@@ -130,7 +130,7 @@ Produce JSON with exactly these fields:
      - informational: news, explainers, education, tutorials, history, science, finance, tech, documentary, reviews — clear, sharp, neutrally-lit subjects
      - lifestyle: food/cooking, travel, vlogs, fashion, beauty, fitness, product, DIY — bright, inviting, aspirational
      - drama: emotional/relationship narrative, hugot, heartbreak, family stories, romance — stories built to move the viewer
-     - commentary: opinion, hot takes, rants, reactions, argument-driven monologue — a clear stance with basis
+     - commentary: opinion, hot takes, rants, reactions, motivation/self-improvement/stoicism — argument- or conviction-driven monologue, a clear stance with basis
      - reddit_story: reddit-style first-person confession/AITA/TIFU storytime — must read as a REAL post by a real person
      - comedy: punchline-driven, skits, absurd/funny storytelling — setup, expectation, subversion
      - general: anything that doesn't clearly fit the above (faith, general storytelling) — neutral composition, no genre-specific rules",

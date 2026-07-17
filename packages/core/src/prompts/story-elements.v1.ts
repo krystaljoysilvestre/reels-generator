@@ -17,7 +17,7 @@
 import { z } from 'zod'
 import type { GenreModule } from './scenes.v1.js'
 
-export const STORY_ELEMENTS_V1_VERSION = 'elements.v1'
+export const STORY_ELEMENTS_V1_VERSION = 'elements.v1.2'
 
 // The labels the planner records about the idea it ALREADY committed to. Short free-text strings —
 // palettes below are guidance, not enums, so a planner can always name its own value. `pov` and
@@ -32,6 +32,11 @@ export const StoryElementsSchema = z.object({
   turn: z.string().min(1), // the reveal/reversal TYPE
   aftereffect: z.string().min(1), // what the viewer carries away
   tensionCurve: z.string().min(1), // the pacing shape only (emotion belongs to mechanics)
+  // The temperature the idea commits to, named in the genre writer's own register vocabulary
+  // (e.g. horror: "kinetic shock"). Optional — genres without registers (general) leave it blank.
+  // Recorded for the anti-sameness rotation + performance-by-register analytics, and passed to the
+  // Writer (committed telling temperature) and the voice-delivery envelope downstream.
+  register: z.string().optional(),
 })
 export type StoryElements = z.infer<typeof StoryElementsSchema>
 
@@ -47,6 +52,7 @@ const DIMENSION_DESCRIPTIONS: Array<{ key: keyof StoryElements; desc: string }> 
   { key: 'turn', desc: 'the TYPE of reveal/reversal at the peak' },
   { key: 'aftereffect', desc: 'what the viewer is left carrying' },
   { key: 'tensionCurve', desc: 'the pacing shape only — where it rises, holds, releases (not the emotion)' },
+  { key: 'register', desc: "the temperature the idea commits to — ONE of the writer's registers, in its own words; blank if none fits" },
 ]
 
 // Per-dimension, per-genre palettes: suggestive vocabularies to reason from. `structure`, `pov`, and
@@ -70,12 +76,13 @@ const PALETTES: Record<GenreModule, Palette> = {
     tensionCurve: ['calm→unease→dread→still', 'dread-from-line-one, sustained', 'quiet→quiet→sudden→cut', 'slow domestic build→late detonation'],
   },
   drama: {
-    role: ['a daughter', 'an estranged brother', 'a widow', 'a breadwinner', 'a former lover', 'a caregiver', 'a father who left'],
-    setting: ['a hospital waiting room', 'the family dinner table', 'a childhood bedroom', 'a bus terminal', 'a wake', 'a rented apartment'],
-    trigger: ['a returning face', 'an unsent message found', 'a diagnosis', 'an inheritance', 'a photograph', 'a phone call after years'],
-    turn: ['recognition', 'a hidden sacrifice revealed', 'a misunderstanding uncovered', 'a truth arriving too late'],
-    aftereffect: ['a permanent loss', 'a reconciliation that costs something', 'an unanswered "what if"', 'forgiveness that comes too late'],
-    tensionCurve: ['restraint→swell→quiet break', 'warm→crack→ache', 'steady→reveal→release'],
+    role: ['a daughter', 'an estranged brother', 'a widow', 'a breadwinner', 'a former lover', 'a caregiver', 'a father who left', 'an eldest child who raised the rest', 'a best friend who knew first', 'an OFW parent home for good'],
+    setting: ['a hospital waiting room', 'the family dinner table', 'a childhood bedroom', 'a bus terminal', 'a wake', 'a rented apartment', 'the old house being sold', 'a graduation missed', 'the airport arrivals gate'],
+    anchor: ['a kept receipt', 'the plate still set', 'an unwashed mug', 'the ringtone never changed', 'a name still first in the contacts', 'the jacket on its hook', 'a half of everything (the other cup, the other chair)', 'an old voicemail never deleted'],
+    trigger: ['a returning face', 'an unsent message found', 'a diagnosis', 'an inheritance', 'a photograph', 'a phone call after years', 'the last box packed', 'a debt discovered after the funeral'],
+    turn: ['recognition', 'a hidden sacrifice revealed', 'a misunderstanding uncovered', 'a truth arriving too late', 'the roles reversed (the child becomes the parent)', 'what the silence was protecting'],
+    aftereffect: ['a permanent loss', 'a reconciliation that costs something', 'an unanswered "what if"', 'forgiveness that comes too late', 'a habit kept in someone\'s memory'],
+    tensionCurve: ['restraint→swell→quiet break', 'warm→crack→ache', 'steady→reveal→release', 'ordinary day→one sentence→everything after'],
   },
   commentary: {
     role: ['someone who used to believe the opposite', 'an insider', 'a frustrated regular person', 'a former true-believer'],
@@ -94,15 +101,16 @@ const PALETTES: Record<GenreModule, Palette> = {
     tensionCurve: ['calm setup→petty escalation→breaking point', 'reasonable→unreasonable→verdict'],
   },
   comedy: {
-    role: ['the overconfident one', 'the deadpan narrator', 'the one thing keeps happening to', 'the straight man'],
-    setting: ['a wedding', 'a job interview', 'a family group chat', 'a jeepney', 'a office party'],
-    trigger: ['a tiny lie that grows', 'a misread situation', 'one wrong assumption', 'a plan that overcommits'],
-    turn: ['expectation subverted', 'a callback detonating', 'escalation reaching its absurd logical end'],
-    aftereffect: ['a punchline that recontextualizes it all', 'a "this is us" recognition', 'a groan-laugh'],
-    tensionCurve: ['setup→build→snap', 'straight→straighter→break'],
+    role: ['the overconfident one', 'the deadpan narrator', 'the one thing keeps happening to', 'the straight man', 'the tita/tito with no filter', 'the new hire who believed the office lie', 'the group\'s designated responsible one'],
+    setting: ['a wedding', 'a job interview', 'a family group chat', 'a jeepney', 'a office party', 'a barangay fiesta', 'the returns counter', 'a video call with the camera accidentally on'],
+    anchor: ['the group chat', 'the office microwave', 'a shared Google sheet', 'the last slice everyone\'s pretending not to want', 'an autocorrected text', 'the "wrong send"', 'a loyalty card one stamp away'],
+    trigger: ['a tiny lie that grows', 'a misread situation', 'one wrong assumption', 'a plan that overcommits', 'a rule followed far too literally', 'two events double-booked'],
+    turn: ['expectation subverted', 'a callback detonating', 'escalation reaching its absurd logical end', 'the innocent explanation that is somehow worse', 'the wrong person having heard everything'],
+    aftereffect: ['a punchline that recontextualizes it all', 'a "this is us" recognition', 'a groan-laugh', 'a new family legend nobody is allowed to forget'],
+    tensionCurve: ['setup→build→snap', 'straight→straighter→break', 'calm→spiral→deadpan landing'],
   },
   informational: {
-    role: [],
+    role: ['the curious skeptic', 'someone who just found out', 'the friend who explains things well', 'a person the fact happened to'],
     setting: ['no scene — direct explanation', 'anchored on one vivid case'],
     trigger: ['a surprising fact', 'a common misconception', 'a "wait, why?" question'],
     turn: ['the misconception flip', 'the felt-scale reveal', 'the so-what that lands'],
@@ -110,7 +118,7 @@ const PALETTES: Record<GenreModule, Palette> = {
     tensionCurve: ['hook→build→payoff'],
   },
   lifestyle: {
-    role: [],
+    role: ['someone who finally tried it', 'the practitioner sharing the real way', 'a beginner on day one', 'the friend who always knows the spot'],
     setting: ['a kitchen', 'a market', 'a travel spot', 'a home corner'],
     trigger: ['the payoff moment shown first', 'an insider secret', 'a sensory hook'],
     turn: ['the reveal of how it\'s really done', 'the attainable first step'],
@@ -152,11 +160,13 @@ export function formatRecentElements(recent: StoryElements[]): string {
   const fps = recent.map((e) => `  • ${elementFingerprint(e)}`)
   const roles = [...new Set(recent.map((e) => e.role.trim()).filter(Boolean))]
   const anchors = [...new Set(recent.map((e) => e.anchor?.trim()).filter((s): s is string => !!s))]
+  const registers = [...new Set(recent.map((e) => e.register?.trim()).filter((s): s is string => !!s))]
   return [
     'Recent fingerprints (structure | setting | trigger | turn):',
     ...fps,
     roles.length ? `Recent roles: ${roles.join(', ')}` : '',
     anchors.length ? `Recent anchors: ${anchors.join(', ')}` : '',
+    registers.length ? `Recent registers: ${registers.join(', ')} — a long streak in one register is its own kind of sameness; vary when quality allows.` : '',
   ]
     .filter(Boolean)
     .join('\n')

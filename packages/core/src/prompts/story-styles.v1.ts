@@ -17,7 +17,7 @@
 
 import type { GenreModule } from './scenes.v1.js'
 
-export const STORY_STYLES_V1_VERSION = 'styles.v1'
+export const STORY_STYLES_V1_VERSION = 'styles.v1.1'
 
 export type StyleInfluence = 'light' | 'medium' | 'full'
 
@@ -154,6 +154,23 @@ export const STORY_STYLES: Record<GenreModule, Record<string, StyleSpec>> = {
       leans: 'Favors receipts drawn from the narrator\'s own life; concedes before it turns.',
       antiPatterns: ['Generic opinion with no lived detail.', 'A conclusion the story didn\'t earn.'],
     },
+    // Motivation/self-improvement's home while it lives inside commentary (owner decision 2026-07-17:
+    // promote to its own genre module when a real motivation channel exists — lazy growth).
+    motivational: {
+      label: 'Motivational',
+      tradition: 'The direct-address charge — a coach or older sibling turning one hard truth into something the viewer does today.',
+      conventions: [
+        'Second person, eye to eye — "you", never "people".',
+        'One hard truth named without flinching, and the cost of ignoring it made concrete.',
+        'The charge is specific enough to act on tonight; it ends on the line the viewer repeats to themselves at 6AM.',
+      ],
+      leans: 'Favors name-the-unsaid and receipts — one real example over any platitude; the stance is the belief the viewer needs today.',
+      antiPatterns: [
+        'Empty hype ("just grind harder") — intensity without a truth underneath.',
+        'Platitudes with no cost attached.',
+        'Shouting where conviction would do.',
+      ],
+    },
   },
 
   comedy: {
@@ -177,6 +194,13 @@ export const STORY_STYLES: Record<GenreModule, Record<string, StyleSpec>> = {
       conventions: ['Understated narration of an increasingly ridiculous situation.', 'The funny word lands last.', 'A callback that returns at the worst moment.'],
       leans: 'Favors expectation-subversion and callback.',
       antiPatterns: ['Over-selling the joke.', 'Reacting to the punchline instead of landing it.'],
+    },
+    cringe_confession: {
+      label: 'Cringe confession',
+      tradition: 'The embarrassing thing that happened to ME, told with full self-awareness and zero self-mercy.',
+      conventions: ['The narrator is the butt of the joke and knows it.', 'The mistake compounds because of choices the narrator keeps defending.', 'Secondhand embarrassment builds to the moment of maximum exposure.'],
+      leans: 'Favors logical-escalation and accidental self-incrimination; the laugh is sympathetic wincing.',
+      antiPatterns: ['Turning the narrator into the hero at the end.', 'Punching at anyone but themselves.'],
     },
   },
 

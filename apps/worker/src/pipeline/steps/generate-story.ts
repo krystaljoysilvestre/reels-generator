@@ -1,10 +1,11 @@
 import { eq, and, gte, desc, count } from 'drizzle-orm'
-import { getDb, channels, stories, rejections, pipelineSteps } from '@reels/db'
+import { getDb, channels, stories, reels, rejections, pipelineSteps } from '@reels/db'
 import { llmCall } from '@reels/providers'
 import {
   StoryOutputSchema,
   WorldBibleSchema,
   ToneConfigSchema,
+  PLATFORM_PRESETS,
   type StoryOutput,
 } from '@reels/core'
 import {
@@ -97,6 +98,10 @@ export async function generateStory(reelId: string, channelId: string, language:
 
   const channel = await db.query.channels.findFirst({ where: eq(channels.id, channelId) })
   if (!channel) throw new Error(`Channel not found: ${channelId}`)
+
+  // The operator's per-reel topic request ("make one about …"), set at reel creation. Optional.
+  const reelRow = await db.query.reels.findFirst({ where: eq(reels.id, reelId), columns: { seedIdea: true } })
+  const operatorSeed = reelRow?.seedIdea?.trim() || undefined
 
   // ── Few-shot pool ────────────────────────────────────────────────────────
   const refStories = await db.query.stories.findMany({
@@ -226,6 +231,8 @@ export async function generateStory(reelId: string, channelId: string, language:
     storyMaxTokens,
     regenerationNonce,
     operatorFeedback,
+    operatorSeed,
+    platformHookHint: PLATFORM_PRESETS[(channel.targetPlatform ?? 'all') as keyof typeof PLATFORM_PRESETS]?.hookHint,
     prevWinnerAngleId,
     recentPremises,
     recentElements,
@@ -305,6 +312,8 @@ interface StudioArgs {
   storyMaxTokens: number
   regenerationNonce: number
   operatorFeedback: string | undefined
+  operatorSeed: string | undefined // per-reel topic request; rides into the planner prompt (and its hash)
+  platformHookHint: string | undefined // target platform's first-seconds grammar → the Writer's hook rule
   prevWinnerAngleId: string | undefined
   recentPremises: string
   recentElements: StoryElements[]
@@ -341,6 +350,7 @@ async function runStudio(a: StudioArgs) {
     styleInfluence,
     targetSeconds: a.targetSeconds,
     angleDirective: angle.directive,
+    operatorSeed: a.operatorSeed,
     avoidList: a.recentPremises,
     rejectionAvoidList: v.rejectionAvoidList,
     operatorFeedback: a.operatorFeedback,
@@ -414,10 +424,13 @@ async function runStudio(a: StudioArgs) {
           plan: {
             premise: plan.premise,
             conflict: plan.conflict,
+            escalation: plan.escalation,
             twist: plan.twist,
             ending: plan.ending,
             emotionalDestination: plan.emotionalDestination,
           },
+          register: plan.elements.register, // the committed temperature — flows on to voice delivery too
+          platformHookHint: a.platformHookHint,
           operatorFeedback: a.operatorFeedback,
           regenerationNonce: a.regenerationNonce,
           qaFeedback,

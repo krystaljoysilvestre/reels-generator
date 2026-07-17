@@ -43,10 +43,38 @@ const GENRE_ENVELOPE: Record<string, { stability: [number, number]; style: [numb
   informational: { stability: [0.45, 0.6], style: [0.05, 0.22], speed: [0.96, 1.08] },
   // Warm and natural — a little expressive, conversational pace.
   lifestyle: { stability: [0.4, 0.55], style: [0.15, 0.35], speed: [0.95, 1.06] },
+  // Warm, close, controlled — feeling carried under the words, never performed; a touch slower than
+  // conversation so the wound has room. (Deterministic owner-set tuning, like horror's; re-tune by ear.)
+  drama: { stability: [0.45, 0.6], style: [0.12, 0.28], speed: [0.86, 0.96] },
+  // Bright and alive — quicker than conversation, more expressive; the energy IS part of the joke.
+  // The hang before the punchline comes from narration-pauses, not from slowing the read.
+  comedy: { stability: [0.38, 0.52], style: [0.2, 0.4], speed: [0.98, 1.1] },
+  // Assertive and direct — steady conviction, brisk; heat comes through style, never through rushing.
+  commentary: { stability: [0.45, 0.6], style: [0.15, 0.3], speed: [1.0, 1.1] },
+  // Flat-ish and real — someone typing-out-loud; natural pace, low drama, believably unpolished.
+  reddit_story: { stability: [0.45, 0.62], style: [0.08, 0.22], speed: [0.96, 1.06] },
 }
 
-// Map (channel genre envelope + channel tone baseline + this reel's story mood) → ElevenLabs voice_settings.
-export function moodToVoiceSettings(mood: string[], tone: ToneConfig, genre?: string): VoiceSettings {
+// Register overrides WITHIN a genre — the story's committed register (elements.register) can shift the
+// envelope where one band can't serve two temperatures. Matched loosely against the free-text register.
+// Same owner-set-tuning exception as the envelopes; extend per (genre, register) as listening proves need.
+const REGISTER_ENVELOPE_OVERRIDES: Array<{
+  genre: string
+  match: RegExp
+  env: { stability: [number, number]; style: [number, number]; speed: [number, number] }
+}> = [
+  // Horror KINETIC SHOCK: the jump-scare register moves — faster and hotter than the dread band
+  // (which would smother it at 0.82–0.9 speed) while staying controlled; the scare is still earned.
+  { genre: 'horror', match: /kinetic|shock|jump/i, env: { stability: [0.45, 0.58], style: [0.1, 0.2], speed: [0.92, 1.02] } },
+  // Drama CONFRONTATION: the said-out-loud scene carries more heat than the quiet-ache band allows.
+  { genre: 'drama', match: /confront/i, env: { stability: [0.4, 0.55], style: [0.2, 0.38], speed: [0.9, 1.0] } },
+]
+
+// Map (channel genre envelope + channel tone baseline + this reel's story mood [+ committed register])
+// → ElevenLabs voice_settings. `register` is the story's committed temperature (stories.elements.register);
+// when a (genre, register) override exists it replaces the genre band, so a kinetic horror story isn't
+// read like quiet dread.
+export function moodToVoiceSettings(mood: string[], tone: ToneConfig, genre?: string, register?: string): VoiceSettings {
   // Baseline from the channel's tone axes (0–10): higher intensity → more expressive (lower stability)
   // + more drama (style); pacing drives speed.
   let stability = clamp(0.55 - (tone.intensity - 5) * 0.04, 0.25, 0.75)
@@ -60,7 +88,12 @@ export function moodToVoiceSettings(mood: string[], tone: ToneConfig, genre?: st
   }
 
   // Genre envelope — clamp into the genre's character band (dominant over tone/mood). No-op for 'general'.
-  const env = genre ? GENRE_ENVELOPE[genre] : undefined
+  // A committed register can swap the band within its genre (see REGISTER_ENVELOPE_OVERRIDES).
+  const regOverride =
+    genre && register
+      ? REGISTER_ENVELOPE_OVERRIDES.find((o) => o.genre === genre && o.match.test(register))?.env
+      : undefined
+  const env = regOverride ?? (genre ? GENRE_ENVELOPE[genre] : undefined)
   if (env) {
     stability = clamp(stability, env.stability[0], env.stability[1])
     style = clamp(style, env.style[0], env.style[1])

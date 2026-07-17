@@ -37,9 +37,14 @@ export async function generateTts(reelId: string): Promise<void> {
   reelScenes.sort((a, b) => a.idx - b.idx)
   const moodTags = [...new Set(reelScenes.flatMap((s) => s.mood ?? []))]
   const override = reel.voiceSettings as VoiceSettings | null
-  const voiceSettings = override ?? moodToVoiceSettings(moodTags, ToneConfigSchema.parse(channel.toneConfig ?? {}), channel.genreCategory)
+  // The story's committed register (elements.register) can swap the genre's delivery band — a kinetic
+  // horror story must not be read like quiet dread. Null for BYO/legacy stories → plain genre envelope.
+  const storyRegister = (story.elements as { register?: string } | null)?.register
+  const voiceSettings =
+    override ?? moodToVoiceSettings(moodTags, ToneConfigSchema.parse(channel.toneConfig ?? {}), channel.genreCategory, storyRegister)
 
-  // Dramatic pauses (horror): silence is spliced into the voiceover AFTER synthesis and the alignment
+  // Dramatic pauses (per-genre profiles — horror's dread holds, comedy's hang-before-the-snap, drama's
+  // breath at the wound): silence is spliced into the voiceover AFTER synthesis and the alignment
   // shifts to match — the narration text stays verbatim, so nothing downstream re-rolls. Beats are planned
   // up front (positions + TARGET total silence) so the cache busts when pacing changes; the actual top-up
   // is resolved against the real alignment below. [M10-safe: alignment length is preserved]

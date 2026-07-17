@@ -12,7 +12,7 @@
 
 import type { GenreModule } from './scenes.v1.js'
 
-export const STORY_MECHANICS_V1_VERSION = 'mechanics.v1'
+export const STORY_MECHANICS_V1_VERSION = 'mechanics.v1.1'
 
 export interface StoryMechanic {
   /** stable id — persisted in plans and counted across the catalog; never rename */
@@ -37,6 +37,7 @@ export const STORY_MECHANICS: Record<GenreModule, StoryMechanic[]> = {
     { id: 'misunderstanding', name: 'Load-bearing misunderstanding', why: 'Two people each hold half the truth; the viewer holds both halves and can\'t hand them over.' },
     { id: 'irreversible_loss', name: 'Irreversible loss', why: 'The chance to say it passes for good — the viewer feels the door close on their own unsaid things.' },
     { id: 'too_late_truth', name: 'Truth arriving too late', why: 'Understanding lands exactly when it can no longer help — the most human timing there is.' },
+    { id: 'object_griefcarrier', name: 'The object that carries it', why: 'A mundane thing (a kept receipt, an unwashed mug) holds the whole feeling — the viewer cries at an object because naming the grief head-on would bounce off.' },
   ],
   commentary: [
     { id: 'sacred_cow', name: 'Sacred cow', why: 'Challenging something the audience loves forces engagement — agreement or fury, never a scroll-past.' },
@@ -58,6 +59,7 @@ export const STORY_MECHANICS: Record<GenreModule, StoryMechanic[]> = {
     { id: 'callback', name: 'Callback', why: 'A planted detail returns at the worst moment — the audience feels smart for catching it.' },
     { id: 'deadpan_contrast', name: 'Deadpan contrast', why: 'Insane events, flat delivery — the narrator\'s seriousness does the laughing for the viewer.' },
     { id: 'hyper_specificity', name: 'Hyper-specificity', why: '"A 2003 Nokia in a ziplock bag" is funny where "an old phone" is dead — precision reads as truth.' },
+    { id: 'the_tag', name: 'The tag', why: 'One more line after the punch — smaller, drier — that makes the joke land twice and hands the viewer the quote they\'ll repeat.' },
   ],
   informational: [
     { id: 'curiosity_gap', name: 'Curiosity gap', why: 'A question the viewer suddenly NEEDS answered — attention held by an open loop, not a promise of facts.' },
@@ -71,6 +73,7 @@ export const STORY_MECHANICS: Record<GenreModule, StoryMechanic[]> = {
     { id: 'insider_secret', name: 'Insider secret', why: 'The detail only a practitioner knows — the viewer feels let into something.' },
     { id: 'sensory_anchor', name: 'Sensory anchor', why: 'One texture, sound, or first-taste moment rendered exactly — the body responds before the mind.' },
     { id: 'attainability', name: 'Attainability', why: 'A visible first step turns envy into intention — saves become attempts.' },
+    { id: 'honest_cost', name: 'The honest cost', why: 'Naming what it really takes (the time, the mess, the failed first try) — candor converts aspiration into trust.' },
   ],
   general: [],
 }
