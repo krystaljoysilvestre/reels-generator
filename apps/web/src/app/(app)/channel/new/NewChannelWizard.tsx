@@ -206,6 +206,10 @@ export function NewChannelWizard({
   const [clarify, setClarify] = useState<Array<{ question: string; examples: string; prefix: string }>>([])
   const [clarifyAnswers, setClarifyAnswers] = useState<Record<number, string>>({})
   const [clarifyHandledText, setClarifyHandledText] = useState('')
+  // "Trending now" rail — live web-searched niches (server caches for a day; hidden when empty/unavailable).
+  // Sits ABOVE the static presets, so a skeleton holds its space while loading (no layout jump).
+  const [trending, setTrending] = useState<Array<{ label: string; blurb: string; description: string; rpm: 'high' | 'mid'; whyNow: string; language: string }>>([])
+  const [trendingLoading, setTrendingLoading] = useState(true)
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
@@ -391,6 +395,20 @@ export function NewChannelWizard({
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [leaveTo])
+
+  // "Trending now" rail: fetch once on mount (server caches for a day, so this is near-free).
+  // Best-effort — on any failure the rail simply doesn't render.
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/channel/trending-niches')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json: { niches?: typeof trending } | null) => {
+        if (!cancelled && Array.isArray(json?.niches)) setTrending(json.niches)
+      })
+      .catch(() => { /* rail is a bonus, never a blocker */ })
+      .finally(() => { if (!cancelled) setTrendingLoading(false) })
+    return () => { cancelled = true }
+  }, [])
 
   // Requested an exit: prompt if there's progress, otherwise just go.
   function requestLeave(href: string) {
@@ -1080,8 +1098,63 @@ export function NewChannelWizard({
             <div className="flex flex-col gap-2">
               <label className="text-sm font-medium text-ink">What&apos;s your channel about?</label>
               <p className="-mt-1 text-xs text-muted">
-                Tap a trending topic to start from a template, or describe your own below. Either way you can edit everything.
+                Start from what&apos;s trending, tap a classic template, or describe your own below. Either way you can edit everything.
               </p>
+
+              {/* Trending now — LIVE web-searched niches with strong current payout (refreshed daily).
+                  Leads the gallery; a skeleton holds the space while loading so the page never jumps.
+                  Quietly removed when the fetch has nothing (static presets always work). */}
+              {(trendingLoading || trending.length > 0) && (
+                <div>
+                  <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-accent" aria-hidden>
+                      <path d="M23 6l-9.5 9.5-5-5L1 18" /><path d="M17 6h6v6" />
+                    </svg>
+                    Trending now — refreshed daily from live data
+                  </p>
+                  {trendingLoading ? (
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      {[0, 1, 2].map((i) => (
+                        <div key={i} className="animate-pulse rounded-lg border border-border-strong p-3">
+                          <div className="h-3.5 w-14 rounded-full bg-subtle" />
+                          <div className="mt-2 h-4 w-3/4 rounded bg-subtle" />
+                          <div className="mt-1.5 h-3 w-full rounded bg-subtle" />
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="animate-fade-in grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      {trending.map((t, i) => {
+                        const id = `trending-${i}`
+                        const on = presetId === id
+                        return (
+                          <button
+                            key={id}
+                            type="button"
+                            title={t.whyNow}
+                            onClick={() => {
+                              if (presetId === id) { setPresetId(null); return }
+                              setPresetId(id)
+                              setNiche(t.description)
+                              setLanguages([t.language || 'English'])
+                            }}
+                            className={`flex flex-col items-start gap-1 rounded-lg border p-3 text-left transition-all ${
+                              on ? 'border-accent bg-accent-soft ring-1 ring-accent' : 'border-border-strong hover:bg-subtle'
+                            }`}
+                          >
+                            <span className={`rounded-full px-1.5 py-[1px] text-[9px] font-semibold uppercase tracking-wide ${t.rpm === 'high' ? 'bg-emerald-50 text-emerald-600' : 'bg-subtle text-muted'}`}>
+                              {t.rpm === 'high' ? 'High payout' : 'Rising'}
+                            </span>
+                            <span className="line-clamp-1 text-sm font-medium text-ink">{t.label}</span>
+                            <span className="line-clamp-2 text-xs text-muted">{t.blurb}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {NICHE_PRESETS.map((p) => {
                   const on = presetId === p.id

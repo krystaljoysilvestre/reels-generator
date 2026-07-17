@@ -34,6 +34,10 @@ export interface LlmCallOptions<T> {
   model?: string
   maxTokens?: number
   temperature?: number // 0–1 (Anthropic's range; OpenAI accepts it too). Omit = provider default.
+  // OpenAI only: answer from LIVE web results via the search-preview model (defaults the model to
+  // gpt-4o-mini-search-preview). Those models reject `temperature`, so it's ignored when set here.
+  // Each transport call adds OPENAI_WEB_SEARCH_FEE_CENTS on top of token cost.
+  webSearch?: boolean
 }
 
 export interface LlmResult<T> {
@@ -52,6 +56,7 @@ const MODEL_PRICING: Record<string, { input: number; output: number }> = {
   // OpenAI (USD/M → cents/M)
   'gpt-4o': { input: 250, output: 1000 },
   'gpt-4o-mini': { input: 15, output: 60 },
+  'gpt-4o-mini-search-preview': { input: 15, output: 60 }, // token rates match mini; search fee added separately
   // Anthropic (QA) — cents per Mtok, matching published USD pricing ($/Mtok × 100)
   'claude-opus-4-8': { input: 500, output: 2500 },       // $5 / $25
   'claude-sonnet-4-6': { input: 300, output: 1500 },     // $3 / $15
@@ -59,6 +64,11 @@ const MODEL_PRICING: Record<string, { input: number; output: number }> = {
 }
 
 const JSON_INSTRUCTION = '\n\nRespond with valid JSON only. No markdown, no code fences.'
+
+// Per-call web-search tool fee for the search-preview models — OpenAI lists ~$27.50/1k calls
+// (gpt-4o-mini-search-preview, medium search context, pricing page as of 2026-07). Rounded UP per
+// the cost-accounting rule (never undercount); re-verify at each model bump.
+const OPENAI_WEB_SEARCH_FEE_CENTS = 3
 
 function calcCostCents(model: string, inputTokens: number, outputTokens: number): number {
   const rate = MODEL_PRICING[model] ?? MODEL_PRICING['gpt-4o']!
@@ -149,13 +159,17 @@ function toOpenAIMessages(system: string, messages: LlmMessage[]): OpenAI.Chat.C
   return [{ role: 'system', content: system + JSON_INSTRUCTION }, ...mapped]
 }
 
-async function callOpenAI(model: string, system: string, messages: LlmMessage[], maxTokens: number, temperature?: number): Promise<TransportResult> {
-  const res = await getOpenAI().chat.completions.create({
+async function callOpenAI(model: string, system: string, messages: LlmMessage[], maxTokens: number, temperature?: number, webSearch?: boolean): Promise<TransportResult> {
+  // Search-preview models reject `temperature`; `web_search_options` may lag in the SDK's param type,
+  // so the params object is widened rather than the field cast away.
+  const params: OpenAI.Chat.ChatCompletionCreateParamsNonStreaming & { web_search_options?: Record<string, never> } = {
     model,
     max_tokens: maxTokens,
     messages: toOpenAIMessages(system, messages),
-    ...(temperature !== undefined ? { temperature } : {}),
-  })
+    ...(temperature !== undefined && !webSearch ? { temperature } : {}),
+    ...(webSearch ? { web_search_options: {} } : {}),
+  }
+  const res = await getOpenAI().chat.completions.create(params)
   return {
     text: res.choices[0]?.message?.content ?? '',
     inputTokens: res.usage?.prompt_tokens ?? 0,
@@ -179,13 +193,13 @@ function classifyLlmError(provider: LlmProvider, err: unknown): Error {
   return err instanceof Error ? err : new ProviderError(provider, message)
 }
 
-async function transport(provider: LlmProvider, model: string, system: string, messages: LlmMessage[], maxTokens: number, temperature?: number): Promise<TransportResult> {
+async function transport(provider: LlmProvider, model: string, system: string, messages: LlmMessage[], maxTokens: number, temperature?: number, webSearch?: boolean): Promise<TransportResult> {
   // Per-provider concurrency cap (the real throttle — see shared/limiter.ts).
   try {
     return await withProviderLimit(provider === 'anthropic' ? 'anthropic' : 'openai', () =>
       provider === 'anthropic'
         ? callAnthropic(model, system, messages, maxTokens, temperature)
-        : callOpenAI(model, system, messages, maxTokens, temperature),
+        : callOpenAI(model, system, messages, maxTokens, temperature, webSearch),
     )
   } catch (err) {
     throw classifyLlmError(provider, err)
@@ -194,7 +208,9 @@ async function transport(provider: LlmProvider, model: string, system: string, m
 
 export async function llmCall<T>(opts: LlmCallOptions<T>): Promise<LlmResult<T>> {
   const provider = opts.provider ?? 'openai'
-  const model = opts.model ?? DEFAULT_MODEL[provider]
+  const webSearch = provider === 'openai' && opts.webSearch === true
+  const model = opts.model ?? (webSearch ? 'gpt-4o-mini-search-preview' : DEFAULT_MODEL[provider])
+  const searchFee = webSearch ? OPENAI_WEB_SEARCH_FEE_CENTS : 0
   const maxTokens = opts.maxTokens ?? 4096
   const inputHash = buildInputHash(opts.templateVersion, {
     system: opts.system,
@@ -204,8 +220,8 @@ export async function llmCall<T>(opts: LlmCallOptions<T>): Promise<LlmResult<T>>
   })
 
   // ── First attempt ─────────────────────────────────────────────────────────
-  const res1 = await transport(provider, model, opts.system, opts.messages, maxTokens, opts.temperature)
-  const cost1 = calcCostCents(model, res1.inputTokens, res1.outputTokens)
+  const res1 = await transport(provider, model, opts.system, opts.messages, maxTokens, opts.temperature, webSearch)
+  const cost1 = calcCostCents(model, res1.inputTokens, res1.outputTokens) + searchFee
   const parsed1 = tryParse(res1.text, opts.schema)
 
   if (parsed1 !== null) {
@@ -224,8 +240,8 @@ export async function llmCall<T>(opts: LlmCallOptions<T>): Promise<LlmResult<T>>
     },
   ]
 
-  const res2 = await transport(provider, model, opts.system, repairMessages, maxTokens, opts.temperature)
-  const totalCost = cost1 + calcCostCents(model, res2.inputTokens, res2.outputTokens)
+  const res2 = await transport(provider, model, opts.system, repairMessages, maxTokens, opts.temperature, webSearch)
+  const totalCost = cost1 + calcCostCents(model, res2.inputTokens, res2.outputTokens) + searchFee
 
   const parsed2 = tryParse(res2.text, opts.schema)
   if (parsed2 !== null) {
