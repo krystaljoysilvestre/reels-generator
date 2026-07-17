@@ -20,7 +20,7 @@ export const NICHE_PRESETS: NichePreset[] = [
     label: 'True crime',
     blurb: 'Cases, mysteries, investigations',
     description:
-      'True-crime narration channel. Tightly-paced retellings of solved and unsolved cases — the timeline, the evidence, the turning point — with a sober, respectful tone. Strong cold-open hook, clear stakes, a lingering question at the end.',
+      'True-crime narration channel. Tightly-paced retellings of real case patterns — the timeline, the evidence, the one overlooked detail that turned it — dramatized with fictionalized names and places, sober and respectful, never lurid. Strong cold-open, clear stakes, a lingering question at the end.',
     language: 'English',
   },
   {
@@ -30,7 +30,7 @@ export const NICHE_PRESETS: NichePreset[] = [
     label: 'Reddit stories',
     blurb: 'AITA, revenge, drama narration',
     description:
-      'Reddit-style story narration channel. Dramatic first-person reads of relationship drama, AITA, petty revenge, and workplace stories. Punchy hook in the first line, escalating tension, satisfying payoff.',
+      'Reddit-style confession channel. First-person reads of relationship drama, AITA, petty revenge, and workplace fights that sound like REAL posts — mundane stakes people take sides over, messy narrators who incriminate themselves a little, details too boring to invent. Hook in the first line, petty escalation, endings that stop the way real posts stop — on the question, not a bow.',
     language: 'English',
   },
   {
@@ -40,7 +40,7 @@ export const NICHE_PRESETS: NichePreset[] = [
     label: 'Motivation & discipline',
     blurb: 'Stoicism, mindset, self-improvement',
     description:
-      'Motivation and discipline channel. Hard-hitting short monologues on stoicism, focus, and self-improvement, built around one sharp idea per video. Direct second-person address, cinematic restraint, a memorable closing line.',
+      'Motivation and discipline channel. Hard-hitting short monologues on stoicism, focus, and self-improvement — one hard truth per video, named without flinching, with the cost of ignoring it made real. Direct second-person address, cinematic restraint, and a closing line the viewer repeats to themselves at 6AM.',
     language: 'English',
   },
   {
@@ -50,7 +50,7 @@ export const NICHE_PRESETS: NichePreset[] = [
     label: 'Did-you-know facts',
     blurb: 'Surprising facts, quick curiosity',
     description:
-      'Curiosity / did-you-know channel. Rapid-fire surprising facts on a theme, each with a vivid hook and a clean payoff. Bright, fast pacing; one "wait, what?" moment per video.',
+      'Curiosity channel built on one lane (for example: the deep sea, ancient Rome, the human body, aviation disasters). Each video takes something the viewer thinks they know and breaks it: one vivid "wait, what?" moment, made concrete enough to re-tell at dinner. Bright, quick, confident; ends with the idea in a shape they\'ll repeat.',
     language: 'English',
   },
   {
@@ -60,7 +60,7 @@ export const NICHE_PRESETS: NichePreset[] = [
     label: 'History & mysteries',
     blurb: 'Forgotten events, ancient enigmas',
     description:
-      'History and mysteries channel. Short, atmospheric retellings of forgotten events, ancient enigmas, and "what really happened" stories. Evocative imagery, a strong narrative spine, an unresolved or eerie ending.',
+      'History and mysteries channel. Short, atmospheric retellings of forgotten events, ancient enigmas, and "what really happened" stories — a strong narrative spine, evocative detail, an unresolved or eerie ending. Focused on one territory — an era, a region, or a thread (lost expeditions, royal scandals, vanished cities) — so the channel builds a world instead of sampling everything.',
     language: 'English',
   },
   {
@@ -70,7 +70,7 @@ export const NICHE_PRESETS: NichePreset[] = [
     label: 'Space & science',
     blurb: 'Cosmic awe, big ideas, simply told',
     description:
-      'Space and science wonder channel. Awe-driven explainers of cosmic and scientific ideas — scale, time, the unknown — told simply and beautifully. Calm narration, a sense of vastness, a thought that lingers.',
+      'Space and science wonder channel. Awe-driven explainers of cosmic and scientific ideas — scale, time, the unknown — each built on one assumption the viewer holds that turns out to be wrong, made felt through vivid comparison. Calm narration, a sense of vastness, a thought that lingers.',
     language: 'English',
   },
   {
@@ -80,7 +80,7 @@ export const NICHE_PRESETS: NichePreset[] = [
     label: 'Money & finance',
     blurb: 'Habits, hustle, practical tips',
     description:
-      'Personal finance channel. Practical, no-fluff tips on money habits, saving, and side income aimed at young earners. One actionable takeaway per video, confident and plain-spoken, a clear "do this" close.',
+      'Personal finance channel. Practical, no-fluff money insight for young earners — habits, saving, side income, and the traps hidden in everyday money decisions. One actionable idea per video, confident and plain-spoken, a clear "do this" close.',
     language: 'English',
   },
   {
@@ -90,7 +90,7 @@ export const NICHE_PRESETS: NichePreset[] = [
     label: 'Psychology & relationships',
     blurb: 'Human behavior, dating, dynamics',
     description:
-      'Psychology channel. Bite-size insights on human behavior, relationships, and dating dynamics — why people do what they do. Warm but sharp tone, a relatable scenario, one insight that reframes it.',
+      'Psychology channel. Bite-size insight on why people do what they do — each video opens on a relatable scene (the text left on read, the friend who always cancels), then lands one idea that reframes it. Warm but sharp, never clinical; ends with the insight in words the viewer will quote at someone.',
     language: 'English',
   },
   {
@@ -100,7 +100,7 @@ export const NICHE_PRESETS: NichePreset[] = [
     label: 'Horror & folklore',
     blurb: 'Scary stories, local myths & legends',
     description:
-      'Horror narration channel covering supernatural encounters, creatures, and local folklore, set in specific real-but-fictionalized places. Slow-burn dread, sensory detail, believable mundane setup, twist endings. The telling can vary — first-hand encounters, retold legends, cautionary tales, found accounts — not one fixed format.',
+      'Horror narration channel covering supernatural encounters, creatures, and local folklore, set in specific real-but-fictionalized places. The telling varies — first-hand encounters, retold legends, cautionary tales, found accounts — and so does the temperature: slow-burn dread, coiled suspense, sudden kinetic scares, old rules broken and paid for. Believable mundane setups, sensory detail, endings that land within a breath of the peak.',
     language: 'Taglish',
   },
 ]

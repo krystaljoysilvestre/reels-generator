@@ -36,6 +36,20 @@ export const ChannelDerivationSchema = z.object({
     type: z.enum(['low_drone', 'drone_swell', 'riser_sting']), // shape the mixer aligns to the reel's peak
     moodTags: z.array(z.string()), // 2–4 short mood tags (preset matching + track selection)
   }),
+  // Follow-up questions for dimensions the description leaves genuinely OPEN (lane/subject, audience,
+  // region/era, format) — the wizard asks the CREATOR after deriving; their answers are appended to the
+  // niche text (via `prefix`) and a re-derive absorbs them. Empty is common and correct: a detailed
+  // description gets no questions. Never ask about dimensions the text already answers.
+  clarifyingQuestions: z
+    .array(
+      z.object({
+        question: z.string(), // plain and friendly, ONE missing dimension each
+        examples: z.string(), // 2–4 short example answers, comma-separated ("family, office, weddings")
+        prefix: z.string(), // declarative lead-in the answer is appended under ("Stories live in:")
+      }),
+    )
+    .max(3)
+    .default([]),
 })
 export type ChannelDerivation = z.infer<typeof ChannelDerivationSchema>
 
@@ -141,7 +155,10 @@ Produce JSON with exactly these fields:
     "prompt": "a text-to-music brief for the channel's SIGNATURE BACKGROUND BED that plays under narration — describe instruments/texture, tempo, and feel; it must be INSTRUMENTAL, loopable, sparse, and non-distracting (no vocals, no strong melody hooks, no heavy percussion that fights speech). Tie it to THIS niche + tone, e.g. horror → 'slow, dread-soaked low drone, distant, sub-bass, sparse, no melody'; finance → 'minimal confident lo-fi beat, soft keys, steady, understated'; wellness → 'warm ambient pads, gentle, airy, calming'",
     "type": "low_drone | drone_swell | riser_sting — the arc of the bed: 'low_drone' = flat sustained ambience (calm, atmospheric, most niches); 'drone_swell' = builds toward a mid/late swell (story-driven, escalating); 'riser_sting' = rises to a hit at the climax (dramatic reveals, hype). Pick from the niche's energy + structure.",
     "moodTags": ["2–4 short mood tags, e.g. 'dread','slow','sparse' or 'uplifting','warm','steady'"]
-  }
+  },
+  "clarifyingQuestions": [  // 0–3 questions, ONLY for dimensions the creator's description leaves genuinely open — the lane/subject ("facts about WHAT?"), the audience, the region/era, the format. A detailed description gets [] (common and correct). Each: a plain, friendly question; 2–4 comma-separated example answers; and a short declarative prefix the answer will be appended under so it reads as clean channel DNA (question "Which corner of life do your stories live in?" → prefix "Stories live in:"). Never ask what the text already answers; never ask more than genuinely helps.
+    { "question": "", "examples": "", "prefix": "" }
+  ]
 }
 
 Output JSON only. No prose, no code fences.`

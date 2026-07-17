@@ -109,6 +109,8 @@ interface Derived {
   narrativeStyle?: string
   narrativeVoice?: string
   audioMood: AudioMood
+  // Follow-ups for dimensions the description left open — asked once, answers appended to the niche.
+  clarifyingQuestions?: Array<{ question: string; examples: string; prefix: string }>
 }
 
 // One proposed visual "look": friendly label + plain-English blurb (shown) +
@@ -197,6 +199,13 @@ export function NewChannelWizard({
   const [narrativeVoice, setNarrativeVoice] = useState('')
   const [styleInfluence, setStyleInfluence] = useState<StyleInfluence>('medium')
   const [tagline, setTagline] = useState('') // AI-derived one-line positioning (persisted on the channel)
+  // Follow-up questions from the derive (dimensions the description left open). Answers append to the
+  // niche text and re-derive. `clarifyHandledText` remembers WHICH niche text was already asked about —
+  // so a rewritten channel idea gets fresh questions, while the answer-append re-derive (pre-marked as
+  // handled) can't loop into asking again.
+  const [clarify, setClarify] = useState<Array<{ question: string; examples: string; prefix: string }>>([])
+  const [clarifyAnswers, setClarifyAnswers] = useState<Record<number, string>>({})
+  const [clarifyHandledText, setClarifyHandledText] = useState('')
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
@@ -718,7 +727,13 @@ export function NewChannelWizard({
     setAvatarPreview(null)
   }
 
-  async function handleGenerate() {
+  // `nicheOverride` lets the clarify flow re-derive with freshly-appended answers in the same click
+  // (setNiche is async, so reading `niche` state right after setting it would use the stale text).
+  // `handledOverride` marks that text as already-asked for the same reason — the state set in the
+  // submit handler wouldn't be visible to this closure yet.
+  async function handleGenerate(nicheOverride?: string, handledOverride?: string) {
+    const nicheText = (nicheOverride ?? niche).trim()
+    const handledText = handledOverride ?? clarifyHandledText
     // Cancel any prior in-flight derive before starting a new one.
     deriveAbortRef.current?.abort()
     const controller = new AbortController()
@@ -729,7 +744,7 @@ export function NewChannelWizard({
       const res = await fetch('/api/channel/derive', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), nicheDescription: niche.trim(), languages, targetPlatform }),
+        body: JSON.stringify({ name: name.trim(), nicheDescription: nicheText, languages, targetPlatform }),
         signal: controller.signal,
       })
       const json = await res.json()
@@ -763,7 +778,7 @@ export function NewChannelWizard({
       setTagline(d.tagline ?? '')
       setAudioMood(d.audioMood ?? null)
       setCostCents(json.costCents ?? 0)
-      setDerivedSig(`${niche.trim()}|${language}|${targetPlatform}`)
+      setDerivedSig(`${nicheText}|${language}|${targetPlatform}`)
       // Fresh profile invalidates anything derived from the old one.
       setRecommended([])
       setSelectedVoices([])
@@ -777,7 +792,17 @@ export function NewChannelWizard({
       setUploadedStyleIdx(null)
       setStyleError('')
       setRefError('')
-      setPhase('script')
+      // Follow-up questions: if the profile left dimensions open, pause and ask — unless THIS exact
+      // text was already asked about (answered or skipped). A rewritten idea gets fresh questions;
+      // the answer-append re-derive arrives pre-marked as handled, so it can never loop.
+      const qs = Array.isArray(d.clarifyingQuestions) ? d.clarifyingQuestions.filter((q) => q?.question && q?.prefix) : []
+      if (qs.length > 0 && nicheText !== handledText) {
+        setClarify(qs.slice(0, 3))
+        setClarifyAnswers({})
+        setClarifyHandledText(nicheText)
+      } else {
+        setPhase('script')
+      }
     } catch (e) {
       // Aborted (unmount / re-fire) is intentional — not an error to show, and any newer call owns the UI now.
       if (e instanceof DOMException && e.name === 'AbortError') return
@@ -1110,6 +1135,56 @@ export function NewChannelWizard({
               <p className="mt-1 text-xs text-faint">{niche.trim().length} characters · 20 min, 2000 max</p>
             </Field>
 
+            {/* Follow-up questions from the profile derive — only for dimensions the description left
+                open. Answers append to the description (visible above) and re-derive absorbs them. */}
+            {clarify.length > 0 && (
+              <div className="card animate-fade-in space-y-3 border-accent/40 p-5">
+                <SectionLabel>Before we build — a couple of questions</SectionLabel>
+                <p className="text-xs text-muted">Your answers become part of the channel and sharpen every reel it makes. Blank is fine.</p>
+                {clarify.map((q, i) => (
+                  <label key={i} className="block">
+                    <span className="mb-1 block text-xs font-medium text-ink">{q.question}</span>
+                    <input
+                      value={clarifyAnswers[i] ?? ''}
+                      onChange={(e) => setClarifyAnswers((a) => ({ ...a, [i]: e.target.value }))}
+                      placeholder={q.examples ? `e.g. ${q.examples}` : ''}
+                      maxLength={200}
+                      className="input"
+                    />
+                  </label>
+                ))}
+                <div className="flex items-center justify-end gap-3 pt-1">
+                  <button type="button" disabled={loading} onClick={() => { setClarify([]); setPhase('script') }} className="btn-ghost btn-sm">
+                    Skip
+                  </button>
+                  <button
+                    type="button"
+                    disabled={loading}
+                    className="btn-accent btn-sm"
+                    onClick={() => {
+                      const additions = clarify
+                        .map((q, i) => {
+                          const a = (clarifyAnswers[i] ?? '').trim()
+                          return a ? `${q.prefix} ${a}` : null
+                        })
+                        .filter((s): s is string => !!s)
+                      setClarify([])
+                      if (additions.length === 0) {
+                        setPhase('script')
+                        return
+                      }
+                      const newNiche = `${niche.trim()}\n${additions.join('\n')}`
+                      setNiche(newNiche)
+                      setClarifyHandledText(newNiche) // this text's questions are answered — never re-ask it
+                      void handleGenerate(newNiche, newNiche) // re-derive with the enriched description; advances after
+                    }}
+                  >
+                    {loading ? 'Working…' : 'Add & continue'}
+                  </button>
+                </div>
+              </div>
+            )}
+
             <Field label="Language" hint="Every reel on this channel is narrated in this language. Want another language? Create a separate channel.">
               <Dropdown
                 className="w-full sm:w-64"
@@ -1130,9 +1205,10 @@ export function NewChannelWizard({
 
             <div className="flex items-center justify-end gap-3 border-t border-border pt-5">
               {/* One consistent label. If the niche/language changed since deriving, clicking
-                  Continue silently re-derives first (handleGenerate); otherwise it just advances. */}
-              <button
-                onClick={derivedFresh ? () => setPhase('script') : handleGenerate}
+                  Continue silently re-derives first (handleGenerate); otherwise it just advances.
+                  Hidden while the follow-up questions card is up — its own buttons take over. */}
+              {clarify.length === 0 && <button
+                onClick={derivedFresh ? () => setPhase('script') : () => handleGenerate()}
                 disabled={!canGenerate || loading}
                 className="btn-accent"
               >
@@ -1149,7 +1225,7 @@ export function NewChannelWizard({
                     <FwdArrow />
                   </>
                 )}
-              </button>
+              </button>}
             </div>
           </div>
         )}
@@ -1213,7 +1289,8 @@ export function NewChannelWizard({
             <div className="card p-5">
               <SectionLabel>Your channel&apos;s voice</SectionLabel>
               <p className="mt-1 text-xs text-faint">
-                One example reel in your voice — every reel is written to match it.
+                Got a script that sounds like you? Paste it — it teaches your channel&apos;s voice, and every reel is written to match it.
+                No script? Skip this — your channel learns from its first approved reels. Or have an example written to preview the voice.
               </p>
 
               {/* Two clear paths: have it written, or write your own. */}
@@ -1330,9 +1407,9 @@ export function NewChannelWizard({
               </button>
               <div className="flex flex-col items-end gap-1">
                 {!sampleScript.trim() && (
-                  <p className="text-xs text-faint">Add an example — or have one written for you — to continue.</p>
+                  <p className="text-xs text-faint">No script is fine — your channel learns from its first approved reels.</p>
                 )}
-                <button onClick={() => setPhase('voice')} disabled={!sampleScript.trim()} className="btn-accent">
+                <button onClick={() => setPhase('voice')} className="btn-accent">
                   Next
                   <FwdArrow />
                 </button>

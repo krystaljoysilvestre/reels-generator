@@ -148,9 +148,12 @@ export async function POST(req: NextRequest) {
     channel = inserted[0]
   }
 
-  // Step-2 sample script(s) become the channel's first reference stories, so the few-shot selector
-  // has seed examples to anchor the writing voice from the very first reel. (Approved reels later
-  // join this set automatically — see approve-spot-check.)
+  // Step-2 sample script(s): USER-written scripts become the channel's first reference stories — the
+  // creator's actual voice, which nothing else can supply. AI-generated samples persist for the record
+  // but are NOT references: they're derived from the same profile the Writer already reads (circular
+  // DNA), and as the newest story they'd out-rank earned references in few-shot selection exactly when
+  // they'd do the most shaping. The reference pool fills with EARNED examples instead (spot-check
+  // approvals + performance promotions).
   const primary = c.sampleScript?.trim()
   const refBodies = [
     ...(primary ? [{ body: primary, source: c.sampleSource }] : []),
@@ -164,7 +167,7 @@ export async function POST(req: NextRequest) {
       language: c.languages[0]!.toLowerCase(),
       title: firstLine ? firstLine.slice(0, 80) : 'Reference example',
       body: ref.body,
-      isReference: true,
+      isReference: ref.source === 'user',
     })
   }
 
