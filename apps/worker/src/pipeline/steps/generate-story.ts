@@ -585,12 +585,20 @@ async function runStudio(a: StudioArgs) {
       let verdict = await gateOnce(raw, natural.narration)
       verdicts.push(verdict)
       if (!verdict.pass) {
-        // One rewrite, steered by the gate's reason. Then pass through regardless —
-        // the story_review human gate is the backstop.
-        retried = true
-        ;({ raw, edited, natural } = await runChain(verdict.reason))
-        verdict = await gateOnce(raw, natural.narration)
-        verdicts.push(verdict)
+        if (verdict.rewriteCanFix === false) {
+          // Idea/premise-level failure: a Writer rewrite of the SAME plan re-runs the whole chain
+          // (writer+editor+naturalizer+gate) and fails again — observed on plan-doomed stories the
+          // gate can't be argued out of. Skip the wasted retry; the story_review human gate is the
+          // backstop, exactly as it is after an exhausted retry.
+          console.warn('[generate_story] gate fail is idea-level (rewriteCanFix=false) — skipping the retry')
+        } else {
+          // One rewrite, steered by the gate's reason. Then pass through regardless —
+          // the story_review human gate is the backstop.
+          retried = true
+          ;({ raw, edited, natural } = await runChain(verdict.reason))
+          verdict = await gateOnce(raw, natural.narration)
+          verdicts.push(verdict)
+        }
       }
       gate = { status: 'ok', version: STORY_CRITIC_V2_VERSION, verdicts, retried }
     } catch (err) {
