@@ -1,12 +1,12 @@
 // Genre lab (2026-07-17): full-chain probe (Planner → Writer → Editor → Claude Naturalizer →
-// Claude gate) for ONE genre at a time, on a Taglish channel — 2 short (75s) + 1 long-form (240s,
+// Claude gate) for ONE genre at a time, on a Taglish channel — 2 short (75s) + 2 long-form (240s,
 // exercises the long-form WRITER branch — isLongForm>180s in story.v2 — NOT the full chaptered
 // scene-breakdown pipeline; this probe stops at the writer/gate). No DB writes. Mirrors production generate-story
 // (studio.v2 routing + discard guards). Every run doubles as a Taglish naturalness test.
 // Usage: tsx scripts/probe-genre-lab.ts <genre> [writerProvider]
 //   e.g. tsx scripts/probe-genre-lab.ts reddit_story            (production: gpt-4o writer)
 //        tsx scripts/probe-genre-lab.ts reddit_story anthropic  (experiment: Claude writer)
-// Cost: ~30-50¢ per genre.
+// Cost: ~50-100¢ per genre.
 import '../src/env.js'
 import type { StoryElements } from '../src/prompts-bridge.js'
 void (async () => {
@@ -201,7 +201,7 @@ Kaya sa susunod na pupunta ka ng grocery para lang sa gatas — bilangin mo kung
   const RUNS = [
     { form: 'short', targetSeconds: 75, targetWords: 190, writerTokens: 4096 },
     { form: 'short', targetSeconds: 75, targetWords: 190, writerTokens: 4096 },
-    { form: 'short', targetSeconds: 75, targetWords: 190, writerTokens: 4096 },
+    { form: 'long', targetSeconds: 240, targetWords: 600, writerTokens: 16384 },
     { form: 'long', targetSeconds: 240, targetWords: 600, writerTokens: 16384 },
   ]
 
@@ -214,6 +214,7 @@ Kaya sa susunod na pupunta ka ng grocery para lang sa gatas — bilangin mo kung
   // registers/shapes instead of converging on one) — the probe otherwise runs each story cold.
   const recentEls: StoryElements[] = []
   const recentLoglines: string[] = []
+  const summary: string[] = [] // one line per run: form | title | register | gate | retried
 
   for (let i = 0; i < RUNS.length; i++) {
    try {
@@ -392,10 +393,14 @@ Kaya sa susunod na pupunta ka ng grocery para lang sa gatas — bilangin mo kung
     console.log(`  stages: ${attempt.stageNotes.join(' | ')}  words=${wordCount(attempt.narration)}`)
     for (const g of gateLines) console.log(`  GATE: ${g}`)
     console.log(`${'─'.repeat(70)}\n${attempt.narration}`)
+    const finalGate = gateLines[gateLines.length - 1] ?? '(no gate)'
+    summary.push(`${run.form.padEnd(5)} | ${attempt.story.data.title.slice(0, 40).padEnd(40)} | ${(el.register ?? '-').slice(0, 24).padEnd(24)} | ${finalGate.startsWith('gate errored') ? 'ERROR' : /(^|: )PASS — /.test(finalGate) ? 'PASS' : 'FAIL'}${retried ? ' (retried)' : ''}`)
    } catch (err) {
     console.log(`\n${'═'.repeat(70)}\n[${genre.toUpperCase()} · ${i + 1}/${RUNS.length}] RUN FAILED (harness): ${String(err).slice(0, 200)}`)
+    summary.push(`${RUNS[i]!.form.padEnd(5)} | ${'(harness failure)'.padEnd(40)} | ${'-'.padEnd(24)} | ERROR`)
    }
   }
-  console.log(`\n${'═'.repeat(70)}\ntotal lab cost (${genre}): ${totalCost}¢`)
+  console.log(`\n${'═'.repeat(70)}\nSUMMARY (${genre}):\n${summary.map((s, n) => `  ${n + 1}. ${s}`).join('\n')}`)
+  console.log(`total lab cost (${genre}): ${totalCost}¢`)
   process.exit(0)
 })()
