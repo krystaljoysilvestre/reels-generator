@@ -8,7 +8,7 @@
 // product bar — "sounds like a real person"), not creative choices made for the model. Nothing
 // here prescribes content, quotas, or genre texture.
 
-export const STORY_CRAFT_V1_VERSION = 'craft.v1.2'
+export const STORY_CRAFT_V1_VERSION = 'craft.v1.3'
 
 // The six principles, addressed to the writer. Order matters: lived-truth first, tests last.
 export const STORY_CRAFT_CORE = `HOW YOU WRITE — six principles, non-negotiable:
@@ -54,6 +54,7 @@ export function spokenRegisterBlock(language: string, audienceDescriptor: string
 - DON'T FORCE THE MIX. Let it fall where it naturally falls — some lines almost pure Tagalog, some mostly English, most a blend. Never balance the code-switch sentence by sentence; if a moment is naturally all-English or all-Tagalog, leave it.
 - Modern things stay in English the way people really say them (phone, text, CR, parking, signal, Messenger, screenshot).
 - Nobody says "labis akong natakot," "may something sa likod," or "walang trace" — they say "grabe, kinabahan ako," "may kakaiba sa likod," "walang bakas." And nobody translates an English sentence into Tagalog word-for-word ("Parang mali na hindi ko masabi kung anong totoo" → say "Parang hindi ko na alam kung ano'ng totoo").
+- WRONG-WORD TELLS — a Tagalog word used slightly off its real meaning, or a literary word in a casual telling, is as dead as a translation. "Tigang na ako sa puyat" → "puyat na puyat na ako"; "sa isang iglap" → "bigla na lang"; "ume-echo sa utak ko" → "paulit-ulit sa isip ko"; "ibang usapan na" (translated filler) → "iba na 'to". If the word isn't one you'd hear in an actual kwentuhan, use the plain one.
 Good: "Akala ko hangin lang." / "Paglingon ko, wala naman." / "Ewan ko ba, pero simula nun…" / "Natawa pa nga ako, pero weird e." / "Promise, wala akong iniinom."
 Avoid: deep/literary Tagalog ("Hindi ako makakilos sa aking kinatatayuan"); forced English inserts ("gusto magstay," "this summer"); perfectly balanced code-switching in every line.`
   )

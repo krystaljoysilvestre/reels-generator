@@ -12,7 +12,7 @@ import { STORY_CRAFT_CORE, STORY_CRAFT_V1_VERSION, spokenRegisterBlock } from '.
 import { WRITER_IDENTITIES, renderIdentity, WRITER_IDENTITIES_V1_VERSION } from './writer-identities.v1.js'
 import { asGenreModule, classifyGenre } from './scenes.v1.js'
 
-export const STORY_EDITOR_V1_VERSION = `editor.v1.2+${STORY_CRAFT_V1_VERSION}+${WRITER_IDENTITIES_V1_VERSION}`
+export const STORY_EDITOR_V1_VERSION = `editor.v1.3+${STORY_CRAFT_V1_VERSION}+${WRITER_IDENTITIES_V1_VERSION}`
 
 export const StoryEditSchema = z.object({
   narration: z.string().min(1),
@@ -36,6 +36,11 @@ export interface StoryEditorVars {
 
 export function buildStoryEditorPrompt(v: StoryEditorVars): { system: string; userMessage: string } {
   const identity = WRITER_IDENTITIES[asGenreModule(v.genreCategory ?? null) ?? classifyGenre(v.nicheDescription)]
+  // Genre-protected texture: craft that only LOOKS like a flaw to a general editing bar (a
+  // confession's deliberate seams, a punchline's engineered word order). The general bar bends here.
+  const protectedTexture = identity.editorProtects?.length
+    ? `\nPROTECTED TEXTURE — in this genre, some craft only LOOKS like a flaw; your general bar bends to these:\n${identity.editorProtects.map((p) => `- ${p}`).join('\n')}\n`
+    : ''
 
   const system = `You are the producer/editor working with ${identity.label} on a narrated short-video script.
 Niche: ${v.nicheDescription}
@@ -55,7 +60,7 @@ YOUR JOB — an actual editing pass, line by line:
 - The peak must be EARNED: whatever detonates at the climax should have been planted earlier as something the viewer heard but misread. If the draft's peak arrives unplanted, seed it — a small, innocent mention in an earlier beat (this is the one place you may add a line, and it must feel like it was always there).
 - Check the shape: does every beat pull toward the ending's intended feeling ("${v.emotionalDestination}")? Trim what doesn't serve it.
 - You improve. You do not score, rank, or comment.
-
+${protectedTexture}
 HARD LIMITS — the writer's story is not yours to change:
 - Same plot, same events, same point of view, same narrator.
 - THE PAYOFF IS UNTOUCHABLE: the story's climactic reveal/peak moment must survive your pass — tighten its wording if it's flabby, but NEVER cut it, and never leave the script trailing off before it lands ("..." is not an ending). Cutting lines AFTER the peak is good editing; cutting the peak itself destroys the reel.

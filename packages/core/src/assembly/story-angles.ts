@@ -20,17 +20,17 @@ export const STORY_ANGLES: StoryAngle[] = [
   {
     id: 'witness_account',
     directive:
-      'A first-hand confession: the narrator experienced something they still cannot explain and is telling it for the first time.',
+      'A first-hand account: the narrator lived through something they still can\'t stop turning over, and is telling it for the first time.',
   },
   {
     id: 'retold_legend',
     directive:
-      'Retell a local legend or well-known warning — but the teller includes one specific detail they could not possibly know unless it happened to them.',
+      'Retell a story a community already tells — a legend, a warning, a famous incident — but the teller includes one specific detail they could not possibly know unless they were there.',
   },
   {
     id: 'mundane_wrong',
     directive:
-      'An ordinary daily routine, described plainly, where exactly one small detail is wrong — and the wrongness compounds each time it recurs.',
+      'An ordinary daily routine, described plainly, where exactly one small detail is off — and it compounds each time it recurs.',
   },
   {
     id: 'second_person',
@@ -40,7 +40,7 @@ export const STORY_ANGLES: StoryAngle[] = [
   {
     id: 'slow_dread',
     directive:
-      'A quiet domestic build with no overt scare until late; the payoff must recontextualize the very first line.',
+      'A quiet, patient build with no overt turn until late; the payoff must recontextualize the very first line.',
   },
   {
     id: 'outsider_pov',

@@ -13,7 +13,7 @@
 // (voiceId/voiceMode/voicePool) and NOT voiceSearchKeyword. Authored under unbiased-design:
 // tendencies to reason from, never mandates. Versioned: any edit bumps STORY_VOICES_V1_VERSION.
 
-export const STORY_VOICES_V1_VERSION = 'voices.v1'
+export const STORY_VOICES_V1_VERSION = 'voices.v1.1'
 
 export interface VoiceSpec {
   /** e.g. "Confessional" — shown in the picker */
@@ -46,7 +46,7 @@ export const STORY_VOICES: Record<string, VoiceSpec> = {
     sentenceRhythm: 'Easy and varied; asides and little check-ins with the listener.',
     vocabularyLean: 'Everyday, relaxed; contractions, slang where natural.',
     humor: 'Light and frequent; the tone of someone easy to be around.',
-    tell: 'Reads like a voice note to a barkada.',
+    tell: 'Reads like a voice note to your closest group chat.',
   },
   deadpan: {
     label: 'Deadpan',
