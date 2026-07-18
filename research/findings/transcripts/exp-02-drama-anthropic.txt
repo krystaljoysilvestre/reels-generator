@@ -1,0 +1,274 @@
+⚗ writer provider override: anthropic
+
+══════════════════════════════════════════════════════════════════════
+[DRAMA · SHORT 75s · 1/4] "yung kotse na hindi niya alam kung kanino"  register=QUIET ACHE
+  logline: Isang lolo ang gumawa ng laruan para sa apo na hindi niya nakilala — at iniwan ito nang walang pangalan.
+  ── PLAN (planner convergence) ──
+  premise:    In the quiet of his garage, a retired electrician sits surrounded by unused tools, piecing together a small toy car meant for his grandson who never visits.
+  conflict:   The electrician wants to reconnect with his estranged daughter, hoping the toy car will show his grandson the love he cannot express aloud. However, his daughter refuses to speak to him due to past grievances.
+  escalation: As he finishes the car, he hesitates to call his daughter, fearing rejection but yearning for connection. He decides to leave the car on their porch, hoping it will be found. After days without a response, he grows anxious and contemplates retrieving it, fearing it might be mistaken for a stranger's gesture.
+  twist:      Finally, he learns from a neighbor that his grandson played with the car joyfully, unaware of who made it. His daughter, though, never reached out.
+  ending:     He accepts that his silent gesture was enough for now, and though estranged, he finds solace in knowing a piece of him reached his grandson.
+  elements:   structure=first-person account | role=a retired electrician | setting=a cluttered garage | anchor=a handmade toy car | trigger=building the toy car | turn=truth arriving too late | aftereffect=a permanent loss
+  stages: editor: ok | naturalizer: ok  words=153
+  GATE: PASS — The kotse carries all the grief without a word of announcement, the Aling Cora beat retroactively makes the leaving-without-a-letter the whole point, and 'kahit hindi siya para sa akin — nakarating' lands the quiet-ache ending without spelling the moral out — all rubric lines hold.
+──────────────────────────────────────────────────────────────────────
+Tatlong linggo ko nang ginagawa 'to. Para sa batang hindi ko pa nakikita.
+
+Yung anak ko, hindi na kami nag-uusap. Matagal na. At hindi ko siya masisisi.
+
+Pero yung apo ko — wala siyang kasalanan.
+
+Kaya ginawa ko. Maliit na kotse, kahoy, may gulong na gawa sa tanso. Trabaho ko dati yun. Matagal na.
+
+Pag natapos ko, ilang beses kong sinubukang tawagan si Marjorie. Pero binaba ko lang ang telepono.
+
+Kinabukasan, dinala ko na lang sa pintuan nila. Iniwan ko. Walang sulat. Wala akong sinabi.
+
+Dalawang linggo, walang tawag. Walang text. Wala.
+
+Saka ko lang nalaman — kay Aling Cora — na pinaglaruan pala ng bata. Nagtatakbo raw siya sa kalsada, kasunod yung kotse, paulit-ulit, hanggang hapon.
+
+Hindi sinabi ng anak ko kung sino gumawa.
+
+Baka hindi niya alam. O alam niya pero hindi niya sinabi.
+
+Hindi ko na tinanong.
+
+Basta alam ko na nakarating. Kahit hindi siya para sa akin — nakarating.
+
+══════════════════════════════════════════════════════════════════════
+[DRAMA · SHORT 75s · 2/4] "ang pinakamalaking tanong niya"  register=QUIET ACHE
+  logline: Habang inaayos ang mga gamit ng yumaong ama, nahanap ng anak ang isang pahina sa notebook — hindi pangalan niya, kundi isang tanong na hindi pa nasasagot.
+  ── PLAN (planner convergence) ──
+  premise:    You stand in your late father's study, tasked with sorting through his things. It's a room you've avoided, full of untouched books and papers.
+  conflict:   You want to find something—anything—that says he saw you, yet every drawer you open just reveals more of what he never shared.
+  escalation: You contemplate whether to read more of his notes, fearing they may reveal a side of him you never knew. You're torn between wanting to understand the man he was and fearing that nothing in them will mention you at all.
+  twist:      In a notebook filled with scrawled thoughts, you finally find a page where he's written about you—not as a name but as his 'biggest question' and what he hopes you find in life.
+  ending:     You close the notebook, realizing he didn't have the answers, but he was as lost as you sometimes feel. It's a connection, raw and unfinished, but it's something.
+  elements:   structure=direct_second_person | role=a bereaved child | setting=a father's study | anchor=a notebook filled with thoughts | trigger=cleaning out a deceased parent's room | turn=a truth arriving too late | aftereffect=an unanswered 'what if'
+  stages: editor: ok (unchanged) | naturalizer: ok  words=173
+  GATE: PASS — The notebook line earns its emotional weight through the object itself, the narrator makes a clear interpretive decision at the end (reframing silence as a kind of speech), and the opening question — are they strangers to each other? — is paid off with the twist that the father's uncertainty mirrored the narrator's own.
+──────────────────────────────────────────────────────────────────────
+Tatlong buwan na akong hindi pumasok sa kwartong iyon.
+
+Nandoon pa rin ang lahat — mga libro na hindi ko kilala, mga papel na hindi ko alam kung bakit niya tinago.
+
+Sinabi nila, ikaw na bahala. Panganay ka.
+
+So pumunta ako. Binuksan ko ang pinto.
+
+At parang — hindi ko alam. Parang banyaga ako sa sarili naming bahay.
+
+Nagbukas-bukas ako ng mga drawer. Lumang resibo, mga liham na hindi na-send, isang notebook na walang label.
+
+Binuksan ko pa rin.
+
+Karamihan sa mga sulat niya — trabaho, gastos, mga plano na hindi natuloy. Wala akong pangalan doon. Kahit isang beses.
+
+Tapos may isang pahina.
+
+Naka-sulat lang: 'Ang anak ko — hindi ko alam kung nahanap na niya ang kailangan niyang hanapin.'
+
+Iyon lang.
+
+Walang sagot. Tanong lang.
+
+Hindi ko alam kung dapat akong masaktan o — o basta.
+
+Kasi pareho pala kami.
+
+Siya rin, hindi niya alam.
+
+Binara ko ang notebook. Nilagay ko sa kahon.
+
+Pero hindi ko masabi na wala kaming sinabi sa isa't isa.
+
+May sinabi siya. Sa paraang hindi niya kaya.
+
+══════════════════════════════════════════════════════════════════════
+[DRAMA · LONG 240s · 3/4] "yung sirang seatbelt ni Nanay"  register=BITTERSWEET WARMTH
+  logline: Habang nililinis ni Mateo ang kotse ng kanyang yumaong ina, isang sirang seatbelt ang nag-iwan sa kanya ng isang bagay na hindi niya inaasahan.
+  ── PLAN (planner convergence) ──
+  premise:    A middle-aged son, Mateo, cleans out the family car after his mother's passing, focusing on a broken passenger seatbelt she never wanted fixed.
+  conflict:   Mateo wants to cherish the last tangible connection he has with his mother while grappling with the uneasiness of not having talked to her about it when she was alive.
+  escalation: As Mateo unbuckles the seatbelt, he recalls childhood trips and recent tense conversations with his mother. He contemplates disposing of it, but is caught between its symbolic weight and his desire for closure.
+  twist:      Mateo discovers a small, tattered notebook tucked under the seatbelt, filled with his mother's unsent letters to him, expressing the love and pride she felt but never vocalized due to their strained relationship.
+  ending:     Holding the notebook, Mateo realizes the broken seatbelt symbolized his mother's constant presence; he chooses to keep both, embracing the warmth from the hidden messages.
+  elements:   structure=the object that carries it | role=a middle-aged son | setting=the family car | anchor=a broken passenger seatbelt | trigger=cleaning out a deceased parent's belongings | turn=a hidden sacrifice revealed | aftereffect=a habit kept in someone's memory
+  stages: editor: ok (unchanged) | naturalizer: ok  words=538
+  GATE: PASS — The script earns its ending — the seatbelt as deliberate container rather than neglect is a real recontextualization, not a decoration; the voice stays credibly spoken and specific throughout; and the notebook pays off the opening question of why the seatbelt first, without spelling out a moral.
+──────────────────────────────────────────────────────────────────────
+Hindi ko alam kung bakit ko inuuna 'yung seatbelt.
+
+Meron namang mas maraming dapat ayusin sa loob ng kotse. Yung floor mat na punit na, yung side mirror na medyo nakabaluktot, yung air freshener na wala nang amoy. Pero 'yun ang unang pinuntahan ko — yung passenger seat, yung seatbelt na sirang-sira na.
+
+Dalawang buwan na siyang patay. Ang seatbelt, hindi 'yung Nanay ko.
+
+Sorry. Ganyan na talaga ako magsalita pagka — ewan. Pagka hindi ko kayang sabihin nang diretso.
+
+Meron kaming argument dati tungkol doon sa seatbelt. 'Yun lang ang naalala ko. Hindi ko na maalala kung anong eksaktong sinabi ko, pero 'yung tono ko — pang-inis, parang nagsasawa na — 'yun, naalala ko. Sinabi ko na palitahin na natin, Nanay, panganib yun. Sabi niya, okay lang, okay na, wag mo na i-alala. Tapos nagkatinginan kami nang ilang segundo, at nagpalit na lang ako ng topic.
+
+Yun. 'Yun na 'yung huli naming conversation tungkol doon.
+
+Nag-umpisa na akong mag-clear ng gamit niya sa loob. Tissue, suklay, yung maliit na santo niya sa dashboard — lahat isinilid ko na sa kahon. Tahimik lang. Yung uri ng tahimik na parang lahat ng gusto mong sabihin, nandoon lang sa dibdib, hindi makalabas.
+
+Nag-abot na ako ng kamay para i-release yung seatbelt buckle.
+
+At may naramdaman ako sa ilalim. May bagay.
+
+Maliit na notebook. Yung tipong binibili sa botika, may orange na cover, medyo kupas na. Nakasiksik sa pagitan ng seat at ng seatbelt track, parang sinigurado na hindi matatapon, hindi mahahanap nang hindi sinesadya.
+
+Binuksan ko.
+
+Unang pahina: "Para kay Mateo. Hindi mo ito mababasa habang buhay ako."
+
+Hindi ko alam kung ilang minuto akong nakatayo doon sa parking. Basa na ang mga mata ko bago ko pa man matapos ang unang liham.
+
+Mga liham. Maraming liham. Walang petsa sa ilan, may petsa sa iba — at 'yung may petsa, kilala ko yung mga araw na 'yun. Malinaw sa alaala ko — ang araw na nag-valedictorian ako, may liham. Ang araw ng first job ko, may liham. Ang araw na nag-away kami nang grabe — 'yung year na hindi kami nag-usap nang halos tatlong buwan — may liham din.
+
+"Minsan gusto ko na lang sabihin na proud na proud ako sayo. Pero ayaw ko ring magmukhang papuri lang ako para makipagbati. Kaya nanahimik na lang ako. Mali yun, alam ko."
+
+Sabi niya sa isang liham.
+
+Naghihintay ako sa kanya na sabihin 'yun sa akin ng harapan. Siya naman — naghihintay siguro na sabihin ko muna. Wala kaming sinabi. Pareho kaming naghintay. Ganun pala tayo eh.
+
+Yung seatbelt — iniisip ko ngayon — baka hindi niya pinabayaan nang hindi sinadya. Hindi ko alam. Pero ngayon, sa isip ko, parang sinigurado niya na may mananatili sa lugar niya. May bagay na hindi maaalis agad-agad. May bagay na pipigil sa aking umalis nang hindi titingin.
+
+Kinuha ko yung notebook. Saka ko kinuha yung seatbelt — tinanggal ko ng maayos, dinalhin ko sa bahay.
+
+Dalawa silang nandito ngayon, sa mesa sa tabi ng kama ko.
+
+May mga bagay na hindi mo na masasabi sa taong kailangan mong sabihin. Huli na. Totoo yun, at hindi mababago.
+
+Pero minsan, yung taong iyon — kahit wala na — nag-iwan sila ng paraan para marinig mo pa rin.
+
+══════════════════════════════════════════════════════════════════════
+[DRAMA · LONG 240s · 4/4] "yung hawak na hindi ko malimutan"  register=CONFRONTATION
+  logline: Ang nagkukuwento ng bayan ay naglabas ng sikreto sa loob ng kwento mismo — isang hawak na naramdaman noong bata siya, at isang pangako na halos nabasag.
+  ── PLAN (planner convergence) ──
+  premise:    In a provincial town's annual fiesta, a local storyteller retells the legendary tale of the river ghost that saves lost children, but adds a personal detail that could only come from witnessing it firsthand.
+  conflict:   The storyteller wants to share a deeper truth about the legend without breaking a vow of silence they made years ago, but struggles against the fear of not being believed or being ostracized for claiming such firsthand knowledge.
+  escalation: As the storyteller weaves the tale, they subtly hint at the truth by describing a specific incident with a lost child that matches their own childhood experience. Faced with skeptical gazes from the audience, they must choose whether to fully reveal their personal connection to the legend or adhere to the promise they made to the apparition.
+  twist:      At the climax, they let slip a detail about the ghost's gentle touch—a memory vivid and comforting—only those saved could know, confirming their experience.
+  ending:     The storyteller finishes the tale, leaving the audience in contemplative silence. The viewers are left with a newfound respect for the legend, an acknowledgment of unseen truths and the weight of promises kept.
+  elements:   structure=retold_legend | role=a local storyteller | setting=a provincial town's annual fiesta | anchor=the unraveling of a known legend | trigger=retelling a legendary story | turn=a truth arriving too late | aftereffect=a deeper respect for the unseen and recognition of personal truths
+  stages: editor: discarded_formatting (77→35) | naturalizer: ok  words=513
+  GATE: PASS — The script earns its pass: the opening lands inside the wound, emotion is carried by the physical weight of the hand rather than announced, the meta-frame (the storyteller breaking their own oath) creates a clear causality chain and genuine agency, the ending recontextualizes every prior telling of the legend without spelling out a moral, and the Taglish voice stays loose and contemporary throughout.
+──────────────────────────────────────────────────────────────────────
+May isang bagay na hindi ko nasabi sa inyo lahat ng taon na nagkukuwento ako dito.
+
+Hindi ko nasabi dahil may pangako ako.
+At hindi ko nasabi dahil alam kong hindi kayo maniniwala.
+
+Pero habang nakatingin kayo sa akin ngayon,
+habang naririnig ninyo ang kwento ng ilog,
+ng batang naliligaw, ng kamay na sumasalok sa dilim—
+
+kailangan na ninyong malaman.
+
+Simula na tayo.
+
+Ang kwento ng Ina ng Ilog ay matagal na.
+Sabi ng mga matatanda, lumilitaw siya tuwing maliit na bata ang naliligaw sa pampang.
+Dating fishermen, dating mga nanay na naghuhugas sa ilog—lahat sila may nakita.
+O hindi man nakita—naramdaman.
+
+At palagi na lang ganun ang kwento.
+Isaw ng isda, pagkalog ng tubig, at biglang—safe na ang bata.
+Walang eksplanasyon.
+
+Akala ko ganun lang din ang nangyari sa akin noong bata ako.
+
+Siyam na taon ako.
+Fiesta rin noon, parehong buwan.
+Naglaro kami ng mga kaibigan ko malapit sa ilog.
+At sa isang paglingon ko—wala na sila.
+
+Di ko alam kung umuwi na sila o nagpatuloy pa sa ibang direksyon.
+Nagtakbo ako.
+Naging madilim bago ko pa napagtanto.
+
+Ang tubig ng ilog—naririnig ko.
+Mga puno—hindi ko na makita ang daan pauwi.
+
+Natakot ako.
+Kinabahan, literally nanginginig.
+At umupo lang ako sa lupa dahil wala na akong ibang alam gawin.
+
+At doon.
+
+May naramdaman akong kamay.
+
+Hindi malamig.
+Madali ninyong isipin—multo, malamig, katakutan.
+Hindi.
+
+Mainit. Malambot. Parang kamay ng lola. Parang kamay ng taong sanay humawak ng bata.
+
+Hinila niya ako pataas.
+Hindi ako lumaban.
+Hindi ko alam kung bakit—hindi ako lumaban.
+
+At saka lang ako napalingon.
+
+Wala.
+
+Wala siyang katawan na makikita.
+Wala siyang mukha.
+Pero naroon yung bigat ng kamay—naroon pa sa aking braso.
+Parang kaninang-kanina lang.
+
+Nahanap ko ang daan pauwi pagkatapos.
+Wala akong maliwanag na kwento kung paano.
+Nahanap ko na lang ang daan.
+
+At noong dumating ako sa bahay, iniyak ako ng Mama ko.
+At hindi ko sinabi sa kanya kung ano ang nangyari.
+
+Baka dahil hindi ko alam kung paano.
+Baka dahil alam ko na tatawaganan niya ang mga tao at magiging malaki ang gulo.
+
+O baka—baka noon pa lang—alam ko na may kasama tayong hindi natin makikita.
+At ang kasama na 'yan—may mga kundisyon.
+
+Kaya noong lumaki ako at naging ang nagkukuwento sa bayan na ito,
+nagbalik-bayan ang nangyari sa ilog.
+
+At may lumabas sa gabi, habang natutulog ang Mama ko.
+
+Hindi ko ito sinasabi para maniwala kayo.
+Sinasamantala ko lang na kumukuwento na rin naman tayo.
+
+Sabi niya sa akin:
+Huwag mong sabihing nakita mo ako.
+Sabihin mo lang ang kwento.
+Gawin mo itong totoo para sa mga bata na susunod.
+
+Mga taon na akong nagkukuwento.
+Siguro kaya rin kayo nandito tuwing fiesta.
+
+Pero ngayong gabi,
+ang isa sa inyo—nakita ko—nakinig kayo nang ibang-iba.
+Parang may kakilala kayo sa kwento.
+
+Kaya sinabi ko na.
+
+Hindi ko sinira ang pangako—hindi ko sinabi ang mukha niya.
+Hindi ko sinabi ang pangalan niya.
+Sinabi ko lang ang kamay.
+
+At kung naramdaman na rin ninyo ang kamay na 'yan—
+kahit kailan, kahit saan—
+
+alam ninyo na ang ibig sabihin ng kwentong ito.
+
+Tapos na tayo para ngayong gabi.
+
+══════════════════════════════════════════════════════════════════════
+SUMMARY (drama):
+  1. short | yung kotse na hindi niya alam kung kanin | QUIET ACHE               | PASS
+  2. short | ang pinakamalaking tanong niya           | QUIET ACHE               | PASS
+  3. long  | yung sirang seatbelt ni Nanay            | BITTERSWEET WARMTH       | PASS
+  4. long  | yung hawak na hindi ko malimutan         | CONFRONTATION            | PASS
+total lab cost (drama): 44¢

@@ -1,0 +1,121 @@
+⚗ DNA override → "Hatinggabi": first-person Taglish horror — ordinary life interrupted by something wrong; spans urban legend, found-footage, psychological, paranormal, and domestic horror (apartments, hospitals, phones, commutes, elevators, old houses); HOUSE RULE of this channel: a story ends only AFTER its biggest consequence has already happened on screen — something irreversible (someone is lost, something followed you home, a truth that cannot be unknown, a line that cannot be uncrossed) — never on a lingering feeling or an open question; the final beat shows what is permanently different now
+
+══════════════════════════════════════════════════════════════════════
+[HORROR · SHORT 75s · 1/4] "yung reflection na hindi umaalis"  register=quiet dread  (rewritten once)
+  logline: Call center agent nakita reflection niya sa window nang may sariling buhay at piniling manatili sa office.
+  ── PLAN (planner convergence) ──
+  premise:    A night-shift call center agent, working alone in a deserted floor of an office building, starts noticing his reflection in the window behaving oddly.
+  conflict:   He wants to finish his shift and go home, but his reflection begins acting independently, unsettling him and making him question if he's seeing things or if something is truly wrong.
+  escalation: He first convinces himself it's just fatigue, but as the night goes on, the reflection waves when he doesn't, smiles back when he isn't smiling. He considers ignoring it to avoid looking crazy but can't resist checking one last time, hoping to confirm it's just in his head.
+  twist:      He discovers his own reflection mouthing words he hasn't said, and when he tries to leave, the reflection remains, grinning back as if understanding something he doesn't.
+  ending:     The next morning, his coworkers notice that the glass reflects nothing, leaving him alone with the knowledge that his own reflection has become haunted — and it never followed him home.
+  elements:   structure=a first-hand account | role=a night-shift worker | setting=a deserted office floor at night | anchor=the window reflection | trigger=a reflection behaving independently | turn=behavioral contradiction | aftereffect=a new rule to live by
+  stages: editor: ok | naturalizer: ok (unchanged)  words=132
+  GATE: FAIL — LANGUAGE NATURALNESS hard fail: 'hindi siya gumise' is garbled and meaningless (likely a mistranslation or typo of 'gumile'/'ngumiti'), and 'kinuhanan ng coworkers ko' is grammatically broken and unclear — both lines must be fixed before this ships.
+  GATE: after rewrite: FAIL — THE DEBT and HOUSE RULE both fail: the ending says 'hindi sumunod pauwi' as if that is the irreversible consequence, but this is told retroactively with zero dramatized scene — the viewer never sees or hears what 'hindi sumunod' actually means, so the biggest consequence never happens on screen; the story just stops on an implication, which the channel's house rule explicitly disqualifies.
+──────────────────────────────────────────────────────────────────────
+Grabe, nag-overtime ako sa office, ako lang mag-isa doon sa silent floor. Sa window, kita reflection ko. Pero parang may mali.
+
+Napansin ko, umakyat yung kamay niya... Pero hindi naman ako nag-wave? Akala ko effect lang ng puyat, pero hindi natigil. Titig lang ako.
+
+Parang ngumiti siya nung hindi naman ako tumatawa? Hanggang sumapit yung oras, ikot lang tingin ko kung tama ba nakikita ko.
+
+Kinabahan na ako. Sabi ko, 'Check ko nga ulit, baka guni-guni lang.' Pero takot na, lakas ng tibok ng puso. Pag balik tanaw ko, iba na.
+
+Gumalaw bibig niya. Hindi ko namalayan, as in ibang sinasabi niya.
+
+Takbo agad ako palabas, pero siya... nandun pa rin. Nakangiti.
+
+Kinabukasan nasa office na mga tao, walang makitang reflection sa bintana. Sa akin lang pala nangyari... at hindi sumunod pauwi.
+
+══════════════════════════════════════════════════════════════════════
+[HORROR · SHORT 75s · 2/4] "yung anino sa ATM"  register=coiled suspense  (rewritten once)
+  logline: An ATM shows you a shadow that turns your late-night walk home into a living paranoia.
+  ── PLAN (planner convergence) ──
+  premise:    As you walk home late at night, you pass by an ATM, and the screen suddenly flickers to life, showing distorted CCTV footage of you from moments ago, but with an extra shadow following you.
+  conflict:   You want to get home safely, but the strange footage suggests you're being followed by something unseen, intensifying your paranoia with each step.
+  escalation: You glance around and see nothing unusual, so you decide to continue walking. As you pass each store on the dimly lit street, every reflective surface—store windows, phone screen—briefly shows that shadow in distorted clarity. It's close, but isn't visible when you turn around.
+  twist:      Finally, you dare to stop and closely inspect your phone's camera in selfie mode, hoping to capture your unseen pursuer. The shadowy figure in the screen suddenly moves independently, raises a hand toward you—then the phone abruptly dies.
+  ending:     When the phone turns back on, a text awaits: 'Home now.' And you understand that you'll never walk alone again.
+  elements:   structure=direct_second_person_address | role=a commuter heading home | setting=a dimly lit street with reflective windows | anchor=reflections in surfaces | trigger=flickering ATM screen showing wrong CCTV footage | turn=identity contradiction | aftereffect=a new rule to live by: never trust reflections
+  stages: editor: discarded_peak | naturalizer: ok  words=169
+  GATE: FAIL — CAUSALITY and AGENCY collapse at the climax: 'Bigla na lang dead bat yung phone' and the 'Home now' message arrive as random events disconnected from any decision the narrator made, so the ending reads as a string of 'and then' beats rather than a forced consequence — and 'Hindi ko alam anong gagawin ko' explicitly flags the narrator as a passive witness at the exact moment the story needs them to act or choose; additionally, 'kasama niya yung kilabot sa screen' is an adjective-summary of the scare rather than a specific sensory detail, which the rubric disqualifies.
+  GATE: after rewrite: FAIL — THE DEBT fails: the opening plants the question 'what was that extra shadow in the CCTV?' but the payoff — an anonymous text saying 'Home now' — answers a completely different and unearned question (who sent it, where did it come from?), arriving from nowhere with no planted thread to resolve; the ending is also a lingering open question ('simula nun, hindi na ako umuuwi mag-isa' is a coping behavior, not an irreversible consequence shown on screen), violating the house rule that demands the biggest consequence has already happened before the story ends.
+──────────────────────────────────────────────────────────────────────
+Kahapon ng gabi, pauwi na ako galing sa tambayan. Mga past midnight na yun. Naglalakad ako, tahimik lang, tapos bigla may lumiwanag sa gilid ng mata ko — yung ATM sa tabi ko, kusang nag-on. Pero imbes na normal na screen, CCTV footage ko ang lumabas. Nasa loob pa ako ng convenience store kanina, pero may extra na anino sa tabi ko. Parang may kasama ako.
+
+Kinabahan ako, pero wala naman nangyayari sa paligid. Nagpatuloy na lang ako, iniisip baka nagkakamali lang ako ng tingin. Pero habang lumalakad ako, bawat salamin sa bintana ng tindahan, pati yung phone screen ko — may anino pa rin na sumusunod. Tapos lagi siyang tatago pag humarap ako.
+
+Pagdating ko sa kanto, di ko na kayang ituloy. Kinuha ko phone ko, nilagay sa selfie mode para makita kung nandun nga. Sa screen — kitang-kita ko yung anino. Tumataas yung kamay. Parang gusto akong hawakan.
+
+Namatay bigla yung phone. Pag-on ko ulit, may bagong text: 'Home now.'
+
+Simula nun, hindi na ako umuuwi mag-isa.
+
+══════════════════════════════════════════════════════════════════════
+[HORROR · LONG 240s · 3/4] "Yung Mga Letter Sinusulat Ko"  register=quiet dread  (rewritten once)
+  logline: A caretaker’s letters home change unrecognizably in the hands of an unseen force, altering their family's memories.
+  ── PLAN (planner convergence) ──
+  premise:    A live-in caretaker, who because of circumstances spends much time writing letters to their distant family, starts noticing strange patterns on their envelopes, as if someone is using them for another purpose.
+  conflict:   The caretaker wants to maintain contact with their family through the letters, but the envelopes seem to be manipulated by an unseen presence, distorting and rearranging the address text in a subtle but unnerving change.
+  escalation: Initially dismissing it as paranoia, the caretaker chooses to rewrite the letters. Each time they do, the pattern becomes clearer and appears more intentionally altered, forming unsettling phrases beyond their control. Fearing to lose contact with family, they try mailing one anyway, but it gets returned with an eerie message.
+  twist:      The caretaker attempts to solve the issue by hand-delivering a letter, but when they arrive, their family doesn't recognize them. They find out through conversations that the caretaker's letters have been arriving, but with a different, unknown narrative, painting a false life that isn't theirs.
+  ending:     The caretaker realizes their written words have been hijacked by an unknown force, and the letters now spin a story that's replacing their family’s memories of them.
+  elements:   structure=slow_dread | role=a live-in caretaker | setting=the caretaker's room inside the residence | anchor=the letters and envelopes | trigger=strange patterns and phrases on the envelopes | turn=identity contradiction | aftereffect=a contaminated routine
+  stages: editor: ok | naturalizer: ok  words=271
+  GATE: FAIL — THE DEBT and THE CHANGE both fail: the opening plants a mystery about altered letters, but the ending never resolves or permanently pays it off — it trails into a passive lament ('ano pa nga bang magagawa ko?') with no irreversible consequence shown on screen, which violates the channel's hard rule that the final beat must show what is permanently different; additionally, the AGENCY check fails because the narrator decides nothing and merely witnesses the wrongness throughout, and CAUSALITY is loose ('and then' accumulation rather than 'therefore/but' escalation); the line 'binabago 'yung sarili kong buhay' also reads like translated prose rather than natural spoken Taglish.
+  GATE: after rewrite: FAIL — Fails the HOUSE RULE hard: the ending trails off on an open question ('Ano na nga bang mangyayari...') instead of showing the irreversible consequence already landed — the family's memories are permanently overwritten and the narrator is now a stranger to them, but that payoff is only gestured at then abandoned for a lingering rhetorical question, so the story stops before its own biggest consequence fully registers.
+──────────────────────────────────────────────────────────────────────
+Nagsimula 'to nung napansin ko yung mga envelope. Maliit na bagay, pero nung pangalawang sulat ko na na may kakaibang formation yung address, kinutuban na ako.
+
+Ganito kasi. Caretaker ako dito sa bahay na 'to. Wala akong ibang pwedeng makausap kundi pamilya ko, at ginagawa ko yun sa pamamagitan ng sulat. Kaso... may nangyayari sa mga envelope.
+
+Parang may gumagawa ng pattern. Yung address, nagdi-displace ng kaunti. Isang line, gumagalaw pa-kaliwa. One time, may word na na-form. 'Gone'. Sobrang weird. Sinubukan kong burahin at ulitin.
+
+Bawat extra letter na sinusulat ko, mas dumudugtong pa yung mga salita. 'Gone forever'. Pinilit kong di pansinin. Paranoia lang, 'di ba? Pero natakot talaga ako nung sumunod na sulat, bumalik yung envelope sa akin. May nakasulat, pero hindi ko 'yun. 'Stop trying.'
+
+Nanghina ako. Parang sinisigaw sa akin na wala nang silbi. Nagtapang-tapangan ako. Sabi ko, hand-deliver ko na lang kaya. Maihatid lang sa pamilya ko.
+
+Kaya pumunta ako sa kanila. Sa unang tanaw sa akin, parang 'di nila ako kilala. Parang ang tagal ko na palang 'di nagparamdam. Kinukwento nila na lahat ng letters ko, natatanggap nila — pero iba ang kwento. Parang ibang tao yung sumulat.
+
+Grabe, anak. Akala namin, naging masaya ka na sa ibang lugar.
+
+Hindi ko alam kung ano'ng mararamdaman ko. Sinubukan kong ipaliwanag pero parang hindi nila naririnig. Parang nawala na yung tunay kong kwento. Nare-realize ko — yung mga letra ko, sinakop na ng iba.
+
+Ngayon, bumalik na ako. Sinusubukan ko pa ring magsulat. Pero may halong takot na sa bawat stroke ng pen. Ano na nga bang mangyayari, kung nahanap ng iba ang boses mo sa papel?
+
+══════════════════════════════════════════════════════════════════════
+[HORROR · LONG 240s · 4/4] "Yung Poster sa Lib"  register=quiet dread  (rewritten once)
+  logline: During late-night study sessions, a student uncovers an unsettling presence lurking in a university library.
+  ── PLAN (planner convergence) ──
+  premise:    A student spends late nights in the university library to study for finals, a routine during exam season. She draws comfort from the posters of alumni success stories lining the walls, especially one featuring a legendary alumnus who vanished mysteriously years ago.
+  conflict:   The student wants to focus on her studies but is increasingly distracted by strange changes in the posters, specifically the one of the vanished alumnus, which seems to change subtly each night.
+  escalation: Each night, she notices the poster changes: different facial expressions, new clothes, until one night, the eyes seem to follow her in a way other posters don't. She talks to friends who dismiss her claims, but they look again and see nothing abnormal. Driven by curiosity, she stays later each night, but each visit uncovers more changes no one else believes.
+  twist:      The final night, the poster's eyes suddenly blink as she passes by. Overwhelmed, she approaches the poster, only to find a folded piece of paper behind it — a note in the vanished alumnus's handwriting mentioning details of the library no one else could know.
+  ending:     She realizes the library never feels empty again. Each visit is shadowed by the sense that the legendary alumnus is still there, causing her sleeplessness and a deeper fear — as if an unseen presence now accompanies her routine.
+  elements:   structure=retold_legend | role=a student | setting=the university library at night | anchor=the alumni poster | trigger=subtle changes in the poster | turn=identity contradiction | aftereffect=a contaminated routine
+  stages: editor: ok | naturalizer: ok  words=237
+  GATE: FAIL — Fails the HOUSE RULE outright — the ending ('Library pa ba 'to, o may nalalalaman akong di dapat? Now each night feels like may kasama akong kaparehong nagbabantay, or maybe, nakabantay na sakin') is exactly the lingering-feeling open question the channel forbids; nothing irreversible has happened on screen, no consequence has landed, and the final beat is pure mood with zero change to the narrator's world — compound-failed by the epilogue line 'Sobrang creepy, kasi ang akala kong safe, may itinatagong iba,' which explains the scare after it lands, a disqualifying NEVER violation.
+  GATE: after rewrite: FAIL — Fails the HOUSE RULE and THE CHANGE check: the ending ('parang hindi na ulit safe yung library') is a lingering feeling, not an irreversible consequence — the note is found but nothing follows from it, no one is lost, nothing followed the narrator home, no truth is acted upon, so the story stops instead of landing its biggest consequence.
+──────────────────────────────────────────────────────────────────────
+Exam week na naman, at sa library lang talaga ako nakakahanap ng peace. Lagi akong pumupunta sa mga stacks around 10pm, kasi tahimik na. May mga poster ng alumni sa walls, 'no? Parang nakatingin ang mga mata nila habang nagbabasa ka.
+
+Isang gabi, may napansin akong kakaiba. Yung poster ng isang alumnus na nawala? Parang iba yung ngiti niya kahapon. Weird, pero baka namalikmata lang ako. Kinabahan ako, pero bumalik pa rin ako the next night.
+
+Sumunod na gabi, nagtaka na talaga ako. Mukhang iba na naman yung suot niya. Napansin ko rin yun habang nagbabasa sa laptop, pero hindi ko na pinansin. Stress lang siguro, sabi ko sa sarili ko.
+
+Pero nitong gabi na 'to, iba na talaga. Naglalakad ako pauwi, tapos 'yung mga mata sa poster? Talagang parang sinundan ako hanggang pinto. Kinabahan ako! Sinabi ko 'to sa mga friends ko kinabukasan, pero sabi nila normal lang daw yung poster.
+
+Bumalik ako kinabukasan, mas late pa. Parang pinaglalaruan ko na yata sarili ko, pero... curiosity na rin kasi. Patay na ang lahat ng ilaw, tapos nakita ko — yung mga mata niya? Bumukas at bumalik. Di ko na talaga kaya.
+
+Lumapit ako sa poster. May kumakaluskos sa likod. Pagtingin ko, may papel na nakaipit sa gilid. Dahan-dahan kong binuksan. Sulat kamay ng nawawalang alumnus, may mga detalye ng library na di ko alam.
+
+Ngayon, kahit di ako mag-isa, parang hindi na ulit safe yung library.
+
+══════════════════════════════════════════════════════════════════════
+SUMMARY (horror):
+  1. short | yung reflection na hindi umaalis         | quiet dread              | FAIL (retried)
+  2. short | yung anino sa ATM                        | coiled suspense          | FAIL (retried)
+  3. long  | Yung Mga Letter Sinusulat Ko             | quiet dread              | FAIL (retried)
+  4. long  | Yung Poster sa Lib                       | quiet dread              | FAIL (retried)
+total lab cost (horror): 62¢

@@ -1,0 +1,110 @@
+
+══════════════════════════════════════════════════════════════════════
+[DOCUMENTARY · SHORT 75s · 1/4] "Paano Naimbento ang Bubble Wrap"  register=CONSPIRATORIAL  (rewritten once)
+  logline: Accidental invention ng bubble wrap, mula sa failed wallpaper to protection sa fragile items.
+  ── PLAN (planner convergence) ──
+  premise:    The accidental invention of bubble wrap begins with a duo of engineers trying to create textured wallpaper in a small lab.
+  conflict:   The engineers aim to create a new type of wallpaper with a textured surface, but their attempts only produce useless sheets with air-filled bubbles.
+  escalation: Their failed product finds its way to a struggling packaging expert, who unexpectedly needs a solution for fragile items. Despite initial skepticism, he decides to test the oddity.
+  twist:      The packaging expert discovers that the air-filled sheets are remarkably effective at protecting delicate items during transit, leading to a surprising new use.
+  ending:     Bubble wrap becomes a staple in shipping industries worldwide, revolutionizing how fragile goods are packaged and transported.
+  elements:   structure=question_first | role=the curious skeptic | setting=a small lab | anchor=- | trigger=a surprising fact | turn=the misconception flip | aftereffect=an idea the viewer can re-explain
+  stages: editor: discarded_peak | naturalizer: discarded_peak  words=126
+  GATE: FAIL — STORY PHYSICS fails on CAUSALITY and THE CHANGE — the beats just follow each other with no forcing logic (why did it land with a 'packaging expert,' how did he test it, what changed in the industry specifically?), and the ending delivers only a generic moral ('minsan talaga, yung mga aksidenteng creation pa…') instead of a concrete payoff the viewer could re-explain; SUBSTANCE also fails because no vivid example or felt-scale comparison makes the invention's impact real — 'nagbago yung packaging industry' does zero work.
+  GATE: after rewrite: FAIL — CREDIBILITY + SUBSTANCE both fail: the script skips the real, nameable inventors (Alfred Fielding and Marc Chavannes, 1957) and the actual buyer (Fred Bowers at Sealed Air/IBM shipping computers), replacing them with vague 'two engineers' and 'a packaging expert na medyo desperado' — a skeptical listener will immediately feel the story is hollow and constructed, and the one concrete detail promised (ceramic vases) is not historically grounded and does no felt-scale work.
+──────────────────────────────────────────────────────────────────────
+Ganito'ng kwento ng bubble wrap, kala mo wallpaper lang nagsimula. Imagine, two engineers nag-eexperiment para gumawa ng textured wallpaper. Pero ang laging resulta? Plastic na puno ng hangin. Parang epic fail diba?
+
+But wait, here's the twist. A packaging expert na medyo desperado sa packaging solution stumbled upon it. At first, medyo skeptical siya. Pero kailangan niyang i-test. Pinasok niya yung bubble wrap sa shipping ng ceramic vases. Kinakabahan pa siya!
+
+Tapos, pagdating sa destination... Walang basag! Ang galing, diba? Yung supposedly pang-wallpaper, nagtransform into the ultimate protector para sa fragile items. Kaya ngayon, ang bubble wrap essential na sa shipping industry.
+
+Kaya next time may i-unbox ka na naka-bubble wrap, tandaan mo—hindi siya meant para dun. Pero perfect siyang naging protector ng precious goods mo.
+
+══════════════════════════════════════════════════════════════════════
+[DOCUMENTARY · SHORT 75s · 2/4] "Ang Kamera na Sayang ng Kodak"  register=CONSPIRATORIAL  (rewritten once)
+  logline: Noong 1975, isang Kodak engineer ang nakaimbento ng digital camera, pero ni-reject ng executives. Ano kaya kung tinuloy nila?
+  ── PLAN (planner convergence) ──
+  premise:    You're a Kodak engineer in 1975, holding a boxy, primitive digital camera you've just developed in your lab.
+  conflict:   You're excited to share this groundbreaking invention, but company executives dismiss digital technology as a fantasy that will never replace film.
+  escalation: As you present the camera's potential, questions and doubts arise among the executives. They're worried investing in digital will cannibalize Kodak's profitable film business. Your attempts to highlight market trends and changing consumer behavior are overshadowed by fears and disbelief rooted in the company's current success.
+  twist:      Despite your efforts, they're stuck in their ways and decide to shelve the camera, leaving the technology dormant within Kodak. Ironically, this inaction seals the company's fate as digital photography rises elsewhere, eventually leading to its decline.
+  ending:     Had Kodak embraced your invention, they might have maintained their industry dominance instead of watching others capture the future of photography.
+  elements:   structure=second_person | role=the innovator faced with skepticism | setting=a Kodak conference room | anchor=- | trigger=a groundbreaking but dismissed invention | turn=the misconception flip | aftereffect=a changed understanding of why a dominant player fell
+  stages: editor: ok | naturalizer: ok  words=177
+  GATE: FAIL — AGENCY fails: the narrator is framed as the inventor ('hawak mo,' 'proud kang ipakita') but never makes a single decision — the execs just dismiss them and the invention just gets shelved, so there is no dramatic choice or consequence owned by anyone, only a passive sequence of 'and then' beats with no causal pressure forcing each other.
+  GATE: after rewrite: FAIL — LANGUAGE NATURALNESS hard fail: 'profit rights daw' is a garbled, untranslatable phrase that no real speaker would say (the actual reason was protecting film revenue/margin, not 'profit rights'), and 'yung inalis nilang invention ang magiging twist ng industry' is word-salad Taglish that parses as nothing — both lines must be rewritten before this ships.
+──────────────────────────────────────────────────────────────────────
+Alam mo bang ang digital camera — halos lahat ngayon meron — ay naimbento ng isang Kodak engineer noong 1975? Oo, ganun katagal na! Excited ka pa nga ipakita ito — isang boxy na gadget, pixelated pa ang mga shots. Para sa'yo, ito na yung future. Pero noong dinala mo 'to sa mga bosses ng Kodak... ayaw maniwala. Sa kanila, parang science fiction lang 'to.
+
+Sabi mo, 'Tingnan niyo ang market, gusto ng tao convenience!' Pero ang sagot nila, 'E bakit natin iiwan ang film? Successful na tayo.' Kahit ipakita mong nagbabago na ang trends, stuck pa rin sila sa film dahil profit rights daw. Hindi nila makita yung potential na nandiyan na.
+
+Sa huli, dini-decide nilang i-shelve ang project mo. Hindi nila alam, yung inalis nilang invention ang magiging twist ng industry.
+
+Nagising na lang ang Kodak na ibang companies na ang nagdala ng future na 'yun — digital photography. Imagine mo, kung tinuloy lang nila yung invention mo... baka hindi nawala ang Kodak. Minsan, yung mga desisyon na hindi mo ginagawa, yun ang pumapatay sa'yo.
+
+══════════════════════════════════════════════════════════════════════
+[DOCUMENTARY · LONG 240s · 3/4] "Yung Bridge na Sumayaw Hanggang Bumagsak"  register=MYTH-SLAYER  (rewritten once)
+  logline: How the wind made the Tacoma Narrows Bridge dance until it collapsed, reshaping engineering forever.
+  ── PLAN (planner convergence) ──
+  premise:    On a cold November morning in 1940, the Tacoma Narrows Bridge swings wildly due to an intense wind storm. Despite its modern design, the bridge begins to sway unpredictably.
+  conflict:   Engineers believed they built one of the most advanced suspension bridges, but something unseen makes it dance—a natural force they didn't anticipate.
+  escalation: As the winds gained speed, observers watched as oscillations grew and the bridge began twisting. Engineers and onlookers were aghast as camera footage started to document the erratic movement. Despite efforts, the bridge’s design couldn't withstand the wind's frequency.
+  twist:      The bridge collapses not because of faulty construction, but due to 'aeroelastic flutter,' an unexpected resonance with the wind, revealing a design oversight in understanding the dynamic interplay between wind and structure.
+  ending:     The footage leads to a revolution in engineering, where wind-tunnel testing for bridges becomes standard, forever changing how large structures are designed.
+  elements:   structure=artifact | role=someone who just found out | setting=on the Tacoma Narrows Bridge | anchor=- | trigger=a surprising fact | turn=the misconception flip | aftereffect=a changed assumption
+  stages: editor: ok | naturalizer: ok  words=229
+  GATE: FAIL — THE DEBT fails: the opening plants 'a force they didn't expect' as the mystery, but the script never concretely pays off what aeroelastic flutter actually is — 'may resonance siya sa hangin na hindi expected' is just a restatement of the mystery, not an explanation, so the viewer leaves unable to re-explain it (PAYOFF rubric violation), and the closing moral ('lagi na lang i-respect yung hindi mo nakikita') is a generic platitude that floats free of the specific story told.
+  GATE: after rewrite: FAIL — The opening beats the rubric by starting on the surprise, but 'aeroelastic flutter' is introduced as the cause and then immediately abandoned — the script never concretely explains what resonance actually did to the bridge in felt terms, so the payoff ('nahanap ng hangin yung exact na frequency') is a claim the story hasn't earned, violating the NEVER rule against claims the story hasn't made believable.
+──────────────────────────────────────────────────────────────────────
+November 1940, bagyo. Tapos bigla na lang, yung Tacoma Narrows Bridge—nagsimulang gumalaw. Parang sumasayaw.
+
+Akala ng mga engineers, solid na solid 'yung design nila—moderno, suspension bridge, advanced. Pero iba ang trip ng hangin.
+
+Isipin mo 'to: isang bridge na para bang nagyo-yoga sa gitna. Hangin lang, pero gumewang-gewang yung buong structure. Sa simula, amazed pa 'yung mga tao. Pero habang tumatagal, parang nightmare na. Cameras nag-start nang mag-roll, kinukuha lahat—bawat twist, bawat sway.
+
+Hindi dapat ganito 'yung bridge. Kaya nga advanced, 'di ba? Pero may isang bagay na di nila nakita—something invisible pero malakas. Ang tawag dito—'aeroelastic flutter'.
+
+Habang lumalakas ang hangin, lalo pang tumitindi ang galaw. Yung mga engineers, napapakamot na lang ng ulo habang nanonood. Yung sway ng bridge, parang may sariling buhay—hangin ang kumukontrol, resonating with the bridge's structure.
+
+Tapos, boom. Bagsak. Hindi dahil sa mahinang materyales o construction errors—kundi dahil sa resonance na hindi nila inaasahan. Nahanap ng hangin yung exact na frequency na swak sa bridge. Sumabay ang bawat indayog ng tulay, hanggang sa bumigay.
+
+Doon nagbago lahat. Engineering sa buong mundo—nagising. Inaral nila bawat segundo ng nangyari. Hindi nagtagal, naging standard na yung wind-tunnel testing. Dati, wala pa 'yon sa proseso. Ngayon, hindi mo na maitayo ng walang ganon.
+
+Ang lesson? May mga bagay na hindi mo makikita, pero kaya pa rin nilang gubahin ang pinakamatibay mong gawa. Huwag mo nang subukan i-underestimate.
+
+══════════════════════════════════════════════════════════════════════
+[DOCUMENTARY · LONG 240s · 4/4] "Blockbuster at Netflix Deal na 'Di Natuloy"  register=MYTH-SLAYER  (rewritten once)
+  logline: Paano natalo ng isang maliit na pitch ng Netflix ang giant na Blockbuster, at paano ito nagsimula ng isang digital revolution.
+  ── PLAN (planner convergence) ──
+  premise:    Imagine a boardroom in Dallas in the year 2000, with Blockbuster executives listening to a pitch from a little-known company called Netflix, offering themselves for sale at a staggering $50 million.
+  conflict:   Blockbuster executives want to dominate the home entertainment market, but their deep-set perception of traditional business models blinds them to the emerging digital wave.
+  escalation: The executives laugh off Netflix's offer, believing the DVD-by-mail model to be a niche market; meanwhile, Netflix begins pivoting towards digital streaming, which is in its nascent stage but shows significant potential.
+  twist:      In a crucial misjudgment, Blockbuster fails to foresee the digital shift and streaming boom, as Netflix capitalizes on the opportunity, growing into a dominant force while Blockbuster begins to collapse under its own weight.
+  ending:     Netflix becomes a household name, while Blockbuster's decline becomes a cautionary tale of corporate complacency and missed opportunity.
+  elements:   structure=artifact | role=the knowledgeable friend who explains things well | setting=a Blockbuster boardroom in Dallas | anchor=- | trigger=Netflix's pitch to be acquired by Blockbuster | turn=the misconception flip | aftereffect=a changed assumption
+  stages: editor: discarded_peak | naturalizer: ok  words=247
+  GATE: FAIL — CAUSALITY fails throughout — the beats are strung together with 'ilang taon lang,' 'lumipas pa ang ilang taon,' 'biglang umangat,' with no forcing logic between them, so the story reads as a timeline summary ('and then… and then…') rather than a chain of decisions and consequences; SUBSTANCE also fails because 'digital shift' and 'streaming' are named but never made concrete or felt-scale — the viewer gets no vivid example of what Netflix actually did differently to beat Blockbuster, just the assertion that they did.
+  GATE: after rewrite: FAIL — STORY PHYSICS fails on CAUSALITY and THE CHANGE: the beats are all 'and then' — Blockbuster laughed, Netflix shifted to streaming, Blockbuster closed — but the script never shows the mechanism that forced each turn (e.g., what specifically made Blockbuster's late fees fatal, or what Netflix bet on streaming actually cost them), so the ending moral ('isang maling desisyon lang') is a claim the story hasn't earned, not a conclusion the viewer felt arrive.
+──────────────────────────────────────────────────────────────────────
+I-imagine mo 'to: taong 2000, gitna ng isang boardroom sa Dallas. Mga executives ng Blockbuster nakaupo, nakikinig — habang isang maliit na kumpanya, Netflix ang pangalan, nag-o-offer na bilhin sila sa halagang $50 million. Akala mo ba 'yun? Isang desisyon na kala mo maliit lang, kaya nilang matawa at i-dismiss kaagad.
+
+Si Blockbuster — hari ng home entertainment market. Feeling nila, wala silang katapat. Pero noong moment na 'yun, sa likod ng lahat ng kumpiyansa nila, may hindi nila nakikita: ang digital wave na papadating.
+
+Sabi ng isang executive, 'DVD-by-mail? Niche market lang 'yan!' Lahat natawa. Ano nga ba naman ang mail, 'di ba? Ang dami na ng stores nila sa bawat sulok ng Amerika. Pero 'yun nga — habang natatawa sila, iba na ang plano ni Netflix. Unti-unti, nag-umpisa silang mag-shift. Streaming, bro! Habang si Blockbuster, stuck pa rin sa rental stores.
+
+Fast forward ng ilang taon, nagkaroon ng Netflix Online. Monthly subscription, unlimited streaming — wala nang balik-balik, 'di ka na pipila. Samantalang si Blockbuster, may late fees pa rin na hassle.
+
+Akala ng Blockbuster, solid ang market nila. Pero grabe 'to — ngayon sino na ang nagdo-dominate? Netflix. Habang ang Blockbuster, nagsara na lang sa huli.
+
+'Yun ang nagturo sa atin: kahit gaano ka kalaki, isang maling desisyon lang, pwede kang masira. Simpleng pitch meeting lang noon — ngayon, legend na.
+
+'Yan ang lesson: huwag mong i-downplay ang mga bagay na kaya kang baguhin. Kasi minsan, 'yung joke mo, siya pala ang papatay sa'yo.
+
+══════════════════════════════════════════════════════════════════════
+SUMMARY (documentary):
+  1. short | Paano Naimbento ang Bubble Wrap          | CONSPIRATORIAL           | FAIL (retried)
+  2. short | Ang Kamera na Sayang ng Kodak            | CONSPIRATORIAL           | FAIL (retried)
+  3. long  | Yung Bridge na Sumayaw Hanggang Bumagsak | MYTH-SLAYER              | FAIL (retried)
+  4. long  | Blockbuster at Netflix Deal na 'Di Natul | MYTH-SLAYER              | FAIL (retried)
+total lab cost (documentary): 58¢

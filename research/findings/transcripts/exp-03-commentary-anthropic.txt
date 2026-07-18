@@ -1,0 +1,287 @@
+⚗ writer provider override: anthropic
+
+══════════════════════════════════════════════════════════════════════
+[COMMENTARY · SHORT 75s · 1/4] "ang fake sick ni Ernie"  register=WRY
+  logline: Nang kausapin ni Dina ang katrabahong palagi na lang nagpapakasakit tuwing Biyernes, hindi niya inaasahang siya rin pala ang kasama sa isyu.
+  ── PLAN (planner convergence) ──
+  premise:    A corporate employee, 'Dina,' encounters a coworker 'Ernie' who openly fakes illness to extend his long weekends at the expense of everyone else's workload
+  conflict:   Dina wants her team to function smoothly and equally, but Ernie's deceit overburdens her with extra tasks while their manager seems oblivious.
+  escalation: Dina debates whether to report Ernie or handle it diplomatically, each approach threatening her workplace harmony differently. She finally chooses a direct approach, confronting him and seeking to understand his motivations, only to find his job insecurity stems not from laziness but cultural conditioning.
+  twist:      Dina learns that Ernie's behavior is driven by a deep-seated belief that rest is only an option through subterfuge, unveiling a shared cultural illusion.
+  ending:     Dina recognizes the need to address not just Ernie's actions, but the broader, unspoken cultural messaging within their workplace about productivity and worth.
+  elements:   structure=first-hand account | role=corporate employee | setting=office coffee break room | anchor=routine sick leave abuse | trigger=coworker's blatantly feigned illness | turn=the concession that flips into the knife | aftereffect=a comfortable belief made uncomfortable
+  stages: editor: ok | naturalizer: ok  words=161
+  GATE: PASS — The script ships: the Credibility Test holds (the dialogue and the narrator's self-implication feel lived-in), the Taglish is natural contemporary spoken register throughout, Story Physics work (the narrator decides to confront Ernie, the confession forces the reframe, the opening question of 'why does Ernie do this' is paid off and twisted inward), and the closing line earns its punch as a quotable claim with a real target someone could push back on.
+──────────────────────────────────────────────────────────────────────
+May kasamahan akong mahilig i-extend ang long weekend gamit ang isang trick: lagi siyang may sakit tuwing Biyernes.
+
+Si Ernie. Laging may LBM. O lagnat. O kung ano pa man — pero lagi sa Biyernes, lagi urgent, at lagi kaming nagco-cover.
+
+Sabi ko sa sarili ko, okay lang. Minsan nangyayari 'yan.
+
+Pero pagkatapos ng ikatlong long weekend niya — na ako ang nag-encode sa lahat ng reports niya — sabi ko, kailangan ko na siyang kausapin.
+
+Kinausap ko siya. Expect ko magsisinungaling siya. Pero hindi.
+
+Sabi niya, 'Takot akong mag-leave ng maayos. Baka isipin nila tamad ako. Baka isipin nila hindi ko kailangan ang trabaho ko.'
+
+Natameme ako. Kasi kilala ko 'yung feeling na 'yon. Alam natin lahat.
+
+Nag-file siya ng fake sick leave para lang makapagpahinga nang hindi nahahatulan — at pinayagan namin 'yung sistema na magturo sa kanya na 'yun ang tanging paraan.
+
+Si Ernie hindi ang problema. Tayong lahat na nagpretend na normal 'to — 'yun ang problema.
+
+══════════════════════════════════════════════════════════════════════
+[COMMENTARY · SHORT 75s · 2/4] "yung post ng tropa"  register=WRY  (rewritten once)
+  logline: Nakita ko ang post ng tropa tungkol sa bagong 'investment' — at hindi ko na matahimik ang sarili ko pagkatapos ng ilang Google search.
+  ── PLAN (planner convergence) ──
+  premise:    You're scrolling through Facebook and find a friend's post bragging about investing in a new get-rich-quick scheme.
+  conflict:   You want to trust the friend and consider investing, but deep down you suspect it might be too good to be true.
+  escalation: You start researching the scheme, reading articles and reviews, and noticing patterns of previous schemes that ended up being scams. Each piece of information makes you question your friend's judgment more, and choosing whether to warn others adds to the pressure.
+  twist:      Your research uncovers a key fact: the scheme is run by the same people involved in multiple past fraudulent activities.
+  ending:     Instead of joining, you post a tactful warning that lays out the evidence to your friend group, feeling the usual flood of conflicting comments but also seeing a few 'thank you' replies.
+  elements:   structure=direct_second_person | role=a concerned friend | setting=your Facebook feed | anchor=an online investment pitch | trigger=a friend's social media post | turn=the receipt nobody expected | aftereffect=a comfortable belief made uncomfortable
+  stages: editor: discarded_peak | naturalizer: discarded_peak  words=183
+  GATE: FAIL — STORY PHYSICS — THE CHANGE fails: the narrator posts the links, gets mixed comments, notes a few 'salamats,' and stops — the payoff never lands (did the friend see it? did anyone avoid the scam? did the friendship survive?), so the ending is a trail-off, not a resolution or a hard verdict thrown to the viewer; and the closing line 'Sulungin talaga ng salitang passive income ang utak ng tao' is a detached observation that belongs in a different essay, not the earned button of this story.
+  GATE: after rewrite: PASS — The narrator decides, posts, absorbs the blowback, and the tropa's silence lands as a real — if unresolved — payoff; voice is natural contemporary Taglish throughout, the claim is clear and disagreeable, and the closing line earns its keep.
+──────────────────────────────────────────────────────────────────────
+Ang hirap pala ng may matalinong tropa na nagpapaloko.
+
+Nakita ko yung post niya — 'Finally found something that works!' — tapos may screenshot ng earnings. Malaki. Parang sweldo ng dalawang buwan sa loob ng isang linggo.
+
+At yun na, nag-Google na ko. Kasi ganun ako — hindi kaagad basta-basta.
+
+Una, mukhang legit. Meron silang website, may testimonials, may 'investment plan.' Tapos nakita ko yung pangalan ng isa sa 'founders.'
+
+Sakto pa ring pangalan.
+
+Hinanabot ko pa yung Investscam.ph, dati pang naka-feature yung tao. Hindi isang beses. Dalawa pa.
+
+Parehong scheme, parehong exit. Pera ng mga tao, biglang 'under maintenance' yung app.
+
+So sumulat ako. Hindi sa kanya direkta — post sa grupo namin. Maingat, walang pangalan, links lang at dates at 'ito yung pattern, mag-ingat tayo.'
+
+Nakuha ko ang expected na 'sige ikaw na matalino.' Pero tatlo ring nagsabi ng salamat — kasama na yung isa pang nag-iisip na mag-invest.
+
+Ang tropa ko? Hindi na nagre-reply sa thread.
+
+Baka nakatulong ako. Baka hindi. Pero alam ko na, pag tahimik na ang isang tao pagkatapos mong mag-abiso — 'yun na ang sagot mo.
+
+══════════════════════════════════════════════════════════════════════
+[COMMENTARY · LONG 240s · 3/4] "yung balikbayan box na hindi namin binuksan"  register=WRY
+  logline: Isang balikbayan box na hindi binubuksan — at ang napag-alaman namin nang buksan namin.
+  ── PLAN (planner convergence) ──
+  premise:    In a small barangay canteen, a frayed balikbayan box sits untouched, a staple in many Filipino homes, supposedly filled with imported delights from a relative abroad.
+  conflict:   The protagonist, a young local who dreams of working overseas, deeply desires to open this balikbayan box to glimpse what awaits in 'greener pastures.' However, the canteen owner is reluctant to explain why it remains unclaimed.
+  escalation: Determined to discover the box's treasures, the protagonist grows close to the canteen owner's estranged son who sent the box. The son reveals the contents are less glamorous donations to mask guilt for leaving his family behind. They agree to open the box together, expecting mixed emotions.
+  twist:      Upon opening, the box is filled with ordinary household essentials—a stark contrast to the imported luxury they imagined—underscoring the superficial allure of life abroad.
+  ending:     The protagonist realizes the box, once a symbol of dreams, is now an emblem of misplaced promises and begins to question their own aspirations to go overseas.
+  elements:   structure=artifact | role=a young dreamer in a barangay | setting=small barangay canteen | anchor=balikbayan box | trigger=the unclaimed balikbayan box in the canteen | turn=the concession that flips into the knife | aftereffect=a comfortable belief made uncomfortable
+  stages: editor: discarded_peak | naturalizer: discarded_peak  words=495
+  GATE: PASS — The script ships: the claim is repeatable and arguable (the balikbayan box is not proof of a good life abroad but of guilt and distance), a concrete scene with real objects and a real conversation carries the weight, the ending reframes the narrator's own ambition rather than just summarizing, and the Taglish reads like someone actually talking — no textbook Tagalog, no translated-sentence stiffness, no hedged conclusion.
+──────────────────────────────────────────────────────────────────────
+May balikbayan box sa sulok ng canteen ni Aling Cora.
+
+Nandoon na siya nung nagsimula akong kumain doon.
+Nandoon pa rin nung naging suki na ako.
+Naka-scotch tape pa rin. Hindi pa nababasa ng singaw ng kanin.
+
+Pagtatanungin mo si Aling Cora, sasabihin niya lang — 'Sige, hintayin natin.'
+Hintayin natin ang sino? Para saan? Wala siyang sinasagot.
+
+Ako, bata pa. Masipag mangarap. At sa tingin ko noon,
+lahat ng nasa loob ng ganitong kahon — ganda.
+Vitamin C na American. Hershey's na hindi pa nahihiwa.
+Maybe pati damit na amoy ibang bansa.
+
+Yan ang balikbayan box sa isip ko:
+patunay na may magandang buhay sa labas.
+
+Kaya oo, curious ako. Sobra.
+
+---
+
+Isang araw, may lalaki na pumasok sa canteen.
+Medyo awkward ang dating — parang hindi sure kung welcome siya.
+Sinabi niyang si Roldan siya. Anak ni Aling Cora.
+Yung nagpadala ng box.
+
+Matagal kaming nag-usap. Gusto ko kasi malaman.
+Hindi ko naman sinabi ng ganoon — pero alam na niya.
+Natatawa pa nga siya. 'Alam ko kung bakit mo ako kinakausap,' sabi niya.
+
+So nagkwento siya.
+
+Overttime daw siya nang overtime noong una.
+Nag-ipon. Nagpadala. Yun ang sistema.
+Pero minsan dumadating ang panahon na hindi mo na alam
+kung nagtatrabaho ka para sa pamilya,
+o nagtatrabaho ka para may dahilan ka para hindi umuwi.
+
+Ang box, sabi niya — binuo niya 'yun
+nung last Christmas na hindi siya nakauwi.
+'Hindi ko alam kung para sa kanila 'yun o para sa aking konsyensya.'
+
+Sinabi niya 'yun na parang biro.
+Hindi biro.
+
+---
+
+Nagkasundo kami na buksan.
+Si Aling Cora, pumayag — o baka sumuko na lang, hindi ko alam.
+Umupo kaming tatlo sa canteen pagkatapos ng lunch rush.
+
+Nilagay ni Roldan ang kahon sa mesa.
+Kinagat ng gunting ang tape.
+
+At doon namin nakita ang mga imported na:
+Tide Pods.
+Philips na shower head.
+Dalawang disposable razor.
+Mga instant noodles na halos ganoon din ang lasa sa atin.
+At isang malaking bag ng Quaker oats na hindi pa rin 'yun kain ni Aling Cora.
+
+Walang Hershey's.
+Walang damit.
+Walang amoy ng ibang bansa.
+
+Sulat lang sa gilid — 'Para sa bahay. Love, Roldan.'
+
+Natawa ako. Hindi ko maipaliwanag kung bakit.
+Natawa rin si Roldan — pero yung klase ng tawa na habol ng hininga.
+Hinawakan ni Aling Cora ang Tide Pods na parang hawak niya ang braso ng anak niya.
+
+---
+
+Hindi ko kinukuwestiyon ang desisyon ni Roldan.
+Maraming dahilan ang tao para umalis. Lahat may karapatan doon.
+
+Pero ito ang hindi namin pinag-uusapan:
+ang balikbayan box hindi patunay ng magandang buhay.
+Patunay lang na may nagtatrabaho sa malayo
+na hindi alam kung paano mag-sorry.
+
+Ganung simple.
+
+Ako? Nandoon pa rin ang plano ko.
+Hindi naman nawala.
+Pero iba na ang tanong ko sa sarili ko ngayon.
+
+Hindi na 'Kailan ako makakaalis?'
+
+Kundi — 'Pag nag-padala na ako ng box,
+ano'ng ipupuno ko doon?'
+
+Kasi kung Tide Pods lang naman ang sagot,
+malamang hindi 'yun ang pangarap na inakala nating pareho nating hinahanap.
+
+══════════════════════════════════════════════════════════════════════
+[COMMENTARY · LONG 240s · 4/4] "ang stapler na parang may legs"  register=WRY
+  logline: Isang employee na gustong resolbahin ang 'missing stapler mystery' ng opisina niya, hanggang sa matuklasan na mas nakakatakot ang taong nagkukwento kaysa sa kwento mismo.
+  ── PLAN (planner convergence) ──
+  premise:    A group of office workers gather for lunch and discuss the infamous 'missing stapler' incidents in their company, each adding to the lore with new 'eyewitness' accounts.
+  conflict:   An employee wants to finally solve the mystery for peace of mind, but is thwarted by increasingly bizarre and mythical explanations that pile on.
+  escalation: As each worker shares their own rendition of the tale, the stories become more fantastical and contradictory, leading the protagonist to grow skeptical and confront the teller who claims to have seen the staple-gobbling monster.
+  twist:      The storyteller inadvertently mentions a specific late-night meeting detail they shouldn't know if they weren't a participant, suggesting they know more about the mundane cause than they let on.
+  ending:     The protagonist realizes the truth might be more about office cliques and secrecy than any mythical creature, leaving everyone with a hint of the absurdity of workplace gossip.
+  elements:   structure=retold_legend | role=a curious employee | setting=office lunch break room | anchor=routine office gossip | trigger=stories of a 'stapler monster' | turn=the receipt nobody expected | aftereffect=a comfortable belief made uncomfortable
+  stages: editor: ok | naturalizer: ok  words=540
+  GATE: PASS — The narrator actively investigates, the stapler mystery reframes into an information-leak trap through clear cause-and-effect beats, the opening question ('what's behind the missing staplers?') is paid off with a chilling human answer, and the closing line — 'huwag muna tanungin kung totoo, tanungin kung sino ang una' — is genuinely quotable and lands the channel's stance cleanly.
+──────────────────────────────────────────────────────────────────────
+May monster sa opisina namin.
+
+Hindi naman literal. O baka oo. Hindi pa rin ako sigurado.
+
+Tatlong buwan na, pitong stapler nawala sa floor namin—wala ni isang matinong paliwanag.
+
+Nung nagsimula ako dito, narinig ko na 'yan. Yung mga stapler sa Finance floor, basta nawawala. Hindi natatambak sa ibang drawer, hindi tinatago ng accounting intern na secretly nagnanakaw—nawawala lang. Walang bakas.
+
+Akala ko urban legend lang. Yung tipong kwento na ginagawa ng mga tao para may pag-usapan tuwing lunch.
+
+Tapos naranasan ko mismo.
+
+Isang Huwebes. Kailangan ko ng stapler, yung red one sa communal table. Nandoon siya kanina. Nakita ko. Pagbalik ko galing CR—wala na.
+
+Fine. Kumuha ako ng iba. Pero nag-trigger na sa akin 'yun.
+
+Kaya kinulit ko mga officemates ko sa lunch.
+
+Unang nagsalita si Marga. Marga from Marketing, sikat sa pagiging OA ng stories niya pero honest naman siya usually.
+
+Sabi niya, nakita niya raw ang stapler na gumagalaw. Mag-isa. Sa ibabaw ng table namin. Dahan-dahan, parang nilalakad ng invisible na kamay.
+
+Tinignan ko siya.
+
+"Gumagalaw. Parang may humihila."
+
+Hindi ko sinabi kahit ano. Kumuha na lang ako ng rice.
+
+Tapos sumali si Kuya Jun. Kuya Jun from Operations, dalawampung taon na sa company, yung tipo na parang encyclopedia ng lahat ng opisina lore.
+
+Sabi niya, hindi daw stapler ang tunay na nawawala. Yung stapler daw, portal siya. At bawat stapulan mo ng papel—nag-se-send ka raw ng signal sa another dimension.
+
+Hinintay ko siyang magtawa.
+
+Hindi siya nagtawa.
+
+Sumali pa si Dianne, yung nasa procurement. Sabi niya, may nakita raw siyang buhok sa loob ng stapler refill container. Mahaba. Walang katawan.
+
+At this point, feeling ko napunta na ako sa ibang meeting.
+
+Pero may isang tanong na hindi ko matigil—sino ba talaga ang nagsimula ng kwentong ito? Kasi hindi pwedeng basta nag-evolve 'to from nothing. May pinagmulan.
+
+Kaya tinanong ko si Dianne—"Saan mo narinig 'to originally?"
+
+Sabi niya, kay Kuya Jun.
+
+Tinanong ko si Kuya Jun—"Ikaw ba talaga nagsimula nito?"
+
+Nakangiti siya. "Ang stapler ay hindi nawawala. Tinatago lang."
+
+Uh. Okay.
+
+"Tinatago ng sino?"
+
+Matagal siyang tumahimik. Tapos sabi niya—'Yung nangyari nung Thursday late meeting ng Q2, alam mo namang hindi dapat may nandoon maliban sa mga department heads.
+
+Stop.
+
+Hininto ko siya.
+
+Dahil walang dapat makaalam sa Thursday late meeting na 'yun maliban sa tatlong tao.
+
+Ako, yung manager namin, at si HR.
+
+At si Kuya Jun—hindi siya kasama sa meeting na 'yun.
+
+Sinabi ko sa kanya yun.
+
+Nakikinig na rin si Marga at Dianne ngayon. Parang nag-shift na ang hangin sa mesa.
+
+Sabi niya, "Narinig ko lang daw sa labas ng conference room."
+
+Okay. Fine. Pero ang conference room namin, nasa isa pang floor.
+
+Hinayaan ko na siyang mag-explain. Nagulo siya. Nagbago ng kwento. Tatlong beses nagbago ang details.
+
+At doon ko narealize—walang monster. Walang portal. Walang buhok na walang katawan.
+
+May isang tao na alam ang isang bagay na hindi niya dapat alam, at para hindi mapansin—gumawa siya ng kwento na imposibleng i-prove.
+
+Kasi kung ang explanation ay monster, walang tatanong pa.
+
+Yun pala ang laro. Hindi ang stapler ang natatago—impormasyon.
+
+At yung pinas-pasa nilang office legend? Yun ang distraction.
+
+Sa susunod na may magsabi sa inyo ng ganito—ng kwentong too weird to be true—huwag muna tanungin kung totoo.
+
+Tanungin kung sino ang una.
+
+══════════════════════════════════════════════════════════════════════
+SUMMARY (commentary):
+  1. short | ang fake sick ni Ernie                   | WRY                      | PASS
+  2. short | yung post ng tropa                       | WRY                      | PASS (retried)
+  3. long  | yung balikbayan box na hindi namin binuk | WRY                      | PASS
+  4. long  | ang stapler na parang may legs           | WRY                      | PASS
+total lab cost (commentary): 48¢

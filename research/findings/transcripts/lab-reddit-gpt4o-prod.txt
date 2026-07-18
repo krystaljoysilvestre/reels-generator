@@ -1,0 +1,119 @@
+
+══════════════════════════════════════════════════════════════════════
+[REDDIT_STORY · SHORT 75s · 1/4] "Sino'ng nangungupit sa akin?"  register=am-I-wrong  (rewritten once)
+  logline: Isang mysterio sa bank account at ang pagtuklas ng pinagmumulan nito.
+  ── PLAN (planner convergence) ──
+  premise:    A young man finds consistent discrepancies in his bank account after his payday. He lives with family in a cramped apartment and relies heavily on online banking.
+  conflict:   He wants to identify why his salary is mysteriously disappearing, but his lack of privacy and trust issues with his family make it hard to investigate without causing family strife.
+  escalation: He initially suspects the bank and contacts them but is told everything checks out on their end. He starts monitoring his transactions daily and notices that the withdrawals match with times he's asleep. Confronting his family risks causing a major argument but his savings are dwindling.
+  twist:      He sets a trap by staying up late without his family knowing and catches his younger brother using his phone to transfer money for gaming without realizing it's affecting real accounts.
+  ending:     Now faced with the decision to address the theft within the family or let it go due to shame and the fear of being seen as the bad guy, he asks what is fair in this situation.
+  elements:   structure=am_i_wrong_post | role=the poster asking who's wrong | setting=a cramped family apartment | anchor=online banking app | trigger=consistent bank account discrepancies | turn=the gut-punch detail found in hindsight | aftereffect=an unresolved judgment thrown to the viewer
+  stages: editor: ok | naturalizer: ok  words=161
+  GATE: FAIL — Too short and skeletal to pass the believability test — no mundane over-specific detail (how much was stolen, how many withdrawals, how long this was happening, how old the sibling is, what 'game' even), no self-incriminating seams, and the whole thing reads like a three-bullet outline rather than a real person's confession; the story is credible in premise but never earns belief in execution.
+  GATE: after rewrite: PASS — Reads like a real, harassed breadwinner's Reddit post — the recurring 3k amount, the sleeping-household detail, the 14-year-old buying ML skins, the fear of being cast as the villain all feel mundane and unpolished in exactly the right way, and the am-I-wrong verdict is thrown cleanly to the viewer.
+──────────────────────────────────────────────────────────────────────
+Parang may kulang lagi sa sweldo ko tuwing payday. Iniisip ko baka system error 'to sa banko, pero laging parehong amount ang nawawala — 3k, every two weeks.
+
+Tinanong ko na rin banko, sabi nila walang mali. Kaya chineck ko na lang daily yung transactions ko — tapos napansin ko, yung mga withdrawals, nangyayari habang natutulog ako.
+
+Nakaka-stress, kasi hindi biro 'yun — sobrang higpit na nga ng budget ko.
+
+Naisip ko nang sabihin sa pamilya ko, pero paano kung ikagalit pa nila? Kaming lahat nakatira sa isang maliit na apartment, wala talagang privacy.
+
+So isang gabi, nag-decide akong mag-stay up. Kunwari natulog ako pero alerto talaga. Nahuli ko si bunso, 14, hawak ang phone ko, nagta-transfer para mabili ng skins sa ML.
+
+Di ko talaga akalain.
+
+Ngayon eto na yung problema ko — paano ko ba siya kokomprontahin? Ayoko siyang mapahiya, pero mali talaga 'to.
+
+Nakakainis kasi gusto ko siyang turuan, pero paano kung ako pa yung maging kontrabida dito?
+
+══════════════════════════════════════════════════════════════════════
+[REDDIT_STORY · SHORT 75s · 2/4] "Yung Nawalang Kuwintas sa Kasal"  register=TIFU (self-own)  (rewritten once)
+  logline: Sa kasal ng pinsan ko, yung napaka-importante ng necklace ng pamilya, nawala sakin... Akala mo kaya tapos wala pala.
+  ── PLAN (planner convergence) ──
+  premise:    You're attending your cousin's wedding in an upscale hotel, and you're handed a responsibility to deliver an important family heirloom to the bride—a necklace that's been in the family for generations.
+  conflict:   As the time approaches for the bride to wear the necklace, you open the ornate box and find it empty. You desperately want to find what's missing before the ceremony starts, but the clamorous wedding preparations swallow your urgency.
+  escalation: Panicking, you retrace your steps, questioning everyone you encountered in the hotel. Some guests seem distrustful; others dismissive. In your rush, you recall a cousin who admired the necklace a bit too closely earlier, but confronting them might spark a bigger family rift. You decide to stealthily search the cousin's hotel room to confirm your suspicion.
+  twist:      You find the necklace still in your possession—it had slipped into the lining of your suit pocket when you adjusted your tie earlier.
+  ending:     Relieved and chagrined, you rush to the bridal room just in time. Despite the satisfaction of the find, the fear of unfounded accusations lingers as you hand over the heirloom.
+  elements:   structure=direct_second_person | role=the one responsible for the heirloom | setting=an upscale hotel during a wedding | anchor=a family heirloom | trigger=the empty heirloom box | turn=the gut-punch detail found in hindsight | aftereffect=an unresolved judgment thrown to the viewer
+  stages: editor: ok | naturalizer: ok  words=162
+  GATE: FAIL — The script fails AGENCY and THE CHANGE (the narrator never truly decides anything under pressure — the necklace just slides out on its own, so there's no real act), but the harder disqualifying fail is BELIEVABILITY: the whole thing reads authored and over-compressed, with zero mundane over-specific detail (no name, no relation to the bride/groom, no amount, no texture of the panic), a stapled-on lesson at the end ('lesson learned: i-check mo yung pockets mo next time'), and the suspicious-cousin beat is raised then immediately dropped with no consequence — a real poster would either pursue it or feel worse about having searched the room, not just move on cleanly.
+  GATE: after rewrite: FAIL — THE CHANGE and AGENCY both fail: the necklace was never actually lost — it fell into a coat lining and was found in one beat — so there's no real stakes, no decision the narrator made, nothing changes, and the ending ('lagi ko na i-check yung bulsa ko') is a tidy moral stapled on a non-event; strangers have nothing to argue about because nothing happened.
+──────────────────────────────────────────────────────────────────────
+So, imbis na makakain ako ng buffet, may bago akong mission: ihatid yung heirloom necklace sa bride, pinsan ko. Simple lang, diba? Pero pagbukas ko ng box—wala yung necklace!
+
+Grabe, kinabahan ako. Nagtanong-tanong ako sa mga tao—caterer, ibang kamag-anak, kahit yung hotel staff. Unti-unti na akong nakakaramdam ng 'Who are you?' na tingin.
+
+Naalala ko nung reception, nakita ko si Kuya Art na parang sobrang interesado sa kuwintas. Sabi ng ibang pinsan, medyo kulang daw siya sa delikadesa. Pero kung pagbibintangan ko siya tapos wala naman pala, ano kaya mangyayari?
+
+Nagpaiwan ako sa room ko, sobrang stressed na. Habang iniisip ko paano ko ito aayusin, may narinig akong kumaluskos.
+
+Yes, nandun lang pala sa lining ng bulsa ng suit ko.
+
+Agad akong tumakbo papunta sa bridal room. Lahat nag-aabang na, nagmamadali na rin. Kahiya-hiya talaga, pero wala na akong magagawa kundi ibigay na. Naibigay ko rin sa wakas.
+
+Pagkatapos nun, ayoko na talaga maulit yun. Lagi ko na i-check yung bulsa ko.
+
+══════════════════════════════════════════════════════════════════════
+[REDDIT_STORY · SHORT 75s · 3/4] "Yung relo na nalibing na pero bumalik"  register=THE DISCOVERY  (rewritten once)
+  logline: A widow receives her husband's buried watch, unraveling a hidden message of love.
+  ── PLAN (planner convergence) ──
+  premise:    In a small barangay, a middle-aged woman accidentally receives her husband's old wristwatch in the mail, a curious incident since she'd buried him with it a year ago.
+  conflict:   She wants to understand how the watch — which was part of a sentimental ritual — could end up in her possession again, questioning her late husband's integrity and memory.
+  escalation: She first suspects a mistake at the cemetery, but her inquiries hit dead ends. She then considers that maybe it was stolen and pawned, leading her to check local shops. A pawnshop owner recognizes the watch and mentions it was bought back by her husband just before he passed.
+  twist:      She learns from an old pawn ticket tucked inside the watch that her husband had a secret stash of savings from years of frugal habits and side jobs, intended as a surprise anniversary gift.
+  ending:     The meaning of the watch shifts from a symbol of mystery and betrayal to a testament of her husband's undying dedication.
+  elements:   structure=the_discovery | role=the partner | setting=a small barangay | anchor=an old wristwatch | trigger=the unexplained delivery of the watch | turn=the reframe | aftereffect=a secret finally said out loud
+  stages: editor: ok | naturalizer: ok  words=166
+  GATE: FAIL — The ending staples on a tidy moral ('may mga bagay na akala mo alam mo na — pero mali pala') and a lyrical drama fade, which is a hard-fail scripted ending — a real person posting this would stop at the shock of discovering the pawn ticket and the love note, not wrap it in a lesson.
+  GATE: after rewrite: FAIL — This is a quiet, plotless literary vignette with nothing to argue over — there is no wrong done, no dilemma, no side to take, just a sentimental 'twist' reveal that lands as a scripted emotional payoff ('Para sa anniversary mo, love') rather than anything a real person stumbled into writing online; it fails the CORE TEST entirely.
+──────────────────────────────────────────────────────────────────────
+Dumating sa akin yung lumang relo ng asawa ko. Ang weird kasi sabi ko sa libing niya, ililibing ito. Sinama ko sa kabaong noon — sentimental yun sa'kin. Wala na si Ricky for a year. Kaya paano bumalik 'to sa'kin?
+
+Nako, baka mali lang yung sa cemetery kaya nagtanong-tanong ako. Pero wala silang masabi. Naisip ko baka ninakaw, pumunta ako sa mga pawnshop sa lugar. Hanggang sa may isa, kilala yung relo. Last year pa raw bumalik.
+
+Nagulat ako. Tinanong ko, sino ang nagpasok? Bago raw mamatay, si Ricky mismo ang bumalik para kunin.
+
+Pinakialaman ko yung relo, naghahanap ng clue. Baka may mali, 'di ba? May napansin akong lumang pawn ticket na nasa loob — hindi ko nakita dati. Sa likod, may sulat. 'Para sa anniversary mo, love.'
+
+Oo, may mga side gigs siya na hindi ko alam. Matagal na pala siyang nag-iipon para surpresahin ako.
+
+Hindi ko alam, sorry. Kaya pala babasag ka nang piggy bank palihim. Pabalik-balik sa trabahong hindi ko rin alam.
+
+══════════════════════════════════════════════════════════════════════
+[REDDIT_STORY · LONG 240s · 4/4] "Yung Amoy sa Burol ni Lola"  register=CONFESSION  (rewritten once)
+  logline: Nagbalik si Lola sa burol, sa paborito niyang albulario talcum powder, at iniwan ang pamilya sa isang tanong hinggil sa kanyang mensahe.
+  ── PLAN (planner convergence) ──
+  premise:    In a small barangay, a family is holding a wake for their much-loved matriarch. Amidst the mourning and stories being shared, the narrator talks about a local legend—how the spirit of a recently departed occasionally returns during their wake to deliver a message to their loved ones. The catch? The legend always describes a specific scent accompanying these visits.
+  conflict:   The narrator wants to convince others that their matriarch did visit during the wake with a message. However, the rest of the family believes these stories are just myths.
+  escalation: The narrator insists on small details about the scent they noticed during the wake, details so specific that it would seem they had experienced it firsthand. They compile accounts from other family members about the exact same scent. As doubt grows and the scent's description keeps getting confirmed by others, tension rises around whether the wake did, in fact, have an otherworldly visitor.
+  twist:      The narrator reveals that they could only have known that scent because their matriarch used a specific talcum powder, which isn't sold anymore and that very few people in the family truly remember.
+  ending:     The revelation leaves the family in silence, a mix of wonder and disbelief hanging in the room, as the subtle scent seems to linger.
+  elements:   structure=creepy_encounter | role=the family member | setting=a family wake | anchor=- | trigger=the retelling of a local legend | turn=the detail that can't be explained away | aftereffect=a chill that doesn't resolve
+  stages: editor: ok | naturalizer: ok  words=336
+  GATE: FAIL — This is a quiet, plotless literary vignette with nothing to argue over — no wrong done, no decision made, no sides to take — just a grieving narrator who smells something and feels comforted; the ending staples on a tidy moral ('yun lang ang kailangan mo para makalma ka sa lungkot') that reads as authored, not as a real person's raw confession, and there is zero comment-section conflict possible here.
+  GATE: after rewrite: FAIL — Fails AGENCY and THE CHANGE — the narrator decides nothing, does nothing, and ends exactly where they started (still unsure if Lola's spirit visited), so there is no payoff and nothing to argue over in the comments; the closing line 'okay na rin isipin na bumalik siya' is a scripted lyrical moral stapled on, not an authentic 'am I wrong?' throw or a landed revelation.
+──────────────────────────────────────────────────────────────────────
+Alam niyo yung pakiramdam na parang alam niyo na agad ang kwento? Ganyan ang nangyari sa akin. Naniniwala akong bumalik si Lola nung gabing yun sa burol. Hindi lang ako, pati ibang tao may naamoy din na kakaiba—yung scent na hindi na namin naamoy mula nung nawala siya.
+
+Nag-umpisa kasi yung usapan nung may nag-share ng local na kwento. Minsan daw, bumabalik ang spirit para magbigay ng mensahe. At laging may kasamang amoy, parang bulaklak o minsan vanilla. Kaya nung gabing yun, may mga nakaamoy, kinilabutan sila.
+
+Ako, naalala ko pa yung amoy. Albulario. Yung talcum powder na ginagamit ni Lola, yung hindi na mabibili ngayon. Yun yung bumabalik sa akin—parang bigla na lang nandiyan siya ulit.
+
+Habang nag-uusap kami sa paligid ng kabaong, may lumapit at tinanong, "May naamoy ka ba?" Kasi halos lahat hindi maalala. Pero sabi ng ilang pinsan ko, "Oo, parang may kakaibang amoy nga." Ako? Alam ko. Albulario, di ba niyo naamoy yan nung bata tayo?
+
+Nilapitan ko si Tita habang nagkukwentuhan yung iba. Sabi ko, "Tita, si Lola ba yung gumagamit ng Albulario noon, tama?" Kita ko yung gulat niya. Sabi niya, "Oo, bakit mo natanong?"
+
+Sabi ko, "Tita, kasi yun yung naamoy ko nung gabi." Ramdam ko yung paghinga niya, biglang bumigat. Parang na-realize niya na hindi lang siya ang nag-aalala kung bumisita ba talaga si Lola nung gabing yun.
+
+Habang iniisip ko ulit yung usapan, parang mas gumugulo lang. Hindi namin ma-confirm kung bumalik si Lola o imagination lang namin. Pero talagang yun yung amoy. Minsan, may naamoy tayo—parang mensahe mula sa nakaraan.
+
+Pag-uwi nung gabi, humupa na yung confusion at yung amoy. Pero sa isip ko, hindi na maalis—yung paboritong Albulario talcum powder niya. Parang iniwan niya yung tanong: siya ba talaga 'yon? Totoo ba, o laro lang ng subconscious? Hindi ko rin sigurado.
+
+Hanggang ngayon, hindi ko pa rin alam kung bumalik si Lola. Pero minsan, okay na rin isipin na bumalik siya—na kahit papaano, iniwan niya yung amoy para ipaalam na nandoon pa rin siya.
+
+══════════════════════════════════════════════════════════════════════
+total lab cost (reddit_story): 68¢

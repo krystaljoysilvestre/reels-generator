@@ -1,0 +1,125 @@
+
+══════════════════════════════════════════════════════════════════════
+[REDDIT_STORY · SHORT 75s · 1/4] "Yung Mug Na Hindi Humingi Ng Permission"  register=CREEPY ENCOUNTER  (rewritten once)
+  logline: Isang call center agent ang nakakakita ng kakaibang mensahe mula sa isang 'offline' na colleague, kasabay ng misteryosong mainit na mug sa opisina.
+  ── PLAN (planner convergence) ──
+  premise:    A call center agent, tasked with finishing one last shift, finds their office mug placed on their desk, still warm, even though they're the only one in the office after hours.
+  conflict:   The narrator wants to finish their shift peacefully and leave, but they're unsettled by the possibility that someone else might be in their supposedly empty office.
+  escalation: Initially ignoring the mug, the narrator continues working but hears a faint shuffle from the storage room. They briefly consider calling security but decide against it to avoid making a scene. Choosing to check the storage room, they find nothing amiss, but the feeling of being watched persists. Every noise and shadow seems to conspire against their rational mind.
+  twist:      Returning to their desk, the computer lights up with a chat message from their supposedly offline colleague, saying 'Don't ignore me.'
+  ending:     The narrator quickly grabs their belongings and leaves the office, casting one last glance at the now-cold mug.
+  elements:   structure=creepy_encounter | role=the one who found out | setting=an office during the late-night shift | anchor=an office mug | trigger=a warm mug on the desk | turn=the detail that can't be explained away | aftereffect=a chill that doesn't resolve
+  stages: editor: discarded_formatting (13→1) | naturalizer: ok  words=169
+  GATE: FAIL — This is a quiet, plotless vignette with nothing to argue about — there is no conflict, no wrong done, no side to take, no decision with consequences, and no payoff; it reads as a creepy-atmosphere mood piece, not a confession or drama post anyone would debate in the comments.
+  GATE: after rewrite: FAIL — This is a quiet, plotless vignette with nothing to argue over — no AGENCY (the narrator decides nothing, only feels and flees), no real payoff, and the story just trails off in a lyrical drama fade ('ramdam ko pa rin yung bigat ng mga mata') that is the opposite of authentic Reddit-post authenticity; there is no wrong done, no dilemma, no verdict question, and nothing for commenters to take a side on.
+──────────────────────────────────────────────────────────────────────
+Nung huling gabi ko sa trabaho, nakita ko yung mug ko, nasa desk. Mainit pa.
+Hindi ko iniwan yun doon. Ako lang dapat ang nasa office.
+
+Sabi ko, 'baka nagmamadali lang ako kanina', kaya binalewala ko.
+Nag-on ng computer para tapusin na lang yung mga kailangan.
+
+Pero habang nagta-type ako, may narinig akong mahina — shuffling, sa may storage room. Parang naglalaro yung utak ko. Dapat hindi ko yun papansinin.
+
+Tiningnan ko yung clock — maaga pa. Sino ba naman papasok ng ganitong oras?
+
+Pinili kong hindi tawagin si security. Ayoko ng gulo. Pero lumapit pa rin ako sa storage. Walang tao. Sarado. Wala talagang kakaiba.
+
+Pero hindi mawala yung pakiramdam na may nakatingin sa akin.
+
+Bumalik ako sa desk — nagulat ako nung nag-flash yung monitor.
+May message sa chat. Colleague ko — offline siya dapat. 'Don't ignore me.'
+
+Napahinto ako. Hinanap ko yung mug — malamig na.
+
+Agad kong kinuha yung gamit, umalis ako.
+
+Habang palayo, ramdam ko pa rin yung bigat ng mga mata na nakatingin.
+
+══════════════════════════════════════════════════════════════════════
+[REDDIT_STORY · SHORT 75s · 2/4] "Sa Turo-Turo May Gulo"  register=AM-I-WRONG  (rewritten once)
+  logline: Naging witness ako sa away ng isang matanda at ng tinda-tindahan habang kumakain, at nagdesisiyon na makialam.
+  ── PLAN (planner convergence) ──
+  premise:    You're at your regular neighborhood 'turo-turo' eatery during lunch break. You find yourself in the middle of a heated argument between an elder woman and the eatery owner.
+  conflict:   You just want to enjoy a quiet meal, but the argument disrupts the entire atmosphere. The elder woman claims she's been shortchanged, and you can either stay out of it or step in to mediate.
+  escalation: You initially try to ignore it, focusing on your food. But the shouting grows louder, and people start watching. As the owner firmly stands their ground, insisting their fairness, the woman seems desperate, insisting she's a regular. You decide to step in, risking backlash from both sides.
+  twist:      As you attempt to mediate, a third party—a regular diner—chimes in, recalling a similar incident where the elder woman had tried the same tactic before.
+  ending:     The argument ends abruptly as the crowd sides with the owner. The elder woman leaves in a huff, but not before shooting you a sharp glare.
+  elements:   structure=direct_second_person | role=the one involved in the middle | setting=a neighborhood turo-turo eatery | anchor=lunch break | trigger=an argument over shortchanging | turn=the history of the tactic exposed | aftereffect=unresolved judgment thrown to the viewer
+  stages: editor: ok | naturalizer: ok  words=165
+  GATE: FAIL — Fails BELIEVABILITY hard — no mundane over-specific detail anywhere (no name, no price, no exact amount of sukli in question, no sense of what food was ordered), and the whole thing reads as a tidy three-act sketch with a convenient 'regular dun' character appearing to flip the crowd exactly on cue, which no real person would believe happened; the narrator also never genuinely incriminates themselves — 'lumapit na rin ako, sana matulungan' is too clean and sympathetic.
+  GATE: after rewrite: FAIL — The narrator has almost no real AGENCY — they stand up once and say one line, then a random third party resolves the conflict for them, making the narrator a passive witness to someone else's punchline; and the ending is a scripted quasi-moral ('parang ako pa ang mali sa sarili kong tanghalian') that reads authored, not like something a real person would post.
+──────────────────────────────────────────────────────────────────────
+Kaninang lunch break, sa paborito kong turo-turo, biglang may ingay. Hindi pa tapos yung sinigang ko nang marinig kong may nagtatalo—yung matandang babae sa iskinita at si Aling Tessa na may-ari. Sabi ni Lola, kulang daw yung sukli niya—P30 dapat, pero P10 lang binigay. Nagkunwari akong walang naririnig at tinuloy ang pagkain, pero ang lakas na ng usap-usapan. Alam mo yung tipong parang sinasang-ayunan na ng ibang customers? Kaya kahit ayaw ko manghimasok, naisip ko, 'Sige na nga.'
+
+Tumayo ako at sabi ko, 'Aling Tessa, baka kailangan niyo ng tulong?' Pero ayaw magpatalo ni Aling Tessa. 'Sukli nang mahalaga 'to, hindi pwedeng mali. Regular niyo po ako,' sabi ni Lolang pasigaw, 'hindi ako nagkakamali.'
+
+Bigla, may sumigaw sa likod—'Oy Lola, di ba dati mo na rin itong ginawa kay Mang Jun?' Lahat natahimik. Nakasimangot na lang si Lola, tapos umalis na. May tingin pang masungit na ibinigay sa'kin bago umalis.
+
+Mukhang tama naman ako, pero ngayon parang ako pa ang mali sa sarili kong tanghalian.
+
+══════════════════════════════════════════════════════════════════════
+[REDDIT_STORY · LONG 240s · 3/4] "Yung Imbitasyong Di Inaasahan"  register=CONFESSION  (rewritten once)
+  logline: A wedding invitation reopens past friendships and misunderstandings.
+  ── PLAN (planner convergence) ──
+  premise:    A former university dorm friend's wedding invitation — hand-delivered and bearing unmistakably sincere friendship reassurances — arrives unexpectedly without any prior reconnection.
+  conflict:   The narrator, ambivalent about childhood friendships and determined to start anew, is torn about attending a wedding of a friend they haven't spoken to in years, fearing they might be walking into a nostalgic trap or hidden agenda.
+  escalation: The narrator weighs the decision, considering their current relationship with old friends — some they've fallen out with — against the strong bond they once shared. They attend the wedding, only to be met with a surprisingly warm reception from mutual friends who assumed the narrator's absence had been due to the friend's own behavior. Conversation pieces, such as an old college art exhibit photo in the wedding slideshow, resurrect past grievances and suspended confessions. This places the narrator in the spotlight, compelling them to look deeper into their old connections.
+  twist:      The narrator learns through an impromptu speech by the friend that both of them had drifted apart due to a mutual misunderstanding caused by a trivial, misdirected chat group message — something the narrator assumed was an animosity signal back then.
+  ending:     With the revelation, the narrator feels a complex mix of relief and regret about lost time. They're left with the choice to rebuild some of those severed ties, now viewing the original invitation as a genuine offer of renewal rather than a social obligation.
+  elements:   structure=am_i_wrong_post | role=the old friend | setting=a wedding | anchor=a hand-delivered wedding invitation | trigger=an unexpected wedding invitation | turn=new information reframing the past | aftereffect=an unresolved judgment thrown to the viewer
+  stages: editor: ok | naturalizer: ok  words=351
+  GATE: FAIL — The ending is a scripted moral ('kahit gaano tayo ka-sure sa sarili nating bersyon ng kwento — nagbabago pala lahat pag nalaman mo yung totoo... may bahagi ka na naghe-heal') that sounds authored and lesson-stapled — a real confused poster would just stop or throw the dilemma to the viewer, not deliver a tidy reflection on healing and self-truth.
+  GATE: after rewrite: FAIL — Fails THE CHANGE and the ending rubric: the story just trails off into vague maybe-we-reconnect hoping ('baka chance na talaga 'to') with no payoff, no verdict thrown hard to the viewer, and no actual decision or confrontation — the narrator decides to go, gets a surprise revelation at the wedding, then… floats; nothing lands, nothing is different, and there is nothing concrete for commenters to argue over or take a side on.
+──────────────────────────────────────────────────────────────────────
+May nahanap akong envelope sa may gate nung isang araw. Invitation sa kasal ng dati kong ka-dorm sa university. Wala kaming contact for years, tapos bigla na lang ganito. Ang daming memories, di ko pa alam kung excited o kinakabahan ako na makipag-usap ulit.
+
+Hindi naman sa hindi ko siya gusto. Pero ang weird lang, diba? Nagpalit na ako ng circles, tinanggap ko na na yung past eh, basta—past na lang. Kaya nung nabasa ko yung note na 'huwag kalimutan ang pinagsamahan,' natulala lang ako.
+
+Gusto ko namang pumunta, pero ayoko ring bumalik sa mga lumang sugat na iniwan ko nang matagal. Lalo na kasi yung mga ibang friends namin noon, hindi rin maganda yung ending namin. Pero yun nga, decision time. Pinili ko pumunta, thinking baka time na to reconnect. Iba kasi yung feeling na nabigyan ka ng second chance, diba?
+
+Pagdating ko sa wedding, parang bumalik yung samahan naming dati. Napansin ko mga tao, tapos yung ibang kaibigan namin, they were all happy to see me, parang walang nangyari. Sabi nila, akala nila may tampuhan kami ng friend naming ikakasal, kaya minsan hindi lumalabas yung topic ko. May pinakita pa nga sila sa slideshow ng wedding tungkol dun sa art exhibit namin dati sa college. Nakatampok pa doon yung 'di ko nasabi sa kanya noon.
+
+Nasasali na ako sa usapan, hanggang umakyat yung ikakasal sa stage at nag-speech. Sabi niya, 'Akala ko galit ka sa akin dahil sa chat na yun, nung sinabihan ako ng iba na para sa akin yun.' Alam ko pa yung message na 'yun eh—akala ko nagpaparinig siya. Hindi ko alam na may nagkamali lang ng intindi sa group chat namin noon.
+
+At that moment, parang umiikot yung feeling ko. Relief kasi hindi pala galit yun sa akin. Tapos regret—ang daming taon nasayang sa isang misunderstanding. Grabe isipin na baka kung kinausap ko lang siya dati, hindi sana ganito kalayo ang lahat.
+
+Ayoko nang mag-pretend na okay lang lahat. Pero iniisip ko ngayon, since totoo naman pala yung invitation, baka chance na talaga 'to—para sabihin na yung mga hindi nasabi, at baka maging friends ulit.
+
+══════════════════════════════════════════════════════════════════════
+[REDDIT_STORY · LONG 240s · 4/4] "Yung Tikbalang Amulet sa Barangay"  register=AM-I-WRONG  (rewritten once)
+  logline: Rumor tungkol sa tikbalang amulet ni Mang Rudy umiikot sa barangay, nagdudulot ng tasang tensyon sa komunidad.
+  ── PLAN (planner convergence) ──
+  premise:    In a barangay hall meeting, a rumor about a neighbor supposedly possessing a tikbalang amulet circulates, causing unrest among community members.
+  conflict:   The narrator wants to keep peace and unity in the barangay, but is caught between skepticism and fear as the rumor spreads, prompting calls for action against the neighbor.
+  escalation: The narrator hesitates but eventually decides to address the rumor directly with the neighbor, who initially denies everything but then offers a personal tale about an encounter in the woods, revealing he does possess something not easily explained. The neighbor recounts leaving supposedly enchanted items on a particular tree in the forest. Curious, the narrator ventures to check the spot, despite warnings, uncovering strange objects but feeling watched.
+  twist:      The narrator discovers a piece of jewelry along with other enigmatic items that exactly matches the description from the urban legend—a detail only those present during the meeting could verify.
+  ending:     The narrator returns unsettled, the atmosphere at the next barangay meeting charged with unease as discussions become fraught with more speculative tales and growing distrust.
+  elements:   structure=am_i_wrong_post | role=the protagonist defending peace | setting=a barangay hall community meeting | anchor=- | trigger=a rumor about a tikbalang amulet | turn=the gut-punch detail found in hindsight | aftereffect=an unresolved judgment thrown to the viewer
+  stages: editor: ok | naturalizer: ok  words=388
+  GATE: FAIL — This is a plotless vignette with no real AGENCY or PAYOFF — the narrator wanders to a tree, gets spooked, goes home, and the story just trails off with a tacked-on 'tama ba yun?' that doesn't land because nothing the narrator DECIDED actually caused or changed anything; the verdict question is hollow when there's no real wrong committed and no consequence to argue about.
+  GATE: after rewrite: FAIL — Fails the core test and AGENCY check: the narrator never actually decides or does anything consequential — they wander to a tree, pick up a ring, feel scared, and then the story just trails off into philosophical questions ('Totoo nga ba?'), which is a scripted literary fade, not a real Reddit-style ending; there is nothing concrete for commenters to argue over or take a side on.
+──────────────────────────────────────────────────────────────────────
+Paano ko ba sisimulan 'to? May rumor na kumakalat dito sa barangay namin, at to be honest, hindi ko alam kung paano ko iha-handle. Pero sige, hayaan niyo akong magpaliwanag.
+
+Nasa barangay hall kami, meeting lang dapat tungkol sa utilities, tapos biglang may nagsabi na si Mang Rudy daw may hawak na tikbalang amulet. May kwento pa na isang kapitbahay na nakita daw niya mismo yung singsing na parang nasa urban legend. Sabi nung neighbor, nakita niya si Mang Rudy kumuha ng mga bagay mula sa puno sa gubat—yung puno na sinasabi ng matatanda na sacred. Alam niyo yun, yung puno na dapat hindi mo kakalikutin.
+
+Una, hindi ko pinansin. Kwentong barangay lang, parang urban legend na inilalabas sa family reunion. Pero habang tumatagal yung usapan, tumitindi yung tension. Parang lahat gusto nang kumprontahin si Mang Rudy agad.
+
+Pagkatapos ng meeting, sabi ko sa sarili ko, 'Kalma lang.' Pero hindi ko matiis, kailangan kong kausapin si Mang Rudy para malaman yung totoo. Kinabukasan, pinuntahan ko siya sa bahay. Una, patawa niyang itinanggi. Sabi niya, 'Ano ba naman yan, akala ko ba city tayo.'
+
+Pero nung naging seryoso ako, nakita ko rin yung tensyon sa mga mata niya. Sinabi niya, 'Wala akong amulet. Pero minsan talaga, nararamdaman ko dun sa puno na may kakaiba.' Kinuwento niya, dati daw, may mga bagay talaga siyang naiwan dun. Gusto ko sana alamin kung ano yun, pero hindi na siya nagsalita pa.
+
+Ewan ko ba, pero curious ako. Kaya nung mga 5 PM, habang dumidilim na, pumunta ako dun sa puno na sinasabi niya. Maraming bagay akong nakita na parang alahas o anik-anik. Pero habang naghalungkat, naramdaman ko na parang may nagmamasid sa akin.
+
+May nakita akong singsing, katulad ng description nung may kwento. Nagtanggal lagot ako, kasi totoo ba talaga to? Bumalik ako sa barangay hall, punong-puno ng kaba. Hindi ko alam kung dapat ko bang sabihin sa lahat 'to o sa barangay captain lang.
+
+Ngayon, pag may meeting ulit, lahat parang ang daming tanong, puro haka-haka pa rin, pero mas intense na yung pakiramdam. Kahit yung mga pinakamarerespetadong tao sa community, nagdadalawang-isip na. Alam niyo ba yung feeling na nasa isang kwento ka na hindi mo alam kung paano matatapos? Minsan, iniisip ko, tama bang nag-investigate ako, o dapat pinabayaan ko na lang? Totoo nga ba ang mga sinasabi nilang kwento?
+
+══════════════════════════════════════════════════════════════════════
+SUMMARY (reddit_story):
+  1. short | Yung Mug Na Hindi Humingi Ng Permission  | CREEPY ENCOUNTER         | FAIL (retried)
+  2. short | Sa Turo-Turo May Gulo                    | AM-I-WRONG               | FAIL (retried)
+  3. long  | Yung Imbitasyong Di Inaasahan            | CONFESSION               | FAIL (retried)
+  4. long  | Yung Tikbalang Amulet sa Barangay        | AM-I-WRONG               | FAIL (retried)
+total lab cost (reddit_story): 69¢

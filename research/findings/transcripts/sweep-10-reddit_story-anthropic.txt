@@ -1,0 +1,297 @@
+⚗ writer provider override: anthropic
+
+══════════════════════════════════════════════════════════════════════
+[REDDIT_STORY · SHORT 75s · 1/4] "Pineke ang pirma ko para mapunan yung budget niya"  register=AM-I-WRONG (moral jury)
+  logline: Natuklasan ni Mia na pina-forge ng supervisor niya ang mga pirma ng team para mapunan ang budget targets — at kasama ang pera nila.
+  ── PLAN (planner convergence) ──
+  premise:    A call center agent named Mia notices a discrepancy in her pay for several months, but her supervisor attributes it to overtime miscalculations. Frustrated with the ongoing issue, she digs into it further on her own time.
+  conflict:   Mia wants her rightful pay, but the company admin keeps dismissing her claims while her supervisor tells her to 'let it go'.
+  escalation: Mia checks her payslips and discovers additional deductions she never authorized, leading her to confront HR. HR shows her a signed form authorizing these deductions, but Mia knows the signature isn't hers. Her further investigation reveals that several colleagues also have unexplained deductions.
+  twist:      Mia finds out that her supervisor has been forging their signatures on deduction forms to meet department budget targets.
+  ending:     Mia reports this to higher management and waits — the case is under review, but her trust in the workplace is shattered.
+  elements:   structure=am_i_wrong_post | role=the coworker | setting=a call center workstation | anchor=payslips and deductions | trigger=discrepancy in monthly pay | turn=the detail found that explains the deductions | aftereffect=a side taken
+  stages: editor: ok | naturalizer: ok  words=168
+  GATE: PASS — Reads like a real post — mundane procedural detail (payslip checks, HR visit, signature comparison), teammates corroborating without drama, the flat 'under review' non-answer, and the ending throws the verdict hard to the viewer exactly as an unresolved workplace complaint should.
+──────────────────────────────────────────────────────────────────────
+Ilang buwan na akong kulang sa sweldo — tapos sinabihan lang akong 'OT miscalculation.' Paulit-ulit. Parang tanga na lang ako na tumatanggap.
+
+Kaya nag-umpisa akong mag-check ng payslips ko — lahat, buwan-buwan.
+
+May deductions na hindi ko alam. Hindi ko authorized. Pumunta ako sa HR.
+
+Pinakita nila sa akin yung signed form — may pangalan ko, may pirma.
+
+Hindi 'yun pirma ko.
+
+Pinuntahan ko yung ibang teammates ko. Nagkuwentuhan kami. Pareho pala. Lahat may ganun — deductions na hindi nila alam, na hindi nila pinirmahan.
+
+At lahat kami, iisang supervisor.
+
+Nakita ko yung pattern. Nagre-report siya ng mababang headcount cost sa management — pero yung 'savings' na 'yun, kinukuha sa sweldo namin. Pina-forge niya yung mga pirma namin para may papel na 'voluntary deduction.'
+
+Nag-report na ako sa higher management. Kasama yung screenshots, yung original payslips, yung comparison ng signatures.
+
+Sabi nila, 'under review.'
+
+Hanggang ngayon, wala pang nangyayari. Si supervisor, nandoon pa rin.
+
+Ano ba dapat kong gawin — mag-antay pa ba, o dalhin na sa DOLE?
+
+══════════════════════════════════════════════════════════════════════
+[REDDIT_STORY · SHORT 75s · 2/4] "Yung camera ni Kuya Ben"  register=THE DISCOVERY  (rewritten once)
+  logline: Nahiram ko yung mahal na camera ng kaibigan — at nang buksan ko ulit yung bag, ibang gear na ang nasa loob.
+  ── PLAN (planner convergence) ──
+  premise:    You borrowed a friend's expensive camera gear to shoot a wedding over the weekend. On Monday, you open the bag to find it's filled with older, cheaper equipment.
+  conflict:   You want to return the borrowed camera gear in perfect condition, but the switch makes it impossible to do so unnoticed. How do you handle the situation with your friend?
+  escalation: You decide to retrace your steps, considering who had access to your bag during the event. You suspect another photographer, but they deny any involvement. Desperate, you scour social media for photos and videos from the event that might show hints of the switch happening.
+  twist:      You discover a video post showing your bag in the venue's storage room, wide open, with the suspicious photographer fiddling inside it.
+  ending:     You confront the photographer with the evidence, and they admit they were trying to borrow some gear but accidentally swapped bags. They return the correct equipment, but your friend questions your trustworthiness.
+  elements:   structure=direct_second_person_experience | role=the borrower | setting=the wedding venue and friend's house | anchor=- | trigger=realizing the switch post-wedding | turn=the gut-punch detail found in social media | aftereffect=a side taken and trust questioned
+  stages: editor: ok | naturalizer: ok  words=259
+  GATE: FAIL — THE CHANGE fails as a Reddit/confession ending: the story resolves neatly offscreen (Marco returned the gear, everything accounted for) but then tacks on a vague 'Kuya Ben no longer fully trusts me' beat that trails off without throwing a real verdict question to the viewer or landing a concrete consequence — it reads like a scripted drama fade, not a real poster stopping mid-wound or demanding judgment.
+  GATE: after rewrite: FAIL — The ending fails the Reddit-post test — this is an 'am I wrong?' setup but it never throws the verdict to the viewer; instead it trails into a vague lyrical close ('iba na pakiramdam') with no explicit judgment-plea, and Kuya Ben's mild one-liner resolves the tension too quietly, leaving nothing concrete for commenters to argue over.
+──────────────────────────────────────────────────────────────────────
+Binuksan ko yung bag — tapos hindi ko na alam kung tatawa o iiyak.
+
+Hindi yun yung gear ni Kuya Ben.
+
+Nahiram ko yung camera niya para sa wedding shoot nung Sabado. Mahal yun — yung full-frame, yung lenses na hindi ko kayang bilhin ngayon.
+
+Nag-iingat ako. Buong event, hawak ko lagi.
+
+Pero nung Monday, binuksan ko — ibang camera. Mas matanda. Mas mura. Yung strap, unfamiliar pa.
+
+Kinabahan agad ako.
+
+Sinubukan ko munang i-retrace. Sino ba yung may access sa bag ko during the event?
+
+May isang photographer din doon — si Rico. Nagkita kami sa storage room nung kinukuha ko yung bag ko bago umuwi.
+
+Tinanong ko siya. Denied agad. Bakit naman ako gagawa nun?
+
+Hindi ako naniwala, pero wala akong pruweba.
+
+Kaya sinearch ko yung lahat ng posts mula sa wedding. Lahat. Stories, tags, videos ng guests.
+
+Nakita ko siya sa isang video — nasa storage room, naka-squat, yung bag ko nakabuka sa harap niya, kamay niya nasa loob.
+
+Pinadala ko sa kanya agad.
+
+Umamin naman siya. Sabi niya sinubukan lang daw niyang hiramin yung isa sa mga lenses — pero nagkamali ng bag, nagpalit nang hindi niya sinasadya.
+
+Nibalik niya yung gear. Kumpleto naman.
+
+Pero nung nibalik ko na kay Kuya Ben, nagkumustahan muna — tapos binanggit ko kung ano nangyari.
+
+Hindi siya nagalit. Pero yung sagot niya, Sana sinabi mo agad sa akin ha, bago ka pa naghahanap. Parang yun lang. Ngumiti pa.
+
+Hindi ko alam kung masama na ko sa kanya o hindi.
+
+Nakabalik naman yung gear. Lahat tama. Pero iba na pakiramdam.
+
+══════════════════════════════════════════════════════════════════════
+[REDDIT_STORY · LONG 240s · 3/4] "Yung relo ng biyenan ko at yung mensahe sa loob"  register=CONFESSION
+  logline: Isang babae ang nakatanggap ng heirloom watch sa kasal niya — tapos nakita niya ang mensahe sa loob na parang babala.
+  ── PLAN (planner convergence) ──
+  premise:    A young woman receives a prized family heirloom watch as a wedding gift from her mother-in-law. However, she discovers a hidden message inside, questioning her marriage.
+  conflict:   The bride wants to honor her new family by cherishing the heirloom, but the message makes her question her husband's loyalty and their future together.
+  escalation: The woman decides to confront her husband about the message, but he dismisses it as a harmless joke. Seeking answers, she discreetly investigates its history by asking other family members and finds others in the family received similar messages before marital issues arose.
+  twist:      The twist is that the watch isn't just an heirloom; it's a covert warning passed down to hint at marriage challenges the women will face, sourced from the mother-in-law who faced infidelity.
+  ending:     The woman, torn and unsure if the warning is justified, keeps the watch but remains vigilant, contemplating the trust in her marriage, unresolved.
+  elements:   structure=the_discovery | role=the bride | setting=the reception room of the wedding venue | anchor=the family heirloom watch | trigger=a hidden message inside the watch | turn=the true purpose of the watch as a warning | aftereffect=an unresolved judgment thrown to the viewer
+  stages: editor: discarded_formatting (55→1) | naturalizer: failed (ProviderError: [anthropic] Schema validation failed after re)  words=564
+  GATE: PASS — Ships — the engrave detail is the kind of over-specific, mundane-but-eerie thing a real person fixates on, the narrator incriminates herself (admits she could be paranoid, admits she interrogated the tita casually), the ending lands as an authentic unresolved confession rather than a scripted moral, and the taglish reads as natural spoken code-switching throughout.
+──────────────────────────────────────────────────────────────────────
+May tinatago ako na halos isang taon na.
+
+Hindi ko pa nasabi sa kahit sino.
+
+Kasi baka sabihin nila na nag-iisip lang ako nang masama — na bago pa lang kaming kasal at iniisip ko na ganun.
+
+Pero kailangan ko nang makasabi.
+
+Noong kasal namin, bago pa tumaas yung rehistro, binigyan ako ni Mamá — yung biyenan ko — ng isang kahon.
+
+Maliit, velvet, medyo luma na.
+
+Sinabi niya, heirloom daw ito. Relo. Suot ng lola niya, ng nanay niya, ngayon sa akin na.
+
+Natanggap ko nang may luha sa mata.
+
+Sinabi ko sa sarili ko, ibig sabihin nito tinatanggap na ako nila.
+
+Kagabi ko lang talaga binuksan nang maayos — yung relo mismo, hindi lang yung kahon.
+
+May lining yung takip sa loob. At naka-engrave sa loob ng case — hindi yung banda, yung mismong loob — may nakasulat.
+
+Maliit na maliit. Parang sinadyang hindi agad makita.
+
+"Bantayan mo ang sarili mo."
+
+Yan lang. Wala nang iba.
+
+Tinanong ko si Jake pagdating niya ng gabi.
+
+Kinuha niya yung relo, tinitigan, tapos sabi niya — "Joke 'yon ng lola ko. Ganyan daw siya."
+
+Natawa pa siya nang kaunti.
+
+Ako, hindi natawa.
+
+Kasi bakit mo ie-engrave ang isang biro sa loob ng relo?
+
+Sinabi ko sa kanya na parang hindi biro ang dating.
+
+Sabi niya, "Babe, antique pa 'yan, siguro ibang panahon na 'yun, ibang ibig sabihin."
+
+Tapos pinakawalan niya.
+
+Ako, hindi ko mapakawalan.
+
+May tita si Jake — yung ate ng biyenan ko — nagkataon na nandoon sa house warming namin makalawa.
+
+Nag-casual lang ako. Basta sabi ko, maganda raw yung relo, natanggap ko sa kasal.
+
+Natigilan siya ng kaunti.
+
+Tapos sabi niya, "Oo, binigyan din ako ng ganyan."
+
+Hinintay ko.
+
+Sabi niya — "Before kaming naghiwalay ng asawa ko."
+
+Hindi ko na nagpatuloy na magtanong.
+
+Nag-hanaap pa ako ng isa pa — yung pinsan ni Jake na kasal din noon.
+
+Ayon, binigyan din. Dalawang taon bago nag-iba yung kanilang sitwasyon.
+
+Hindi rin sila ngayon.
+
+Sabi ng biyenan ko mismo noong tinanong ko nang diretso — calmly, sinubukan kong maging kalmado — sabi niya, "Heirloom lang 'yan. Mahal na mahal kita ng anak ko."
+
+Na-off ko siya, alam ko.
+
+Pero hindi niya tinanggal yung mensahe.
+
+Hindi niya sinabi kung ano ang ibig sabihin.
+
+Pag-uwi ko, naghanap ako ng background — anong nangyari sa biyenan ko sa kanyang sariling kasal.
+
+Alam ko na ngayon.
+
+Ang maaga niyang nalaman na may iba ang asawa niya.
+
+Humiwalay sila nang matagal, nagbalik, pero alam ng lahat kung bakit lumayo.
+
+At ngayon iniisip ko — baka hindi ito biro ng lola.
+
+Baka ito yung tanging paraan ng mga babae sa pamilyang ito para sabihin sa isa't isa ang hindi nila kayang sabihin nang deretso.
+
+Isang babae na nagmahal, nasaktan, at gusto niyang hindi maulit sa susunod.
+
+At binigay niya sa akin.
+
+Hinawakan ko yung relo ngayon, habang isinusulat ko ito.
+
+Naka-suot si Jake sa sala. Nanonood ng basketball. Tumawag pa siya sa akin kanina, "Babe, may merienda?"
+
+Normal.
+
+Parang walang nangyari.
+
+At baka wala ngang nangyari — baka talagang biro lang, baka paranoid lang ako, baka hinihusgahan ko siyang walang basehan.
+
+Pero hindi ko maitapon yung relo.
+
+At hindi ko rin mapakawalan yung tanong.
+
+Itinatago ko yung relo sa kahon. Sa kabilang panig ng closet.
+
+At araw-araw, hindi ko alam kung dapat akong magtiwala —
+
+o kung handa na ako sa araw na hindi ko dapat dapat na magtiwala.
+
+══════════════════════════════════════════════════════════════════════
+[REDDIT_STORY · LONG 240s · 4/4] "Yung sikreto ko, narinig ng lahat — pero nag-iisa lang ako sa confession booth"  register=CREEPY ENCOUNTER  (rewritten once)
+  logline: Kumpisal siya ng sikreto nang nag-iisa sa booth — wala namang pari — pero lahat nakaalam kinabukasan.
+  ── PLAN (planner convergence) ──
+  premise:    An urban legend circulates within a religious community about a haunted confession booth, said to relay the sins of confessors even when the priest is absent. A parishioner claims to know a specific haunting detail only the priest would know.
+  conflict:   The narrator, a devout churchgoer, wants to clear their name after a strange incident makes them a suspected gossip within the community, but the only explanation involves disclosing a supernatural experience.
+  escalation: The narrator first tries to ignore the rumors, but their social standing erodes as community members distance themselves. They decide to confront the priest, only to learn he had left the booth the moment the confession started. In desperation, the narrator investigates the confessional's history and finds a record of an unsolved mystery from decades past, which aligns with their personal experience.
+  twist:      The narrator reveals a chilling, inexplicable truth during a meeting with the parish council: a sin they confessed alone was somehow known and circulated by the entity in the booth.
+  ending:     The church is forced to temporarily close the confessional for investigation, leaving the narrator's reputation hanging in a limbo of suspicion and eerie vindication.
+  elements:   structure=creepy_encounter | role=the devout churchgoer | setting=inside a confession booth in a local church | anchor=- | trigger=the confession relayed without the priest present | turn=the detail that can't be explained away | aftereffect=a chill that doesn't resolve
+  stages: editor: discarded_peak | naturalizer: discarded_peak  words=594
+  GATE: FAIL — AGENCY and THE CHANGE both fail for a confession/drama format: the narrator never decides anything — she wanders in, hears something, gets accused, reports it, and waits — and the ending ('tinitingnan pa rin ako na parang ako yung problema') is a lyrical drama fade rather than a payoff or a hard verdict-throw; the supernatural hook also pushes this away from a Reddit-style 'real post' into a scripted ghost-story vignette where there is nothing concrete to argue about ('did she do wrong?') — commenters can only debate the ghost, not the narrator's choices.
+  GATE: after rewrite: PASS — Passes: the confession-booth mystery is a genuine arguing-over premise, the narrator's credibility is left deliberately bruised ('baka nag-iimbento lang'), mundane details land (Ate Rowena, Mang Celso pumutla, lumang archivo), the Taglish reads as spoken not translated, and the ending is authentically unresolved — a real confessor's post stops exactly here, verdict thrown to the viewer.
+──────────────────────────────────────────────────────────────────────
+May isang bagay na nangyari sa akin noong Mahal na Araw na hindi ko pa nasasabi sa kahit sino.
+
+Hindi kasi ako sigurado kung paniniwalaaan ako.
+
+At ngayon, parang mas malala pa yung hindi maniniwala sa akin kaysa sa yung nangyari talaga.
+
+Simula sa simula.
+
+Ako si Cora. Sampung taon na akong miyembro ng aming parokya. Lector, volunteers sa Simbang Gabi, yung tipo. Kilala ako doon. Maayos ang pangalan ko.
+
+Noong Miyerkules Santo, pumunta ako sa kumpisal. Hindi extraordinary — regular lang. Madaming tao noon, pila sa labas ng booth. Pagdating ko sa loob, nagsimula akong mag-kumpisal ng isang bagay na — okay, isasalin ko lang — isang bagay na hindi ko sinabi kahit sa sarili ko nang malakas. Tungkol sa pera. Sa isang tao sa komunidad.
+
+Hindi ko idedetalye.
+
+Nagsalita ako. Tahimik yung kabilang side. Akala ko normal lang — nakikinig yung pari. Pagkatapos ng kumpisal ko, naghintay ako. Walang nagsalita. Tinapik ko pa yung grill. Wala. Tinignan ko sa baba — walang paa. Walang tao sa kabilang side.
+
+Nag-panic ako nang konti, pero sabi ko sa sarili ko, baka lumabas na habang papasok ako. Possible. Palabas na ako.
+
+Dalawang araw pagkatapos noon, nagsimulang kumausap sa akin ang mga kaibigan ko sa parokya nang kakaiba. Yung usual na 'kamusta' — wala na. Yung chat group ng volunteers — tahimik na pagdating ko.
+
+Hanggang may nagsabi sa akin — si Ate Rowena, yung matanda, honest — sabi niya, may nagsalaysay daw na may narinig na kwento tungkol sa sikreto ng isang miyembro. At yung detalye ng kwento — yung eksaktong bagay na kinumpisal ko — kumakalat na.
+
+Sinabi pa niya, 'akala nila ikaw yung nag-tsismis, Cora.'
+
+Doon na ako nag-decide na kailangan ko kausapin si Father Bong.
+
+Pinagtripan ko 'to. Kinabahan ako. Pero sabi ko, kung hindi ko ito haharapin, mananatiling ako yung pinagbibintangang chismosa sa isang bagay na hindi ko ginawa.
+
+Kaya pinuntahan ko si Father Bong. Kinuwento ko lahat — yung booth, walang tao sa kabilang side, yung detalye ng kinumpisal ko na kumakalat na.
+
+Tahimik siya ng matagal.
+
+Tapos sabi niya — at ito yung part na hindi pa rin ako makatulog — sabi niya, lumabas daw siya ng booth mga sampung minuto bago ako pumasok. Emergency. Tinawagan siya ng isang miyembro sa labas. Hindi siya bumalik agad.
+
+So wala siyang narinig.
+
+Wala.
+
+Sinimulan niyang maghanap ng records. At doon namin nalaman — hindi kami ang una.
+
+May nakasulat sa lumang archivo ng parokya. Dekada otsenta. Isang pari noon nag-ulat ng parehong bagay — mga kumpisal na walang pari sa booth, pero ang mga laman, kumakalat sa komunidad. Hindi natukoy kung paano. Walang resolusyon sa records. Natapos lang yung entry.
+
+Dinala ni Father Bong ito sa parish council.
+
+Ako yung nag-testigo. Sa harap ng buong council, sinabi ko word for word yung kinumpisal ko — yung bagay na dapat tanging Diyos lang ang nakakaalam.
+
+Isang miyembro ng council, si Mang Celso, pumutla. Sabi niya, narinig na niya yung kwentong iyon. Isang linggo na. Pero akala niya, tsismis lang ng tsismis.
+
+Nasara nila ang confession booth para sa imbestigasyon.
+
+Kaya ngayon — bukas pa rin ang parokya, nagmimisa pa rin si Father Bong, pero walang kumpisal doon.
+
+At ang pangalan ko? Nalinaw nang konti. Pero hindi buo. Kasi may mga tao pa ring nagsasabi — baka nag-iimbento lang ako ng supernatural excuse para makalusot.
+
+Ano bang masasabi nila? Maniwalang may narinig sa booth — o maniwalang ako ang nagpakalat?
+
+Ako mismo, hindi pa rin ako sigurado kung ano ang nangyari.
+
+Pero yung kinumpisal ko, nag-iisa lang ako noon.
+
+At alam ng lahat.
+
+══════════════════════════════════════════════════════════════════════
+SUMMARY (reddit_story):
+  1. short | Pineke ang pirma ko para mapunan yung bu | AM-I-WRONG (moral jury)  | PASS
+  2. short | Yung camera ni Kuya Ben                  | THE DISCOVERY            | FAIL (retried)
+  3. long  | Yung relo ng biyenan ko at yung mensahe  | CONFESSION               | PASS
+  4. long  | Yung sikreto ko, narinig ng lahat — pero | CREEPY ENCOUNTER         | PASS (retried)
+total lab cost (reddit_story): 75¢
