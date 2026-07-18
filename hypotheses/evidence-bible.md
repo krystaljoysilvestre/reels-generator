@@ -53,6 +53,21 @@ The Evidence Bible answers **only** these questions, and nothing else:
 
 Deliberate wording, per review: facts are **sourced, frozen, and treated as authoritative for the duration of generation** — *not* "verified." The system cannot verify truth in the absolute; it can guarantee fidelity to the trusted sources chosen for this piece. Promising more than that would be an architecture writing a check it can't cash.
 
+### Evidenced core vs. designed extensions (mark the seam)
+
+Only part of this contract is backed by a probe; the rest is anticipatory design and must not wear the same "earned" language. Honestly:
+
+- **Evidenced core (build this first — 3 items the Tacoma/probe failures actually demand):** (a) the dossier is the authority; (b) a **gate provenance check** — "every asserted fact traces to the dossier" — which alone would have caught Tacoma; (c) **frozen-verbatim protection** for scalars (names, dates, figures), mechanically identical to `canonicalNames`.
+- **Designed, not yet evidenced (keep in the doc, but let a real failure demand each):** essential-vs-supporting, uncertainty-carrying, and the compiled prep-stage that builds a flagged fact table. No probe stands behind these.
+
+### The sharpest open risk: paraphrase fidelity for causal claims
+
+The motivating failure (Tacoma) was **not a wrong scalar — it was a wrong causal model** (resonance vs. aeroelastic flutter). Frozen-verbatim protection works for names/dates/figures; it *cannot* cover causal explanations, which must be paraphrased into prose — and checking that a paraphrase is *faithful* to a source is an **LLM judgment call, the same class the gate just failed**. So the evidenced core above catches wrong *scalars* cleanly but only partially addresses the wrong-*model* failure that motivated the whole spec. "Paraphrase fidelity for causal claims" is the open risk, and it is the specific thing the **first documentary probe must measure** (does a source-in-hand check actually catch a faithful-sounding but wrong causal paraphrase?).
+
+### Open workflow question: fact-gaps discovered during writing
+
+The Bible is built once, frozen, then consumed — but writing reveals gaps (the Writer reaches for a connective fact that isn't in the Bible). Omit? Fail the reel? Loop back to prep? **Undefined**, and it will happen on the first real documentary. Left open deliberately; the first build must decide it.
+
 ## The model: a compiler (mirrors the Story Bible)
 
 Reuse the proven [Story Bible](specs/story-bible.md) shape exactly — an analyze/prepare stage builds a frozen table; downstream stages *reference*, never re-derive; a mechanical step protects the invariants.
@@ -125,5 +140,11 @@ Three responsibilities, none overlapping, each justified by an independent produ
 | **Narrative Planning Grammar** | How should this story be selected and shaped? |
 | **Story Bible** | What is true within this *fictional* world? |
 | **Evidence Bible** | What is true about the *real* world for this piece of content? |
+
+## Strongest known objection
+
+*(Required section — the doc states its own best counter-argument.)*
+
+The **responsibility** survives every challenge (no existing layer can own truth without corrupting its boundary — demonstrated twice). The **object** is where it's vulnerable: five of the seven contract items are unevidenced design, and — sharper — the mechanism is weakest exactly where the motivating failure lives. Frozen-verbatim protection nails wrong *scalars*; Tacoma was a wrong *causal model*, which needs paraphrase-fidelity checking that is itself an LLM judgment call. And for the highest-stakes future consumers (**medical, news**), source *choice* is the entire risk — and sourcing is explicitly **out of scope**, so the out-of-scope part is the whole problem. That caps the promise: this architecture guarantees *fidelity to chosen sources*, never correctness, and for some products those are far apart. Build the evidenced core (a–c); let a real documentary demand the rest.
 
 Related: [narrative-planning-grammar.md](hypotheses/narrative-planning-grammar.md), [story-modes.md](specs/story-modes.md), [story-bible.md](specs/story-bible.md), [Kendrix Constitution](ARCHITECTURE.md).

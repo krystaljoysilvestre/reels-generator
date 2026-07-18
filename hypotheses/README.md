@@ -9,12 +9,17 @@ These documents describe architecture that has **evidence but has not earned imp
 
 A document graduates from `/hypotheses` to `/specs` (and only then toward code) when it clears the final bar: **the engine is blocked without it.** Until then, the hypothesis carries the knowledge perfectly well on its own.
 
+**Death path (a hypothesis can lose, and that's valuable).** Falsifiability is required, so retirement must be defined too. When a hypothesis is falsified, do **not** delete it — move it to `hypotheses/retired/` (or mark it `Status: retired`) with a one-paragraph **why it died** and the evidence that killed it. A rejected hypothesis plus its evidence is more useful than its absence: it stops the same idea being re-proposed from scratch. Three end-states: **graduate** (→ /specs), **remain provisional** (stay here), or **retire** (→ retired, with reason).
+
+**Process note — this tier is working as intended.** Its first cohort already spread across all three end-states: one hypothesis *strengthened* under review (Evidence Bible — responsibility accepted), one *weakened* to a narrower claim (Narrative Planning Grammar — "lever" kept, "five-dimension layer" demoted to candidate), and one *died* before it ever became a doc (the "comfort/likability planner prior" — a controlled experiment showed it was a steerable operator default, not a planner responsibility). That spread is the evidence the process reduces speculative architecture rather than multiplying it.
+
 ## What every hypothesis here must contain
 
 - Emerged from **multiple concrete failures or observations**, not intuition.
 - Explains behavior that **existing concepts could not**.
 - Explicit **non-goals** (what it must never own).
 - A stated **falsifiability or adoption threshold**.
+- A **"strongest known objection"** section — the doc's own best counter-argument, held to the same rigor as its case. Persuasive docs resist falsification socially even when they invite it formally; this section is the antidote.
 - It **does not drive implementation**.
 
 ## How to review a hypothesis
@@ -32,5 +37,5 @@ Then one falsification question — framed to produce a roadmap, not a debate:
 
 ## Current hypotheses
 
-- [narrative-planning-grammar.md](hypotheses/narrative-planning-grammar.md) — the layer that shapes what the Planner *selects*. Earned its evidence by **repeatedly explaining planner behavior** across reddit, informational, and horror. Not blocking anything today.
+- [narrative-planning-grammar.md](hypotheses/narrative-planning-grammar.md) — the **selection lens / lens-authoring discipline** that shapes what the Planner *selects* (the "layer" and "five orthogonal dimensions" framing is explicitly under test, not asserted). Earned its evidence by **repeatedly explaining planner behavior** across reddit, informational, and horror. Not blocking anything today.
 - [evidence-bible.md](hypotheses/evidence-bible.md) — the owner of **factual truth**, peer to the Story Bible. Earned its evidence because its **absence causes a product failure no existing layer catches** (a documentary shipped a debunked myth, gate-approved). Will block documentary implementation — but only when documentary is actually built.

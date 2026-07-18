@@ -12,7 +12,7 @@ The valuable finding is not "different formats feel different." It is this:
 
 A **Narrative Planning Grammar** (informally "narrative grammar") is the set of assumptions that shape **what the Planner selects and the high-level trajectory it commits to** — the *planning attractor*. It is named "planning" grammar on purpose: the evidence validates that it governs selection, and *only* selection. Prose quality, pacing, scene craft, dialogue, and emotional execution are governed by other systems and are explicitly out of scope (see [Non-goals](#non-goals)).
 
-Every successful content format runs on its own planning grammar. It sits **above** genre, Story Elements, and [Story Modes](specs/story-modes.md), and **below** Channel DNA (see [Where it sits](#where-it-sits)).
+The formats examined so far each ran on a *distinguishable* planning grammar; whether this generalizes to **every** format is the open claim under test, not an established fact. Its place in the stack — above genre / Story Elements / [Story Modes](specs/story-modes.md), below Channel DNA — is a **proposed placement** (see [Where it sits](#where-it-sits)), not a shipped layer: today the only implementation is a per-genre selection lens. The genuinely earned artifact right now is a **lens-authoring discipline** (the [protocol](#protocol-for-the-next-format) below); the layer is the future claim.
 
 ## The falsifiability criterion
 
@@ -22,9 +22,9 @@ The only test that matters:
 
 This is a much stronger bar than "the stories feel different." It demands *prediction before output*: given a grammar, you can state what the Planner will select and what it will refuse, and then verify it.
 
-## The five dimensions
+## The candidate decomposition (five dimensions — unvalidated as axes)
 
-A planning grammar is specified by five orthogonal dimensions. None is a genre label or a beat sheet — that is the point.
+Our current best decomposition is **five candidate dimensions** — a post-hoc taxonomy fitted to the formats examined so far, **not** a validated axis set. No dimension has ever been varied *in isolation* (each experiment swapped one whole lens — a holistic prose paragraph — for another), so "orthogonality" is a hypothesis, not a finding. Treat these as a decomposition to test, not a definition. None is a genre label or a beat sheet.
 
 | Dimension | What it answers |
 |---|---|
@@ -44,7 +44,9 @@ Filled in for the three formats validated so far:
 | Expected payoff | a verdict to argue / vindication | a re-tellable "oh, THAT's why" | fear that follows you home |
 | Resolution style | judged / open (thrown to the jury) | resolved / explained | unsettling / unresolved |
 
-The **Narrative role** dimension is the newest and least proven: it emerged from the informational validation ("agency isn't binary") and held cleanly on horror (victim). It stays a **candidate** dimension until a format with a genuinely new role (investigator, teacher) confirms it earns its own axis rather than folding into Engine of progression.
+The **Narrative role** dimension is called out as a candidate below — but the same skepticism applies to **all five**: none has independent evidence of being an *axis* rather than a *facet* of one, and role still needs a genuinely new-role format (investigator, teacher) to earn its place.
+
+**One facet has since been varied in isolation — and it moved out.** A controlled experiment held everything constant and swapped only the *resolution valence* (comfortable ↔ irreversible cost). The planner complied immediately in both genres tested — i.e. valence is **steerable by channel DNA**, an *operator lever*, not a planner axis. So the "Resolution style" row is at best partly a grammar concern; its comfort/valence facet belongs to Channel DNA / [Story Modes](#boundary-narrative-planning-grammar-vs-story-modes). That is one facet tested and demoted, the rest untested — exactly why the table is a decomposition to falsify, not a definition.
 
 ## Evidence so far — three tiers, not equal
 
@@ -69,7 +71,7 @@ Concretely: "which dilemma is worth posting?" is grammar. "How scary should this
 ```
 Channel DNA            (who this channel is; its world, voice, canon)
       ↓
-Narrative Planning Grammar   (the planning attractor: the 5 dimensions)
+Narrative Planning Grammar   [PROPOSED placement — today just a selection lens]
       ↓
 Story Elements / Story Modes (the composition knobs + per-mode contract)
       ↓
@@ -80,10 +82,23 @@ Writer                 (executes the telling)
 Prose Craft            (editor / naturalizer / gate — sentence-level)
 ```
 
-Planning Grammar does **not** replace Channel DNA, Story Elements, or Story Modes — it constrains *how the Planner interprets them*. The relationships that make it a distinct layer rather than a relabeling:
+**This placement is PROPOSED, not established.** The only shipped implementation is the per-genre selection lens; drawing Grammar as its own layer is the claim under test, held here so it can be argued with — not asserted as fact.
+
+If it *is* a distinct layer (not a relabeling), these must hold — and the first two are argued, the third is the open boundary:
 
 - Two channels can share a **grammar** but differ entirely in **Channel DNA** (a US office-drama Reddit channel and a Filipino family-drama Reddit channel run the same planning grammar).
-- Two channels can share a **genre** but run different **grammars** (a horror channel telling existential-dread stories vs. a "creepy AITA" channel where the supernatural is the *object of a judgment dilemma* — same genre surface, different planning grammar, because "Discovery" splits into dilemma / investigation / existential / wonder engines).
+- Two channels can share a **genre** but run different **grammars** (a horror channel telling existential-dread stories vs. a "creepy AITA" channel where the supernatural is the *object of a judgment dilemma* — because "Discovery" splits into dilemma / investigation / existential / wonder engines).
+
+**Conflict precedence:** when Channel DNA and the grammar's defaults disagree (a cozy-voiced channel running a dread grammar), **DNA wins** — it sits above the grammar and constrains it. This is consistent with the finding that resolution valence is DNA-steerable: the grammar supplies a default, the channel overrides it.
+
+## Boundary: Narrative Planning Grammar vs. Story Modes
+
+The doc argues grammar ≠ Channel DNA and grammar ≠ genre. The harder, previously-unargued boundary is grammar vs. **[Story Modes](specs/story-modes.md)** — both are "contract-ish" and both touch `selectionLens`/format language. The split (owner decision, and it aligns with the evidence):
+
+- **Story Modes own *execution policy*** — narrator stance, interaction model, identity posture, **knowledge requirement**, structural constraints. *(Documentary forced a knowledge responsibility → a Mode concern.)*
+- **Narrative Planning Grammar owns *selection behavior*** — which premises, conflicts, resolutions, and narrative equations the planner is biased toward **choosing**. *(Drama exposed a selection attractor → a Grammar concern.)*
+
+Keep both concepts under this split; only collapse one into the other if, after defining them this way, they still overlap materially in practice. This boundary is the single most likely place the grammar hypothesis dies, so it is stated explicitly rather than assumed.
 
 ## Current implementation vehicle (deliberately minimal)
 
@@ -108,5 +123,13 @@ Until then: document, validate opportunistically, and treat every new format as 
 3. Encode the selection half (a `selectionLens`); change nothing else in the planner architecture.
 4. Run the probe; read the **plans**, not just the prose ([probe-genre-lab.ts](apps/worker/scripts/probe-genre-lab.ts) prints plan internals for this reason).
 5. Record whether the prediction held, and — honestly — which evidence tier it belongs to (causality / generalization / consistency).
+
+## Strongest known objection
+
+*(Required section — every hypothesis states its own best counter-argument, so the doc can't advocate its way past falsification.)*
+
+The evidenced thing and the named thing are different sizes. What's proven is that **explicit selection guidance in the planner prompt causally changes what the planner selects** — the lens as a *lever*, a holistic paragraph. What's *named* is a five-dimension layer. The dimensions are a post-hoc taxonomy at n≈3 with no dimension varied in isolation (and the one facet that *was* — resolution valence — turned out to be a channel/operator lever, not a grammar axis). So the honest reduction is: **the earned artifact is the lens-authoring discipline; "layer" and "five orthogonal dimensions" are claims under test.** If the Grammar-vs-Modes boundary above doesn't hold in practice, the concept should be absorbed into Story Modes rather than stand alone.
+
+**Products most likely to break it:** *live / reactive commentary* (events dictate content, so there may be no meaningful selection step — attacking the premise that selection is the primary lever, not just the axes); and *interactive fiction* (the viewer holds both the payoff and the narrative role, breaking two dimensions at once).
 
 Related: [Evidence Bible](hypotheses/evidence-bible.md), [Kendrix Constitution](ARCHITECTURE.md), [Story Modes](specs/story-modes.md), [Story IR architecture](specs/story-ir-architecture.md).
