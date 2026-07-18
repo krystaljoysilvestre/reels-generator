@@ -16,11 +16,14 @@ The formats examined so far each ran on a *distinguishable* planning grammar; wh
 
 ## The falsifiability criterion
 
-The only test that matters:
+An earlier version of this criterion — *"changing it predictably changes the Planner's selection, architecture unchanged"* — was itself **falsified** by the valence experiment (below). Valence changed selection predictably, yet the correct conclusion was that valence is a channel/operator lever, **not** a grammar axis. So that criterion tested only **lever-ness** (does the planner obey an instruction?) — which *every* explicit knob passes — and cannot distinguish a grammar axis from an ordinary channel setting.
 
-> **A planning grammar is real and useful iff changing it predictably changes the Planner's selection behavior, while the underlying planner architecture (prompt structure, pipeline stages, model) stays unchanged.**
+The corrected criterion is a **two-part test**. A dimension is a genuine grammar axis only if it:
 
-This is a much stronger bar than "the stories feel different." It demands *prediction before output*: given a grammar, you can state what the Planner will select and what it will refuse, and then verify it.
+> 1. **Varies across formats** — changing it is part of what makes one format not another (reddit_story ≠ horror); **and**
+> 2. **Is invariant within a format** — every channel running that format shares the setting *regardless of Channel DNA*.
+
+**Falsification protocol for any candidate dimension: vary it across channels of the *same* format.** If the format survives the variation, the dimension is **Channel DNA, not grammar** — exactly how valence was demoted (channels of one format legitimately differ on comfortable-vs-irreversible endings, failing part 2). "The planner obeyed the instruction" is necessary but nowhere near sufficient.
 
 ## The candidate decomposition (five dimensions — unvalidated as axes)
 
@@ -46,7 +49,7 @@ Filled in for the three formats validated so far:
 
 The **Narrative role** dimension is called out as a candidate below — but the same skepticism applies to **all five**: none has independent evidence of being an *axis* rather than a *facet* of one, and role still needs a genuinely new-role format (investigator, teacher) to earn its place.
 
-**One facet has since been varied in isolation — and it moved out.** A controlled experiment held everything constant and swapped only the *resolution valence* (comfortable ↔ irreversible cost). The planner complied immediately in both genres tested — i.e. valence is **steerable by channel DNA**, an *operator lever*, not a planner axis. So the "Resolution style" row is at best partly a grammar concern; its comfort/valence facet belongs to Channel DNA / [Story Modes](#boundary-narrative-planning-grammar-vs-story-modes). That is one facet tested and demoted, the rest untested — exactly why the table is a decomposition to falsify, not a definition.
+**One facet has since been varied in isolation — and it moved out.** A controlled experiment held everything constant and swapped only the *resolution valence* (comfortable ↔ irreversible cost). The planner complied immediately in both genres tested — i.e. valence is **steerable by channel DNA**, an *operator lever*, not a planner axis (it fails part 2 of the two-part test above: channels of the same format legitimately differ on it). So the "Resolution style" row is at best partly a grammar concern; its comfort/valence facet belongs to Channel DNA / [Story Modes](#boundary-narrative-planning-grammar-vs-story-modes). That is one facet tested and demoted, the rest untested — exactly why the table is a decomposition to falsify, not a definition.
 
 ## Evidence so far — three tiers, not equal
 
