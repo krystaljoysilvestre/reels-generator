@@ -47,7 +47,10 @@ export interface WriterIdentity {
   // ── REGISTERS (v3) — the genre's temperatures. A genre is not one aesthetic: horror can be quiet
   // dread OR kinetic shock; drama can ache OR confront. The STORY picks its register (per-story
   // judgment, owner decision 2026-07-17) and commits fully — registers are candidates, never a
-  // rotation or a quota (unbiased-design). Each line: NAME — temperature — when it fits. ──
+  // rotation or a quota (unbiased-design). Each line: NAME — temperature — when it fits.
+  // SEMANTIC NOTE: reddit_story overloads this field for format SHAPES (AM-I-WRONG, REVENGE, TIFU…),
+  // not tonal temperatures — spread across a channel's history via the anti-sameness guard. Same field,
+  // a per-genre meaning; don't "normalize" reddit's registers back to temperatures. ──
   registers?: string[]
   // ── EDITOR PROTECTIONS (v4) — texture the EDITOR must not sand off. Some genres' craft only
   // LOOKS like sloppiness (a confession's deliberate tangents) or over-precision (a punchline's

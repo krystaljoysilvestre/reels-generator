@@ -1,6 +1,7 @@
 // Genre lab (2026-07-17): full-chain probe (Planner → Writer → Editor → Claude Naturalizer →
 // Claude gate) for ONE genre at a time, on a Taglish channel — 2 short (75s) + 1 long-form (240s,
-// exercises the chaptered long-form writer path). No DB writes. Mirrors production generate-story
+// exercises the long-form WRITER branch — isLongForm>180s in story.v2 — NOT the full chaptered
+// scene-breakdown pipeline; this probe stops at the writer/gate). No DB writes. Mirrors production generate-story
 // (studio.v2 routing + discard guards). Every run doubles as a Taglish naturalness test.
 // Usage: tsx scripts/probe-genre-lab.ts <genre> [writerProvider]
 //   e.g. tsx scripts/probe-genre-lab.ts reddit_story            (production: gpt-4o writer)
@@ -316,6 +317,9 @@ Kaya sa susunod na pupunta ka ng grocery para lang sa gatas — bilangin mo kung
             maxTokens: run.writerTokens,
           })
           totalCost += res.costCents
+          // SOURCE OF TRUTH: these mirror the production discard tolerances in
+          // apps/worker/src/pipeline/steps/generate-story.ts (editor ±25%, naturalizer ±15%). If those
+          // change, this probe silently diverges from the thing it claims to mirror — keep in sync.
           const tol = stage === 'editor' ? 0.25 : 0.15
           const dw = Math.abs(wordCount(res.data.narration) - wordCount(narration)) / Math.max(1, wordCount(narration))
           const inL = beatLines(narration)

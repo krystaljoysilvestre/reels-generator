@@ -12,10 +12,13 @@ import { z } from 'zod'
 import { STORY_MECHANICS_V1_VERSION, renderMechanics } from './story-mechanics.v1.js'
 import { STORY_ELEMENTS_V1_VERSION, StoryElementsSchema, renderElementPalette, formatRecentElements, type StoryElements } from './story-elements.v1.js'
 import { STORY_STYLES_V1_VERSION, resolveStyle, renderStyleForPlanner, type StyleInfluence } from './story-styles.v1.js'
-import { WRITER_IDENTITIES } from './writer-identities.v1.js'
+import { WRITER_IDENTITIES, WRITER_IDENTITIES_V1_VERSION } from './writer-identities.v1.js'
 import { asGenreModule, classifyGenre, type GenreModule } from './scenes.v1.js'
 
-export const STORY_PLANNER_V1_VERSION = `planner.v1.6+${STORY_MECHANICS_V1_VERSION}+${STORY_ELEMENTS_V1_VERSION}+${STORY_STYLES_V1_VERSION}`
+// Includes WRITER_IDENTITIES_V1_VERSION because the planner renders identity fields (questionsAsked,
+// taboos, registers, selectionLens) — so an identity edit must bust the planner's inputHash explicitly,
+// not rely solely on the step's full-text hashing of plannerSystem/plannerUser (review nit, 2026-07-18).
+export const STORY_PLANNER_V1_VERSION = `planner.v1.6+${STORY_MECHANICS_V1_VERSION}+${STORY_ELEMENTS_V1_VERSION}+${STORY_STYLES_V1_VERSION}+${WRITER_IDENTITIES_V1_VERSION}`
 
 // The committed idea. `mechanics` + `elements` are planner METADATA — the caller STRIPS them before
 // the Writer sees the plan (INVARIANT 1: the Writer writes from the idea, never from labels).

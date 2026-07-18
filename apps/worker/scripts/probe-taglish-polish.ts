@@ -131,7 +131,7 @@ void (async () => {
           maxTokens: 4096,
         })
         totalCost += er.costCents
-        const dw = Math.abs(wordCount(er.data.narration) - wordCount(narration)) / wordCount(narration)
+        const dw = Math.abs(wordCount(er.data.narration) - wordCount(narration)) / Math.max(1, wordCount(narration))
         if (dw > 0.25) editorStatus = `discarded_wordcount (${Math.round(dw * 100)}%)`
         else if (!er.data.narration.includes(er.data.peakMoment.trim())) editorStatus = 'discarded_peak'
         else ({ narration, peakMoment } = er.data)
@@ -159,7 +159,7 @@ void (async () => {
           maxTokens: 4096,
         })
         totalCost += nr.costCents
-        const dw = Math.abs(wordCount(nr.data.narration) - wordCount(narration)) / wordCount(narration)
+        const dw = Math.abs(wordCount(nr.data.narration) - wordCount(narration)) / Math.max(1, wordCount(narration))
         if (dw > 0.15) naturalizerStatus = `discarded_wordcount (${Math.round(dw * 100)}%)`
         else if (!nr.data.narration.includes(nr.data.peakMoment.trim())) naturalizerStatus = 'discarded_peak'
         else ({ narration, peakMoment } = nr.data)

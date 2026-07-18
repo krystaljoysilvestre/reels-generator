@@ -5,7 +5,8 @@
 // (those are discovery engines, already half the emotional equation), so the angle no longer imposes
 // object/legend shapes. No planner or prompt changes — only the experiment changed.
 //
-// Usage: PROBE_NICHE="..." PROBE_NAME="..." tsx scripts/probe-drama-attractor.ts [N]
+// Usage: PROBE_NICHE="..." PROBE_NAME="..." tsx scripts/probe-drama-attractor.ts [genre] [N]
+//   positional args: genre = argv[2] (default 'drama'), N = argv[3] (default 16).
 // Prints N plans (premise/conflict/twist/ending + turn) so distinct EMOTIONAL EQUATIONS can be counted.
 import '../src/env.js'
 void (async () => {
