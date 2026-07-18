@@ -93,10 +93,34 @@ function wordCount(s: string): number {
 // The peakMoment chain: first candidate that survives as a verbatim substring of the final text.
 // Worst case '' → stories.twist_anchor NULL → breakdown-scenes re-extracts via peak-extract.v1
 // (already shipped + validated). Never a hallucinated anchor. (Exported for tests.)
+// Character-level normalization for peak matching. LLMs asked to echo a line "verbatim" routinely
+// vary smart quotes, dash style, internal whitespace, and trailing punctuation; a raw-string match
+// then fails and an otherwise-good pass gets discarded over a pointer typo. Normalize both sides.
+function normalizeForMatch(s: string): string {
+  return s
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .replace(/[—–]/g, '-')
+    .replace(/\s+/g, ' ')
+    .replace(/[.,!?;:]+$/, '')
+    .trim()
+    .toLowerCase()
+}
+
 export function resolvePeak(narration: string, candidates: Array<string | undefined>): string {
   for (const c of candidates) {
     const t = c?.trim()
     if (t && narration.includes(t)) return t
+  }
+  // Normalized line-level fallback: recover a peak whose only difference is quotes/dashes/spacing/
+  // trailing punctuation. Return the ACTUAL narration line so the peak stays a verbatim substring
+  // for downstream music timing. A genuinely cut peak differs by whole words → still returns ''.
+  const lines = narration.split('\n').map((l) => l.trim()).filter(Boolean)
+  for (const c of candidates) {
+    const nc = c ? normalizeForMatch(c) : ''
+    if (!nc) continue
+    const hit = lines.find((l) => normalizeForMatch(l).includes(nc))
+    if (hit) return hit
   }
   return ''
 }
@@ -524,10 +548,13 @@ async function runStudio(a: StudioArgs) {
             detail: `${inWords}→${outWords} words exceeds ±${Math.round(tolerance * 100)}%`,
           }
         }
-        // A pass that orphans its own peak (returned peakMoment not verbatim in its narration —
-        // seen live: an editor cutting the climax) is a destructive rewrite: discard it.
-        if (!res.data.narration.includes(res.data.peakMoment.trim())) {
-          return { narration, peakMoment, status: 'discarded_peak', detail: 'returned peakMoment not in returned narration' }
+        // The guard catches a pass that CUT the climax (seen live), not one that merely reworded the
+        // peak line or returned a near-miss pointer (a quote/dash/spacing diff) — that false positive
+        // discarded a good pass. Keep it if the stage's own peak OR the peak we gave it still resolves
+        // (exact or normalized) in the returned narration; store that resolved line as the peak.
+        const keptPeak = resolvePeak(res.data.narration, [res.data.peakMoment, peakMoment])
+        if (!keptPeak) {
+          return { narration, peakMoment, status: 'discarded_peak', detail: 'no peak survived in returned narration' }
         }
         // A pass that collapses the spoken line-per-beat formatting into a paragraph (seen in the
         // polish probe) breaks the read-aloud contract: discard it.
@@ -537,7 +564,7 @@ async function runStudio(a: StudioArgs) {
         if (inLines >= 4 && outLines <= Math.ceil(inLines / 2)) {
           return { narration, peakMoment, status: 'discarded_formatting', detail: `${inLines}→${outLines} beat lines — collapsed the spoken formatting` }
         }
-        return { narration: res.data.narration, peakMoment: res.data.peakMoment, status: 'ok' }
+        return { narration: res.data.narration, peakMoment: keptPeak, status: 'ok' }
       } catch (err) {
         console.warn(`[generate_story] ${stage} failed, passing text through: ${String(err)}`)
         return { narration, peakMoment, status: 'failed', detail: String(err) }

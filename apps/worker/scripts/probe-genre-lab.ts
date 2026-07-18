@@ -31,6 +31,7 @@ void (async () => {
     STORY_CRITIC_V2_VERSION,
   } = await import('../src/prompts-bridge.js')
   const { selectAngles } = await import('../src/assembly-bridge.js')
+  const { resolvePeak } = await import('../src/pipeline/steps/generate-story.js')
 
   // Authentic Taglish reddit exemplars (ORIGINAL, hand-authored). Every one is a genuine DILEMMA
   // ("I did X, someone did Y, now I don't know if I was wrong / what to do"), meaty and relatable,
@@ -335,12 +336,14 @@ Kaya sa susunod na pupunta ka ng grocery para lang sa gatas — bilangin mo kung
           const dw = Math.abs(wordCount(res.data.narration) - wordCount(narration)) / Math.max(1, wordCount(narration))
           const inL = beatLines(narration)
           const outL = beatLines(res.data.narration)
+          const keptPeak = resolvePeak(res.data.narration, [res.data.peakMoment, peakMoment])
           if (dw > tol) stageNotes.push(`${stage}: discarded_wordcount (${Math.round(dw * 100)}%)`)
-          else if (!res.data.narration.includes(res.data.peakMoment.trim())) stageNotes.push(`${stage}: discarded_peak`)
+          else if (!keptPeak) stageNotes.push(`${stage}: discarded_peak`)
           else if (inL >= 4 && outL <= Math.ceil(inL / 2)) stageNotes.push(`${stage}: discarded_formatting (${inL}→${outL})`)
           else {
             stageNotes.push(`${stage}: ok${res.data.narration === narration ? ' (unchanged)' : ''}`)
-            ;({ narration, peakMoment } = res.data)
+            narration = res.data.narration
+            peakMoment = keptPeak
           }
         } catch (err) {
           stageNotes.push(`${stage}: failed (${String(err).slice(0, 60)})`)
