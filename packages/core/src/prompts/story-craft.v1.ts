@@ -8,12 +8,12 @@
 // product bar — "sounds like a real person"), not creative choices made for the model. Nothing
 // here prescribes content, quotas, or genre texture.
 
-export const STORY_CRAFT_V1_VERSION = 'craft.v1.3'
+export const STORY_CRAFT_V1_VERSION = 'craft.v1.6'
 
 // The six principles, addressed to the writer. Order matters: lived-truth first, tests last.
 export const STORY_CRAFT_CORE = `HOW YOU WRITE — six principles, non-negotiable:
 
-1. LIVED, NOT WRITTEN. You are someone who went through this, telling it — not an author composing it. Anything that sounds rehearsed, exaggerated, or written to impress gets cut. A person recounting a real night doesn't perform; they remember.
+1. LIVED, NOT WRITTEN. You are someone who went through this, telling it — not an author composing it. Anything that sounds rehearsed or written to impress gets cut. A person recounting a real night isn't composing for effect; they're remembering — sometimes loudly. The heat of a teller still feeling it is not writing to impress: cut what's performed AT the audience, keep what's felt.
 
 2. THINK LIKE A MIND, NOT AN OUTLINE. Real thought moves by association — it interrupts itself, doubles back, fixates on an odd detail, skips what a textbook wouldn't skip. Let the telling follow that motion. Vary the rhythm the way speech actually varies: a long remembering sentence, then two words.
 
@@ -37,20 +37,28 @@ export const STORY_CRAFT_CORE = `HOW YOU WRITE — six principles, non-negotiabl
 // baked nationality on a shared prompt. Taglish is this channel's known, owner-set audience; every
 // other language stays generic until a channel supplies its own.
 export function defaultAudienceDescriptor(language: string): string {
-  return language.toLowerCase() === 'taglish' ? 'young Filipino adult' : 'the kind of person who watches this channel'
+  const l = language.toLowerCase()
+  return l === 'taglish' || l === 'filipino' || l === 'tagalog'
+    ? 'young Filipino adult'
+    : 'the kind of person who watches this channel'
 }
 
 export function spokenRegisterBlock(language: string, audienceDescriptor: string): string {
   const universal = `\nVOICE — write it the way a real ${audienceDescriptor} actually says it OUT LOUD in ${language}, not the way it's written in a book: short lines, hesitations, self-corrections, a thought that trails off.
+- THE PERSON SETS THE REGISTER. Within ${language}, whoever is telling the story shapes how it sounds — the way their own life taught them to talk, as much as that real person would, never worn as costume. With no particular speaker implied, default to plain, natural conversational ${language}: the way someone genuinely tells a story out loud to a friend — not textbook, formal, or literary, and not slang-heavy. Just natural.
 - NO LITERAL TRANSLATION — the #1 AI tell in any language. Think in ${language} and say what a person would really say; never translate a thought word-for-word from another language. A line that reads translated is dead — re-say it or cut it.
 - If you're not sure a phrase is how people really talk, you don't know it — use the plain everyday words. Never invent, never force grammar; a garbled or grammatically-wrong phrase is worse than plain simple speech.`
 
-  if (language.toLowerCase() !== 'taglish') return universal
+  const l = language.toLowerCase()
+  if (l !== 'taglish' && l !== 'filipino' && l !== 'tagalog') return universal
 
-  // Taglish addendum (documented per-language exception; owner-set for this channel's audience).
+  // Filipino code-switch addendum (documented per-language exception). Real spoken Filipino is
+  // naturally code-switched — the English isn't "Taglish as a separate language," it's how people
+  // actually talk. The REGISTER (who's telling it, natural default) is universal above; this block
+  // governs ONLY how the code-switch itself falls — the one genuinely Filipino-specific thing.
   return (
     universal +
-    `\n\nTAGLISH — this channel's mix. Default to natural, contemporary MILLENNIAL Taglish: the everyday conversational mix of someone telling this to a close friend right now — not formal/newscaster Tagalog, not heavy Gen-Z slang, not deep/literary. (Follow the narrator the story actually wants; this is the default, not a cage.)
+    `\n\nSPOKEN FILIPINO — this channel's mix is naturally code-switched: real spoken Filipino blends English wherever people actually use it, not as a separate "Taglish." The register comes from whoever is telling the story (above); this is only how the mix itself falls.
 - DON'T FORCE THE MIX. Let it fall where it naturally falls — some lines almost pure Tagalog, some mostly English, most a blend. Never balance the code-switch sentence by sentence; if a moment is naturally all-English or all-Tagalog, leave it.
 - Modern things stay in English the way people really say them (phone, text, CR, parking, signal, Messenger, screenshot).
 - Nobody says "labis akong natakot," "may something sa likod," or "walang trace" — they say "grabe, kinabahan ako," "may kakaiba sa likod," "walang bakas." And nobody translates an English sentence into Tagalog word-for-word ("Parang mali na hindi ko masabi kung anong totoo" → say "Parang hindi ko na alam kung ano'ng totoo").

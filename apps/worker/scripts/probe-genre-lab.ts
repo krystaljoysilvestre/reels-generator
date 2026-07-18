@@ -4,8 +4,8 @@
 // scene-breakdown pipeline; this probe stops at the writer/gate). No DB writes. Mirrors production generate-story
 // (studio.v2 routing + discard guards). Every run doubles as a Taglish naturalness test.
 // Usage: tsx scripts/probe-genre-lab.ts <genre> [writerProvider]
-//   e.g. tsx scripts/probe-genre-lab.ts reddit_story            (production: gpt-4o writer)
-//        tsx scripts/probe-genre-lab.ts reddit_story anthropic  (experiment: Claude writer)
+//   e.g. tsx scripts/probe-genre-lab.ts reddit_story            (gpt-4o writer)
+//        tsx scripts/probe-genre-lab.ts reddit_story anthropic  (Claude writer — PRODUCTION since studio.v3, 5482675)
 // Cost: ~50-100¢ per genre.
 import '../src/env.js'
 import type { StoryElements } from '../src/prompts-bridge.js'

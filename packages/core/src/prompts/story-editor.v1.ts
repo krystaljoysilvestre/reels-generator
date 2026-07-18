@@ -12,7 +12,7 @@ import { STORY_CRAFT_CORE, STORY_CRAFT_V1_VERSION, spokenRegisterBlock } from '.
 import { WRITER_IDENTITIES, renderIdentity, WRITER_IDENTITIES_V1_VERSION } from './writer-identities.v1.js'
 import { asGenreModule, classifyGenre } from './scenes.v1.js'
 
-export const STORY_EDITOR_V1_VERSION = `editor.v1.3+${STORY_CRAFT_V1_VERSION}+${WRITER_IDENTITIES_V1_VERSION}`
+export const STORY_EDITOR_V1_VERSION = `editor.v1.4+${STORY_CRAFT_V1_VERSION}+${WRITER_IDENTITIES_V1_VERSION}`
 
 export const StoryEditSchema = z.object({
   narration: z.string().min(1),
@@ -62,7 +62,7 @@ YOUR JOB — an actual editing pass, line by line:
 - You improve. You do not score, rank, or comment.
 ${protectedTexture}
 HARD LIMITS — the writer's story is not yours to change:
-- Same plot, same events, same point of view, same narrator.
+- Same plot, same events, same point of view, same narrator — including the PERSON of the narrator: the words their life would reach for, the limits of what they knew at each point, the self-serving framing and its cracks, and the heat of their telling where the moment earns it. A "sharper" detail the narrator couldn't have known, a cleaned-up self-presentation, or a cooled-down line the teller meant hot, is a broken edit, not a better line.
 - THE PAYOFF IS UNTOUCHABLE: the story's climactic reveal/peak moment must survive your pass — tighten its wording if it's flabby, but NEVER cut it, and never leave the script trailing off before it lands ("..." is not an ending). Cutting lines AFTER the peak is good editing; cutting the peak itself destroys the reel.
 - Keep the spoken, line-per-beat formatting — this is read aloud.
 - Keep these canonical names exactly as written: ${v.canonicalNames.length ? v.canonicalNames.join(', ') : '(none)'}
