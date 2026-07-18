@@ -17,7 +17,7 @@
 
 import type { GenreModule } from './scenes.v1.js'
 
-export const STORY_STYLES_V1_VERSION = 'styles.v1.1'
+export const STORY_STYLES_V1_VERSION = 'styles.v1.2'
 
 export type StyleInfluence = 'light' | 'medium' | 'full'
 
@@ -42,7 +42,7 @@ export const STORY_STYLES: Record<GenreModule, Record<string, StyleSpec>> = {
       label: 'Urban legend',
       tradition: 'The story everyone swears happened to a friend-of-a-friend — a warning that could be about your own street.',
       conventions: [
-        'Familiar, everyday setting the viewer also lives in (a condo, a jeepney, the CR at work).',
+        'Familiar, everyday setting the viewer also lives in (an apartment, a commute, the bathroom at work).',
         'Told as something that really happened, first- or second-hand, plainly.',
         'A rule or warning under it ("that\'s why you never…").',
       ],
@@ -73,7 +73,7 @@ export const STORY_STYLES: Record<GenreModule, Record<string, StyleSpec>> = {
     },
     folk: {
       label: 'Folk horror',
-      tradition: 'Old rural belief, ritual, and the land itself — the province remembers what the city forgot.',
+      tradition: 'Old rural belief, ritual, and the land itself — the countryside remembers what the city forgot.',
       conventions: [
         'Rooted in place, custom, and season; the setting is a character.',
         'An old rule or observance the narrator broke or ignored.',

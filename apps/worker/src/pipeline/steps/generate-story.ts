@@ -51,13 +51,21 @@ import { runStep, setReelStatus } from '../harness.js'
 // Planner won on freshness/pull, so write-6-and-rank is gone. History is in git if ever needed.)
 const CANDIDATE_TEMPERATURE = 1.0 // temperature for the planner-failure fallback draft (story.v1)
 // Studio recipe version: keys the input hash alongside every stage/asset version.
-const GENERATE_STORY_STUDIO_VERSION = 'generate_story.studio.v1'
+// v2 (2026-07-17): Naturalizer routed to Claude — the polish probe (probe-taglish-polish.ts) showed
+// the gpt-4o naturalizer inert on unnatural Taglish while Claude's gate critiques were native-sharp;
+// owner decision. Also: formatting-collapse discard guard.
+// v3 (2026-07-18): WRITER routed to Claude — owner decision after the Production Consequence
+// Investigation (research/findings/production-consequence-investigation.md): gpt-4o 1/40 vs Claude
+// 14/16 at the same gate, and gpt-4o re-suspended consequences even under an explicit DNA+plan+gate
+// demand (steerability 0/8). Planner/editor stay on the default prose provider; the planner-failure
+// fallback (story.v1) is untouched — rare, and pending the legacy-path decision.
+const GENERATE_STORY_STUDIO_VERSION = 'generate_story.studio.v3'
 // How many recent stories feed the Planner's premise avoid-list (the mirror-×6 fix).
 const RECENT_PREMISES_LIMIT = 15
 const WRITER_TEMPERATURE = 1.0
 const REWRITE_TEMPERATURE = 0.7 // editor + naturalizer: refinement, not invention
 
-type RewriteStatus = 'ok' | 'failed' | 'discarded_wordcount' | 'discarded_peak'
+type RewriteStatus = 'ok' | 'failed' | 'discarded_wordcount' | 'discarded_peak' | 'discarded_formatting'
 
 // Persisted as pipeline_steps.output (studio mode) — the full attribution trail. Any bad story
 // decomposes into inspectable artifacts; this is also the evidence base for the 300-story read.
@@ -440,6 +448,7 @@ async function runStudio(a: StudioArgs) {
           schema: StoryOutputSchema,
           system,
           messages: [{ role: 'user', content: userMessage }],
+          provider: 'anthropic', // studio.v3: the writer must cross consequence thresholds gpt-4o softens
           temperature: WRITER_TEMPERATURE,
           maxTokens: a.storyMaxTokens,
         })
@@ -497,6 +506,10 @@ async function runStudio(a: StudioArgs) {
           schema: stage === 'editor' ? StoryEditSchema : StoryNaturalizeSchema,
           system: prompt.system,
           messages: [{ role: 'user', content: prompt.userMessage }],
+          // NATURALIZER RUNS ON CLAUDE (owner decision 2026-07-17): the language-repair stage needs
+          // the model that actually hears the register — the polish probe showed the default model
+          // returning unnatural Taglish untouched. Editor stays on the default prose provider.
+          ...(stage === 'naturalizer' ? { provider: 'anthropic' as const } : {}),
           temperature: REWRITE_TEMPERATURE,
           maxTokens: a.storyMaxTokens,
         })
@@ -515,6 +528,14 @@ async function runStudio(a: StudioArgs) {
         // seen live: an editor cutting the climax) is a destructive rewrite: discard it.
         if (!res.data.narration.includes(res.data.peakMoment.trim())) {
           return { narration, peakMoment, status: 'discarded_peak', detail: 'returned peakMoment not in returned narration' }
+        }
+        // A pass that collapses the spoken line-per-beat formatting into a paragraph (seen in the
+        // polish probe) breaks the read-aloud contract: discard it.
+        const beatLines = (s: string) => s.split('\n').filter((l) => l.trim()).length
+        const inLines = beatLines(narration)
+        const outLines = beatLines(res.data.narration)
+        if (inLines >= 4 && outLines <= Math.ceil(inLines / 2)) {
+          return { narration, peakMoment, status: 'discarded_formatting', detail: `${inLines}→${outLines} beat lines — collapsed the spoken formatting` }
         }
         return { narration: res.data.narration, peakMoment: res.data.peakMoment, status: 'ok' }
       } catch (err) {

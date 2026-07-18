@@ -11,7 +11,7 @@
 import { z } from 'zod'
 import { asGenreModule, classifyGenre, type GenreModule } from './scenes.v1.js'
 
-export const STORY_CRITIC_V2_VERSION = 'story-critic.v2.3'
+export const STORY_CRITIC_V2_VERSION = 'story-critic.v2.7'
 
 export const StoryGateSchema = z.object({
   pass: z.boolean(),
@@ -46,7 +46,7 @@ VOICE
 - Committed to ONE register — intimate 2AM dread, coiled suspense, or kinetic shock all pass; a story that blends registers into mush fails. Loud is legitimate when the story earns it; gore never is.
 
 WORLD
-- Grounded in believable local texture (places, habits, objects people actually have); nothing generic-western pasted in.
+- Grounded in the believable texture of this channel's own world (places, habits, objects its people actually have); nothing pasted in from another culture's stock imagery.
 
 NEVER
 - A hook that could open any story ("Something strange happened to me").
@@ -88,17 +88,27 @@ NEVER
 - Hedging that dissolves the stance ("both sides have a point" as a conclusion).
 - Volume substituting for basis.`,
 
-  reddit_story: `BELIEVABILITY (disqualifying if failed)
-- Reads as a REAL post: mundane specifics no one would invent, seams and small tangents, a narrator who incriminates themselves a little.
-- Nothing winks at the audience; nothing is too well-structured.
+  reddit_story: `THE CORE TEST — does it read like a real person's real experience you're overhearing ("did this actually happen?"), and would strangers argue in the comments (who's right, who's lying, is this even real)? If there's nothing to argue about, or it sounds authored, it fails no matter how well-written.
+
+HOOK
+- Opens on a plain PROBLEM or dilemma the viewer will follow within the first breath — a wrong done, a mess the narrator caused, a mystery, a secret. Not slow scene-setting.
+
+BELIEVABILITY (disqualifying if failed)
+- Reads as a REAL post: mundane, over-specific detail no one would invent (names, ages, amounts, how long), seams and small tangents, a narrator who incriminates themselves a little.
+- Nothing winks at the audience; nothing sounds polished, structured, or literary — the instant it reads as written, it fails.
 
 STAKES
-- Small, real stakes a commenter would take sides over.
+- A real situation a commenter would take a side over. Scale is open: trivial (a stolen lunch) OR life-altering (a betrayal, a life's savings) both pass — never judge "big enough" or "small enough".
 
-ENDING
-- Stops the way real posts stop — on the unresolved question or the update, never a bow.
+ENDING — the test is AUTHENTICITY, not open-vs-closed. End the way a REAL poster of THIS kind of story would:
+- A revenge / malicious-compliance / TIFU story lands its payoff (the comeuppance, the backfire, the damage).
+- An "am I wrong?" throws the verdict question to the viewer.
+- A confession / creepy encounter / still-unfolding situation may just STOP, unresolved — that is authentic and fine.
+- What FAILS is a SCRIPTED ending: a tidy moral, a lesson stapled on, a lyrical drama fade, or a conflict resolved neatly offscreen.
 
 NEVER
+- Sounding authored — the spell of realness is the entire product.
+- A quiet, plotless literary vignette with nothing to argue over (that's a drama story, not a Reddit post).
 - Colorful-instead-of-mundane details; a purely sympathetic narrator; a tidy moral.`,
 
   comedy: `SETUP
@@ -183,7 +193,7 @@ How you judge:
   · CAUSALITY: do the beats force each other ("therefore/but"), or just follow each other ("and then")?
   · THE DEBT: does the ending answer the question the opening planted — or twist from nowhere?
   · THE CHANGE: is anything different at the end (in the narrator, their world, or the viewer's understanding) — or does it just stop?
-  (An explainer or argument answers these in its own terms: a claim advanced, a question paid off, an understanding changed.)
+  (An explainer or argument answers these in its own terms: a claim advanced, a question paid off, an understanding changed. A Reddit post answers them in ITS terms: AGENCY = the narrator or their target DID something, not just felt something; THE CHANGE = the payoff landed — revenge taken, rule backfired, disaster arrived — OR, for an "am I wrong?" post, the verdict question thrown hard to the viewer. An open verdict is a real ending; a revenge or disaster story that just trails off is not.)
 - Then the channel's rubric below. A clear violation of a rubric line fails; judge against the rubric, not your personal taste.
 - You do not rewrite, rank, or score. Pass or fail, with ONE blunt sentence of reason. On fail, the reason must point at the text (what fails and where), because it steers exactly one rewrite.
 - Bar check: a good-enough story passes. This gate exists to catch real failures, not to chase perfection — most competent scripts should pass.`

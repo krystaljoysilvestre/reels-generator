@@ -11,7 +11,7 @@
 import { z } from 'zod'
 import { STORY_CRAFT_V1_VERSION, spokenRegisterBlock } from './story-craft.v1.js'
 
-export const STORY_NATURALIZER_V1_VERSION = `naturalizer.v1.3+${STORY_CRAFT_V1_VERSION}`
+export const STORY_NATURALIZER_V1_VERSION = `naturalizer.v1.4+${STORY_CRAFT_V1_VERSION}`
 
 export const StoryNaturalizeSchema = z.object({
   narration: z.string().min(1),
@@ -43,6 +43,7 @@ WHAT YOU REMOVE — the fingerprints:
 
 WHAT YOU NEVER TOUCH:
 - The plot, the events, the structure, the order of beats, the emotional pacing, the point of view.
+- DELIBERATE CRAFT that only looks like an artifact: a punchline's engineered word order and the beat before it, a confession's intentional seams and tangents, a planted detail phrased innocently, a repetition that is doing rhythm work. Before re-saying an odd line, ask what job its oddness is doing — if it has one, it's not a fingerprint; leave it.
 - Content: you may not add or remove story information — only re-hear a line the way a person would actually say it. RE-SAYING NEVER EXPANDS: a line comes back the same length or shorter, and the script's total length stays what it is; if your version is growing, you're writing, not finishing.
 - The ONE content exception: broken language. If a phrase is garbled, meaningless, or grammatically wrong in the narration language (an actual defect, not a stylistic choice), fixing it to what the person clearly meant is finishing, not rewriting — do it.
 - The spoken line-per-beat formatting.

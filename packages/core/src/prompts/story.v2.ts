@@ -12,7 +12,7 @@ import { STORY_VOICES_V1_VERSION, resolveVoice, renderVoice } from './story-voic
 import { asGenreModule, classifyGenre } from './scenes.v1.js'
 
 // Craft + identities + style/voice are baked into the prompt text, so their versions ride along.
-export const STORY_V2_VERSION = `story.v2.3+${STORY_CRAFT_V1_VERSION}+${WRITER_IDENTITIES_V1_VERSION}+${STORY_STYLES_V1_VERSION}+${STORY_VOICES_V1_VERSION}`
+export const STORY_V2_VERSION = `story.v2.4+${STORY_CRAFT_V1_VERSION}+${WRITER_IDENTITIES_V1_VERSION}+${STORY_STYLES_V1_VERSION}+${STORY_VOICES_V1_VERSION}`
 
 // The story's physics — what makes a telling a STORY rather than a mood or a report. Sits beside the
 // six craft principles (which govern the sentences; these govern the chain). Authored under
@@ -126,7 +126,7 @@ ${
   }
 OUTPUT (JSON only):
 {
-  "title": "",                   // in ${v.language} — short and casual, how a person would name this story to a friend ("Yung Katok", "May Kausap sa CR"), NEVER an English title on a non-English channel and NEVER a literary/translated title
+  "title": "",                   // in ${v.language} — short and casual, the words a person would actually use naming this story to a friend ("the knocking thing", "the guy at the window" — in ${v.language}), NEVER an English title on a non-English channel and NEVER a literary/translated title
   "language": "",
   "narration": "",
   "logline": "",                 // one-line summary of the reel

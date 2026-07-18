@@ -12,7 +12,7 @@
 
 import type { GenreModule } from './scenes.v1.js'
 
-export const STORY_MECHANICS_V1_VERSION = 'mechanics.v1.1'
+export const STORY_MECHANICS_V1_VERSION = 'mechanics.v1.5'
 
 export interface StoryMechanic {
   /** stable id — persisted in plans and counted across the catalog; never rename */
@@ -38,18 +38,25 @@ export const STORY_MECHANICS: Record<GenreModule, StoryMechanic[]> = {
     { id: 'irreversible_loss', name: 'Irreversible loss', why: 'The chance to say it passes for good — the viewer feels the door close on their own unsaid things.' },
     { id: 'too_late_truth', name: 'Truth arriving too late', why: 'Understanding lands exactly when it can no longer help — the most human timing there is.' },
     { id: 'object_griefcarrier', name: 'The object that carries it', why: 'A mundane thing (a kept receipt, an unwashed mug) holds the whole feeling — the viewer cries at an object because naming the grief head-on would bounce off.' },
+    { id: 'overdue_reckoning', name: 'The overdue reckoning', why: 'The thing two people spent years not saying finally gets said out loud — the viewer braces, because it cannot be unsaid and both of them know it.' },
+    { id: 'impossible_choice', name: 'The impossible choice', why: 'Loyalty to one person costs another — whichever way they choose, someone they love loses; the viewer argues with the choice because there is no right one.' },
+    { id: 'earned_goodbye', name: 'The earned goodbye', why: 'Letting go done well — the loss is real but so is the grace; the viewer leaves sad and warm at once, and that mix is what gets shared.' },
   ],
   commentary: [
     { id: 'sacred_cow', name: 'Sacred cow', why: 'Challenging something the audience loves forces engagement — agreement or fury, never a scroll-past.' },
     { id: 'double_standard', name: 'Double standard', why: 'Holding two accepted things side by side until the contradiction is undeniable — the viewer feels caught.' },
-    { id: 'receipts', name: 'Receipts', why: 'One concrete, checkable example does what ten claims can\'t — it converts the skeptical.' },
+    { id: 'receipts', name: 'Receipts', why: 'One concrete example the viewer recognizes as true from their own experience does what ten vague claims can\'t — it converts the skeptical.' },
     { id: 'concede_then_turn', name: 'Concede, then turn', why: 'Granting the other side\'s best point first earns the ear for the knife that follows.' },
     { id: 'name_the_unsaid', name: 'Naming the unsaid', why: 'Saying the thing everyone thinks but won\'t say — relief and outrage in the same beat.' },
   ],
   reddit_story: [
-    { id: 'mundane_stakes', name: 'Mundane stakes that matter', why: 'A parking spot, a potluck, a group chat — small stakes feel REAL, and real is what makes people take sides.' },
-    { id: 'self_incrimination', name: 'Accidental self-incrimination', why: 'The narrator reveals their own fault without noticing — the viewer trusts a confessor who isn\'t clean.' },
-    { id: 'escalation_ladder', name: 'Petty escalation', why: 'Each retaliation is one notch too far — the viewer keeps reading to see where sanity breaks.' },
+    { id: 'authenticity', name: 'The authenticity spell', why: 'The whole appeal is "did this actually happen?" — the feeling of overhearing a real person. Ordinary, over-specific detail no one would invent earns the belief; the suspense is who is telling the truth, not what happens next. Break the spell (sound scripted, polished, literary) and the genre dies.' },
+    { id: 'righteous_anger', name: 'Clear injustice', why: 'Someone is wronged so plainly the viewer gets angry ON THEIR behalf — righteous anger is the most shareable emotion on the platform; a neutral situation nobody spreads.' },
+    { id: 'comeuppance', name: 'Comeuppance', why: 'The wrongdoer gets exactly what they earned — no more — and the viewer stays to the last second for it; the payoff (revenge landed, rule backfired, karma collected) is why they share.' },
+    { id: 'real_consequence', name: 'Real consequence', why: 'Something that cannot be undone is on the line — a marriage, years of savings, a job, a sibling bond severed for good, a trust that can never be rebuilt. Weight is what separates a story you judge from one you forget; the biggest posts pair a tiny mundane detail with a life-sized stake.' },
+    { id: 'mundane_stakes', name: 'Mundane texture', why: 'Names, exact amounts, timelines, the specific object — concrete, boring detail is what makes it BELIEVABLE. Believability is texture, not size: what is AT STAKE can be a parking spot OR a life, and the texture works the same either way. Never shrink a story to stay "relatable"; let it be as big as it honestly is.' },
+    { id: 'self_incrimination', name: 'Accidental self-incrimination', why: 'The narrator reveals their own fault without noticing — the viewer trusts a confessor who isn\'t clean, and it\'s what makes an "am I wrong?" genuinely arguable.' },
+    { id: 'escalation_ladder', name: 'Petty escalation', why: 'Each retaliation is one notch too far — the viewer keeps watching to see where sanity breaks.' },
     { id: 'moral_split', name: 'Genuine moral split', why: 'Both sides are half right — the comment section becomes the second half of the story.' },
     { id: 'the_update', name: 'The update', why: 'New information reframes the whole account — the viewer re-reads their own judgment.' },
   ],
@@ -64,7 +71,7 @@ export const STORY_MECHANICS: Record<GenreModule, StoryMechanic[]> = {
   informational: [
     { id: 'curiosity_gap', name: 'Curiosity gap', why: 'A question the viewer suddenly NEEDS answered — attention held by an open loop, not a promise of facts.' },
     { id: 'misconception_flip', name: 'Misconception flip', why: 'Colliding with what the viewer thought they knew — being corrected is memorable; being lectured isn\'t.' },
-    { id: 'felt_scale', name: 'Felt scale', why: 'A number translated into a scene ("that\'s every seat in Araneta, twice") — magnitude experienced, not stated.' },
+    { id: 'felt_scale', name: 'Felt scale', why: 'A number translated into a scene ("that\'s every seat in the country\'s biggest stadium, twice") — magnitude experienced, not stated.' },
     { id: 'one_vivid_case', name: 'One vivid case', why: 'A single concrete story carries the general truth better than three thin examples.' },
     { id: 'so_what', name: 'The so-what', why: 'Connecting the fact to the viewer\'s own life — knowledge that lands as relevance gets retold.' },
   ],

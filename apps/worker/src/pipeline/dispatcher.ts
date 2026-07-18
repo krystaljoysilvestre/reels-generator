@@ -40,7 +40,11 @@ export async function dispatchPipelineJob(job: Job<PipelineJobData>): Promise<vo
   try {
     switch (stepName) {
       case 'generate_story':
-        await generateStory(reelId, channelId!, language)
+        // channelId is required only for this first step (later steps resolve it from the reel row).
+        // Guard loudly: without it, generateStory fails deep with an opaque "UNDEFINED_VALUE" that
+        // burns all 3 retries before the reel is marked failed.
+        if (!channelId) throw new Error(`generate_story requires channelId in job data (reelId=${reelId})`)
+        await generateStory(reelId, channelId, language)
         break
       case 'annotate_audio_script':
         await annotateAudioScript(reelId)

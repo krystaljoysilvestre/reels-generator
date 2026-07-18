@@ -12,10 +12,13 @@ import { z } from 'zod'
 import { STORY_MECHANICS_V1_VERSION, renderMechanics } from './story-mechanics.v1.js'
 import { STORY_ELEMENTS_V1_VERSION, StoryElementsSchema, renderElementPalette, formatRecentElements, type StoryElements } from './story-elements.v1.js'
 import { STORY_STYLES_V1_VERSION, resolveStyle, renderStyleForPlanner, type StyleInfluence } from './story-styles.v1.js'
-import { WRITER_IDENTITIES } from './writer-identities.v1.js'
+import { WRITER_IDENTITIES, WRITER_IDENTITIES_V1_VERSION } from './writer-identities.v1.js'
 import { asGenreModule, classifyGenre, type GenreModule } from './scenes.v1.js'
 
-export const STORY_PLANNER_V1_VERSION = `planner.v1.4+${STORY_MECHANICS_V1_VERSION}+${STORY_ELEMENTS_V1_VERSION}+${STORY_STYLES_V1_VERSION}`
+// Includes WRITER_IDENTITIES_V1_VERSION because the planner renders identity fields (questionsAsked,
+// taboos, registers, selectionLens) — so an identity edit must bust the planner's inputHash explicitly,
+// not rely solely on the step's full-text hashing of plannerSystem/plannerUser (review nit, 2026-07-18).
+export const STORY_PLANNER_V1_VERSION = `planner.v1.6+${STORY_MECHANICS_V1_VERSION}+${STORY_ELEMENTS_V1_VERSION}+${STORY_STYLES_V1_VERSION}+${WRITER_IDENTITIES_V1_VERSION}`
 
 // The committed idea. `mechanics` + `elements` are planner METADATA — the caller STRIPS them before
 // the Writer sees the plan (INVARIANT 1: the Writer writes from the idea, never from labels).
@@ -71,13 +74,20 @@ export function buildStoryPlannerPrompt(v: StoryPlannerVars): { system: string; 
   const registersBlock = identity.registers?.length
     ? `\nTHE WRITER'S REGISTERS — every idea has a temperature; commit yours to the ONE register it wants (record it in elements.register). Candidates, not a rotation — but a long streak in one register is its own sameness:\n${identity.registers.map((r) => `- ${r}`).join('\n')}\n`
     : ''
+  // Selection lens: genre-specific guidance on WHICH ideas deserve to exist (not how to tell them).
+  // TESTS the planner reasons with, never a beat template. Where present, it OUTRANKS the generic
+  // "pick the freshest premise" instinct below (e.g. reddit: relatable postable conflict > novelty).
+  const selectionBlock = identity.selectionLens?.length
+    ? `\nHOW YOU CHOOSE — this channel's selection lens. These are TESTS for whether an idea deserves to exist, NOT a formula or a beat sheet: the situation, the people, and how it ends are always yours to invent, and range across many different situations is required. Where these conflict with the general "pick the freshest premise" instinct below, THESE WIN:\n${identity.selectionLens.map((s) => `- ${s}`).join('\n')}\n`
+    : ''
 
   const system = `You are the story planner for "${v.channelName}" — the creative subconscious of ${identity.label}.
 Niche: ${v.nicheDescription}
 Tone calibration (0–10 scales): ${v.toneConfig}
 
 You do not write prose. You decide WHAT story deserves to exist next on this channel. The writer who executes your idea is always asking: ${identity.questionsAsked.join(' ')} Plan ideas that give those questions great answers.
-${mechanics ? `\n${mechanics}\n` : ''}${styleBlock}${registersBlock}
+That writer refuses to: ${identity.taboos.join(' ')} Never commit an idea whose premise, ending, or emotional destination would force one of those — the taboo shows up at YOUR level first (e.g. an ending planned as "and it brought everyone closer" is already a bow before a word is written).
+${mechanics ? `\n${mechanics}\n` : ''}${styleBlock}${registersBlock}${selectionBlock}
 WORLD BIBLE — ideas must fit this world (reuse canonical names; don't invent recurring elements):
 ${v.worldBibleJson}
 
