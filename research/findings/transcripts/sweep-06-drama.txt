@@ -1,0 +1,164 @@
+
+══════════════════════════════════════════════════════════════════════
+[DRAMA · SHORT 75s · 1/4] "Yung Di Ko Nasabi Kay Lola"  register=QUIET ACHE  (rewritten once)
+  logline: Ang huling pag-uusap ng isang apo at lola sa dining table na dati'y puno ng ingay, ngayo'y puno ng tahimik na alaala at unsaid na pagmamahal.
+  ── PLAN (planner convergence) ──
+  premise:    A young woman reflects on her last conversation with her grandmother at the family dining table, now empty without its matriarch.
+  conflict:   The young woman wants to come to terms with not having expressed her gratitude and love to her grandmother before she passed away, but the silence and the unsaid words haunt her.
+  escalation: The woman recalls moments at the dining table where she hesitated to speak up, partly out of shyness and partly from assuming there would always be more time. She remembers the tight smile her grandmother gave her during their last meal together, now realizing it was her grandmother's way of saying goodbye.
+  twist:      The grandmother's unused plate, still set on the table, uncovers a letter of encouragement she left for her granddaughter to find one day.
+  ending:     The woman holds the letter tightly, finally breaking down, understanding her grandmother knew her heart all along and loved her deeply, spoken or not.
+  elements:   structure=a first-hand account | role=a granddaughter | setting=the family dining table | anchor=the unused plate | trigger=the absence of the grandmother | turn=a hidden sacrifice revealed | aftereffect=a reconciliation that costs something
+  stages: editor: ok | naturalizer: ok  words=161
+  GATE: FAIL — The ending breaks the NEVER rule hard — 'Kapag nagmahal ka, minsan, di kailangan ng salita. Nararamdaman lang.' is a character articulating the theme as a spelled-out moral, which is a clear rubric violation, and the narrator never makes a real decision (no AGENCY — things happen to her and she just feels them), making the story a passive, decorative grief piece rather than something earned.
+  GATE: after rewrite: FAIL — The ending violates the rubric twice: 'Ramdam ko, kahit hindi ko nasabi lahat... naintindihan niya' and 'natapos ang kwento namin ng may... kahit papano, closure' spell out the theme and hand the narrator a clean bow — the script literally announces its own meaning instead of leaving a mark, and the note-under-the-plate device is a convenient mechanism that lets Lola articulate exactly what the story needed said, which the rubric calls out by name.
+──────────────────────────────────────────────────────────────────────
+Ang dining table namin... na walang lola.
+
+Dati, puno ng ingay at tawanan.
+
+Ngayon, tahimik na.
+
+Isang beses, hindi ko nasabi sa kanya na mahal ko siya.
+
+Sabi ko kasi, next time na lang.
+
+Pero hindi dumating 'yung next time.
+
+Huli naming meal, nagtight-lip smile siya sa akin.
+
+Parang paalam.
+
+Hindi ko inintindi.
+
+Palagi niyang sinasabing 'lagi kitang iniintindi kahit di mo sinasabi.'
+
+Ngayon ko lang naintindihan 'yun.
+
+Habang inaayos ko 'yung mesa, napansin ko 'yung plato niya — hindi pa rin natanggal.
+
+Tinignan ko. May sulat sa ilalim.
+
+Para sa akin.
+
+Mahal kita, apo. Proud ako sa 'yo.
+
+Nabigla ako.
+
+Kamay niya 'yung sulat.
+
+Hindi ko na napigilan — umiyak na lang ako.
+
+Parang alam na niya na hindi ko masasabi.
+
+Kaya siya na lang ang nagsabi.
+
+Ramdam ko, kahit hindi ko nasabi lahat... naintindihan niya.
+
+Hawak ko 'yung sulat, at kahit paano, parang nakahinga ako.
+
+Oo, may pagkukulang ako.
+
+Pero natapos ang kwento namin ng may... kahit papano, closure.
+
+══════════════════════════════════════════════════════════════════════
+[DRAMA · SHORT 75s · 2/4] "Sulat ni Papa"  register=BITTERSWEET WARMTH  (rewritten once)
+  logline: In an old shoebox, a letter from his father reveals love unspoken but deeply felt.
+  ── PLAN (planner convergence) ──
+  premise:    You are standing in your childhood room, late at night, holding a shoebox filled with old letters. You didn't expect to find a letter addressed to you from your father, who passed away years ago.
+  conflict:   You want to read the letter, hoping to find the words from him you never heard. Yet you're afraid of what it might say, fearing more silence even in the words written.
+  escalation: You hesitate to open the letter, feeling the weight of the box. You consider putting it back in the box, but the promise of his voice pushes you forward. You decide to open it, but as you read, the letter reveals unanswered questions about choices he made and never explained.
+  twist:      The letter reveals a hidden sacrifice your father made for you and your siblings, something he never spoke of but that shaped your life profoundly.
+  ending:     With the letter folded back into the shoebox, you feel the enormity of his unspoken love — and the bitterness that you only learn of it now, when it's too late to ask him anything more.
+  elements:   structure=direct_second_person | role=a son or daughter | setting=a childhood bedroom | anchor=a shoebox of old letters | trigger=finding a letter addressed to you | turn=a hidden sacrifice revealed | aftereffect=a reconciliation that costs something
+  stages: editor: ok | naturalizer: ok  words=153
+  GATE: FAIL — AGENCY and CAUSALITY both fail: the narrator does nothing but open a box and read — no decision drives the beats forward (the 'ibalik na lang' hesitation resolves itself with 'sige na nga,' which is not a real choice), and the beats string together as 'and then' with no forcing tension; THE CHANGE also fails because the ending only announces grief ('naramdaman ko ulit... yung lungkot') rather than landing a shift in what an earlier moment meant — and 'Si Papa pala yung dahilan kung bakit maayos buhay namin' is exactly the rubric's hard-fail: a character (the narrator, on Papa's behalf) conveniently articulating the theme out loud.
+  GATE: after rewrite: FAIL — The narrator is a passive witness throughout — they open the box, they read, they cry, they put it back — no decision is forced and nothing changes except their mood, which is announced directly ('narealize ko rin... nandoon palagi yung pagmamahal') instead of earned by a specific object or action; the ending line ('kahit di niya nasabi, hindi siya nagkulang') explicitly spells out the theme, which the rubric forbids.
+──────────────────────────────────────────────────────────────────────
+Hawak ko yung shoebox na puno ng lumang sulat. Hindi ko inaasahan... meron palang isa para sa akin, galing kay Papa. Matagal na siyang wala.
+
+Akala ko, masaktan lang ako. Baka wala pa ring makukuha sa pagbabasa. Pero may something na nag-udyok sa akin — binuksan ko na lang.
+
+Nanginginig ang kamay ko habang tinitiklop. 'Mahal kong anak,' sabi sa umpisa. Parang boses niya bigla kong narinig.
+
+Sa gitna, may mga bagay na hindi ko alam. Yung pagtahimik niya, akala ko lagi lang siyang nasa trabaho... yun pala, para sa amin yun lahat. Sinasalo niya yung lahat ng bigat, mag-isa.
+
+Nang matapos akong basahin, napaluhod ako. Ang dami kong tanong — tapos wala na akong matatanungan. Pero narealize ko rin... nandoon palagi yung pagmamahal. Tahimik lang talaga.
+
+Ibinalik ko ang sulat sa loob ng shoebox. Kasama ang panghihinayang... at pasasalamat. Kasi ngayon, alam ko na — kahit di niya nasabi, hindi siya nagkulang.
+
+══════════════════════════════════════════════════════════════════════
+[DRAMA · LONG 240s · 3/4] "Yung Jacket ni Miguel"  register=CONFRONTATION  (rewritten once)
+  logline: Carlos finds an old jacket that brings back memories of his estranged brother, forcing him to confront unresolved issues.
+  ── PLAN (planner convergence) ──
+  premise:    An elder brother, Carlos, discovers an old jacket in the shared closet from his high school days while preparing to move out after selling their childhood home.
+  conflict:   Carlos wants to move on and leave behind all relics of the past, but he's drawn to the jacket, which represents his estranged relationship with his younger brother, Miguel. The jacket stirs an old argument between them that was never resolved.
+  escalation: Carlos debates whether to bring the jacket or leave it, each choice triggering memories of arguments and shared moments with Miguel. As he goes through old photos and notes found in the jacket's pockets, Carlos faces the weight of unresolved tensions and wonders if he should reach out to Miguel, risking rejection.
+  twist:      Carlos finds a note written by Miguel from all those years ago, expressing regret for their fallout and a desire to mend things, which he never showed or gave to Carlos.
+  ending:     Carlos decides to keep the jacket and picks up the phone to call Miguel, having realized there's unfinished business and a chance to reconcile.
+  elements:   structure=artifact | role=an elder brother | setting=the shared bedroom closet | anchor=an old jacket | trigger=preparing to move out | turn=a hidden sacrifice revealed | aftereffect=a reconciliation that costs something
+  stages: editor: ok | naturalizer: ok  words=305
+  GATE: FAIL — AGENCY/CAUSALITY fail: the narrator never truly decides anything — the jacket is put on, the note is found by accident, the call is made in a haze — every beat is things happening TO Carlos rather than Carlos forcing the next beat, so the script reads as a passive witness chain of 'and then' discoveries; compounded by a LANGUAGE NATURALNESS fail on 'Bawat sinulid may-indindi' which is garbled and grammatically broken (no verb, unclear meaning), making it unsayable aloud.
+  GATE: after rewrite: FAIL — AGENCY and CAUSALITY both fail: the narrator never truly decides anything — he finds the jacket, finds the note, then dials almost as if the plot nudges him forward ('Kasi eto na 'to, pagkakataon din 'to, di ba?'), and the ending trails off into 'Sana sagutin niya' with zero payoff — the call is made but nothing lands, no answer, no shift in the narrator, just suspended hoping; plus THE DEBT is broken because the opening plants the question of leaving (moving out, boxing things up) but the ending answers a different question (reconciliation with Miguel) without connecting the departure to the estrangement, so the jacket's significance as catalyst for *this* move never clicks; and the line 'Alam mo 'yun, parang sigaw na hindi naririnig' is announced emotion, not carried — it names the feeling instead of letting the image (the note) do the work.
+──────────────────────────────────────────────────────────────────────
+Sabi nila, hindi mo kailangan ng maraming gamit kapag aalis ka na. Pero nung nakita ko yung jacket, parang may humila sa akin pabalik.
+
+Halos naka-box na lahat, pero itong lumang jacket, parang sinadyang magpaalala. Gusto ko na nga sanang itapon, pero parang dala-dala nito lahat ng alaala.
+
+Hinawakan ko yung jacket, napa-pause ako. Ito ang bagay na naging dahilan ng tampuhan namin ni Miguel. Gusto ko sanang mag-move on, pero ang bigat dalhin.
+
+Dinampot ko yung jacket at may nalaglag na papel mula sa bulsa. Picture namin ni Miguel nung high school — inseparable kami sa barkada noon. May mga lumang notes din, mga quiz na lagi siyang mataas. Habang tinitingnan ko, bumabalik lahat ng alaala, pati mga argumento at hindi pagkakasunduan.
+
+Sumandal ako sa pader, hawak yung jacket. Naalala ko yung gabing nagkaalitan kami. Liit ng dahilan, pero lumaki kasi di namin napag-usapan. Pareho kaming may pride.
+
+Tapos nakita ko yung isang maliit na note sa bulsa. Hindi ko maalala 'to.
+
+Nakasulat sa sulat kamay ni Miguel: "Sorry kuya, sana maayos natin 'to. Miss na kita."
+
+Alam mo 'yun, parang sigaw na hindi naririnig. Gusto kong umiyak, pero natawa ako.
+
+Ngayon, iniisip ko kung ano'ng susunod kong gagawin. Ang dami nang taon ang lumipas. Pero hindi ko alam hanggang kailan ko kayang dalhin 'to.
+
+Doon ko naramdaman na kailangang umalis ng dati. Pero di ba para makausad ka, kailangan mong balikan yung naiwan? Hawak ko na yung telepono; hindi ko alam kung sasagutin niya.
+
+Pero nag-dial na ako. Kasi eto na 'to, pagkakataon din 'to, di ba? Para sa isang fresh start. Nung unang ring pa lang, hinigpitan ko yung kapit sa jacket.
+
+Kahit sa phone lang, kahit walang kasiguraduhan, siguro kaya pa. Pwede pa naman, di ba? Kung hindi ko ito gagawin, parang paulit-ulit lang.
+
+Tumawag ako, tapos naghintay. Sana sagutin niya.
+
+══════════════════════════════════════════════════════════════════════
+[DRAMA · LONG 240s · 4/4] "Ang Mansion na Saksi"  register=BITTERSWEET WARMTH  (rewritten once)
+  logline: Nagbalik ang isang retired na guro sa isang lumang mansion kung saan nakatago ang mga maaagang alaala ng pagkabata.
+  ── PLAN (planner convergence) ──
+  premise:    A retired teacher hears a familiar local legend about a mysterious old mansion on the outskirts of town, reputed to hold secrets of a bygone era. Invited by the local historian, the teacher returns to the mansion for a community storytelling event, recalling a past tied to its walls.
+  conflict:   The teacher wants to share a version of the legend, which they uniquely know, but must balance revealing enough to ignite curiosity without unearthing personal memories they’ve kept buried.
+  escalation: As each storyteller recounts familiar parts of the legend, the teacher's mind wanders to their own youthful days spent at the mansion. Each tale stirs deeper memories, prompting them to weigh whether they should reveal their intimate knowledge of the mansion that no one else knows, at the cost of reopening wounds from their past.
+  twist:      When the teacher tells their story, they casually mention details inside the mansion that no one outside should know. The audience is captivated by the seemingly firsthand depiction, hinting at the sacrifices and connections the teacher made during those years.
+  ending:     Ending with a wistful smile, the teacher lets the last detail hang, allowing the community to wonder about the bond they had with the mansion's reclusive last occupant.
+  elements:   structure=retold_legend | role=a retired teacher | setting=the mansion on the outskirts of town | anchor=- | trigger=a community storytelling event | turn=a hidden sacrifice revealed | aftereffect=an unanswered 'what if'
+  stages: editor: ok | naturalizer: ok  words=327
+  GATE: FAIL — The script fails AGENCY and THE CHANGE — the narrator attends an event, drops one vague detail about a kitchen cabinet, and nothing is decided or revealed; the 'lihim' is never actually shared, so the ending ('Siya na hindi lahat ng kuwento ay maikwekwento') is a non-answer that reads as a dodge rather than a payoff, and the opening wound ('may kumurot sa dibdib ko') is never earned or resolved — the viewer is left with no clearer understanding of the secret, the relationship, or what the narrator chose.
+  GATE: after rewrite: FAIL — AGENCY and THE CHANGE both fail: the narrator decides nothing — she shows up, almost reveals something, then chooses silence, and nothing is different at the end; combined with the final paragraph spelling out the theme ('may mga kwento na hindi mo talaga maikukwento… yun ang sikreto ng mansion') which is a direct rubric violation ('a character conveniently articulating the theme').
+──────────────────────────────────────────────────────────────────────
+Alam mo yung moment na parang naamoy mo yung lumang libro? Ganun yung nararamdaman ko nung narinig ko yung mga kwento tungkol sa luma na mansion sa dulo ng bayan. Nag-flashback lahat sa akin. Siguro mga ilang taon na rin kasi akong hindi bumabalik doon. Retired na ako, pero parang may parte pa rin ng buhay na naiwan sa lugar na 'yun.
+
+Si Kuya Ramon, ang local historian namin, nag-invite sa akin para sa evening ng storytelling doon mismo sa mansion. Sa isip ko, sige, bakit hindi? Pero habang patungo kami, hindi ko maiwasang mag-isip — 'Ano nga ba ang itinatago ko sa mansion na 'to?'
+
+Bawat speaker, nagsha-share ng sarili nilang bersyon ng kwento ng mansion. Ang alam ng lahat, mystical daw nung luma pang panahon, may mga secret rooms pa raw talaga. Ako? Ewan ko, pero parang alam ko ng higit pa sa lahat ng nandoon — may mga memories akong bumabalik, mga araw noong bata pa ako, madalas akong nandun...
+
+Habang nakikinig, naiisip ko yung mga oras na nandoon ako. Yung palaging may uling sa mga kamay ko kasi sinisilip ko yung mga furnitures na nag-aalikabok. Alam ko na hindi lahat ng ito kwento ko, pero natutukso ako. Kailangan ko bang manahimik o ikuwento na lahat?
+
+Finally, ako na ang sumalang. Sabi ko, 'Naaalala niyo ba yung kusina diba, na laging malamig kahit walang electric fan?' Lahat napatingin sa akin. 'Parang kilalang-kilala mo.' Oo nga pala. Maliit na detail pero hindi dapat pinag-uusapan 'yun.
+
+Napangiti lang ako, sinabi ko, 'May mga bagay kasi na ang dami na ring nakatago dyan.' Hindi ko na sinagot yung tanong. Hinayaan ko na lang silang mag-isip.
+
+Habang pauwi ako, naisip ko lang — parang ang daming hindi nasabi, pero baka mas okay na ganun. Minsan kasi may mga kwento na hindi mo talaga maikukwento — lalo na kung ikaw mismo ang maaapektuhan kapag ginawa mo. At ayos lang yun. Yun ang sikreto ng mansion. Yung mga hindi nasasabi.
+
+══════════════════════════════════════════════════════════════════════
+SUMMARY (drama):
+  1. short | Yung Di Ko Nasabi Kay Lola               | QUIET ACHE               | FAIL (retried)
+  2. short | Sulat ni Papa                            | BITTERSWEET WARMTH       | FAIL (retried)
+  3. long  | Yung Jacket ni Miguel                    | CONFRONTATION            | FAIL (retried)
+  4. long  | Ang Mansion na Saksi                     | BITTERSWEET WARMTH       | FAIL (retried)
+total lab cost (drama): 64¢

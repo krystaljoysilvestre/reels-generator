@@ -1,0 +1,364 @@
+⚗ writer provider override: anthropic
+
+══════════════════════════════════════════════════════════════════════
+[HORROR · SHORT 75s · 1/4] "yung tawag na alam lahat"  register=QUIET DREAD
+  logline: Sa gabi shift niya, nagsimulang tumawag ang isang unknown number na alam ang lahat — hanggang sa mga bagay na hindi niya sinasabi kahit kanino.
+  ── PLAN (planner convergence) ──
+  premise:    A call center employee, alone during a night shift, starts receiving eerily personal calls from an unknown number that gets more specific about her life with each ring.
+  conflict:   She wants to complete her shift peacefully and safely, but the increasingly intrusive calls disrupt her focus and instill fear.
+  escalation: She decides to ignore the first call, but then another call comes with more personal information, forcing her to confront the idea that someone is watching her. She tries to block the number, but the calls persist, each one revealing more intimate details about her day-to-day life. Her attempts to alert security or call for help fail as the line goes dead.
+  twist:      The final call reveals something only she should know about her hidden fears and anxieties, suggesting an impossibly deep intrusion into her mind or life.
+  ending:     She ends the account, still haunted by the invasive calls, avoiding her phone even for necessary tasks, leaving the viewer with a sense of unease about the devices they rely on.
+  elements:   structure=first-hand account | role=a call center employee | setting=the call center late at night | anchor=a phone call | trigger=an unknown caller with personal information | turn=identity contradiction | aftereffect=a new rule to live by: never assume privacy
+  stages: editor: ok | naturalizer: ok  words=174
+  GATE: PASS — The hook lands mid-tension with a concrete, specific detail, the escalation through the dress color, the sugar count, and finally the phone ringing behind the narrator's back each raises the cost without repeating intensity, the payoff recontextualizes the narrator's private fear as something externally known, and the voice reads as natural spoken Taglish throughout — no translated phrasing, no literary register drift, no stock imagery.
+──────────────────────────────────────────────────────────────────────
+Hindi ko na alam kung sino'ng nagkukuwento ng buhay ko.
+
+Gabi yun, naka-shift ako. Normal lang — headset on, malamig na kape, wala akong kasama sa floor.
+
+Umikot yung number. Unknown.
+
+Sinagot ko. Parte ng trabaho 'yan.
+
+Babae yung boses — mahinahon. Sabi niya: "Pagod ka na nang bihisan mo 'yung asul na damit kanina."
+
+Nag-hang up ako agad.
+
+Asul na damit. Oo nga, suot ko 'yun. Pero wala akong sinabihan.
+
+Nag-call ulit.
+
+Sabi niya: "Lasing 'yung kape mo kanina. Dalawang kutsara ng asukal."
+
+Tatlo ang ginawa ko. Tatlong kutsara. Pero halos tama siya.
+
+Tinry kong i-block. Nag-call pa rin.
+
+Kinausap ko yung security — biglang patay yung linya.
+
+Tinawagan ko ulit. Nag-ring sa likod ko.
+
+Nag-ring yung sariling phone ko.
+
+Sinagot ko.
+
+Sabi niya: "Alam mo naman kung bakit takot ka umuwi sa gabi."
+
+At tsaka ko naalala — yung takot na 'yon, hindi ko sinasabi kahit kanino. Hindi ko nga iniisip. Pero alam niya.
+
+Hindi ko alam kung paano.
+
+Hanggang ngayon, hinahayaan ko na lang mag-ring ang phone ko. Ayoko nang sumagot.
+
+══════════════════════════════════════════════════════════════════════
+[HORROR · SHORT 75s · 2/4] "walang drayber"  register=COILED SUSPENSE  (rewritten once)
+  logline: Nag-iisa sa huling tren, huminto sa dilim — at nang marating ko ang driver's cabin, wala roon kahit sino.
+  ── PLAN (planner convergence) ──
+  premise:    You are the last passenger on the final ride of an evening MRT commute, when the train slows to a stop in an unexpected darkness between stations.
+  conflict:   You want to safely reach your station, but an unexpected stop leaves you isolated in a dark carriage with doors that refuse to open.
+  escalation: As the train sits silent and still, you decide to check with the driver by walking down the length of the empty train. Each car you pass through becomes darker and more unfamiliar, as if you've been moving backward in time. The shadows seem to swallow the light, and the windows show nothing but darkness. You try calling for help, but no network service is available.
+  twist:      You reach the driver's cabin only to find it completely empty—no driver, not even controls—just a row of empty, dusty seats.
+  ending:     The train resumes movement on its own, propelling you forward but leaving you claustrophobically trapped in the past—a passenger with no driver.
+  elements:   structure=direct_second_person | role=the last passenger on the last trip | setting=the final ride of an evening MRT commute | anchor=the MRT train car | trigger=a stop in an unexpected darkness | turn=spatial contradiction | aftereffect=a contaminated routine
+  stages: editor: ok | naturalizer: ok  words=201
+  GATE: FAIL — AGENCY failure is fatal: the narrator never decides anything — he walks forward passively beat by beat, and the ending is pure drift ('hindi ko alam kung saan tayo patungo') with no decision, no change, no cost paid, just a witness trailing off; combined with a DEBT miss — the opening plants 'huling pasahero, huling tren' but the ending never pays that framing off with a recontextualized detail, it just stops — making this a mood sketch, not a story.
+  GATE: after rewrite: FAIL — AGENCY and CAUSALITY both fail: the narrator does nothing but walk forward and observe — every beat is 'and then,' no decision forces a consequence — and the ending question ('sino ang nagpalabas sa akin?') is a voiced-over thesis that explains the scare rather than landing it, violating the NEVER rule against explaining after the scare lands.
+──────────────────────────────────────────────────────────────────────
+Sumakay ako sa huling tren.
+
+Dapat hindi ko ginawa 'yon.
+
+Nag-iisa na ako sa buong karwahe — lahat ng iba bumaba na sa Kamuning. Wala akong inisip na dapat ikabahala.
+
+Tapos huminto ang tren.
+
+Hindi sa estasyon. Sa gitna ng riles, sa dilim.
+
+Antay lang muna, sabi ko sa sarili ko. Siguro may technical issue. Normal lang 'to.
+
+Pero limang minuto. Sampung minuto. Walang anunsiyo, walang ilaw na nagbago.
+
+Lumakad ako pasulong. Sisiguraduhin ko lang kung may tao sa driver's cabin.
+
+Doon nagsimulang maging mali.
+
+Bawat karwahe na nilakaran ko — parang lumalayo ako sa mas maliwanag, mas maingay na lugar. Parang lumalayo sa ngayon.
+
+Yung mga upuan — may alikabok na. Yung mga hawakan — mainit pa, pero parang matagal nang walang humawak.
+
+Sinabi ko sa sarili ko, huwag mag-isip ng masama.
+
+Abot ko na ang cabin.
+
+Binuksan ko.
+
+Walang drayber. Walang kontrol. Walang kahit ano.
+
+Puros upuan lang — sira, maalikabok — parang hindi nag-operate ang tren na ito sa matagal na panahon.
+
+Tapos gumalaw na muli ang tren.
+
+Hindi ko pinili 'yon. Yun ang nakakatakot.
+
+Dumating ako sa estasyon — pero paglabas ko sa pintuan, hindi ko mapigilan ang tanong:
+
+Kung walang drayber, sino ang nagpalabas sa akin?
+
+══════════════════════════════════════════════════════════════════════
+[HORROR · LONG 240s · 3/4] "ang relo sa locker"  register=QUIET DREAD
+  logline: Isang nurse sa night shift ang nakahanap ng lumang relo sa isang nakalimutang locker — at unti-unting natanto na hindi ito nagtatala ng oras, nagtatakda siya.
+  ── PLAN (planner convergence) ──
+  premise:    A nurse on the night shift at a small-town hospital finds an old, forgotten wristwatch in an abandoned locker.
+  conflict:   The nurse wants to finish her shift uneventfully, but the wristwatch has stopped ticking and starts mysteriously setting itself to a new time, disrupting her sense of routine.
+  escalation: Initially dismissive, the nurse decides to put the wristwatch back when it starts changing the time by itself—displaying events that haven't happened yet. Each time she checks her patients, she finds them mirroring the watch's time and condition. Her ignorance of the watch's time—and the reality it dictates—quickly gives way to terror.
+  twist:      The wristwatch takes control, setting itself forward to a critical moment where a patient flatlines unexpectedly, echoing the watch's hands. It's now clear the watch isn't predicting time—it's dictating it.
+  ending:     Realizing she can't alter what's been set, the nurse watches helplessly as the wristwatch ticks towards another vital point—the end of her own shift and, perhaps, her safety.
+  elements:   structure=mundane_wrong | role=a night-shift nurse | setting=an abandoned locker in the hospital | anchor=a wristwatch | trigger=the watch changing its time unexpectedly | turn=causal contradiction | aftereffect=a contaminated routine
+  stages: editor: discarded_peak | naturalizer: discarded_peak  words=568
+  GATE: PASS — Ships clean: the hook plants a specific dread without naming it, the relo functions as a genuine recontextualizing plant across all three beats, causality is tight (each observation forces the next check), the ending lands on the narrator's own shift-end with zero epilogue bleed, language reads as natural spoken Taglish throughout, and the 'anong oras natatapos yung shift ko' turn pays the opening line's debt exactly.
+──────────────────────────────────────────────────────────────────────
+Hindi ko alam kung sa anong oras siya nagsimula.
+
+Yan ang nakakatakot.
+
+Night shift ako nun. Sabado. Yung shift na walang ibang gustong mag-report kaya lagi akong napipili.
+
+Maliit lang ang ospital — dalawang ward, isang nurses' station, at isang matagal nang saradong locker room sa dulo ng C-corridor. Sabi ng mga senior namin, dating storage room yun. Hindi namin ginagamit.
+
+Pero yung gabi na yun, naglakad ako papunta dun.
+
+May napansin kasi akong pinto — bukas nang konti. Hindi ko pa nakikita na ganun dati.
+
+Sinabi ko sa sarili ko, hangin lang siguro. Yung aircon sa corridor, matagal na ring sira.
+
+Pinasok ko.
+
+Madilim. Ningas lang ng ilaw mula sa corridor ang pumasok. May mga locker na — lumang metal, may kalawang, yung may pangalan pang nakasulat sa masking tape. Lahat sarado. Lahat kundi isa.
+
+Yung pangalan sa locker, hindi ko na mabasa. Natanggal na yung masking tape — nakadikit pa lang yung gilid, nakabitin.
+
+At sa loob — relo.
+
+Manual. Silver. Ang correa, natanggal na. Nakapatong lang siya sa sahig ng locker, parang iniwan ng may balak bumalik.
+
+Pinulot ko.
+
+Hindi gumagalaw yung mga kamay.
+
+Syempre. Matagal na siyang nakatengga dun.
+
+Pinasok ko sa bulsa ng uniform ko. Basta. Ewan ko rin kung bakit. Puyat siguro.
+
+Bumalik ako sa station.
+
+---
+
+Mga alas dose na. Ginawa ko yung rounds ko — dalawang pasyente sa ward, stable naman. Nakahiga, natutulog. Normal. Lahat normal.
+
+Pagbalik ko sa station, hinubad ko yung relo mula sa bulsa. Saka ko nakita.
+
+Gumagalaw na yung mga kamay.
+
+Hindi naman ganun kagalaw — dahan-dahan, tiyak. Parang binabago yung oras.
+
+Alas dose singkwenta singko.
+
+Nanahimik ako sandali. Nakinig kung may ibang nagalaw sa loob ng building. Wala.
+
+Sinabi ko sa sarili: baka may natamaan na spring sa loob, nagising. Ganun naman yung mga lumang relo.
+
+Kaya tinanggap ko yun.
+
+---
+
+Alas una kinumpleto ko yung chart ng Bed 3. Babae, animnapu't apat. Stable. Natutulog.
+
+Tinignan ko yung relo ulit.
+
+Alas una singkwenta.
+
+At yung pangalawang kamay — yung segundero, kung tatawagin — nakaturo sa ikaanim.
+
+Binuksan ko yung chart ng Bed 3 muli.
+
+BP niya nung nakaraang check: medyo mababa. Hindi alarming pero — mababa.
+
+Hindi ko pa binocheck yung Bed 3 nang ganun kagabi.
+
+Pumasok ako sa ward.
+
+Natutulog pa rin siya. Pero ang kulay ng mukha niya — medyo iba. Hindi naman ganun kagabi.
+
+Tinig ko: "Ma'am?"
+
+Napaos.
+
+Nagising siya. Nahihilo.
+
+BP: 88/60.
+
+Sinabi ko sa sarili: coincidence. Nag-check lang ako ng mas maaga. Kaya napansin ko.
+
+Ganun lang yun.
+
+---
+
+Pinalis ko yung relo sa desk ko.
+
+Sinalin ko sa drawer. Sarado.
+
+Mga alas dos.
+
+Kumakain sana ako ng pandesal nung narinig ko yung monitor.
+
+Flatline.
+
+Tumakbo ako.
+
+Bed 1. Lalaki. Limampu't walo. Dating stable.
+
+Code. Tinawagan namin yung on-call. Nagsimula kaming mag-resuscitate.
+
+Sandaling tinatamad kong banggitin ito kasi buo pa rin sa isip ko: nung dumating yung doctor at nagsimula silang mag-work sa pasyente — bigla ko lang naalala.
+
+Yung relo.
+
+Bukas ko yung drawer.
+
+Alas dos singkwenta.
+
+At yung pangunahing kamay — nakaturo sa alas tres.
+
+Nagtitick na siya. Dahan-dahan.
+
+Wala akong nagawa. Nakatayo lang ako dun, relo sa kamay, habang nasa likod ko ang lahat ng ingay ng code.
+
+Kasi bigla kong naisip yung isang bagay na hindi ko gustong isipin:
+
+Anong oras natatapos yung shift ko?
+
+Alas tres.
+
+At kahit hindi ko gustong titigan yung relo —
+
+tumingin pa rin ako.
+
+Gumagalaw pa rin yung mga kamay.
+
+══════════════════════════════════════════════════════════════════════
+[HORROR · LONG 240s · 4/4] "ang babaeng laging basa"  register=QUIET DREAD
+  logline: Isang residente ng apartment ang nagkwento ng urban legend tungkol sa babaeng laging basa — at napagtanto na lagi pala siyang papunta sa 4B.
+  ── PLAN (planner convergence) ──
+  premise:    A long-term resident of a Manila apartment complex shares the urban legend of 'The Dripping Woman,' a ghost rumored to appear in the building's elevator at midnight. However, during the retelling, a listener notices the storyteller mentions a distinct detail about the ghost's wet footprints leading directly to a specific apartment—their own.
+  conflict:   The narrator dismisses their own mention of the wet footprints as imagination, but begins to fear the legend might be true. They want to confirm their suspicions without seeming paranoid or foolish to the others.
+  escalation: Determined to find rational explanations, the narrator sets up cameras inside the elevator, hoping to catch a prankster. However, each night the footage shows nothing but wet footprints appear outside their door. They try to confront neighbors but are met with indifference, deepening their fear.
+  twist:      The narrator experiences a sleepless night and sees the faint outline of wet footprints leading from the elevator to their apartment in real-time, but the camera footage shows no sign of anyone passing, only the footprints coolly manifesting themselves.
+  ending:     The narrator hears the sound of water dripping inside their own apartment. They approach the bathroom, their mind racing, and realize that the wet footprints always led into their own space. One breath later, the bathroom door creaks open on its own.
+  elements:   structure=retold_legend | role=a long-term apartment resident | setting=the elevator in a Manila apartment complex | anchor=an urban legend | trigger=mention of wet footprints leading to the narrator's apartment | turn=spatial contradiction | aftereffect=a contaminated living space
+  stages: editor: ok | naturalizer: ok  words=500
+  GATE: PASS — The script ships: the hook plants a concrete dread-detail in the first two lines, the escalation moves from legend to personal to physical evidence to presence-inside-the-apartment without repeating a beat, the 4B plant pays off exactly at the peak, the voice stays in tight 2AM dread throughout, and the Taglish reads as natural spoken register with no translated-sentence stiffness.
+──────────────────────────────────────────────────────────────────────
+Hindi ko sana sinabi.
+
+Yung detalye tungkol sa paa.
+
+Kasi nung sinabi ko, nag-iiba yung mukha ng nakikinig sa akin.
+
+Tayo muna.
+
+Six years na ako sa building na 'to. Kaya alam ko lahat ng chismis dito — sino ang late sa rent, sino ang may ayaw sa kapitbahay, yung kuya sa rooftop na may alaga na kambing nung isang taon. Lahat alam ko.
+
+Pero itong si The Dripping Woman — hindi ko pinansin noon.
+
+Urban legend lang naman daw.
+
+Sabi ng mga matatanda dito, babae daw siya. Laging basa. Tuwing hatinggabi, lumalabas daw sa elevator — hindi nagbubukas ang pinto, basta naroon na lang siya sa loob pag binuksan mo.
+
+At lagi raw may bakas.
+
+Wet footprints. Simula sa elevator, papunta sa isang partikular na apartment.
+
+Noon ko sinabi yun nang malakas.
+
+Nabanggit ko na — reflexive, kasi ganun naman talaga yung kwento — na ang footprints niya daw, nagtatapos sa 4B.
+
+Yung kaibigan ko na nakikinig — tinitigan niya ako.
+
+Diba, sabi niya, 4B ka?
+
+Tumigil ako.
+
+Oo. 4B nga.
+
+Pilit akong nagpatawa. E, iyan na nga yung makakatakot, di ba?
+
+Pero kahit sinabi ko yun, may natira na sa akin. Yung tanong. Hindi na siya umalis.
+
+Kaya itinayo ko ang camera.
+
+Isang maliit na action cam, nakapatong sa bookshelf ko sa harap ng pinto. Focused sa hallway palabas ng 4B, kayang kunin ang elevator entrance. Hindi ko sinabihan ang kahit sino — ayokong magmukhang sira.
+
+Unang gabi — wala. Malinis ang footage.
+
+Ikalawang gabi — gisingin ako ng katabi ko sa 4A. Nagre-rewind ako ng footage, naghahanap ng tao, naghahanap ng bata, kahit anino.
+
+Wala.
+
+Pero sa umaga, pagbukas ko ng pinto ko para kumuha ng delivery —
+
+Wet footprints. Nasa hallway. Papunta sa pintuan ko.
+
+Kinatok ko ang bawat pinto sa palapag namin.
+
+4A — Wala kaming alam.
+
+4C — Baka may nagtutubig lang sa taas.
+
+4D — walang nagsagot.
+
+Binago ko ang angle ng camera. Kinunan ko na ang buong hallway, mula sa stairwell hanggang dulo.
+
+Ikatlong gabi. Nakaupo ako sa sahig ng sala ko nang alas-dose, mata ko nakadikit sa live feed sa laptop.
+
+Ang hallway — walang tao. Siyempre walang tao.
+
+Tagos nakita ko sila.
+
+Mahina lang. Pero naroon.
+
+Isa-isa. Nagsi-appear sa tile — mala-shadow, pero basa. Walang tao, wala kahit anino, pero nagla-lumabas ang footprints. Papunta rito.
+
+Alas-dose't trenta. Sapat ang oras para huminahon.
+
+Tagos narinig ko ang patak ng tubig.
+
+Mula sa loob ng apartment ko.
+
+Hindi naman nakabukas ang gripo ko — alam ko yun dahil OCD ako sa tubig, lagi kong sinisigurado yun bago matulog.
+
+Patak. Patak. Patak.
+
+Mula sa banyo.
+
+Hindi ako agad lumayo. Nanatili muna ako nang ilang segundo sa gitna ng sala, kasi pag hindi ka gumalaw, may parte ng utak mo na nagsasabing posibleng hindi totoo yung naririnig mo.
+
+Tagos hindi na tumitigil ang patak.
+
+Lumakad ako papalapit.
+
+Ang sahig ng banyo — nakita ko agad sa liwanag ng sala — basa.
+
+At yung pinto ng banyo —
+
+Hindi ko siya isinara mamaya.
+
+Nagbukas siya.
+
+══════════════════════════════════════════════════════════════════════
+SUMMARY (horror):
+  1. short | yung tawag na alam lahat                 | QUIET DREAD              | PASS
+  2. short | walang drayber                           | COILED SUSPENSE          | FAIL (retried)
+  3. long  | ang relo sa locker                       | QUIET DREAD              | PASS
+  4. long  | ang babaeng laging basa                  | QUIET DREAD              | PASS
+total lab cost (horror): 60¢

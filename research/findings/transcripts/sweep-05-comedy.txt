@@ -1,0 +1,122 @@
+
+══════════════════════════════════════════════════════════════════════
+[COMEDY · SHORT 75s · 1/4] "Yung Internet na 'di kaya"  register=ESCALATING ABSURD  (rewritten once)
+  logline: A confident student leads a chaotic online group presentation, with unstable Wi-Fi and a surprise rooster cameo.
+  ── PLAN (planner convergence) ──
+  premise:    A college student is tasked with leading a simple online group presentation. They're confident it's easy, until they realize they're the only one with a stable internet connection.
+  conflict:   The student just wants to deliver a smooth presentation, but their teammates keep dropping off the call or speaking over each other's frozen screens.
+  escalation: As Internet problems mount, each teammate resorts to increasingly desperate measures: one uses a shaky hotspot, another huddles close to a neighbor’s window Wi-Fi, and the last resorts to typing notes into the chat asking the leader to 'speak for him.'
+  twist:      Just when they’re about to finally complete a slide, a loud rooster crows in the background, silencing any hope of regaining professionalism.
+  ending:     The student, resigned and a little amused, leans back and types 'Rooster signal: Five stars' into the chat.
+  elements:   structure=escalating_spiral | role=the overconfident one | setting=an online group presentation | anchor=unstable internet connections | trigger=a presentation's technical difficulties | turn=expectation subverted | aftereffect=a groan-laugh
+  stages: editor: ok | naturalizer: ok  words=140
+  GATE: FAIL — CAUSALITY fails: the beats just stack ('and then JD froze, and then Celine moved, and then Dahlia typed, and then a rooster crowed') with no therefore/but chain forcing each other, so the rooster feels like a random addition rather than the inevitable catastrophic payoff of a narrator's specific decision — and AGENCY is missing because the narrator never makes a meaningful choice that backfires; things just happen around them until the script stops.
+  GATE: after rewrite: FAIL — Agency and causality collapse — the narrator never decides anything, just watches disasters happen to others in a flat 'and then… and then' chain, so there's no comic escalation with its own logic, only a list; and 'Napahiga na kami. Kasi... paano ba yan hahamunin?' is a non-ending that trails off instead of paying off the opening promise of a smooth presentation with any real consequence or shift.
+──────────────────────────────────────────────────────────────────────
+Okay, guys, madali lang 'to. Promise, smooth presentation na 'to. Pero... hataw si Cathy sa intro pa lang, biglang freeze frame—parang si Elsa. So ako na ulit. JD's turn—pero ibang kuwento to; biglang 'Oops, Kenny Rogers' na tunog niya. Tapos dumaan daw tricycle driver sa wifi spot niya.
+
+Si Celine, kinawayan na yata kapitbahay para mag-share ng signal. Dahil nakisuyo pa siya, pero nung bumalik, parang zombie yung galaw ng video. Tawa na lang background ni JD.
+
+Si Dahlia—wala nang gana, type na lang siya sa chat. 'Pls speak for me... ang bagal ng net ko.' So ako, sugod lang ulit sa presentation.
+
+Eto na, tapusin na sana namin, KKK na sa slide, tapos...
+
+COCK-A-DOODLE-DOO!!!
+
+Seryoso?! Si manok na nasa spotlight ngayon. Ako na lang nagtype sa chat, 'Rooster signal: Five stars.'
+
+Napahiga na kami. Kasi... paano ba yan hahamunin?
+
+══════════════════════════════════════════════════════════════════════
+[COMEDY · SHORT 75s · 2/4] "Nephew vs. Karaoke"  register=DEADPAN  (rewritten once)
+  logline: A failed karaoke attempt turns into a family hit when a tone-deaf uncle saves the day.
+  ── PLAN (planner convergence) ──
+  premise:    You're at a family reunion, trying to join a karaoke session in your aunt's cramped living room.
+  conflict:   You want to sing a specific song to impress your relatives, but the karaoke machine's remote is malfunctioning and won't cooperate.
+  escalation: You decide to fix the remote yourself, leading to accidentally changing the song to an embarrassing duet. Opting to redo, you start hitting random buttons, which makes the machine cycle through scores of unknown songs. Finally, you try to unplug it and accidentally disconnect the entire sound system mid-performance.
+  twist:      Just as you're about to give up, your uncle—famed for being tone-deaf—picks up the mic, thinking you intentionally set the song for him.
+  ending:     Your uncle croons loudly off-key, earning cheers, as you slip into the background unnoticed, realizing he saved the day with unintended hilarity.
+  elements:   structure=direct_second_person | role=the one thing keeps happening to | setting=a family reunion's karaoke session | anchor=the karaoke machine | trigger=a malfunctioning remote | turn=expectation subverted | aftereffect=a groan-laugh
+  stages: editor: ok | naturalizer: ok  words=162
+  GATE: FAIL — The ending line 'who knew my disaster could be a hit?' has the narrator laughing at their own punchline and spelling out the joke — a direct violation of the 'played straight, never explain the punchline' rules, and it kills the landing.
+  GATE: after rewrite: FAIL — AGENCY and CAUSALITY both fail: the narrator never decides anything — the remote breaks itself, the song changes itself, the system falls by accident, and Uncle saves the day on his own — so every beat is 'and then' not 'therefore/but,' and the narrator is just a bystander to a series of things that happen near him, which drains all comic stakes and makes the ending feel like it just stops rather than pays off.
+──────────────────────────────────────────────────────────────────────
+So, sa family reunion, nasa gitna ako ng sala ni auntie, ready na mag-karaoke. Pero sa dami ng tao, hindi ko mahanap yung remote. Nung nahanap ko na, ayaw gumana! Gusto ko lang naman kantahin yung favorite ko para ma-impress mga pinsan.
+
+Sabi ko, 'Kaya ko 'to,' tapos sinubukan ko i-fix yung remote. Ayun, nagpalit ng kanta, biglang duet! Natawa mga pinsan ko. Subok ulit. Pindot dito, pindot doon. Biglang naging song marathon na ng mga hindi ko kilala.
+
+Praning na ako, kaya naisip ko tanggalin na lang yung power, pero aksidente kong nahatak buong sound system.
+
+Akala ko tapos na ang lahat. Pero biglang, si Uncle! Kinuha yung mic, tapos akala niya sinasadya kong ipasa sa kanya yung kanta.
+
+Game na game siya, kahit alam naming lahat na tone-deaf si Uncle. Grabe, kahit wala sa tono, thumbs up pa rin siya ng lahat. Habang palihim akong umaatras palabas ng kwarto. Nakakahiya pero... at least hindi na ako yung bida sa pagkakahiya.
+
+══════════════════════════════════════════════════════════════════════
+[COMEDY · LONG 240s · 3/4] "Yung Mascot sa Basketball Game"  register=WARM RECOGNITION  (rewritten once)
+  logline: Sa isang youth basketball game, isang super hyper mascot na parol ang nagdulot ng kaguluhan — at isang nakakagulat na rebelasyon.
+  ── PLAN (planner convergence) ──
+  premise:    During a local youth basketball game, a hyperactive mascot in a giant parol (Christmas lantern) costume inadvertently causes chaos on and off the court.
+  conflict:   The team's manager, eager to display the new mascot to impress sponsors, struggles to control the over-enthusiastic performer, who is causing more distractions than entertainment.
+  escalation: The mascot's antics start mildly amusing but quickly escalate: it trips and falls, sending a shower of tinsel over the players, then attempts CPR on a fallen teammate, and finally unintentionally blocks a referee's view with its oversized arms during a crucial play.
+  twist:      The mascot's costume, intended to impress, ends up entangling itself with a stray basketball, unveiling the performer inside as the opponent team's coach who was spying on their tactics.
+  ending:     Defeated but entertained, both teams laugh it off, agreeing that this will be a new holiday tradition — with rules.
+  elements:   structure=escalating_spiral | role=the designated responsible one | setting=a high school basketball court | anchor=the parol mascot costume | trigger=the new mascot unveiling at a basketball game | turn=expectation subverted | aftereffect=a groan-laugh
+  stages: editor: discarded_peak | naturalizer: ok  words=332
+  GATE: FAIL — The spy reveal lands from nowhere — there is zero planted detail before it that makes it retroactively obvious, so it violates the core punch rule ('unexpected AND retroactively obvious'), and the ending then deflates further into generic 'good sportsmanship' moralizing instead of a earned payoff, failing THE DEBT and THE CHANGE simultaneously.
+  GATE: after rewrite: FAIL — THE DEBT fails hard: the opening plants 'may bago silang paandar' and builds toward a mascot-chaos story, but the ending twist — 'Spy pala from kalaban ang coach!' — lands from nowhere with zero prior setup or logic tying the rival coach to the mascot costume, so the 'retroactively obvious' requirement is completely unmet and it reads like a random reveal bolted on to force a punchline.
+──────────────────────────────────────────────────────────────────────
+So nandito kami sa local youth basketball game — parang normal lang, di ba? Pero eto, may bago silang paandar: isang mascot na parol. Ang galing nung construct, grabe. Mukhang sobrang saya dapat, pero, well, hindi.
+
+Dun palang sa simula, obvious na medyo hyper yung nasa loob. Yung team manager, siya yung pinaka-excited kasi alam mo na, may mga sponsor siyang gustong ma-impress. May nagdala pa talaga ng kamera. Pero si mascot, hindi siya maka-focus. Habang naglalaro, pakulit nang pakulit, kung anu-anong kalokohan, lahat parang nag-aalala na. Nakita mo ba?
+
+Una, nalaglag siya — may kasama pang ulan ng tinsel. Ang daming na-distract, lalo na't mga bata lang naman ang naglalaro. Sabi nila, natural lang daw na maubos ang atensyon ng mga bata. Pero natapunan ng kalahati ang court kaya ayun, sumigaw lahat — kahit masaya.
+
+Tapos may player na nadapa. Si mascot, akala niya kailangan ng CPR! Imagine mo — ginagamit yung malalaking braso nung costume, sinubukang mag-pump ng dibdib kahit hindi naman tama. Iniisip mo na lang, sineseryoso ba niya yung eksena o hindi.
+
+Sabi mo sa sarili, 'okay na sana' — pero hindi pa tapos. Yung referee, sa crucial play, nagmamasid. Pero paano ka magreref kung may parol na harang sa tingin mo? Nabwisit na si referee, pinenalty si mascot — yung tipong 'Tama na yan!'
+
+At saka — eto yung big reveal. Nagtatawanan pa ang lahat, iniisip mo na magkakaayos na — bigla na lang. Yung basketball napunta kay mascot. Ikot, ikot yung costume niya, tapos bigla! Nahulog yung ulo ng parol! Nagtaka ang lahat, 'Sino 'yung nasa loob?' Spy pala from kalaban ang coach!
+
+Tawa lahat, sabog na sabog! Sabi ng kakampi ko, 'Naku, bagong tradition 'to!' Masaya kami — kasi kahit nagkaguluhan ng tricks and tactics, mas memorable pa rin yung buong laro. May good sportsmanship pa rin, kahit pabiro lang.
+
+So ayun — every holiday game from now on, may parol! At least hindi na ulit siya magiging coach ng kalaban. Okay na next year!
+
+══════════════════════════════════════════════════════════════════════
+[COMEDY · LONG 240s · 4/4] "Yung MP3 ng Lolo mo"  register=WARM RECOGNITION  (rewritten once)
+  logline: How pop music and nostalgia helped win a village pig-catching contest.
+  ── PLAN (planner convergence) ──
+  premise:    In a barangay fiesta known for its annual pig-catching contest, an older man recounts the legendary tale of how his cousin once successfully captured the slipperiest pig ever — using a very unconventional method.
+  conflict:   The older man wants to prove he really knows the secret to catching the trickiest pig, despite the crowd's skepticism and the disbelief of those who weren't there.
+  escalation: As he narrates, he faces increasing heckling — everyone believes he's exaggerating. To counter this, he adds more and more specific details about the pig and the contest, insisting he was right there when it happened. His cousin, he claims, realized the pig only responded to pop songs from the early 2000s, and combined a dance routine with pig-catching tactics.
+  twist:      The story becomes hilariously personal when he describes how his cousin's playlist activated from his ancient MP3 player, which he insists he still has as evidence. He couldn't know these precise dance steps unless he truly was there, subtly revealing his presence as the original 'DJ'.
+  ending:     He proves his point when his niece accidentally activates the same playlist, sending the current contest's pig into a frenzy, and the crowd erupts with laughter at the realization.
+  elements:   structure=artifact | role=the storyteller who was really there | setting=a barangay fiesta's storytelling circle | anchor=the annual pig-catching contest | trigger=retelling a famous incident | turn=a callback detonating | aftereffect=a 'this is us' recognition
+  stages: editor: ok | naturalizer: ok  words=336
+  GATE: FAIL — CAUSALITY and AGENCY both fail: the pig-catching 'works' for no earned reason — the pig responding to 2000s pop songs is stated but never made retroactively logical, so the turn reads as random wackiness rather than unexpected-yet-obvious; and the narrator never actually decides or does anything consequential (Jojo plays the music, the crowd dances, the pig reacts), leaving the narrator as a passive witness whose 'sabi ko na sa inyo' claims credit for nothing shown on screen.
+  GATE: after rewrite: FAIL — The story has no real causality or agency — Kuya Jojo dances, the pig somehow 'syncs,' and it works, but there's no logic chain forcing each beat (why would a pig react to early-2000s pop specifically?), making the escalation feel random rather than absurd-but-inevitable; then the ending doubles down with a second pig in the present that also reacts to the MP3, which is a twist from nowhere that doesn't pay off any question the opening planted — it just adds a second unexplained incident and trails off with 'the punchline' being literally announced as such ('Eto na yung punchline'), a direct violation of the NEVER rule against explaining the punchline.
+──────────────────────────────────────────────────────────────────────
+Alam niyo ba yung sikat na pig-catching contest sa barangay fiesta namin? Lagi kong sinasabi, iba 'yung nangyari kay Kuya Jojo dati—legendary talaga. Sabi ng iba, exaggeration lang daw yung kwento ko. Pero grabe, ito yung nangyari at andito pa ako para ikwento sa inyo.
+
+Andaming tao, hanep ang ingay. Piglets pa lang at naiimagine mo na gaano ito kagulo later. Pero this one particular year, may isa talagang pig na grabe ka-slippery—parang nag-training para maging Houdini.
+
+Aba! Si Kuya Jojo naman, chill lang, parang may alam siyang hindi namin alam. Tapos, eto na—sa kabila ng tawanan at kantyaw, naisip niyang subukan yung kakaibang technique niya: may bitbit siyang ancient na MP3 player.
+
+Lahat nagtatawanan na, nagsasabing sumuko na daw siya. Pero si Kuya Jojo, walang arte. Sinaksak niya yung maliit na speaker niya. Alam mo yung tumutugtog? Early 2000s pop songs. Parang dance contest ang iniisip niya, 'no?
+
+Pero grabe, nagulat ang lahat nung biglang nagsayaw si Jojo. As in, y-jay style. Disbelief sa crowd, ika nga. Sinusundan pa ni Kuya yung beat, with matching pig-catching maneuvers. At ito pa—yung pig, parang naka-sync sa music!
+
+Nagtawanan lahat, pero unti-unti talagang nalalapit yung pig kay Jojo. Ganyan ka-weird yung nangyari. At habang inaabot na niya yung pig, mas lalo pang nag-iyakan yung tao sa tuwa.
+
+Tapos ayan na! Fast forward to ngayon, sabi ko tuloy sa mga barkada ko na andito pa rin yung MP3 player na yun, nakatago sa sala. Parang di sila makapaniwala. 'Grabe, akala namin gawa-gawa lang ito,' sabi ni Tina.
+
+Natawa ako, di nila ko pinapaniwalaan kasi. Then, all of a sudden, accidentally na-play ng pamangkin ko yung MP3 dun sa remote speaker—hello, early 2000s na naman! Would you believe it? Nung nadinig yun ng pig sa contest ngayon, ayun gulung-gulo lalo!
+
+Eto na yung punchline: Sabi na kasi nagsasayaw din 'yang mga baboy! Lahat biglang tawa, umiyak sa kakatawa—totoo pala ang sinasabi ko. Kaya every fiesta, ang kukulit na ng mga tao sa akin, lalo pagka may pig-catching contest na ulit.
+
+══════════════════════════════════════════════════════════════════════
+SUMMARY (comedy):
+  1. short | Yung Internet na 'di kaya                | ESCALATING ABSURD        | FAIL (retried)
+  2. short | Nephew vs. Karaoke                       | DEADPAN                  | FAIL (retried)
+  3. long  | Yung Mascot sa Basketball Game           | WARM RECOGNITION         | FAIL (retried)
+  4. long  | Yung MP3 ng Lolo mo                      | WARM RECOGNITION         | FAIL (retried)
+total lab cost (comedy): 64¢

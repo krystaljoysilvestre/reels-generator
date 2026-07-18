@@ -1,0 +1,118 @@
+
+══════════════════════════════════════════════════════════════════════
+[COMMENTARY · SHORT 75s · 1/4] "Utang na Loob Trap"  register=WRY  (rewritten once)
+  logline: Navigating a family dinner discussing 'utang na loob', a young professional realizes the endless cycle of expectation.
+  ── PLAN (planner convergence) ──
+  premise:    A young professional navigates a family dinner where everyone casually discusses 'utang na loob' — debts of gratitude — and the silent expectation of his financial contributions.
+  conflict:   The protagonist wants to maintain family harmony while struggling with the pressure to contribute financially beyond his means, which collides with cultural expectations.
+  escalation: During dinner, he is asked to contribute to a cousin's tuition. He hesitates but eventually nods reluctantly. Later, he overhears family members talking about his 'ingratitude'. Feeling frustrated, he decides to discuss it openly, but he's met with accusations of selfishness.
+  twist:      He realizes that fulfilling these unspoken obligations never truly satisfies the expectation; it's a bottomless pit that can't be filled with financial contributions alone.
+  ending:     He decides to set firm boundaries, resolving to value his own financial stability over perceived family obligations, disrupting the dinner chatter with a firm but kind explanation.
+  elements:   structure=first-person | role=a young professional | setting=family dining table | anchor=- | trigger=casual family conversation about financial contributions | turn=the concession that flips into the knife | aftereffect=a comfortable belief made uncomfortable
+  stages: editor: ok (unchanged) | naturalizer: ok  words=183
+  GATE: FAIL — STORY PHYSICS — THE DEBT fails: the opening plants a question about the weight of utang na loob as a systemic cultural trap, but the ending just shows the narrator eating lechon and walking away, so the big claim ('kahit anong bigay mo, laging kulang — bottomless') is never actually argued or paid off, it's just asserted and then dropped; RUBRIC BASIS also fails because the script substitutes personal drama for any concrete, checkable grounding of the 'bottomless' claim — the other side (that utang na loob has real relational logic) is never met, only labelled 'drama.'
+  GATE: after rewrite: FAIL — AGENCY/CAUSALITY fail: the narrator never actually does anything — they say 'nagdecide ako: from now on, hangganan na,' but that decision costs nothing and changes nothing within the story; the 'ending' is a resolution announced in the air after a dinner where the narrator caved (said 'oo na lang'), overheard gossip, and got talked over by Tito — so THE DEBT is unpaid (the opening promises we'll watch someone escape the trap, but the story ends with them still inside it, just narrating their feelings about it), and the closing line ('Sarili ko rin kailangan kong isipin') is a wind-down summary, not a quotable closer.
+──────────────────────────────────────────────────────────────────────
+Grabe, 'yung utang na loob na 'yan, hindi talaga nauubos. Kahit anong bigay mo, laging kulang. Kagabi lang, family dinner. Masaya sana, pero alam mo naman, may halong pressure. Tinanong nila ako kung kaya kong tumulong sa tuition ni pinsan. Ewan ko ba... saglit akong natahimik. Tapos 'yung isang tita ko, sinundan pa ng, 'Kasi ikaw naman yung successful sa atin.'
+
+Ayun, napilitang oo na lang ako. Pero nung palabas na ko ng kusina, narinig ko sila na nag-uusap. Parang disappointed na hindi ko agad sinabi. Kesyo ingrato daw. Ang bigat nun, promise.
+
+Kaya sinubukan kong i-bring up. Sabi ko, 'Hindi naman sa ayoko tumulong, pero minsan kailangan ko rin i-prioritize sarili ko.' Aba, sagot ni Tito, 'Nagbago ka na.' Ha! Eh dati galante naman daw ako.
+
+Sakto, habang pinapaliwanag ko, bigla ko na lang narealize: kahit anong gawin mo, hindi naman talaga sila masaya. Kahit umabot ka sa langit, babalik at babalik pa rin sayo 'tong expectation.
+
+Kaya guys, nagdecide ako: from now on, hangganan na ng pagbibigay ko. Kasi dapat naman, hindi puros sila, diba? Sarili ko rin kailangan kong isipin.
+
+══════════════════════════════════════════════════════════════════════
+[COMMENTARY · SHORT 75s · 2/4] "Family Reunion Hirit"  register=WRY  (rewritten once)
+  logline: At a family reunion, you realize keeping up a facade is less important than the shared laughter and memories.
+  ── PLAN (planner convergence) ──
+  premise:    You're at a lively family reunion, cornered by enthusiastic relatives asking about your impressive new job and upcoming plans.
+  conflict:   You want to keep the peace and satisfy your family's high expectations, but the reality is much less glamorous than the narrative that has taken shape.
+  escalation: As you engage in conversation, you find yourself embellishing the truth here and there, each lie escalating the pressure to maintain this image. Therefore, you have to decide between coming clean and potentially disappointing your family, or keeping these fabrications going, which tires you out with every new embellishment.
+  twist:      You realize that your family is not so much interested in the details of your achievements as they are in using your story as a feel-good subject.
+  ending:     Understanding that the narrative is more about their comfort than your reality, you subtly steer the conversation toward shared experiences and memories, relieving yourself from maintaining a troublesome facade.
+  elements:   structure=direct_second_person | role=someone caught between truth and expectation | setting=a corner in a family reunion venue | anchor=familial expectations and narratives | trigger=family's assumptions about your success | turn=naming the unsaid | aftereffect=a comfortable belief made uncomfortable
+  stages: editor: ok | naturalizer: ok  words=173
+  GATE: FAIL — The script fails AGENCY and THE CHANGE: the narrator never truly decides anything — the lies just happen, the topic shifts almost accidentally, and the ending lands on a soft realization ('gusto lang nila ng bonding') that the opening already implies, so nothing is different and no real choice was made; additionally, 'detalyado' in 'hindi naman sila sobrang interested sa detalyado e' reads like a word-for-word slot-fill from English ('the details') rather than natural spoken Taglish — a real speaker would say 'sa mga detalye' or more likely just 'sa details.'
+  GATE: after rewrite: FAIL — Fails AGENCY and THE CHANGE under Story Physics: the narrator never truly decides anything — the pivot to redirecting conversation ('binaliktad ko ang usapan') happens in one throwaway beat with no real cost or resistance, and the ending ('ang point talaga ng reunion') is a wind-down summary moral rather than a line worth quoting back, violating both the ENDING rubric and THE CHANGE check since nothing is actually different at the close.
+──────────────────────────────────────────────────────────────────────
+Andito na ako sa family reunion, ang ingay! Tapos, lumapit si Tita Belen, super excited. 'Uy, kumusta na ang bagong trabaho mo?' Siyempre, ako naman, game face. 'Okay naman po, Tita!' pero sa totoo lang, stress na stress ako sa workload.
+
+Tapos ayun na, dumating yung tita kong mas updated pa sa buhay ko kaysa sa social media ko. Sabi niya, 'Narinig ko, international boss ka na!' Ako naman parang, oh no, eto na. Kailangan mong i-play along, hanggang unti-unti nalulunod na ako sa sarili kong kwento.
+
+Habang nag-iimbento na ako ng imaginary company, natawa ako sa sarili ko. Bigla ko kasing napagtanto, wala naman talagang pakialam sa details ang pamilya. Gusto lang nila ng bida, yung pag-uusapan at pagmamayabang nila sa iba.
+
+Di na ako nakuntento sa sarili kong stress, binaliktad ko ang usapan. 'Tita, naaalala mo ba nung nadapa si Tito sa stage?' Lahat tawanan pa rin. At doon ko na feel, ang point talaga ng reunion, eh yung mga kabonding na kwento, hindi yung masalimuot na buhay ko sa trabaho.
+
+══════════════════════════════════════════════════════════════════════
+[COMMENTARY · LONG 240s · 3/4] "Planner na Pressure"  register=WRY  (rewritten once)
+  logline: Kapag ang planner nina-pressure ka, oras na para hanapin ulit ang sariling direksyon.
+  ── PLAN (planner convergence) ──
+  premise:    A young professional receives a brand-new planner for Christmas from their parents, meant to symbolize a year of ambition and success.
+  conflict:   The professional wants to use the planner effectively to organize life and career goals, but faces parental pressure to overachieve and check off excessive expectations.
+  escalation: Each page entry begins to reflect not personal goals, but imposed ambitions — 'Call relatives for New Year', 'Join family business meeting', 'Increase monthly remittances'. This contrast grows starker as personal aspirations are crowded out. The pressure mounts when they skip entries they wanted to prioritize and instead work to satisfy parental expectations.
+  twist:      A sudden family emergency forces the young professional to abandon all plans and realize the genuine worth of unfettered time with loved ones, not pre-planned achievements.
+  ending:     They put the planner aside, focusing on the present and realizing that fulfillment isn't in ticking boxes but in living authentically.
+  elements:   structure=mundane_wrong | role=a young professional | setting=a quiet home office | anchor=a planner | trigger=receiving a planner as a gift with implied expectations | turn=the realization brought by a family emergency | aftereffect=perceiving achievement as personal fulfillment rather than external validation
+  stages: editor: ok | naturalizer: ok  words=265
+  GATE: FAIL — The ending dissolves the stance into hedging ('okay lang pala na magulo minsan') and a wind-down summary ('Fulfillment hindi naman nasa mga checkmark… Loko-loko lang pero buhay') instead of a quotable, committed close — and THE CHANGE is missing because the narrator never actually decides or does anything (the planner just sits there, the emergency just happens), so the script violates both the NEVER rule on hedging-as-conclusion and the AGENCY/CHANGE story-physics checks.
+  GATE: after rewrite: FAIL — THE DEBT fails: the opening plants a clear claim — the planner your parents fill with their expectations pressures you out of your own goals — but the ending abandons that claim entirely and resolves into a generic 'family comes first' lesson triggered by a deus-ex-machina hospital emergency, so the pressure problem is never actually answered, just dissolved by an unrelated crisis; and AGENCY fails alongside it because the narrator never decides anything — the planner is imposed, the emergency happens, and the narrator simply drifts from one external force to the next.
+──────────────────────────────────────────────────────────────────────
+Alam mo 'yung feeling na may planner ka tapos bigla kang napa-pressure? Parang lahat ng plano mo, sinasakal ng expectations. Regalo pa 'to ng parents ko for Christmas. "Para sa mga goals mo," sabi nila. Pero nung binuksan ko, hindi ko goals ang nandun.
+
+Simula pa lang ng taon, imbes na 'achieve personal goals' or 'travel to a new place,' nakasulat dun 'Call relatives for New Year,' 'Join family business meeting,' 'Increase monthly remittances.' Para bang checklist para maging anak ng taon. Na-pressure tuloy ako na dapat lahat ng boxes na 'to, ma-check ko.
+
+Kaya nung na-realize ko na puro pressure na lang, nag-focus ako sa pagpuno ng planner. Check dito, check doon—pero ang totoo, yung personal goals ko, unti-unti nang nawawala sa listahan. Lahat ng gusto kong gawin para sa sarili ko, nakahold. Gusto mo na lang itapon yung planner, kaso di mo magawa kasi galing pa naman sa parents mo.
+
+Pero ayun, one day dumating ang hindi inaasahan—may biglang family emergency. Lahat ng plans ko? Wala na rin. Nasira na 'yung schedule. Wala akong nagawa kundi tulungan si Mama at pumunta sa hospital.
+
+Ano ba 'yung naging realization ko? Simple lang: ang plano nandiyan lang yan para gabay, hindi para maging buhay mo. Yung mga importanteng bagay, hindi nakasulat sa planner.
+
+Sa huli, iniwan ko na 'yung planner sa tabi. Parang okay na lang na burahin lahat ng naka-schedule at mag-focus sa ngayon. Fulfillment hindi ko nakita sa pag-check ng boxes—nakita ko siya sa pagiging nandoon para sa pamilya ko.
+
+Magandang may plano, oo. Pero 'yung pinakamagandang plano? Yung piniling mabuhay ng totoo.
+
+══════════════════════════════════════════════════════════════════════
+[COMMENTARY · LONG 240s · 4/4] "Yung Playground Ghost Story na 'Yon"  register=WRY  (rewritten once)
+  logline: Pag-usapan natin 'yung ghost story sa barangay—gaano nga kalalim ang kasinungalingan at ang katotohanan?
+  ── PLAN (planner convergence) ──
+  premise:    During a late-night online discussion between millennials, someone recounts a childhood story of a famous neighborhood ghost haunting a local playground, but adds a peculiar detail that suggests they were there when it supposedly happened.
+  conflict:   A young professional wants to debunk the story as mere folklore, but struggles with the growing belief fueled by the unexplained detail.
+  escalation: They dig into past forum posts, interviews with older residents, and even local legend sites, yet each supposed explanation only deepens the mystery, eventually leading to dead ends or contradictions.
+  twist:      The storyteller casually reveals an intimate, verifiable piece of information about one of the supposed witnesses, shocking the group and making the narrator's presence seem inexplicably plausible.
+  ending:     As the discussion shifts to uncomfortable acknowledgments of how much our childhood stories shape us, doubt seeps in about the reality vs. fiction of what they once thought they knew.
+  elements:   structure=retold_incident | role=a young professional | setting=an online discussion room | anchor=childhood folklore | trigger=the retelling of a neighborhood ghost story | turn=the receipt nobody expected | aftereffect=a comfortable belief made uncomfortable
+  stages: editor: ok | naturalizer: ok  words=379
+  GATE: FAIL — STANCE fails: the script never states a single arguable claim a stranger could repeat — it's a mood piece that trails off into 'ewan ko,' 'hindi ko na alam,' and audience questions, which is open-verdict non-ending for a kwentuhan story but only works if the Reddit-style payoff lands hard (it doesn't — Kaloy's revelation goes nowhere, no consequence, no confrontation, no verdict thrown to the viewer with force), so THE CHANGE and AGENCY also fail: nothing is decided, nothing lands, and the narrator ends more passive and confused than they started.
+  GATE: after rewrite: FAIL — THE DEBT fails: the opening plants a debunking mission ('Gusto kong i-debunk') but the script never delivers a verdict — it just trails off into 'hanggang saan nga ba ang totoo' resignation, and the final joke ('Teka, sino na susunod na iinuman?') abandons both the investigation and the claim, leaving the viewer with no payoff and no clear stance a stranger could repeat.
+──────────────────────────────────────────────────────────────────────
+Alam mo 'yung ghost story sa playground ng barangay? Every kid sa area nakarinig na niyan. Obvious na gawa-gawa, diba? Pero lagi nilang sinasabi na may multo raw na naglalakad doon tuwing madaling araw. Isang gabi, nag-inuman kami ng mga bro online — pandemic e, virtual kwentuhan. Napunta 'yung usapan sa childhood stories na never nating malilimutan.
+
+Tapos si Kaloy biglang bumanat. 'Kilala niyo 'yung kwento na 'yun di ba? 'Yung kwento ni Mang Ed na naglalaro raw ng piko mag-isa 'yung batang multo, maya-maya nawala… parang 'yung batang sinasabing kakilala n'yo.' Tumawa kaming lahat, pero may dagdag siyang kwento na hindi ko makalimutan.
+
+'Bakit namin hindi makakilala? Eh, kapag gabi, nahuli raw niya 'yung bata. Kasama ako nun,' sabi niya bigla.
+
+Napatahimik lahat, kasi kilala ni Kaloy si Mang Ed. So ako, mga bro, hindi ako mapakali. Gusto kong i-debunk, so nag-research ako. Old forum posts, interviews, pati chika sa mga buhay na tito't tita natin. Pero grabe, bawat sinusundan ko, lalo lang gumugulo.
+
+Meron bang batang nadapa sa piko tapos nakita na lang kinabukasan? Parang may kwento sa bawat anggulo pero lahat sablay. Isa lang ang clear: mukhang may nangyari talagang hindi natin alam.
+
+Kahit sinong nakausap ko, walang consistent na storya. Parang ubod ng kalokohan, pero bakit ganoon kagulo sa totoong buhay din?
+
+Hanggang biglang si Kaloy ulit. 'Alam niyo ba na 'yung chinelas nung bata, `yung may bisikleta pa?' Teka, paano niya alam 'yun? Paano maaalala 'yun? Biglang tahimik kaming lahat.
+
+Doon nagsimula silang mag-isip. Nakaramdam ng konting kaba, kasi this wasn't the usual keri lang kwento. Napaisip lahat kung gaano nga katotoo 'yung mga binuo natin sa sariling mga kwento natin.
+
+Inalam lang pala ni Kaloy 'yun nung maliit pa siya, kilala daw ni Tito 'yung tatay ng bata. Parang gano'n lang. Pero bakit nalaman 'yung mga detalye, mga bro?
+
+Napalunok kami at parang... ano ba talaga? Ako na 'yung nagsabi, 'Pucha, siguro nga may katotoo 'yung bata ng kalokohan natin.'
+
+Minsan parang mas madaling sabihing kwento lang lahat 'to, pero ghost stories? Bakit ba for once, nagpauto tayo? Yan 'yung mga kwento na dinadala natin mula pagkabata hanggang ngayon. Pero hanggang saan nga ba ang totoo, hanggang saan ang gawa-gawa lang natin? Tayo na, pagod na ako. Teka, sino na susunod na iinuman?
+
+══════════════════════════════════════════════════════════════════════
+SUMMARY (commentary):
+  1. short | Utang na Loob Trap                       | WRY                      | FAIL (retried)
+  2. short | Family Reunion Hirit                     | WRY                      | FAIL (retried)
+  3. long  | Planner na Pressure                      | WRY                      | FAIL (retried)
+  4. long  | Yung Playground Ghost Story na 'Yon      | WRY                      | FAIL (retried)
+total lab cost (commentary): 62¢

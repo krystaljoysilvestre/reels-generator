@@ -1,0 +1,134 @@
+
+══════════════════════════════════════════════════════════════════════
+[HORROR · SHORT 75s · 1/4] "Yung Whispers sa Headset"  register=QUIET DREAD  (rewritten once)
+  logline: A night-shift agent haunted by whispers on her headset finds unsettling truths she can't escape.
+  ── PLAN (planner convergence) ──
+  premise:    A night-shift call center agent experiences strange interference on her headset when a wrong number persists, speaking only in whispers.
+  conflict:   The agent wants to finish her shift without issue, but the whispers become more intrusive and sinister, disrupting her work and causing increasing unease.
+  escalation: At first, she tries to ignore the calls; then she reports them to her supervisor, who dismisses them as glitches. Despite switching desks and headsets, the whispers persist and start mentioning things only she knows. Feeling cornered, she reluctantly engages with the voice, hoping to end the disturbance.
+  twist:      The whispers start revealing personal secrets about her, things no one else could possibly know, trapping her in a personal nightmare.
+  ending:     After trying to disconnect the call, she hears the whispers fading, only to find a new voice mail on her personal phone when her shift ends, leaving her haunted.
+  elements:   structure=first-hand account | role=a night-shift call center agent | setting=the cubicle at her workstation | anchor=the headset and phone | trigger=a series of wrong number calls with whispers | turn=identity contradiction | aftereffect=a contaminated routine
+  stages: editor: ok | naturalizer: ok  words=144
+  GATE: FAIL — THE CHANGE fails completely — 'It's not over' is a stock non-ending that stops the story cold with no payoff, no recontextualization of an earlier detail, and no answer to what the voice actually revealed; paired with THE DEBT failing (the opening plants 'it reveals her secrets' but the script never delivers a single specific secret or consequence), the story has no peak at all — just a list of escalating beats that trail off into a tagline.
+  GATE: after rewrite: FAIL — THE CHANGE fails: the voicemail is planted but never opened — the ending stops instead of landing, so the question 'lahat ng sikreto mo, alam ko na' is never paid off and the viewer is left with nothing changed; additionally, 'Sabi ko sa sarili, Guni-guni lang 'to, siguro dahil puyat na puyat na ako' violates the NEVER rule by explaining away the scare mid-story, bleeding tension before the peak arrives.
+──────────────────────────────────────────────────────────────────────
+Third wrong call na 'to. Pero this time, hindi lang static — may bumubulong. Parang may ibang tunog sa background, pero deadma lang ako. 'Pag report ko kay Sir, sabi niya 'glitch lang yan'.
+
+Palipat-lipat na 'ko ng desk. Iba-ibang headset na pero pareho pa rin. Hanggang sa may narinig akong pangalan. Yung palayaw ko noong bata pa 'ko, na family ko lang ang gumagamit. Kinilabutan ako.
+
+Bandang huli, sumuko na ako. Sinabi ko, 'Ano ba talaga gusto mo?' Tahimik saglit. Tapos, 'Lahat ng sinikreto mo, alam ko na.'
+
+Bigla kong binaba. Pero kahit off na headset, rinig ko pa rin. Sabi ko sa sarili, 'Guni-guni lang 'to, siguro dahil puyat na puyat na ako.'
+
+Pag-out ko, palikod-likod pa ako, parang sinundan ako ng bulong. Tapos pagkuha ko ng phone, nakita ko may bagong voicemail. Kahit may araw pa, para akong kinulong sa dilim.
+
+══════════════════════════════════════════════════════════════════════
+[HORROR · SHORT 75s · 2/4] "Yung Kasabay sa Jeep"  register=COILED SUSPENSE  (rewritten once)
+  logline: A quiet ride home turns into a chilling experience when a jeepney ride takes an eerie detour.
+  ── PLAN (planner convergence) ──
+  premise:    You're the last passenger on an evening jeepney ride home. The night is quiet, and you're tired, eager to get back after a long day.
+  conflict:   You just want to reach home safely, but something feels off when the jeepney takes unfamiliar turns, and you notice only one other passenger—someone who seems a bit too interested in you.
+  escalation: You decide to shrug it off, convincing yourself you're imagining things. But as the streets become deserted, the jeepney stops, the driver and passenger exchange unnerving glances. You decide to confront them, asking where they're going, but their vague answers only heighten your fear.
+  twist:      You finally demand to be let out, realizing the passenger is mimicking your every move. As the driver ignores your pleas, the passenger sits beside you, grinning eerily. Suddenly, the jeepney's lights flicker, casting strange shadows.
+  ending:     When the lights return, the passenger is gone, replaced by an empty seat. The driver stops without a word; you're back on the main road, as if nothing happened.
+  elements:   structure=direct_second_person | role=the last passenger on the last trip | setting=inside a jeepney at night | anchor=a routine commute | trigger=the jeepney taking an unfamiliar route | turn=spatial contradiction | aftereffect=a contaminated routine
+  stages: editor: ok | naturalizer: discarded_peak  words=146
+  GATE: FAIL — AGENCY and CAUSALITY both fail: the narrator does nothing that changes the outcome — the jeep simply returns on its own with no cause the narrator triggered — and the mirroring detail, which should be the recontextualizing plant, is introduced and then abandoned at the flicker beat instead of being paid off (the passenger vanishes before the mirroring ever escalates to a consequence), leaving the ending a shrug ('parang wala lang nangyari') rather than a debt answered.
+  GATE: after rewrite: FAIL — PAYOFF fails the debt test: the story plants 'parang iba yung daan' and 'ginagaya bawat galaw ko' as its two live threats, but neither is paid off — the passenger simply vanishes with no recontextualization of any earlier detail, and the ending ('kinikilabutan pa rin ako tuwing naa-alala ko') is a mood-close epilogue that bleeds tension instead of landing within seconds of the peak; the disappearance is the whole payoff, not a twist on anything planted.
+──────────────────────────────────────────────────────────────────────
+Napansin ko lang, parang iba yung daan. Hindi na ito yung usual route. Pasado alas-otso na, at ako na lang ang natitira sa jeep, maliban sa isang passenger sa harap. Tahimik ang gabi, pero may kumakabog sa loob ko.
+
+Sabi ko, 'Baka naligaw lang.' Pero habang paikot-ikot na sa mga kalsadang di ko kilala, yung isa pang sakay, napansin kong nakatitig sa akin. Ang tagal. Pinilit kong tumawa, pero iniisip ko lang, sana umalis na sila.
+
+Bigla, huminto yung jeep. Sabi ko, 'Manong, saan po tayo?' Pero yung driver, walang malinaw na sagot. Yung passenger naman, parang ginagaya bawat galaw ko.
+
+Nagsalita ako, 'Pakiusap, pakibaba na ako.' Pero lumapit yung pasahero, nakangisi. Tapos, biglang kumurap yung ilaw.
+
+Pagbalik ng ilaw, siya'y wala na—walang bakas, walang tao.
+
+Bumalik kami sa main road, tahimik ang driver. Parang walang nangyari kanina. Pero kinikilabutan pa rin ako tuwing naa-alala ko.
+
+══════════════════════════════════════════════════════════════════════
+[HORROR · LONG 240s · 3/4] "Yung Salamin sa Apartment"  register=QUIET DREAD  (rewritten once)
+  logline: A mirror in a small apartment shows a different reality, sowing dread.
+  ── PLAN (planner convergence) ──
+  premise:    A young man finds an antique mirror at a thrift store, a gift perfect for his girlfriend's small apartment.
+  conflict:   He begins noticing that his girlfriend's reflection in the mirror sometimes moves differently than she does in reality, sowing doubt and fear in his mind.
+  escalation: Determined to debunk his growing terror, he compares her movements with the reflection during their video calls. Each check confirms the discrepancy, elevating his suspicion and fear. Despite his effort to rationalize it, the fear escalates when she starts acting more like the reflection when they are apart.
+  twist:      The man notices that the mirror's reflection never shows his own image, suggesting something beyond mere reflection—perhaps that the mirror filters people rather than showing them.
+  ending:     The last call shows the girlfriend waving at him through his phone, but in the mirror, she turns and walks away, alone in the room.
+  elements:   structure=mundane_wrong | role=a young boyfriend | setting=the girlfriend's small apartment | anchor=an antique mirror | trigger=the reflection moving differently | turn=identity contradiction | aftereffect=a contaminated routine
+  stages: editor: ok | naturalizer: ok  words=279
+  GATE: FAIL — THE DEBT fails: the opening plants the question 'what is wrong with the mirror?' but the ending quietly pivots to 'which version of the girlfriend is real?' — a different question that was never established, so the payoff feels like a drift rather than a paid-off plant; and LANGUAGE NATURALNESS fails on 'naglakad palayo, naiwan niyang mag-isa ang kwarto' which reads like translated literary prose, not spoken Taglish.
+  GATE: after rewrite: FAIL — THE DEBT fails: the opening plants a question about the mirror showing a different reality, but the payoff — the girlfriend's reflection walking away while she stays still — never answers what the mirror IS or what it means for her, leaving the story without a recontextualized plant; compounded by THE CHANGE failing because the narrator ends on vague existential dread ('ibang mundo') instead of a concrete shift in understanding or situation, and the final beat bleeds into an epilogue that explains the scare ('May maliit, pero malalim na duda na bumalot sa pagitan naming dalawa') rather than letting it land.
+──────────────────────────────────────────────────────────────────────
+Mabilis kaming dumiretso sa thrift store. Gusto ko sanang may maibigay sa girlfriend ko na bagay sa maliit niyang apartment.
+
+Pagkakita ko sa lumang salamin, alam ko agad na yun na yun. Ganda ng frame, parang may istorya. Perfect sa sala niya.
+
+Nung una, aliw siya. Elegant daw sabi niya. Pero… alam mo yung pakiramdam na parang may mali pero di mo ma-pinpoint? Ganun.
+
+First time ko napansin… nasa harap siya ng salamin, nag-aayos ng buhok. Pero sa reflection, parang hindi tugma 'yung kilos.
+
+Siyempre, naisip ko agad, baka pagod lang ako o may glare lang na hindi ko napansin.
+
+Pero di talaga mawala yung kaba. Kaya nung nag-vidcall kami, tinry ko talaga i-check, dahan-dahan. Magkausap kami, tapos ibabaling ko yung camera sa salamin… lagi kong inaabangan na dapat pareho sila ng moves.
+
+Andun yung kaba kasi tuwing chine-check ko, lagi kong nahuhuli: kung saan dapat siya, hindi siya doon.
+
+Sinasabi ko sa sarili ko, kalokohan lang 'to, baka coincidental lang. Pero every time, confirm e. Laging iba.
+
+Hanggang kamakailan, sunod-sunod. Nung isang araw, wala akong nakitang sarili ko sa salamin. As in, hindi ko alam paano i-explain 'yon, pero hindi siya glitch.
+
+Sinubukan kong panghawakan yung gusto kong paniwalaan. Alam mo naman, practicality over ghouls. Pero deep inside, may duda.
+
+Pumutok yung kaba nung huling call namin.
+
+Nasa ibang lugar ako, nasa sala siya. Inayos niya yung phone para kita siya sa salamin.
+
+Nag-wave siya, ngumiti, pero…
+
+Sa reflection, nakita kong tumalikod siya, naglakad palayo, naiwan niyang mag-isa yung kwarto.
+
+Dun ko naramdaman na parang ibang mundo na 'tong ginagalawan ko. Iba na ang nakikita ko. May maliit, pero malalim na duda na bumalot sa pagitan naming dalawa.
+
+══════════════════════════════════════════════════════════════════════
+[HORROR · LONG 240s · 4/4] "Yung Upuan sa LRT"  register=FOLK UNCANNY  (rewritten once)
+  logline: Isang dalaga sa LRT ang di makalimutan ang nakakatakot na mantsa sa bakanteng upuan.
+  ── PLAN (planner convergence) ──
+  premise:    A young woman enters an old, crowded LRT train and sits next to an empty seat, which everyone else avoided despite the packed train. She decides to take a curious look at the seat and notices a curious stain faintly resembling a face.
+  conflict:   She wants to ignore the stain and arrive peaceably at her destination, but the feeling that the face-like shape is observing her keeps growing, interrupting her thoughts, refusing to be forgotten.
+  escalation: She finds herself unable to look away, and each time her eyes meet the stain, she feels an inexplicable heaviness. Determined to dismiss it, she asks another passenger about it, but the woman hushedly warns that those who take a 'closer look' attract something attention they can never shake off. Her curiosity piqued and fear blocked by denial, she decides to examine it herself when they disembark at the same station.
+  twist:      As she bends closer to the fabric, she sees not just a face but several pairs of weary eyes staring back at hers — eyes that move, seemingly aware of her gaze.
+  ending:     Haunted by the train seat, she can't shake the feeling that she's being watched, and every train ride becomes a relentless exercise in frantic vigilance.
+  elements:   structure=retold_legend | role=a young commuter | setting=an old LRT train interior | anchor=an empty train seat | trigger=an empty seat ignored by everyone else | turn=identity contradiction | aftereffect=a new rule to live by
+  stages: editor: discarded_formatting (9→1) | naturalizer: ok  words=291
+  GATE: FAIL — AGENCY and CAUSALITY both fail — the narrator never decides anything (the woman's warning is ignored for no reason, the closer look at the seat just happens), the beats don't force each other (every paragraph is 'and then'), and the ending is a vague floating dread ('parang may nagbabantay') instead of a payoff that answers what the opening planted; on top of that, the final two paragraphs explain the scare out loud ('di mo alam kung ano yung nandiyan lang, tahimik pero nanonood'), which the rubric disqualifies.
+  GATE: after rewrite: FAIL — AGENCY and CAUSALITY both fail: the narrator is told 'don't look closer' by the woman, decides to look anyway, and then... nothing happens — no consequence, no confrontation, no change — only a vague lingering feeling, so THE DEBT and THE CHANGE also collapse because the opening question ('what's wrong with the seat?') is never answered and the ending is just mood bleed ('may nakikita akong mata sa bawat sulok') with no payoff anchored to a re-read detail; additionally, 'bigat sa dibdib' and 'parang may curiosity na pumasok' are written-prose constructions no one says aloud in natural Taglish, and the closing two lines explain the scare after it lands, which is a hard NEVER violation.
+──────────────────────────────────────────────────────────────────────
+May mga kwento na dapat basta nalang pinalagpas... Kaya lang, minsan, hindi ganun kadali.
+
+Kagabi, sumakay ako ng LRT pauwi mula sa trabaho. Siksikan as usual, pero may isang bakanteng upuan sa tabi ko na hindi ko mapigilang pag-isipan. Taga nga yun, isang bakanteng upuan sa rush hour? Walang pumapansin kasi raw may kakaiba, pero di ko naman mawari ano.
+
+Tiningnan ko ng mabuti. Tapos napansin ko yun. Parang may mantsa sa upuan, na pahapyaw na parang mukha. Parang nanonood. Sinubukan kong ibaling tingin ko, pero parang may bigat sa dibdib. Basta parang may nagwo-watch sakin.
+
+May katabi akong babae, tanong ko bigla, "Ate, anong meron sa upuan?"
+
+Tumingin siya sa akin, parang ayaw niyang magkwento. Pero sabi niya, "Kung wise ka, iwasan mo nalang. Yung mukha dyan, marami nang kumuha ng closer look, pero hanggang ngayon, kasama pa rin nila."
+
+Napatawa pa ako ng konti, pero hindi ko alam kung bakit parang may curiosity na pumasok. Ayoko sa mga pamahiin, pero ewan ko ba. Parang gusto ko nalang tingnan ng maigi. Huminto ang tren sa istasyon, at nung bumaba na yung iba, di ko na napigilang lumapit at silipin ng malapitan.
+
+Habang napapatungo ako, kitang-kita ko yun. Hindi lang basta mukha, kundi magkakasamang mga mata. Punong-puno ng pagod. At habang nakatingin ako, parang gumalaw. Parang aware silang nanonood ako.
+
+Simula nun, hindi na mawawala sa isip ko yung feeling na may nagmamasid. Kahit nung sumunod na araw, habang nasa tren ulit ako, parang kasama ko pa rin sila, kahit wala naman sila dun sa upuan. Basta may nakikita akong mata sa bawat sulok.
+
+Yung takot na sinasabi nilang mararamdaman mo sa tren, yun ang di mo pwedeng baliwalain. Hindi ko na maalis yung pakiramdam na may nagbabantay. Tahimik, pero alerto.
+
+══════════════════════════════════════════════════════════════════════
+SUMMARY (horror):
+  1. short | Yung Whispers sa Headset                 | QUIET DREAD              | FAIL (retried)
+  2. short | Yung Kasabay sa Jeep                     | COILED SUSPENSE          | FAIL (retried)
+  3. long  | Yung Salamin sa Apartment                | QUIET DREAD              | FAIL (retried)
+  4. long  | Yung Upuan sa LRT                        | FOLK UNCANNY             | FAIL (retried)
+total lab cost (horror): 63¢

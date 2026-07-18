@@ -1,0 +1,114 @@
+
+══════════════════════════════════════════════════════════════════════
+[INFORMATIONAL · SHORT 75s · 1/4] "Bakit Walang Sugar ang Kape Dito?"  register=MYTH-SLAYER  (rewritten once)
+  logline: A barista unravels why their café intentionally doesn't offer sugar, encouraging customers to discover new coffee flavors.
+  ── PLAN (planner convergence) ──
+  premise:    A barista at a popular Manila café explains why customers often request an ingredient that their establishment intentionally withholds.
+  conflict:   The barista wants to serve the customers the best-tasting coffee, but the customers keep demanding the missing ingredient, which goes against what the café is trying to achieve.
+  escalation: The barista shares how their curiosity led them to investigate why this ingredient is never provided despite constant demand. They discover that the café made a deliberate decision based on improved flavor profiles and consumer research.
+  twist:      The barista reveals that excluding the ingredient actually enhances the coffee's natural flavors, making it more appealing if customers were open to the change, contrary to the popular belief.
+  ending:     The barista concludes that tenacity in customer preferences often blinds them to unexpected benefits, leaving them with a new perspective on coffee enjoyment.
+  elements:   structure=first_hand_account | role=the curious skeptic | setting=a popular Manila café | anchor=ordering coffee | trigger=a common customer request | turn=the misconception flip | aftereffect=a changed assumption
+  stages: editor: ok | naturalizer: ok  words=145
+  GATE: FAIL — SUBSTANCE fail and STORY PHYSICS fail compound each other: the 'surprising reason' promised by the premise never actually arrives — 'nakaka-apekto raw yung sugar sa natural na lasa ng kape' is the vaguest possible non-explanation, and the script never makes it concrete or vivid (no flavor notes named, no comparison, no felt scale); plus AGENCY is missing — the narrator says 'nag-research ako' but the research yields nothing, and THE CHANGE is hollow because the lesson ('magtiwala sa sarili nating preferences') is a generic inspirational tag, not a payoff earned by anything the script actually showed.
+  GATE: after rewrite: FAIL — STORY PHYSICS — CAUSALITY fails: the beats don't force each other; the narrator 'nag-research, tinanong ko yung mga managers' and then just accepts the answer and tries the coffee, with no tension or resistance anywhere — it's a chain of 'and then' moments, not 'but/therefore,' so the story has no real spine to carry the payoff.
+──────────────────────────────────────────────────────────────────────
+Alam mo ba kung bakit walang sugar sa kape namin? Lagi kong naririnig yun sa customers — 'Ate, asan yung sugar?' Pero ito yung secret: sinadya naming wala. Bakit? Nung unang linggo ko dito, na-curious ako. Nag-research, tinanong ko yung mga managers. Ang sugar, nahaharangan yung natural na lasa ng beans. Pag walang sugar, mas lumalabas yung toasty at fruity notes ng kape. Nung tinry ko mismo, hindi na ako naghanap ng sugar, promise. Pero marami pa ring gustong may sugar — nakasanayan na kasi, 'di ba? Pero minsan, pag wala kang nilagay, bigla ka na lang magugulat sa mga flavors na lalabas. Yung tunay na lasa ng kape, dun mo talaga siya mahahanap. Kaya pag tinatanong ako bakit wala, sabi ko lang, 'Try mo muna. Baka magustuhan mo.' Kasi minsan, kailangan lang talaga ng bagong try. Sa kape pa lang, dami mo nang matutunan.
+
+══════════════════════════════════════════════════════════════════════
+[INFORMATIONAL · SHORT 75s · 2/4] "Bakit Magkaiba ang Presyo ng Isda sa Palengke?"  register=CONSPIRATORIAL  (rewritten once)
+  logline: Discovering the true cost of cheap tilapia and its environmental impact in Manila's wet market.
+  ── PLAN (planner convergence) ──
+  premise:    You're shopping at a local wet market in Manila and spot two vendors selling tilapia at very different prices.
+  conflict:   You want to buy the freshest and most sustainable fish, but the huge price gap makes you question your decision.
+  escalation: You start asking the vendors why their prices vary so much, but their explanations only add to the confusion. One claims premium quality and freshness, while the other assures you it's equally good but from a different source. You dig deeper online and find several articles discussing 'carbon footprint' and how transportation affects not just price but also environmental impact.
+  twist:      You learn that the cheaper tilapia is imported and has a massive carbon footprint, making the supposedly 'cheap' choice more costly in environmental terms.
+  ending:     In the end, it's not just about price but understanding what you really pay for when buying fish. You leave the market more informed about how far your food travels and the true cost hidden behind lower numbers.
+  elements:   structure=direct_second_person | role=the curious shopper | setting=a Manila wet market | anchor=- | trigger=a surprising price difference | turn=the misconception flip | aftereffect=a changed assumption
+  stages: editor: ok | naturalizer: ok  words=170
+  GATE: FAIL — The carbon footprint claim is dropped in a single vague sentence with zero concrete grounding — the script never earns it, making the ending feel like a pasted moral rather than a payoff the story built toward; and 'Target runner 'yan sa shipping' is garbled phrasing that no real speaker would say.
+  GATE: after rewrite: FAIL — SUBSTANCE hard fail: the script makes a specific environmental-cost claim ('napakalaki ang carbon footprint ng imported tilapia') but never earns it — no number, no comparison, no felt-scale anchor — just the assertion, which violates the rubric's ban on doing work that 'a lot'/'huge' does; compounding this, CAUSALITY collapses at 'Alam nyo ba' because the pivot from 'two vendors gave me different answers' to 'I Googled and now I know carbon footprints' is a 'and then' leap with no connective force, and LANGUAGE flags 'which impacts the environment' as a mid-sentence English clause that reads like untouched machine translation, not spoken Taglish.
+──────────────────────────────────────────────────────────────────────
+Sa palengke, napansin ko agad: dalawang tindahan ng tilapia, pero ang layo ng presyo. Isa P150, yung isa P70 lang. Medyo nakakalito, 'di ba?
+
+Kaya tinanong ko, bakit ganito kalayo ang presyo? Yung isa, sobra raw fresh at premium quality. Yung mas mura, sabi, 'Wala namang kakaiba — ibang supplier lang.'
+
+Pero teka, ano ba talaga ang ibig sabihin nito? Parang parehong may point. Kaya nag-google ako habang nakapila — konting research lang naman.
+
+Alam nyo ba, yung mga imported na tilapia, oo, mura nga sila, pero napakalaki ng carbon footprint nila. Dala-dala ng shipping yan mula iba-ibang bansa, gumagamit ng fuel, which impacts the environment.
+
+Kaya kahit sa tingin mo mura, may mas mataas na environmental cost na nakatago.
+
+Bigla, nag-iba yung perspective ko. Hindi lang pala presyo ang usapan. Tinitingnan ko na kung saan galing at paano napunta sa plato ko.
+
+Hindi na ako bumibili basta-basta — napaisip talaga ako. Minsan yung kalidad at yung epekto sa mundo, di mo mapapansin kung di mo titingnan ng mas malalim.
+
+══════════════════════════════════════════════════════════════════════
+[INFORMATIONAL · LONG 240s · 3/4] "Bakit Mabigat ang Manggang 'To?"  register=CONSPIRATORIAL  (rewritten once)
+  logline: Bakit ang ibang mangga sa palengke, maliit pero mabigat? May sikreto pala sa technique na ginagamit.
+  ── PLAN (planner convergence) ──
+  premise:    In a bustling palengke (market) in Manila, a shopper picks up a specific kind of native mango, only to wonder why it feels heavier than it looks.
+  conflict:   The shopper wants to understand why these particular mangoes, which look the same as others, are surprisingly heavier, clashing with their assumptions about size and weight.
+  escalation: As the shopper investigates, it leads to conversations with a fruit vendor who explains that these mangoes are cultivated in a unique way — through a specific grafting technique that affects their density. This reveal forces the shopper to consider the implications on flavor, price, and sustainability.
+  twist:      The turn comes when it's revealed that these heavier mangoes are not just a novelty, but are intentionally cultivated to be juicier and more nutrient-rich, challenging the typical belief that bigger mangoes are always better.
+  ending:     The viewer is left with a new appreciation for selecting fruits wisely, understanding that bigger isn't always superior, and knowing that these denser mangoes offer a richer experience.
+  elements:   structure=question_first | role=the curious shopper | setting=a bustling palengke in Manila | anchor=selecting fruits | trigger=an unusually heavy mango | turn=the misconception flip | aftereffect=a changed assumption about food quality
+  stages: editor: ok | naturalizer: ok  words=233
+  GATE: FAIL — The script fails CAUSALITY and SUBSTANCE: the vendor's 'grafting' explanation is never actually connected to why the mango is heavier (the causal link — more water content, denser flesh, or whatever the real mechanism is — is never stated), so the central question the hook plants ('bakit ang bigat?') is never genuinely answered, only decorated with vague lines like 'may bigat sa lasa, hindi lang sa timbang' and a metaphor about the world of mango farming that substitutes poetry for an actual payoff — the viewer cannot re-explain this to anyone.
+  GATE: after rewrite: FAIL — The core claim fails the credibility test fatally: 'durog grafting technique' is not a real or recognized term, the script never explains a credible mechanism for why grafting increases density or weight, and the payoff ('mas siksik, mas masarap, mas puno ng nutrients') is an unearned assertion the story has done nothing to make believable — the viewer cannot re-explain this because nothing was actually explained.
+──────────────────────────────────────────────────────────────────────
+Alam mo 'yung palengke sa Maynila na sobrang dami ng tao? Pumunta ako dun isang araw at may napansin akong kakaiba. Habang nag-aabang para bumili ng mangga, napahawak ako sa isa. Ang liit nito, pero bakit parang ang bigat? Parang may secret na nakatago!
+
+Kilala mo 'yung tipikal na mangga, 'di ba? Magandang kulay, tamang laman, pero 'pag hinawakan mo, parang magaan. Pero ito, kakaiba. Kaya na-curious ako. Tinanong ko si ate vendor.
+
+Sabi ni ate, "Ah, 'yan ba? Special kasi 'yan, may tawag kaming 'durog' na grafting technique na ginagamit diyan."
+
+Sinabi niya na 'yung grafting process na 'to, pinagsasama 'yung dalawang klase ng puno ng mangga para makuha 'yung pinakamasustansya na prutas. Akala ko kasi dati, mas malaki, mas maganda. Pero ang totoo pala, 'yung density ang nagagawa ng prosesong 'to. Kaya siya mabigat!
+
+Eto na 'yung tunay na mind-blow: ibig sabihin, mas siksik, mas masarap, at mas puno ng nutrients! Parang na-reveal sa'kin 'yung isang slice ng mango farming secrets na hindi pala obvious.
+
+Medyo mahal nga lang, 'di ba? Kaya kinompare ko 'yung lasa sa regular. Grabe, iba talaga! Nakaka-surprise na hindi sa laki nababase ang quality ng mangga, kundi sa bigat at sa sustansya mismo.
+
+So, sa susunod na nasa palengke ka, subukan mo tingnan 'yung ibang mangga. Alamin mo kung ano talaga 'yung nasa loob. May bigat din pala sa sustansya ang bawat prutas na hinahawakan mo!
+
+══════════════════════════════════════════════════════════════════════
+[INFORMATIONAL · LONG 240s · 4/4] "Yung Alamat ng Usok sa Bundok"  register=CONSPIRATORIAL  (rewritten once)
+  logline: Sa likod ng alamat ng usok sa burol, natagpuan ang tunay na dahilan—isang illegal operation ng sugarcane alcogol. Nai-reveal na ang totoo.
+  ── PLAN (planner convergence) ──
+  premise:    In a small village in the Philippines, there's a local legend about a mysterious source of evening fog that gathers at the hill's peak every now and then, believed to conceal hidden treasures. The legend includes a curious detail: the fog smells like burning sugarcane — something only those who've ventured close would notice.
+  conflict:   Villagers are tempted to seek the supposed treasure on the hill, but fear of the unknown and tales of those who never returned keep them at bay.
+  escalation: The unexplained scent of burning sugarcane leads skeptics and believers alike to question what lies in the fog. Speculation rises: Is it a natural phenomenon, or does it mask a man-made secret? An investigation by a few brave locals stiffens the community's resolve as they weigh rumor against risk.
+  twist:      The peculiar scent turns out to be from an underground illegal operation using sugarcane to produce alcohol, cleverly concealed beneath the hill and creating the fog.
+  ending:     With the mystery solved, the villagers dispel the legend, realizing how a perceived myth was a clever front. Their trust in local tales is shaken, but they continue to share the story with newcomers, now paired with truth.
+  elements:   structure=retold legend | role=the knowledgeable local | setting=a fog-covered hill in a small village | anchor=the local legend of the treasure hill | trigger=the peculiar detail of the scent of burning sugarcane | turn=the misconception flip | aftereffect=realizing the sometimes hidden truths behind everyday myths
+  stages: editor: discarded_wordcount (25%) | naturalizer: ok  words=381
+  GATE: FAIL — Multiple lines fail the language naturalness test — 'hindi inaasahan ng mga tao na likha ito ng kayang kamay ng tao,' 'ganun na pala kalalim ang pagkakababa ng alamat,' 'parang nabuksan tuloy sa amin yung totoong gabundok ng pasa-pasa kwento,' and 'hindi lang basta usok, pero parang tunay na nasusunog na tubo' all read as garbled or word-salad constructions no real speaker would say out loud, making the credibility test a hard fail.
+  GATE: after rewrite: FAIL — STORY PHYSICS hard fail on THE DEBT and THE CHANGE: the opening plants a treasure-myth mystery and the reveal is an illegal distillery, but the script never pays off what happened to the operation or Mang Roger — no arrest, no confrontation, no consequence — so the story just trails off with a generic 'next time may marinig kang kakaiba' moral that answers nothing the opening asked; additionally, 'isang underground pa-laboratory kung saan nag-iillegal sila ng pag-distill ng alcohol gamit ang tubo' is garbled and unnatural even for Taglish ('nag-iillegal sila ng pag-distill' is not how anyone speaks this).
+──────────────────────────────────────────────────────────────────────
+Eto ang isang kwento sa isang baryo sa Pilipinas kung saan nagiging usap-usapan ang misteryosong usok sa tuktok ng isang burol. Hindi basta-basta usok ha—amoy parang nasusunog na tubo. Nakakatawa, kasi 'yung iba naniniwala na may nakatagong kayamanan doon.
+
+Siyempre, sa baryo, kahit hindi ka madaling maniwala, curious ka pa rin. Ang kwento, lahat daw ng nagtatangkang umasenso sa lugar na 'yon, maire-report na hindi na makakabalik sa barangay. May mga kuwento ng mga nawawala na tila ba'y nalunod sa hamog. Kaya noong mga nakaraang taon, walang may gustong sumubok.
+
+Pero unti-unti, meron ding mga matitigas ang ulo na 'di mapakali. Si Mang Roger, na kilala sa pagiging skeptic, hindi na matiis ang misteryo. "Hindi ito galing sa alamat! May dahilan ito," sabi niya. Dun pumasok sa usapan ang amoy ng nasusunog na tubo. "Ano bang kakaiba sa amoy na 'yon?"
+
+Dahil sa mga tanong na 'to, lalo na namang nag-init ang hinala ng mga tao. Nung mas dumami na ang nalaman, may mga sumubok alamin ang pinagmumulan nito. 'Yung amoy na tila nasusunog na tubo, 'yun pala ang clue. Napaisip si Mang Roger. "Bakit amoy tubo? Hindi naman nagtatanim ng tubo dito?"
+
+Sabi nila, nagdesisyon na silang pumunta mismo. Dumeretso sila sa burol para alamin mismo. Ang mga pinuno ng baryo, nabahala pero naniwala rin na dapat nang wakasan ang pamahiin. Kaya naging ganap na mission ito.
+
+At nandoon na nga sila, taas ng kaba. Nung maabot nila ang tuktok, hindi nila inaasahan ang nadiskubre nila. Alam mo kung ano nakita? Isang underground pa-laboratory kung saan nag-iillegal sila ng pag-distill ng alcohol gamit ang tubo, na nagdudulot ng misteryosong usok.
+
+Boom. Ang sikretong taon nang nagtatago, na-reveal dahil sa usok at amoy.
+
+Kaya noong napaalam na sa lahat ang totoong nangyari, tapos na rin ang alamat ng treasure. Nakakaasar pero nakakatawa. Paalala lang pala—'wag agad tumalon sa konklusyon, kahit masarap ang kilig ng alamat. Kwentong umikot sa baryo nga lang, pero mas malaki pa ang totoo kaysa haka-haka.
+
+Pero syempre, hindi nawawala yung kwento dun—sa halip, nai-share pa sa mga bagong dating. Natutunan nilang hindi lahat ng akala mong alamat, puro pamahiin lang—minsan may laman din sa likod kung susuriin mo.
+
+Kaya next time may marinig kang kakaiba, isipin mo na lang—baka may matagal nang nakatago na hindi natin inaasahan.
+
+══════════════════════════════════════════════════════════════════════
+SUMMARY (informational):
+  1. short | Bakit Walang Sugar ang Kape Dito?        | MYTH-SLAYER              | FAIL (retried)
+  2. short | Bakit Magkaiba ang Presyo ng Isda sa Pal | CONSPIRATORIAL           | FAIL (retried)
+  3. long  | Bakit Mabigat ang Manggang 'To?          | CONSPIRATORIAL           | FAIL (retried)
+  4. long  | Yung Alamat ng Usok sa Bundok            | CONSPIRATORIAL           | FAIL (retried)
+total lab cost (informational): 61¢

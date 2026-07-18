@@ -1,0 +1,119 @@
+⚗ DNA override → "Hindi Ko Nasabi": Filipino family drama — the things we never say to the people we love, told first-person; HOUSE RULE of this channel: a story ends only AFTER the narrator has paid the price on screen — the confrontation happens and we hear the answer, the relationship is permanently changed, the words said cannot be taken back; never end at the moment a decision is made — end after its consequence has landed
+
+══════════════════════════════════════════════════════════════════════
+[DRAMA · SHORT 75s · 1/4] "Mga Painting ni Mama"  register=BITTERSWEET WARMTH  (rewritten once)
+  logline: A daughter learns the meaning behind her mother's unsold paintings, discovering a hidden bond.
+  ── PLAN (planner convergence) ──
+  premise:    A daughter returns to her childhood home for the first time since her mother's death, finding a room filled with old, unsold artwork.
+  conflict:   The daughter wants to understand why her mother kept creating art she never sold, questioning her mother's motives and her own lack of support.
+  escalation: As she inspects each painting, she recalls moments of dismissing her mother's passion, realizing these paintings were personal messages she never took the time to read, therefore begins uncovering hidden notes behind each canvas with personal messages from her mother.
+  twist:      She finds a final painting with a note explaining that her mother painted for her, not for sale, revealing how her creativity was her way of showing love and understanding for her daughter.
+  ending:     The daughter sits among the paintings, a quiet realization changing her view of her mother and rekindling a connection she thought was lost.
+  elements:   structure=a first-hand account | role=a daughter | setting=a room filled with paintings | anchor=the unsold artwork | trigger=returning to her childhood home | turn=a hidden sacrifice revealed | aftereffect=a reconciliation that costs something
+  stages: editor: ok | naturalizer: ok  words=136
+  GATE: FAIL — The channel's HOUSE RULE is a hard fail here: the narrator never confronts anyone (Mama is dead, the paintings are passive objects), no price is paid, nothing is permanently changed — the script ends at the discovery and the feeling it produces, not after a consequence has landed; additionally, 'Bigla na lang gumaan ang dibdib ko' and 'Hindi pala nawawala 'yung connection namin—nandito lang pala' announce the emotional resolution outright instead of carrying it through action or image, violating the BUILD and PAYOFF rubric lines.
+  GATE: after rewrite: FAIL — Fails the HOUSE RULE hard — the story ends at the narrator sitting stunned among the paintings, which is the moment of realization, not the consequence of any action; there is no confrontation, no relationship permanently changed, no price paid, and Mama is already dead so the 'hindi ko nasabi' is never tested against a living person — the wound is discovered but nothing is done with it, making this a mood piece that stops rather than ends.
+──────────────────────────────────────────────────────────────────────
+Pagpasok ko sa lumang bahay, ramdam ko agad 'yung bigat ng tahimik. Sa gilid, andun 'yung art room ni Mama, puno ng mga madilim na painting, hindi nabenta. Dati lagi kong sinasabi, 'Mama, sayang ang oras mo.' Ngayon, iba na 'yung tingin ko.
+
+Isa-isang kinuha ko 'yung mga canvas. Nagulat ako, may mga sulat pala sa likod. Kwento niya, na hindi ko pinakinggan noon—'yung first crush ko, 'yung favorite ni Papa na dish na bihira niyang lutuin.
+
+Tapos may isang painting, pinakamalaki sa lahat. Sa likod may sulat sa akin, 'Para sa 'yo ito, anak.' Dun ko lang na-realize, painting niya pala 'yung language ng pagmamahal.
+
+Napaupo ako, natulala, napaligiran ng mga painting niya. Hindi ko na siya matatanong, pero parang kasama ko pa rin siya. Parang nabuhay ulit 'yung connection namin, hindi pala siya nawala.
+
+══════════════════════════════════════════════════════════════════════
+[DRAMA · SHORT 75s · 2/4] "Lumang Susi, Bagong Kuwento"  register=QUIET ACHE  (rewritten once)
+  logline: A son's discovery of his late father's unsent letters turns silence into a conversation.
+  ── PLAN (planner convergence) ──
+  premise:    You (a middle-aged son) are sitting in your father's old barber chair, clearing out his shop after his sudden passing. As you sort through the familiar tools and relics of his life, you find an old, locked drawer.
+  conflict:   You want to understand the unspoken words and hidden history between you and your father; the locked drawer, the weight of his expectations, and your own reluctance to pry stand in the way.
+  escalation: You deliberate between leaving the drawer as is, respecting his privacy but remaining in the dark about his inner world, and forcing it open to dig through the silence. Your hand shakes as you finally decide to pick the lock, each creak of the drawer an intrusion into a past you never knew.
+  twist:      Inside the drawer, you find a stack of unsent letters addressed to you, detailing the struggles, regrets, and love your father never voiced. Each letter a direct address, revealing how much he both admired and feared for you.
+  ending:     In that cramped, echoing shop, you whisper a promise to understand him better through what he left behind, a resolve that won't go unheard.
+  elements:   structure=direct_second_person | role=a middle-aged son | setting=his father's barber shop | anchor=the locked drawer | trigger=the unsent letters found | turn=a hidden sacrifice revealed | aftereffect=a reconciliation that costs something
+  stages: editor: ok | naturalizer: ok  words=179
+  GATE: FAIL — Fails the channel's HOUSE RULE hard: the story ends at the moment of a private vow ('promise… I'll understand you better') — no confrontation happens, no relationship is permanently changed, no price is paid; the letters are discovered and the narrator makes a quiet internal promise, which is exactly the 'ends at the moment a decision is made' structure the rule explicitly prohibits.
+  GATE: after rewrite: FAIL — Fails the channel's hardest rule — the story ends at the moment a decision is made ('Desidido akong ipakita...') and never pays the price: the cousins are never shown the letters, no relationship is changed on screen, no word said cannot be taken back, so the ending is pure intention, not consequence; additionally, AGENCY is hollow throughout because the narrator does nothing but react and plan, and the BUILD fails the 'never announced' rule with 'Ang daming oras na nasayang' spelling out the emotion directly.
+──────────────────────────────────────────────────────────────────────
+Alam mo 'yung chair sa barbershop ni Papa? Andiyan ako ngayon, clearing out his things. Sa tagal ko na rito, wala akong alam tungkol sa kanya na hindi niya pinakita. Sa dami ng gamit, may isang drawer na laging nakalock. Sobrang tago.
+
+Iniisip ko, 'Should I open it?' Parang may pakiramdam akong dapat ko na siyang hayaang magpahinga, pero gusto ko ring maintindihan ang mga bagay na hindi namin napag-usapan.
+
+With a shaky hand, I unlocked it. Squeaks ng drawer, parang echo ng mga 'di sinagot na tanong. Inside, may mga sulat na hindi naipadala. Lahat para sa akin. Nalaman ko ang mga iniisip, pangarap, at takot ni Papa para sa akin. Ang daming oras na nasayang.
+
+Ano ba, hinihintay ko na marinig 'yung boses niya habang binabasa ko. Pero wala. Umupo ako sa chair, binasa ko lahat. May mga luha, pero may ngiti rin.
+
+Desidido akong ipakita 'tong mga sulat sa mga pinsan ko, para mas maintindihan namin si Papa — para mabuhay 'yung mga sinimulan niya kahit 'di na siya rito. Sa letters, naririnig ko siya, finally.
+
+══════════════════════════════════════════════════════════════════════
+[DRAMA · LONG 240s · 3/4] "Lihim ng Susi ng Orasan"  register=BITTERSWEET WARMTH  (rewritten once)
+  logline: Sa graduation ng kanyang apo, isang widow binigay ang pocket watch ng kanyang yumao na asawa na may nakatagong mensahe tungkol sa kahalagahan ng oras.
+  ── PLAN (planner convergence) ──
+  premise:    A widow prepares her late husband's old pocket watch as a gift for their grandson's college graduation, intending it as a family heirloom to symbolize continuity.
+  conflict:   The widow wants to pass the watch to her grandson, believing it to be a treasured possession, but is unsure about the true value it held for her husband, as he never wore it.
+  escalation: She contemplates how to present it meaningfully while grappling with the oversight of never asking her husband about its importance. The widow finds a hidden note inside the watch, written by her husband, revealing its true story but not without a bittersweet confession.
+  twist:      The note explains that the watch was a symbol of the husband's greatest regret, a time he could not get back due to missed opportunities with family when he was working abroad.
+  ending:     The widow gives the watch to the grandson along with the note, leaving him with understanding and a cautionary tale rather than a mere heirloom. The grandson carries forward a legacy modified by insight, not just tradition.
+  elements:   structure=the_last_time | role=a widow | setting=her quiet living room | anchor=an old pocket watch | trigger=preparing a meaningful gift | turn=a too-late truth arrives | aftereffect=a legacy altered by understanding
+  stages: editor: ok | naturalizer: ok  words=356
+  GATE: FAIL — The ending violates the channel's house rule — the script stops at the moment of giving (the decision's consequence), but Miguel's reaction is told as a neat summary ('naintindihan na niya rin') with a moral spelled out ('hindi niya gagawin ang parehong pagkakamali'), rather than a real, irreversible landing; and the final two lines are pure theme-announcement ('kwento na siya ng mga oras na lumipas, at paalala ng mga oras na hindi na dapat sayangin'), which is a direct rubric violation under NEVER and PAYOFF — the price is never actually paid on screen.
+  GATE: after rewrite: FAIL — The ending violates the channel's house rule — it stops at a warm exchange and a soft hug, never paying the price: no relationship is permanently changed, nothing said is unsayable, and the closing lines ('Wala na 'yung bigat ng mga regrets... knowing na may kasamang mensahe') announce emotional resolution instead of showing a consequence that landed, making this a clean bow the rubric explicitly bans.
+──────────────────────────────────────────────────────────────────────
+Hindi ko nasabi kay Lolo Ben kung gaano ko kamiss si Lolo.
+
+Oras na nun para one by one sila bumaba ng stage sa graduation. Si Miguel, apo namin, ang star ng show para sa amin. Habang nangyayari iyon, nagka-crash course ako sa naiwan ni Lolo. Lagi naming sinasabi na love ni Lolo itong pocket watch pero hindi ko siya nakitang suot iyon. Ewan ko ba, pero ngayon, gusto kong ibigay ito kay Miguel. Parang tama lang na siya ang magmana.
+
+Habang binabalot ko 'yung orasan, pilit kong iniisip lahat ng times na magkasama kami ni Lolo — mga kulitan, kwento niya nung siya'y nagtrabaho abroad. Lahat ng mga moments at missed chances, bigla na lang bumabalik sa isip ko. Pag binuksan ko para i-check ulit if working pa, may nakita akong maliit na papel nakatago sa loob.
+
+'Para sa mga panahong hindi ko na maibabalik,' ang nakasulat. Pakiramdam ko, bumigat 'yung papel sa kamay ko. Tatawa sana ako kasi typical Lolo style, pero nung nakita ko 'yung handwriting, bigla akong napaisip. Bakit ganon 'yung mensahe?
+
+Habang nasa labas ako ng auditorium, hinihintay ang graduation, pinaglaruan ko 'yung orasan at iniisip kung ano talaga ang ibig sabihin ng note na yun. Isa lang ang naging message ni Lolo nung gabing iyon, noong siya pa'y nagtatrabaho abroad — na-miss niya 'yung mga oras na di na mababalikan sa pamilya niya.
+
+Pagkatapos ng graduation, casual lang si Miguel nung ibinigay ko sa kanya ang watch. "Naiintindihan mo kasi 'yung oras, di ba?" sabi ko, trying to sound light. At napansin ko siyang nagbaba ng tingin sa orasan, at tumigil ng konti. "Bakit may sulat sa loob?" tanong niya.
+
+Ibinigay ko sa kanya yung note. Seryoso siyang nagbasa, tahimik ng ilang sandali. Tiningnan niya ako, ngumiti kunwari, pero may kaunting lungkot sa mata niya. "Gusto ko na lang i-treasure 'to," sabi niya. "Lagi kong dala, Mamita."
+
+Noon, sa sandaling iyon, naramdaman ko na hindi na lang kami basta nagse-celebrate ng isang graduation. Wala na 'yung bigat ng mga regrets. Kaya naman iniwan ko siya with a soft hug, knowing na may kasamang mensahe para sa susunod pa niyang hakbang.
+
+══════════════════════════════════════════════════════════════════════
+[DRAMA · LONG 240s · 4/4] "Ang Blessing ni Mama"  register=CONFRONTATION  (rewritten once)
+  logline: Sa unang birthday blessing ng anak, isang ina naharap sa nakakubling koneksyon ng tradisyon, pamilyang kasaysayan.
+  ── PLAN (planner convergence) ──
+  premise:    A young mother, Nica, waits anxiously outside a traditional Filipino village house where her daughter is being blessed and prepped for her first birthday celebration—a local tradition said to ensure a child's prosperous future.
+  conflict:   Nica wants the blessing to go perfectly, especially since there have been rumors about the local midwife's ceremonies being tainted by bad luck, but something about the midwife's demeanor and specific instructions seems off, making Nica anxious about the ritual's outcome.
+  escalation: Nica internally questions each part of the ceremony described to her but suppresses her doubts to respect tradition. She decides to peek inside when left alone for a moment, witnessing a small detail that only someone who had been blessed themselves could know—but Nica wasn't, because her own mother broke with tradition years ago. The realization sets off an emotional turmoil as Nica wonders if the rumor of bad luck could actually be tied to unspoken family history.
+  twist:      Nica discovers that despite not having her own blessing due to her mother's rebellion, she recognizes the ritual's accuracy from vague childhood memories and begins to suspect a personal connection she was unaware of.
+  ending:     Nica confronts the midwife, who reveals she has overseen blessings for generations in the family and has a secret: Nica's mother actually performed a private blessing at home. Nica must reconcile this newfound connection with her past and decide what that means for her and her daughter.
+  elements:   structure=outsider_pov | role=a young mother | setting=outside a traditional Filipino village house | anchor=an overlooked detail in the ritual | trigger=the midwife's peculiar behavior | turn=a misunderstanding uncovered | aftereffect=a reconciliation that costs something
+  stages: editor: discarded_peak | naturalizer: ok  words=366
+  GATE: FAIL — The PAYOFF and AGENCY rules both fail hard: the narrator decides nothing — Aling Rina simply 'kinumpirma' a secret and hands over the revelation, so the narrator only receives information rather than acting or paying any price — and the ending ('Ganun') announces a feeling ('mixed emotions,' 'parang kumpleto') instead of leaving a mark, violating the channel's house rule that the confrontation must happen and the relationship must be permanently changed on screen.
+  GATE: after rewrite: FAIL — The script fails the HOUSE RULE and PAYOFF on multiple counts: the narrator never confronts her mother, the revelation lands and then just... sits there — no price is paid, no relationship is permanently changed, no words are said that cannot be taken back; additionally, 'May option akong gawin dito... Pwede itong magpatuloy, o si Luna hindi na rin malalaman' is the exact violation the rule names — ending at the moment of decision, not after its consequence has landed.
+──────────────────────────────────────────────────────────────────────
+Nasa labas lang ako ng bahay nila Lola Iska. Kabado na halos, yung kili-kili ko pinagpapawisan na. Sabi nila, lahat ng bata dito may blessing sa unang birthday, 'di ba? Pero etong midwife na 'to, si Aling Josie... ewan ko, parang may mali lang. Lumakas pa yung kaba nung napa-buntong hininga siya habang nag-aayos ng kandila. Napa-isip tuloy ako, 'Paano kung totoo yung tsismis, na malas na raw siya?' Pero hindi ko pwedeng ipakita sa kanila na natatakot ako.
+
+Iniwan nila ako saglit habang pinapasa yung mga flowers sa anak ko. Alam ko dapat wala akong ginagawang unnecessary moves, pero hindi na rin ako makatagal, e. Sumilip ako sa maliit na bintana. Tip-toe nga ako para lang makita kung ano'ng ginagawa nila sa loob. Malay ko ba? Mukha namang tama lahat.
+
+Pero teka, 'yung pagkakalagay, 'yung pagkakahawak nung mga lumang bulaklak... Bakit pamilyar? E, hindi naman ako na-bless dati, 'di ba? Si Mama kasi nagsabi noon na hindi raw importante. Pero... bakit parang... may naaalala ako? Noon ba yun?
+
+Bumalik si Aling Josie na dala yung mangkok na may tubig. Sabi niya, 'Wag kang mag-alala. Lahat ng parehong ginagawa ko nung una mong blessing.'
+
+'First blessing ko? Ako?' Parang biglang nawala yung oxygen sa paligid ko. Sinabi ko sa kanya na hindi ko natanggap yung blessing ko, kasi hindi ako na-bless dati. Pero ngumiti lang siya, at saka nagpatuloy.
+
+'Ay, hija. Yung mama mo mismo nagpatuloy, siya 'yung nag-bless sayo nung una, sa bahay ninyo. Pangkamag-anak lang talaga. Iba lang ang paraan.'
+
+Napakapit ako sa pinto. So... meron pala akong sariling blessing na hindi ko alam. Sobrang dami palang hindi napag-uusapan tungkol kay Mama sa pamilya. Ngayon, nakatunganga lang ako, lahat ng naiipon na tanong, ang dami.
+
+May option akong gawin dito... Pwede itong magpatuloy, o si Luna hindi na rin malalaman.
+
+Nagpasya akong ilapit ulit yung mata ko dun para makita si Luna, o, anak. Tinignan kong mabuti, kung naayos lahat. Sa mga oras na 'to, hindi ko masyadong maipaliwanag yung pakiramdam. Pero isa lang alam ko: ang gulo pala ng simpleng tradition lang ha.
+
+Bumalik si Aling Josie, nakangiti pa rin ganun. Hiling ko nun... sa lahat ng nangyari, sana naman mapagtagumpayan natin 'to.
+
+══════════════════════════════════════════════════════════════════════
+SUMMARY (drama):
+  1. short | Mga Painting ni Mama                     | BITTERSWEET WARMTH       | FAIL (retried)
+  2. short | Lumang Susi, Bagong Kuwento              | QUIET ACHE               | FAIL (retried)
+  3. long  | Lihim ng Susi ng Orasan                  | BITTERSWEET WARMTH       | FAIL (retried)
+  4. long  | Ang Blessing ni Mama                     | CONFRONTATION            | FAIL (retried)
+total lab cost (drama): 64¢

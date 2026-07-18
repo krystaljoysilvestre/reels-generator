@@ -1,0 +1,122 @@
+
+══════════════════════════════════════════════════════════════════════
+[LIFESTYLE · SHORT 75s · 1/4] "Tambak ng Lechon at Sinulog"  register=REAL TALK  (rewritten once)
+  logline: A young chef turns a lechon mishap into a festival highlight during the Sinulog.
+  ── PLAN (planner convergence) ──
+  premise:    A young chef from Cebu recounts their unexpected breakthrough during an intense celebration of Sinulog Festival, when a towering feast they prepared had a surprising twist.
+  conflict:   The chef wants to prepare a show-stopping lechon display at the Sinulog Festival, but struggles with an unexpected spice imbalance that could ruin the centerpiece.
+  escalation: Attempting various last-minute fixes, the chef adds complementary dishes, asks for quick assistance from fellow vendors, and even considers calling it off, but a moment of inspiration from an elderly vendor leads to a crucial discovery.
+  twist:      The chef realizes that the imbalance can be turned into a feature by incorporating a tangy side dish that accentuates rather than diminishes the flavors.
+  ending:     The feast becomes the highlight of the festival, earning admiration from festival-goers and vendors alike, changing the chef's perspective on embracing unexpected outcomes.
+  elements:   structure=a first-hand account | role=young chef | setting=festival food stall | anchor=- | trigger=an unexpected spice imbalance | turn=the reveal of how it's really done | aftereffect=a want + a belief it's doable
+  stages: editor: ok | naturalizer: ok  words=153
+  GATE: FAIL — Fails the AGENCY and CAUSALITY checks: the narrator never truly decides anything under pressure — Lola Cora solves the problem for him ('sabi niya…'), so the pivot is handed to him, not earned; the beats also just follow each other ('and then I asked, and then she said, and then I served, and then everyone loved it') with no 'but/therefore' tension; and the line 'tasked sa pag-prepare ng lechon display' reads like a translated corporate memo, not natural spoken Taglish.
+  GATE: after rewrite: FAIL — CAUSALITY fails: the beats are 'and then' chain reactions, not forced choices — the narrator never actively DECIDES to pivot (the tindera's quip and the calamansi idea arrive as passive inspirations, not decisions), so the mishap-to-triumph arc has no dramatic spine; and THE CHANGE collapses into a generic 'mistakes teach us' moral that pays off nothing the opening planted about Sinulog or the display specifically.
+──────────────────────────────────────────────────────────────────────
+So, imagine this. Nag-try ako gumawa ng lechon display sa Sinulog. Excited na excited ako kasi doon kami naatasan. Pero, grabe, may spice imbalance sa lechon. Alanganin talaga, nakakahiya!
+
+Nag-panic ako, pero tuloy pa rin. Naghahanap ako ng tulong, at may lumapit na tindera. Sabi niya, 'Ano ba 'yan, 'di ba festive ang Sinulog? Dapat happy rin ang lechon mo!' Natawa ako, kasi tama siya. Sabi ko, 'Pwede bang gawing festively spicy?'
+
+Bigla akong napaisip, masarap 'to lagyan ng tangy side dish. Kaya humanap ako ng calamansi sa mga kalapit na tindahan. Nag-calamansi sauce ako bigla. Nakakadagdag na rin ng pop sa lechon.
+
+Noong sinerve ko na, akala ko flop na. Pero grabe, nagustuhan ng lahat! Parang may surprise party sa bawat bite. Lahat naka-smile. Kahit si Tandang Andoy na mataray minsan, tumango pa.
+
+Doon ko napagtanto, minsan sa mga mali natin, dun rin tayo natututo. At minsan, 'yun pa yung magpapasikat sa'yo.
+
+══════════════════════════════════════════════════════════════════════
+[LIFESTYLE · SHORT 75s · 2/4] "First Time Mag-Adobo"  register=SAVOR  (rewritten once)
+  logline: First time mag-cook ng adobo—will it live up to the family legacy?
+  ── PLAN (planner convergence) ──
+  premise:    You're in your grandmother's kitchen in Manila on a Sunday morning, tasked with cooking your first pot of authentic adobo for the family's lunch together, feeling both eager and nervous.
+  conflict:   You want to create a perfect traditional adobo that lives up to family's expectations, but your grandmother insists you must 'learn it on your own' without direct guidance.
+  escalation: You start confidently, but quickly run into issues—questioning the right amount of soy sauce and vinegar, at risk of overcooking the chicken with distractions like clinking pots and family voices. Every decision could make or break the dish, but you choose to trust your senses, taste-testing with worry that experimentation might stray from tradition.
+  twist:      As family members begin to gather at the dining table, you realize that the true essence of adobo isn't just in following a recipe, but in the taste memories shared across generations that inherently guide you.
+  ending:     With nervous anticipation, you serve the dish, and the approving smiles and hums confirm that you've captured the family spirit even if it isn't exactly like your grandmother's.
+  elements:   structure=direct_second_person | role=a first-time adobo cook | setting=grandmother's kitchen | anchor=- | trigger=the task to cook adobo for family lunch | turn=the reveal of inherited guidance | aftereffect=fulfillment in crafting something meaningful
+  stages: editor: ok | naturalizer: ok  words=138
+  GATE: FAIL — Fails AGENCY and CAUSALITY — the narrator never decides anything under pressure (the ratio is forgotten passively, the family just 'arrives,' the adobo just gets served), beats string together as 'and then' with no forcing move, so the script reads like things happening to a bystander rather than a cook making a real call; and the CREDIBILITY TEST fails because lines like 'tumigil din ang mundo ko' and 'may kurot pa rin' and the closing 'Lasa ng pamilya ko nandito pa rin' are over-polished constructions that no one says out loud in a kitchen story, killing the spoken-Taglish feel the channel requires.
+  GATE: after rewrite: FAIL — LANGUAGE NATURALNESS hard fail: 'tahimik na tinuturo ang puso niya, 'Sa sarili mong paraan'' is a constructed literary image — no real person speaks this way out loud, and it reads like a translated metaphor, not a genuine Taglish moment; STORY PHYSICS secondary fail on CAUSALITY — the beats ('hinga ng malalim… taste-test… smiles everywhere… lola tumango') are strung by 'and then,' no beat forces the next through a clear therefore/but pivot.
+──────────────────────────────────────────────────────────────────────
+Okay, eto na. Una kong adobo sa lola's kitchen. Grabe, kinakabahan ako habang tinitimpla ng toyo at suka. Ayoko maging maalat! Ang daming ingay sa paligid—mga pinsan nagtatawanan, clanging ng pots. Si lola, nakaupo lang, nanonood, at tahimik na tinuturo ang puso niya, 'Sa sarili mong paraan.' Kaya ayun, hinga ng malalim, tapang ng loob: taste-test ito. Isang timpla pa ng konti… inom ng tubig… hawig ba sa lola's recipe? Mga alaala ko nagsasalita, yung lasa na laging nandiyan. Family starts gravitating sa table. 'Kumusta?' tanong nila. Kaba pa rin, pero ngumiti lang. Tipong ito na, serve na. From the first bite, tinikman ko rin pati reaction nila. Smiles everywhere. Woohoo! Pati si lola, tumango ng konti. Ang saya! Mukhang nakuha ko yung spirit, kahit hindi exactong tulad ni lola. Yun pala—lasa ng tradisyon, sa sarili mong version.
+
+══════════════════════════════════════════════════════════════════════
+[LIFESTYLE · LONG 240s · 3/4] "Si 'Layla' at ang Kwento sa Likod ng Kawali"  register=SPARK  (rewritten once)
+  logline: A plantain vendor in Quezon City finds unexpected charm in his trusty old frying pan 'Layla' when a teen appreciates its storied past, making it the star of his sell.
+  ── PLAN (planner convergence) ──
+  premise:    A struggling street food vendor in Quezon City uses his trusty frying pan, 'Layla,' to cook crispy fried plantains, which never appeal to customers despite his best efforts.
+  conflict:   The vendor wants to attract more customers, but despite the perfect sizzle and golden brown color of his plantains, they don’t sell, especially when competition offers more extravagant dishes.
+  escalation: Determined to make his plantains irresistible, he experiments with adding different tweaks—varying the oil temperature, using different types of sugar for caramelization. Each alteration seems right but results in the same disinterest. Frustration mounts, leading him to contemplate giving up his spot entirely. However, the narrative takes a turn when a curious teen, intrigued by the frying pan's history, pauses to chat, expressing interest in how it has been used as a seasoned carrier of flavors over generations.
+  twist:      The teen's vivid enthusiasm reveals that the real lure is Layla’s storied past, not the plantains themselves. The vendor realizes the frying pan holds more charm as an antique culinary artifact than a mere cooking tool.
+  ending:     Acknowledging Layla’s authentic, enduring story sets the vendor apart. He starts sharing Layla's history as part of his selling strategy, drawing in curious customers eager to taste a piece of history and heritage.
+  elements:   structure=payoff_first | role=a struggling street food vendor | setting=a food stall in Quezon City | anchor=the vendor's frying pan, 'Layla' | trigger=the vendor's continuous failed attempts to attract customers | turn=the reveal of how it's really done | aftereffect=a want + a belief it's doable
+  stages: editor: ok | naturalizer: ok  words=256
+  GATE: FAIL — The final paragraph collapses into English and reads like a press release — 'Layla takes the spotlight with her vintage quirkiness' and 'he unearthed something more valuable than the crunch—he unearthed a piece of his heritage' are textbook AI-flavored copy that no real Taglish narrator would say out loud, and they hard-fail the credibility test and language naturalness check.
+  GATE: after rewrite: FAIL — 'May tinga na ng lola mo 'yan' is garbled — 'tinga' means food stuck in teeth, so the line is nonsensical where it clearly wants to mean age or wear ('tanda' or 'ganda' of heritage), and this specific broken line must be fixed before the script ships.
+──────────────────────────────────────────────────────────────────────
+Bakit ayaw nilang bumili? Paulit-ulit ko itong tanong habang nakatitig sa mga plantain na nagiging perfect golden brown sa kawali kong si 'Layla'.
+
+Si Layla—parang kaibigan na, ilang taon ko na siyang kasama. Pero, malamig pa rin ang benta.
+
+Sa gitna ng amoy ng grilling meats at umuusok na pansit sa paligid ko, hirap talaga mag-stand out.
+
+Kaya nag-experiment na ako. Iba't ibang oil temp, binago ko ang asukal para sa caramelization. Pero kahit anong gawin ko, wala pa ring pumapansin. Parang wala nang pag-asa.
+
+Isang araw, habang binubuong loob ko nang lagyan ng karatula para sa sale, lumapit si Jake—a teen na may pagka-curious.
+
+'Ano 'yang kawaling 'yan? Luma na, ah.'
+
+'Naku, si Layla ito,' sagot ko, napatigil siya.
+
+'Sino si Layla?'
+
+Ang tagal ko rin hindi gaanong pinansin si Layla, pero habang sinasabi ko kay Jake, parang bumalik lahat ng kwento—kay Lola pa 'to, ginagamit niya sa probinsya.
+
+Unti-unti kong na-realize, hindi lang plantain ang may kwento.
+
+'May tinga na ng lola mo 'yan,' sabi pa ni Jake, tawa nga siya ng tawa pero interesado talaga.
+
+Doon ko narealize, pwede palang si Layla rin ang highlight, hindi lang ang pagkain.
+
+Simula noong araw na 'yon, sinimulan ko nang ikwento si Layla sa mga dumadaan. Lalong tumigil mga tao, lalo na pag nalaman ang kwento ng kawali.
+
+May ibang tumigil para makita lang si Layla. Bigla na lang, nagdala siya ng charm.
+
+Akala ko kailangan ko ng bagong recipe, 'yun pala, kailangan ko lang mag-share ng story ni Layla. Ano na kayang next story namin?
+
+══════════════════════════════════════════════════════════════════════
+[LIFESTYLE · LONG 240s · 4/4] "Yung Lihim ni Lolo sa Binutong"  register=SAVOR  (rewritten once)
+  logline: Ang lolo na dating mangingisda, nagturo ang apo ng sikreto sa Binutong sa pamamagitan ng tunog ng kaldero.
+  ── PLAN (planner convergence) ──
+  premise:    In a quaint village in Bicol, a retired fisherman shares a seemingly implausible tale of the legendary 'Binutong' recipe with his grandson, while tucked away in his humble kitchen.
+  conflict:   The grandson, skeptical yet intrigued, wants to uncover the truth behind the elusive flavor his grandfather boasts about, but lacks any recipe or verifiable source besides his grandfather's cryptic story.
+  escalation: The grandson decides to try piecing together the elusive 'Binutong' dish using only his grandfather's scattered hints, each attempt revealing subtle techniques and long-forgotten ingredients the grandfather claims to 'remember' through nostalgic recollections.
+  twist:      The grandson finally perfects the dish by following a specific detail only someone who had cooked it before could know: the exact timing of removing the coconut milk from the fire relies on the unique sound of clams scrubbing against the pot, a technique his grandfather proudly reveals he invented.
+  ending:     With newfound respect for his grandfather's culinary skill, the grandson shares the meal with his family, feeling a stronger connection to his heritage and the mysterious flavors of their ancestry.
+  elements:   structure=retold | role=skeptical grandson | setting=a humble kitchen in Bicol | anchor=- | trigger=an implausible tale from his grandfather | turn=the reveal of a specific cooking technique | aftereffect=a saved idea and appreciation for family traditions
+  stages: editor: ok | naturalizer: ok  words=264
+  GATE: FAIL — Agency and causality both fail: the narrator never makes a real decision that forces the next beat — he just keeps cooking until Lolo randomly drops the 'clam dance' line, which the narrator then ignores ('hindi ko na siya pinansin nung una') and somehow still cracks the recipe, so the solving of the mystery happens *to* him, not *because* of him, and the script never explains the logical link between Lolo's clue and the breakthrough, leaving the central promise — 'grandson SOLVES the cryptic recipe' — unpaid.
+  GATE: after rewrite: FAIL — Multiple language-naturalness and credibility failures throughout — 'may aliw sa mata niya' is garbled (the intended 'may liwanag/saya sa mata' becomes meaningless), 'kulang-kulang na lang yun para ma-perfect mo' is a word-for-word awkward construction no real speaker would say, and the closing line 'ito ang ating pinagmulan' tips into literary/declamation Tagalog that kills the spoken Taglish register; beyond language, the CHANGE beat collapses because 'biglang nag-click' and 'perfect na siya' are told not felt — the sensory anchor (clams rubbing the pot) is named but never lands in the body the way the rubric demands.
+──────────────────────────────────────────────────────────────────────
+Grabe, hindi ko makalimutan yung araw na yun. Isang kwento ni Lolo ang lahat—tungkol sa Binutong. Akala ko kwento lang. "Walang recipe," sabi niya, "pero kapag nakuha mo yung tunog, kulang-kulang na lang yun para ma-perfect mo."
+
+Natawa lang kami ng mga pinsan ko. Sino ba naman ang nagluluto base sa tunog, di ba? Pero habang pinapakinggan ko si Lolo sa maliit niyang kusina, may aliw sa mata niya. Parang ang sarap balikan yung panahon na siya pa ang gumagawa.
+
+Kaya sa init ng isang araw, sinubukan ko. Simula sa simpleng sticky rice. Alam ko Bicolano dish 'to, kailangan ng gata. Si Lolo, parang director, nagkukwento ng dati niyang ginagawa habang umaasa akong tama ang bawat hakbang.
+
+Kaso kahit gaano ko subukan, palaging sablay. Laging may kulang sa lasa kahit anong adjust. "Bumalik ka sa tunog," sabi ni Lolo. Kaya binitawan ko yung measuring cup, nag-focus sa tunog.
+
+Nang narinig ko yung tunog ng mga tahong na sumasayad sa kaldero—halos magpikit-mata ako. Lolo, parang maestro, tinuturo sakin yung timing. Bigla, nag-click. The clams rubbing the pot, para siyang musika sa kusina.
+
+And that was it. Naramdaman ko lahat. Biglang naging puwede lahat. Sinubukan ko ulit makuha yung paborito ni Lolo, and this time, perfect na siya. Lahat kami sa bahay tuwang-tuwa habang sabay-sabay naming tinikman yung tamang Binutong.
+
+Naluluhang sinabi ni Lolo, "Ito yung lasa ng mga ala-alang gusto mong balikan." Masarap na kapiling ang lahat. Parang bumalik yung dati habang kumakain kami—simpleng hapunan, pero malalim ang halaga.
+
+At dun ko narealize, yung mga ala-ala ng lumang panahon, hindi lang kwento—ito ang ating pinagmulan.
+
+══════════════════════════════════════════════════════════════════════
+SUMMARY (lifestyle):
+  1. short | Tambak ng Lechon at Sinulog              | REAL TALK                | FAIL (retried)
+  2. short | First Time Mag-Adobo                     | SAVOR                    | FAIL (retried)
+  3. long  | Si 'Layla' at ang Kwento sa Likod ng Kaw | SPARK                    | FAIL (retried)
+  4. long  | Yung Lihim ni Lolo sa Binutong           | SAVOR                    | FAIL (retried)
+total lab cost (lifestyle): 60¢

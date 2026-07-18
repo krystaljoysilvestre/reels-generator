@@ -1,0 +1,112 @@
+
+══════════════════════════════════════════════════════════════════════
+[GENERAL · SHORT 75s · 1/4] "Yung Bilis ng Pangyayari sa Palengke"  register=Life is lived  (rewritten once)
+  logline: Anya witnesses random events at a market but finds their unexpected connection.
+  ── PLAN (planner convergence) ──
+  premise:    Anya, a middle-aged woman, recounts her day at the community market where she witnessed a series of events that seemed unconnected: a vendor short of change, a stray puppy wandering, and a young stranger on a motorcycle who crashed.
+  conflict:   Anya wants to understand the seemingly unrelated events and find their connection, but each recollection only adds more confusion to her memory.
+  escalation: Anya recalls helping the vendor, losing track of the puppy, and then hearing the crash. She decides to trace her steps back, engaging the vendor, then the bystanders, trying to connect the dots between these random incidents.
+  twist:      Upon piecing it together, Anya realizes that the random events led up to the young stranger avoiding a worse accident by swerving to miss the puppy, which had wandered farther than anticipated.
+  ending:     Anya reflects on the small ways her actions, and the actions of others, unknowingly intertwined, revealing the interconnectedness of their community.
+  elements:   structure=first-hand account | role=a middle-aged community member | setting=the community market | anchor=a typical market day | trigger=a series of unrelated events | turn=interconnected revelation | aftereffect=sense of wonder
+  stages: editor: ok | naturalizer: ok  words=145
+  GATE: FAIL — AGENCY and CAUSALITY both fail: the narrator never actually decides anything meaningful — she gives a dog some bread and observes a crash, then constructs a vague chain of coincidence she didn't influence — so the closing 'napaisip ako, kahit simpleng bagay...' is an unearned moral rather than a real payoff; compounded by the HOOK failing (opens with generic 'ewan ko ba sa araw na 'to' scene-setting) and the ending landing on a summary abstraction ('hindi mo talaga alam kung saan mapupunta ang isang bagay') — exactly what the NEVER rule prohibits.
+  GATE: after rewrite: FAIL — AGENCY and CAUSALITY both fail: Anya decides nothing consequential — feeding the dog is a casual act, not a choice — and the chain of events (barya → dog → crash) is coincidence dressed up as meaning, so the closing line 'nag-connect lahat, e no?' reads as the narrator straining to manufacture profundity from random happenings rather than earning it; the ending pays off a connection the story never actually built.
+──────────────────────────────────────────────────────────────────────
+Grabe, ang weird ng nangyari kanina sa palengke. Habang bumibili ako ng gulay kay Mang Ben, kulang siya ng barya. Naglabas na ako ng limang piso, tapos biglang may asong kalye na dumaan. Ang cute niya! May tinapay akong baon, kaya binigay ko sa kanya. Balik kami sa usapan ni Mang Ben. Habang nagbibigay siya ng sukli, narinig namin yung tunog ng motor. Biglang lumihis yung motor para iwasan yung aso. Lagot, nag-crash siya. Tumakbo agad yung ibang tao, pati ako, para makita kung ano nangyari. Ayun, nakita ko si Kuya, di naman malubha, pero nagka-gulo talaga. Maya-maya, nahanap ko rin yung asong cute — safe naman siya. Bigla ko naisip, grabe, nag-connect lahat, e no? Kung di ko binigyan ng tinapay, baka napahamak si Kuya. Tapos si Mang Ben, parang nawindang na rin. Yung mga simpleng bagay, akala mo wala, pero may impact pala.
+
+══════════════════════════════════════════════════════════════════════
+[GENERAL · SHORT 75s · 2/4] "Siksikan sa Terminal"  register=Life is lived  (rewritten once)
+  logline: Sa terminal, natutunan kong minsan kailangan lang sumabay at maghintay.
+  ── PLAN (planner convergence) ──
+  premise:    You’re waiting for your jeepney to arrive at a crowded terminal, hoping to get home after a long day.
+  conflict:   You desperately want to get home, but every jeepney that arrives is either full or doesn't go to your destination.
+  escalation: You decide to squeeze into an overcrowded jeepney, thinking you'll get a seat soon as others get off. But with every stop, more people try to board, causing you to be pushed further inside and your hopes of getting a seat fade. You consider getting off, but you're afraid you'll be stuck waiting even longer if you do.
+  twist:      Standing cramped, you overhear a conversation between passengers discussing how important it is to be patient in life’s long journeys, just like commuting.
+  ending:     This simple wisdom strikes a chord, and as you reflect, you feel a sense of calm, realizing that sometimes all you can do is go with the flow.
+  elements:   structure=direct_second_person | role=a daily commuter | setting=a crowded jeepney terminal | anchor=- | trigger=continually full jeepneys | turn=unexpected wisdom from overheard conversation | aftereffect=calm acceptance
+  stages: editor: ok | naturalizer: ok  words=164
+  GATE: FAIL — The script fails multiple hard checks: it has no AGENCY (the narrator just waits and boards passively, decides nothing), no CAUSALITY (beats are pure 'and then'), no THE DEBT (the opening plants 'will I get a seat?' but the ending never pays that off), no THE CHANGE (nothing is different or resolved), and the closing line 'Patience lang daw, sa mahahabang biyahe at sa buhay' is a textbook summary abstraction — exactly the 'summary line where a person would just stop' the rubric forbids.
+  GATE: after rewrite: FAIL — Fails THE DEBT and THE CHANGE — the ending pays off a lesson the narrator didn't earn through any decision or real event, just a stranger's overheard line that instantly dissolves all tension; AGENCY also fails because the narrator never actually decides anything (the 'bumaba na lang kaya' thought goes nowhere), so the resolution feels handed to them rather than lived; and the closing lines 'Oks na rin, okay na ako, chill lang. Sabay hintay na rin — ride lang ng ride' are summary filler that a real person would just stop before saying.
+──────────────────────────────────────────────────────────────────────
+Grabe, ang haba ng pila dito sa terminal. Pagod na pagod na ako sa trabaho, tapos lahat ng dumadating na jeep puno. Parang wala na atang uuwi sakin, bro — bawat jeep puno, tapos yung iba hindi naman papunta sa amin.
+
+May isa na dumating na kahit siksikan, game na rin ako. Sabi ko, baka naman may bababa agad, pero sa bawat stop, mas marami pa sumasakay. Parang padami nang padami kaming sardinas.
+
+Naisip ko, bumaba na lang kaya ako? Pero baka ma-stuck lang ako dito sa pila forever. Hirap isipin.
+
+Tapos biglang narinig ko yung usapan ng mga katabi ko... 'Kailangan talaga ng patience sa mga biyahe, eh. Parang life lang yan, chill lang tayo.'
+
+Ayun, parang na-inspire ako sa sinabi nila, hindi na ako galit. Bigla ko naisip, minsan kailangan lang sumabay, di ba? Wala ka namang magagawa kundi hintayin — kagaya nga ng pag-commute.
+
+Oks na rin, okay na ako, chill lang. Sabay hintay na rin — ride lang ng ride.
+
+══════════════════════════════════════════════════════════════════════
+[GENERAL · LONG 240s · 3/4] "Ang Luma't Bagong Tunog ng Bell"  register=Moments that Matter  (rewritten once)
+  logline: Isabel restores an old bell in her sari-sari store, finding meaning in nostalgia despite the younger generation's indifference.
+  ── PLAN (planner convergence) ──
+  premise:    In a small sari-sari store, Isabel finds an old, tarnished bell that customers used to ring for service. She decides to clean and restore it out of nostalgia.
+  conflict:   Isabel wants to reignite memories of a time when the store was bustling by restoring the bell, but the younger generation of customers find it outdated and inconvenient.
+  escalation: Isabel invests time and energy into cleaning and decorating the bell, but as each day passes, more customers ignore it and simply call out for her or use their phones to get her attention. Isabel questions whether her efforts are meaningful in the modern age.
+  twist:      Isabel realizes that while the bell is no longer practical, it has become a cherished memory for her as it symbolizes her connection to the past and the many stories shared in the store.
+  ending:     Isabel decides to keep the bell prominently displayed as a tribute, and she smiles whenever she hears the few older customers who still ring it.
+  elements:   structure=anchor | role=sari-sari store owner | setting=a small sari-sari store | anchor=a tarnished bell | trigger=noticing the tarnished bell needs cleaning | turn=personal revelation | aftereffect=nostalgic reflection
+  stages: editor: ok | naturalizer: ok  words=327
+  GATE: FAIL — AGENCY and CAUSALITY both fail: Isabel never really decides anything consequential — she polishes the bell, hangs a ribbon, then passively waits while customers ignore it, and the 'resolution' is just choosing to leave it there, which is non-action; each beat follows the last with 'and then' logic (she cleans it, customers ignore it, Mang Rudy walks in, she feels nostalgic) rather than any beat forcing the next, so the story never builds tension — it just drifts to a stop dressed up as an ending.
+  GATE: after rewrite: FAIL — AGENCY and CAUSALITY both fail — Isabel never really decides anything (the bell just gets cleaned, Mang Rudy just shows up, the bell just stays on the counter), so the beats chain as 'and then / and then' with no forcing tension; and the closing abstraction ('kahit hindi na practical, mahalaga pa rin na may maalala tayong espesyal mula sa nakaraan') is a summary moral where a real person would just stop, violating the NEVER rule on summary lines.
+──────────────────────────────────────────────────────────────────────
+Lagi kong sinasabi sa sarili ko, pag hindi na busy yung store, babalikan ko na 'tong lumang bell. Isang araw, ayun nga, nakita ko ulit siya habang nag-aayos ng mga lumang gamit. Dati, sobrang makintab 'tong bell na 'to. Mahilig gamitin ng customers para tawagin kami. Ngayon, wala nang pumapansin, may kailangan sila, 'di na ginagamit.
+
+Pinagmasdan ko, parang may kwento eh. Pinulot ko, dinala ko sa loob. Pagpasok sa bahay, hinanap ko agad ang panglinis. Sabi ko, 'Sige, linisin natin, ibalik natin yung dati nitong kintab.' Ala-una pa lang, 'di ko namalayan, alas-singko na. Kulang na lang lagyan ng ribbon o magandang stand sa gilid ng counter.
+
+Pero kinabukasan, dinaanan lang ng mga bata yung bell, hindi man lang pinansin. Naalala ko tuloy, ibang panahon na pala ngayon. Nasanay na sila sa tawag, text, o kaya picture sa Messenger. Pero pangarap ko sana, 'yung tindahan ay ramdam pa rin 'yung panahong abala kami noon. Na-realize ko, teka, ano nga bang halaga nito sa kanila ngayon?
+
+Hanggang isang araw, late na ng hapon nun, pumasok si Mang Rudy. Siya yung regular na bumisita dito mula noong nineties. Nakangiti si Mang Rudy, parang kahapon lang siya nandito. At kung saan-saan ang kwento, nung si Katniss pa ang uso. Napansin niya yung bell at nagkwento ng mga dating alaala niya. Sa tuwing sinasabi niya 'to, parang bumabalik lahat, 'di ba?
+
+Sa sobrang saya ko, sabi ko sa sarili, kahit hindi na ito gamitin ng mga bata, importante pa rin 'to. Tanda 'to ng panahong mas simple pa ang lahat. Kaya, iniwan ko ang bell sa kitang-kitang pwesto. Ipinagmamalaki ko pa sa mga pumapasok. At tuwing may iilang matatanda na pumindot pa rin dito, ngumingiti na lang ako. Kasi para sakin, kahit hindi na practical, mahalaga pa rin na may maalala tayong espesyal mula sa nakaraan. 'Yun ang di matutupad ng kahit anong makabagong tawag.
+
+Minsan, 'yung lumang bagay, hanggang alaala na lang. Pero 'yung alaala, iyon ang hindi nawawala.
+
+══════════════════════════════════════════════════════════════════════
+[GENERAL · LONG 240s · 4/4] "Ang Kuwento ni Don Julio at ang Nawawalang Kayamanan"  register=Echoes and Legacy  (rewritten once)
+  logline: Ang kwento ni Don Julio at ang misteryosong artifact na nabunyag ng isang elder.
+  ── PLAN (planner convergence) ──
+  premise:    In a small barangay hall, a storytelling session unfolds where an elder retells the mysterious tale of Don Julio's lost treasure. The elder slips in a vivid description of a hidden artifact that no one else knows about.
+  conflict:   The elder wants to maintain the mystique of the tale while avoiding suspicion, but the community's curiosity about the unknown artifact grows, questioning the credibility of the elder's tale.
+  escalation: The community listens intently, intrigued by the specific detail. Curiosities heighten as they question the elder, leading to subtle probing from the barangay chairperson. The elder initially deflects with humor but eventually hints at firsthand knowledge, raising eyebrows.
+  twist:      The elder reveals that they were indeed a young caretaker at Don Julio's estate and witnessed the events firsthand, explaining the accuracy of their detail about the artifact.
+  ending:     The tale transforms from a mere legend to a credible piece of the village's heritage, sparking a newfound respect for the elder.
+  elements:   structure=retold_legend | role=elder storyteller | setting=barangay hall | anchor=community storytelling session | trigger=specific detail about a hidden artifact | turn=personal revelation | aftereffect=wonder about familiar faces
+  stages: editor: ok | naturalizer: ok  words=352
+  GATE: FAIL — The narrator is a pure passive witness throughout — they watch Mang Tino, watch Kapitana, watch the room react — but never decide or do anything that moves the story, failing the AGENCY check; and the closing line ('Kinalabit niya yung something sa amin') is a vague abstraction standing in for a payoff where a concrete beat is needed.
+  GATE: after rewrite: FAIL — STORY PHYSICS fails on THE DEBT and THE CHANGE: the opening plants a promise of revealed hidden treasure and a real artifact, but the ending pays off nothing — Mang Tino says the kayamanan is still where he left it, yet no one goes looking, no secret is actually shared, no truth lands, and the narrator just 'smiles when they remember it,' leaving the story with zero earned resolution; this reads like a setup that forgot to have a second half.
+──────────────────────────────────────────────────────────────────────
+Alam mo yung mga kwento na parang totoo pero hindi ka sure? Ganito yung narinig ko sa barangay hall nung isang gabi. Nando'n kami lahat, at si Mang Tino, yung matandang nagkukuwento, inumpisahan na. Parang laging may magic sa paligid pag nagsimula na siyang magkwento.
+
+"Alam niyo ba," sabi niya, "yung kayamanan ni Don Julio?" Halatang yun ang gusto niyang simulan. May mysterious na dating palagi kapag si Don Julio na ang usapan. Tapos bumanat siya ng, "May artifact akong tinago nung nasira ang estate."
+
+Ang mga tao, medyo nagtaka. "Artifact? Ano 'yan, Tino?" tanong ni Kapitana.
+
+Tatawa-tawa si Mang Tino, "A eh, parang isang painting lang naman," sabi niya nang nakangiwi. Pero ramdam mo na alam niya talaga ang sinasabi niya. Lalong nagkainteres yung mga tao sa paligid.
+
+Tapos ayun na, may mga tanong na, "Eh papaano mo alam yan ng ganyan ka-detalye?" Hagikgikan. Pero seryoso din, alam mo yun?
+
+Si Kapitana, parang hindi mapalagay. Yan ang magaling kay Kapitana, kahit alam din niya yung kwento eh gusto niyang malaman kung totoo o hindi. Pero hindi niya kinokonfront si Mang Tino ng diretso. Maingat siya lagi.
+
+Pagkatapos nung mga biro-biro, si Mang Tino, medyo tumigil siya. Alam mong may ishe-share siyang bago.
+
+"Di ko naman talaga ikinikwento, pero bata pa ako noon. Isa ako sa mga caretaker sa estate ni Don Julio," bigla niya sinabi. Ayun na, napalunok ang lahat. DOON sumabog yung usap-usapan. Lahat nagtatanong, parang, "Teka, totoo pala 'to?"
+
+Na-realize namin, hindi lang pala ito alamat o kwento-kwento lang. Seryoso! Tapos nagbaba ng boses si Mang Tino, parang sinenyasan niya kaming magtahimik. "Kahit gaano katagal lumipas na panahon, andun pa rin yung kayamanan, kung saan ko iniwan."
+
+Grabe, para kaming nawala sa sarili naming mundo saglit. Nakakatuwang isipin na may ganitong bagay palang nangyari sa bayan namin. Si Mang Tino, hindi lang siya basta storyteller, keeper pa pala siya ng history.
+
+Nung natapos siya, nag-iba yung tingin namin sa kanya. Parang mas may depth yung bawat ngiti niya, yung bawat hagikgik niya pag may punchline siya na binitawan. Hanggang ngayon, pag naririnig ko yung kwento, hindi ko mapigilang ngumiti.
+
+══════════════════════════════════════════════════════════════════════
+SUMMARY (general):
+  1. short | Yung Bilis ng Pangyayari sa Palengke     | Life is lived            | FAIL (retried)
+  2. short | Siksikan sa Terminal                     | Life is lived            | FAIL (retried)
+  3. long  | Ang Luma't Bagong Tunog ng Bell          | Moments that Matter      | FAIL (retried)
+  4. long  | Ang Kuwento ni Don Julio at ang Nawawala | Echoes and Legacy        | FAIL (retried)
+total lab cost (general): 55¢
