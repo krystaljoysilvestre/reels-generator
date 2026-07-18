@@ -54,7 +54,12 @@ const CANDIDATE_TEMPERATURE = 1.0 // temperature for the planner-failure fallbac
 // v2 (2026-07-17): Naturalizer routed to Claude — the polish probe (probe-taglish-polish.ts) showed
 // the gpt-4o naturalizer inert on unnatural Taglish while Claude's gate critiques were native-sharp;
 // owner decision. Also: formatting-collapse discard guard.
-const GENERATE_STORY_STUDIO_VERSION = 'generate_story.studio.v2'
+// v3 (2026-07-18): WRITER routed to Claude — owner decision after the Production Consequence
+// Investigation (research/findings/production-consequence-investigation.md): gpt-4o 1/40 vs Claude
+// 14/16 at the same gate, and gpt-4o re-suspended consequences even under an explicit DNA+plan+gate
+// demand (steerability 0/8). Planner/editor stay on the default prose provider; the planner-failure
+// fallback (story.v1) is untouched — rare, and pending the legacy-path decision.
+const GENERATE_STORY_STUDIO_VERSION = 'generate_story.studio.v3'
 // How many recent stories feed the Planner's premise avoid-list (the mirror-×6 fix).
 const RECENT_PREMISES_LIMIT = 15
 const WRITER_TEMPERATURE = 1.0
@@ -443,6 +448,7 @@ async function runStudio(a: StudioArgs) {
           schema: StoryOutputSchema,
           system,
           messages: [{ role: 'user', content: userMessage }],
+          provider: 'anthropic', // studio.v3: the writer must cross consequence thresholds gpt-4o softens
           temperature: WRITER_TEMPERATURE,
           maxTokens: a.storyMaxTokens,
         })
