@@ -23,7 +23,7 @@ Reviewers: **do not bikeshed names or implementation.** Those are downstream. Te
 
 1. **Is this genuinely a missing responsibility?** Could an existing concept (Story Bible, Story Modes, the Planner) reasonably own it instead?
 2. **Is the boundary clean?** Is anything in it that belongs elsewhere — or anything important missing?
-3. **Would removing it make a future product materially harder?** If "no," it hasn't earned first-class status.
+3. **Would removing this hypothesis make a future product materially harder to build or reason about?** If not, it has not yet earned first-class status.
 4. **Does it overreach?** Is it trying to solve problems it shouldn't own?
 
 Then one falsification question — framed to produce a roadmap, not a debate:
