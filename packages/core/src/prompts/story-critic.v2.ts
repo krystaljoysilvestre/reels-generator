@@ -11,13 +11,19 @@
 import { z } from 'zod'
 import { asGenreModule, classifyGenre, type GenreModule } from './scenes.v1.js'
 
-export const STORY_CRITIC_V2_VERSION = 'story-critic.v2.7'
+export const STORY_CRITIC_V2_VERSION = 'story-critic.v2.8'
 
 export const StoryGateSchema = z.object({
   pass: z.boolean(),
   // One blunt sentence. On fail it steers the Writer's single retry, so it names the failure in
   // the text ("the narrator explains the scare after it lands"), not a vibe ("not scary enough").
   reason: z.string().min(1),
+  // On a FAIL only: could a rewrite of the SAME idea plausibly fix this? Prose/voice/ending
+  // execution → true. A failure baked into the idea/premise/structure (no dilemma to argue, wrong
+  // genre grammar, nothing at stake) → false, so the pipeline skips a retry that would re-run the
+  // whole chain and fail again. Optional + safe default: absent or true ⇒ retry (status quo);
+  // only an explicit false skips it. Ignored on a pass.
+  rewriteCanFix: z.boolean().optional(),
 })
 export type StoryGateVerdict = z.infer<typeof StoryGateSchema>
 
@@ -196,6 +202,7 @@ How you judge:
   (An explainer or argument answers these in its own terms: a claim advanced, a question paid off, an understanding changed. A Reddit post answers them in ITS terms: AGENCY = the narrator or their target DID something, not just felt something; THE CHANGE = the payoff landed — revenge taken, rule backfired, disaster arrived — OR, for an "am I wrong?" post, the verdict question thrown hard to the viewer. An open verdict is a real ending; a revenge or disaster story that just trails off is not.)
 - Then the channel's rubric below. A clear violation of a rubric line fails; judge against the rubric, not your personal taste.
 - You do not rewrite, rank, or score. Pass or fail, with ONE blunt sentence of reason. On fail, the reason must point at the text (what fails and where), because it steers exactly one rewrite.
+- On a FAIL, also judge rewriteCanFix: could a better TELLING of this SAME idea plausibly pass — a prose/voice problem, an announced feeling, a translated line, a fumbled ending's execution? Then true. Or is the failure in the IDEA itself — the premise has no dilemma to argue, it's the wrong grammar for this genre, nothing is at stake, a structure a rewrite of the same plan cannot repair? Then false (a rewrite would just re-run and fail again). When unsure, true. On a pass, ignore it.
 - Bar check: a good-enough story passes. This gate exists to catch real failures, not to chase perfection — most competent scripts should pass.`
 
   const userMessage = `RUBRIC — this channel's bar:
@@ -211,7 +218,8 @@ ${v.narration}
 OUTPUT (JSON only):
 {
   "pass": true,
-  "reason": ""   // one blunt sentence: why it ships, or exactly what fails and where
+  "reason": "",           // one blunt sentence: why it ships, or exactly what fails and where
+  "rewriteCanFix": true   // FAIL only: can a rewrite of this SAME idea fix it? idea/premise-level failure ⇒ false; when unsure, true
 }`
 
   return { system, userMessage }

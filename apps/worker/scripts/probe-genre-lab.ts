@@ -31,6 +31,7 @@ void (async () => {
     STORY_CRITIC_V2_VERSION,
   } = await import('../src/prompts-bridge.js')
   const { selectAngles } = await import('../src/assembly-bridge.js')
+  const { resolvePeak } = await import('../src/pipeline/steps/generate-story.js')
 
   // Authentic Taglish reddit exemplars (ORIGINAL, hand-authored). Every one is a genuine DILEMMA
   // ("I did X, someone did Y, now I don't know if I was wrong / what to do"), meaty and relatable,
@@ -204,6 +205,14 @@ Kaya sa susunod na pupunta ka ng grocery para lang sa gatas — bilangin mo kung
     { form: 'long', targetSeconds: 240, targetWords: 600, writerTokens: 16384 },
     { form: 'long', targetSeconds: 240, targetWords: 600, writerTokens: 16384 },
   ]
+  // Cheap mode: PROBE_RUNS=1 runs only the first N of the 4 configs (1 short ≈ 1/4 the cost) for a
+  // fast smoke; unset = the full 4-run batch. PROBE_NAT_MODEL overrides the naturalizer's model
+  // (e.g. a Haiku id) to A/B a cheaper finishing stage against the default Sonnet.
+  const RUN_LIMIT = process.env.PROBE_RUNS
+    ? Math.max(1, Math.min(RUNS.length, parseInt(process.env.PROBE_RUNS, 10)))
+    : RUNS.length
+  if (process.env.PROBE_RUNS) console.log(`⚗ cheap mode → ${RUN_LIMIT}/${RUNS.length} run(s)`)
+  if (process.env.PROBE_NAT_MODEL) console.log(`⚗ naturalizer model override → ${process.env.PROBE_NAT_MODEL}`)
 
   const wordCount = (s: string) => s.trim().split(/\s+/).filter(Boolean).length
   const beatLines = (s: string) => s.split('\n').filter((l) => l.trim()).length
@@ -216,7 +225,7 @@ Kaya sa susunod na pupunta ka ng grocery para lang sa gatas — bilangin mo kung
   const recentLoglines: string[] = []
   const summary: string[] = [] // one line per run: form | title | register | gate | retried
 
-  for (let i = 0; i < RUNS.length; i++) {
+  for (let i = 0; i < RUN_LIMIT; i++) {
    try {
     const run = RUNS[i]!
     const angle = selectAngles(1, i * 3 + 1)[0]!
@@ -313,7 +322,9 @@ Kaya sa susunod na pupunta ka ng grocery para lang sa gatas — bilangin mo kung
             schema: stage === 'editor' ? StoryEditSchema : StoryNaturalizeSchema,
             system: prompt.system,
             messages: [{ role: 'user', content: prompt.userMessage }],
-            ...(stage === 'naturalizer' ? { provider: 'anthropic' as const } : {}),
+            ...(stage === 'naturalizer'
+              ? { provider: 'anthropic' as const, ...(process.env.PROBE_NAT_MODEL ? { model: process.env.PROBE_NAT_MODEL } : {}) }
+              : {}),
             temperature: 0.7,
             maxTokens: run.writerTokens,
           })
@@ -325,12 +336,14 @@ Kaya sa susunod na pupunta ka ng grocery para lang sa gatas — bilangin mo kung
           const dw = Math.abs(wordCount(res.data.narration) - wordCount(narration)) / Math.max(1, wordCount(narration))
           const inL = beatLines(narration)
           const outL = beatLines(res.data.narration)
+          const keptPeak = resolvePeak(res.data.narration, [res.data.peakMoment, peakMoment])
           if (dw > tol) stageNotes.push(`${stage}: discarded_wordcount (${Math.round(dw * 100)}%)`)
-          else if (!res.data.narration.includes(res.data.peakMoment.trim())) stageNotes.push(`${stage}: discarded_peak`)
+          else if (!keptPeak) stageNotes.push(`${stage}: discarded_peak`)
           else if (inL >= 4 && outL <= Math.ceil(inL / 2)) stageNotes.push(`${stage}: discarded_formatting (${inL}→${outL})`)
           else {
             stageNotes.push(`${stage}: ok${res.data.narration === narration ? ' (unchanged)' : ''}`)
-            ;({ narration, peakMoment } = res.data)
+            narration = res.data.narration
+            peakMoment = keptPeak
           }
         } catch (err) {
           stageNotes.push(`${stage}: failed (${String(err).slice(0, 60)})`)
@@ -367,8 +380,9 @@ Kaya sa susunod na pupunta ka ng grocery para lang sa gatas — bilangin mo kung
     let retried = false
     try {
       let verdict = await gateOnce(attempt.story.data.title, attempt.story.data.logline, attempt.narration)
-      gateLines.push(`${verdict.pass ? 'PASS' : 'FAIL'} — ${verdict.reason}`)
-      if (!verdict.pass) {
+      gateLines.push(`${verdict.pass ? 'PASS' : `FAIL [rewriteCanFix=${verdict.rewriteCanFix ?? '—'}]`} — ${verdict.reason}`)
+      // Mirror production: skip the retry on an idea-level failure (rewriteCanFix===false).
+      if (!verdict.pass && verdict.rewriteCanFix !== false) {
         retried = true
         attempt = await runChain(verdict.reason)
         verdict = await gateOnce(attempt.story.data.title, attempt.story.data.logline, attempt.narration)
@@ -380,7 +394,7 @@ Kaya sa susunod na pupunta ka ng grocery para lang sa gatas — bilangin mo kung
 
     const el = plan.data.elements
     console.log(`\n${'═'.repeat(70)}`)
-    console.log(`[${genre.toUpperCase()} · ${run.form.toUpperCase()} ${run.targetSeconds}s · ${i + 1}/${RUNS.length}] "${attempt.story.data.title}"  register=${el.register ?? '-'}${retried ? '  (rewritten once)' : ''}`)
+    console.log(`[${genre.toUpperCase()} · ${run.form.toUpperCase()} ${run.targetSeconds}s · ${i + 1}/${RUN_LIMIT}] "${attempt.story.data.title}"  register=${el.register ?? '-'}${retried ? '  (rewritten once)' : ''}`)
     console.log(`  logline: ${attempt.story.data.logline}`)
     // PLAN INTERNALS — what the PLANNER selected (the real signal for narrative-grammar convergence).
     console.log(`  ── PLAN (planner convergence) ──`)
@@ -396,7 +410,7 @@ Kaya sa susunod na pupunta ka ng grocery para lang sa gatas — bilangin mo kung
     const finalGate = gateLines[gateLines.length - 1] ?? '(no gate)'
     summary.push(`${run.form.padEnd(5)} | ${attempt.story.data.title.slice(0, 40).padEnd(40)} | ${(el.register ?? '-').slice(0, 24).padEnd(24)} | ${finalGate.startsWith('gate errored') ? 'ERROR' : /(^|: )PASS — /.test(finalGate) ? 'PASS' : 'FAIL'}${retried ? ' (retried)' : ''}`)
    } catch (err) {
-    console.log(`\n${'═'.repeat(70)}\n[${genre.toUpperCase()} · ${i + 1}/${RUNS.length}] RUN FAILED (harness): ${String(err).slice(0, 200)}`)
+    console.log(`\n${'═'.repeat(70)}\n[${genre.toUpperCase()} · ${i + 1}/${RUN_LIMIT}] RUN FAILED (harness): ${String(err).slice(0, 200)}`)
     summary.push(`${RUNS[i]!.form.padEnd(5)} | ${'(harness failure)'.padEnd(40)} | ${'-'.padEnd(24)} | ERROR`)
    }
   }
