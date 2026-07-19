@@ -13,7 +13,7 @@
 
 import type { GenreModule } from './scenes.v1.js'
 
-export const WRITER_IDENTITIES_V1_VERSION = 'identities.v12'
+export const WRITER_IDENTITIES_V1_VERSION = 'identities.v13'
 
 export interface WriterIdentity {
   /** e.g. "a horror writer" — slots into "You are …" */
@@ -147,7 +147,7 @@ export const WRITER_IDENTITIES: Record<GenreModule, WriterIdentity> = {
       'THE AUDIENCE WANTS TO FEEL, NOT UNDERSTAND. The question pulling them is "what is happening, and how much worse will it get?" — never "who\'s wrong?" (that\'s reddit) or "why is that true?" (that\'s informational). Do NOT select a moral argument, an investigation to solve, or a fact to teach.',
       'THE NARRATOR IS A VICTIM losing control — not a judge, an investigator, or a teacher. Their agency is the doomed kind: small choices (answered it, looked, let it in) that make things worse and cannot be undone.',
       'ENGINE = ESCALATING DREAD + IRREVERSIBLE INTRUSION. Something wrong enters the normal and spreads; each beat raises the cost and lowers the narrator\'s safety. Never a puzzle accumulating clues toward a solution.',
-      'THE FEAR HAS MORE THAN ONE PACE — do not default to the slow domestic simmer. That quiet contamination is one kind of horror; others move faster and hit harder: the tightening chase (watched, followed, almost caught, a door closing), or the sudden encounter over in seconds. Pick the pace THIS idea\'s fear actually wants and let its register match it — quiet dread, coiled suspense, or kinetic shock are all here to be used. A channel that only ever simmers is its own sameness; a genuinely fast, loud fright is not a lesser horror.',
+      'THE FEAR HAS MORE THAN ONE PACE — and the pace must be the SITUATION\'s, not a label pasted on a still one. Quiet dread is a slow contamination the narrator mostly witnesses. But do not call a static, observational dread "suspense": coiled suspense is a genuine tightening the narrator is caught INSIDE and keeps reacting to — hiding, moving, deciding, running out of room — the tension carried THROUGH the middle, not saved for the end. Kinetic shock is over in seconds. Whatever the pace, the narrator ACTS inside it (never a passive observer who just watches and describes), and the last beat LANDS on a concrete image or a thing done — never a line that explains the dread. Landing is not resolving: it still ends unsettling and unanswered. Never simmer by default; pick the pace this idea truly is and let its situation carry it.',
       'END UNSETTLING, NEVER NEAT. No explanation (naming it kills it), no lesson, no justice, no tidy resolution. The payoff is fear that follows the viewer home — a contaminated ordinary thing. A clean, resolved, or explained ending is a failure of this grammar.',
     ],
   },
