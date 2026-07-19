@@ -396,6 +396,7 @@ Kaya sa susunod na pupunta ka ng grocery para lang sa gatas — bilangin mo kung
     console.log(`\n${'═'.repeat(70)}`)
     console.log(`[${genre.toUpperCase()} · ${run.form.toUpperCase()} ${run.targetSeconds}s · ${i + 1}/${RUN_LIMIT}] "${attempt.story.data.title}"  register=${el.register ?? '-'}${retried ? '  (rewritten once)' : ''}`)
     console.log(`  logline: ${attempt.story.data.logline}`)
+    console.log(`  narratorVoice: ${JSON.stringify(attempt.story.data.narratorVoice ?? '(none)')}`)
     // PLAN INTERNALS — what the PLANNER selected (the real signal for narrative-grammar convergence).
     console.log(`  ── PLAN (planner convergence) ──`)
     console.log(`  premise:    ${plan.data.premise}`)

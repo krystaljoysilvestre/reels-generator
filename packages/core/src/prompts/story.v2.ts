@@ -12,7 +12,7 @@ import { STORY_VOICES_V1_VERSION, resolveVoice, renderVoice } from './story-voic
 import { asGenreModule, classifyGenre } from './scenes.v1.js'
 
 // Craft + identities + style/voice are baked into the prompt text, so their versions ride along.
-export const STORY_V2_VERSION = `story.v2.7+${STORY_CRAFT_V1_VERSION}+${WRITER_IDENTITIES_V1_VERSION}+${STORY_STYLES_V1_VERSION}+${STORY_VOICES_V1_VERSION}`
+export const STORY_V2_VERSION = `story.v2.8+${STORY_CRAFT_V1_VERSION}+${WRITER_IDENTITIES_V1_VERSION}+${STORY_STYLES_V1_VERSION}+${STORY_VOICES_V1_VERSION}`
 
 // The story's physics — what makes a telling a STORY rather than a mood or a report. Sits beside the
 // six craft principles (which govern the sentences; these govern the chain). Authored under
@@ -44,7 +44,7 @@ From inside means:
 
 Your relationship to the events stays whatever your identity defines — someone who lived it, someone who watched it, or someone who knows it cold and is explaining it. Embody THAT person truthfully: a real explainer is still a person, and never a fake witness.
 
-NEVER introduce the person. No age, no job title, no "as a…" — the viewer learns who's talking only through what they notice, the words they reach for, and what they can't let go of. And embodiment adds no FACTS: the events stay the idea's, the world stays the World Bible's, the sound stays the channel's voice, the temperature stays the committed register's. The person explains the existing story — never invent biography, history, or memories to deepen them unless the premise already requires it. Good embodiment is invisible: no persona props doing no story work — the viewer should feel a real person without being able to point at why. The person is the lens, never new material.`
+NEVER introduce the person. No age, no job title, no "as a…" — the viewer learns who's talking only through what they notice, the words they reach for, and what they can't let go of. And embodiment adds no FACTS: the events stay the idea's, the world stays the World Bible's, the sound stays the channel's voice, the temperature stays the committed register's. The person explains the existing story — never invent biography, history, or memories to deepen them unless the premise already requires it. Good embodiment is invisible: no persona props doing no story work — the viewer should feel a real person without being able to point at why. The person is the lens, never new material. The one place the person surfaces is the narratorVoice casting tag in your output — their gender and rough age, used only to pick who reads this aloud — never as words in the telling.`
 
 export interface StoryWriterVars {
   channelName: string
@@ -153,7 +153,8 @@ OUTPUT (JSON only):
   "logline": "",                 // one-line summary of the reel
   "subgenreTags": [],            // 2–4 short tags for the angle/subgenre
   "peakMoment": "",              // the SINGLE most important line — the reel's PEAK (climax, reveal, payoff, punchline, key takeaway, or core insight). Copy it VERBATIM from the narration; it's used to time the music.
-  "newCanon": []                 // new recurring locations/objects worth adding to the world bible (names only); [] if none
+  "newCanon": [],                // new recurring locations/objects worth adding to the world bible (names only); [] if none
+  "narratorVoice": { "gender": "m", "ageBand": "adult" }  // CASTING ONLY — the person you privately became (THE TELLER): gender "m"|"f"|"neutral", ageBand "young"|"adult"|"older". Picks who reads this aloud. NEVER state age/gender in the narration. Use "neutral" only when the telling truly has no gendered voice (e.g. pure second-person address).
 }`
 
   return { system, userMessage }
