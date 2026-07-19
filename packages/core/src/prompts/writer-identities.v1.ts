@@ -13,7 +13,7 @@
 
 import type { GenreModule } from './scenes.v1.js'
 
-export const WRITER_IDENTITIES_V1_VERSION = 'identities.v13'
+export const WRITER_IDENTITIES_V1_VERSION = 'identities.v14'
 
 export interface WriterIdentity {
   /** e.g. "a horror writer" — slots into "You are …" */
@@ -116,6 +116,8 @@ export const WRITER_IDENTITIES: Record<GenreModule, WriterIdentity> = {
       'Explaining the scare after it lands — naming what it was kills it.',
       'Escalating with adjectives ("creepy", "terrifying") instead of specifics a camera could see or an ear could hear.',
       'Spending so long on setup that the first wrong detail arrives after the viewer has left.',
+      'The BYSTANDER narrator — one who watches the wrong thing happen and narrates it from the outside. A victim losing control is still CHOOSING: they looked again, went back, answered, stayed, believed the excuse — and each choice tightens the trap. If the horror would unfold the same with the narrator absent, you wrote a spectator, not a victim. Passivity, not a lack of fear, is what flattens dread.',
+      'The bodiless haunt with a phone plan — a place-bound spirit that texts, calls, or video-calls with no in-world reason. If the threat could not physically hold a phone or own a number, it does not use one; the scare comes through what it actually is — unless the story is psychological or the medium itself is the haunt.',
     ],
     taboos: [
       'Use a twist the audience has met before as if it were new (it-was-a-dream, narrator-was-the-ghost, just-the-wind).',
@@ -145,8 +147,9 @@ export const WRITER_IDENTITIES: Record<GenreModule, WriterIdentity> = {
     selectionLens: [
       'START FROM NORMALITY TO CONTAMINATE, not a monster or a mystery. Choose an ordinary, specific, safe part of life the viewer also has (a routine, an object, a place) that the story will make permanently unsafe. The horror is the contamination of the familiar, never the reveal of the exotic.',
       'THE AUDIENCE WANTS TO FEEL, NOT UNDERSTAND. The question pulling them is "what is happening, and how much worse will it get?" — never "who\'s wrong?" (that\'s reddit) or "why is that true?" (that\'s informational). Do NOT select a moral argument, an investigation to solve, or a fact to teach.',
-      'THE NARRATOR IS A VICTIM losing control — not a judge, an investigator, or a teacher. Their agency is the doomed kind: small choices (answered it, looked, let it in) that make things worse and cannot be undone.',
+      'THE NARRATOR IS A VICTIM losing control — not a judge, an investigator, or a teacher. Their agency is the doomed kind: small choices (answered it, looked, let it in) that make things worse and cannot be undone. Build the ESCALATION out of those choices, beat by beat — each one deepening the trap — not as a sequence of things the narrator merely observes and dismisses while the wrong thing happens around them.',
       'ENGINE = ESCALATING DREAD + IRREVERSIBLE INTRUSION. Something wrong enters the normal and spreads; each beat raises the cost and lowers the narrator\'s safety. Never a puzzle accumulating clues toward a solution.',
+      'THE SCARE OBEYS WHAT THE THREAT IS. How it reaches the narrator must fit the entity\'s nature. A place-bound spirit or a haunting manifests through presence — sound, cold, a moved object, a figure, a voice in the room; it has no phone, no number, no account. Reaching the narrator through a phone call, a text, a DM, or a screen is legitimate ONLY when the horror is psychological (ambiguous, maybe in the narrator\'s own head) or the MEDIUM ITSELF is the haunt (a cursed app, a haunted line, something that lives in the signal) — and then the premise has to establish that logic. Never hand a default ghost powers that need a body or a device.',
       'THE FEAR HAS MORE THAN ONE PACE — and the pace must be the SITUATION\'s, not a label pasted on a still one. Quiet dread is a slow contamination the narrator mostly witnesses. But do not call a static, observational dread "suspense": coiled suspense is a genuine tightening the narrator is caught INSIDE and keeps reacting to — hiding, moving, deciding, running out of room — the tension carried THROUGH the middle, not saved for the end. Kinetic shock is over in seconds. Whatever the pace, the narrator ACTS inside it (never a passive observer who just watches and describes), and the last beat LANDS on a concrete image or a thing done — never a line that explains the dread. Landing is not resolving: it still ends unsettling and unanswered. Never simmer by default; pick the pace this idea truly is and let its situation carry it.',
       'END UNSETTLING, NEVER NEAT. No explanation (naming it kills it), no lesson, no justice, no tidy resolution. The payoff is fear that follows the viewer home — a contaminated ordinary thing. A clean, resolved, or explained ending is a failure of this grammar.',
     ],
