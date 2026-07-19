@@ -345,6 +345,9 @@ export const ChannelVoiceSchema = z.object({
   providerId: z.string(),      // ElevenLabs voice_id
   name: z.string(),
   gender: z.string(),
+  // Apparent age band, for matching a narrator to a voice. Optional + dormant: existing pools have
+  // no age, so age-matching is a no-op until voices are tagged (gender-matching works meanwhile).
+  age: z.enum(['young', 'adult', 'older']).optional(),
   description: z.string().default(''),
 })
 export type ChannelVoice = z.infer<typeof ChannelVoiceSchema>

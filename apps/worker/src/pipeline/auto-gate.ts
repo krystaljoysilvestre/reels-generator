@@ -2,7 +2,7 @@ import { eq, and } from 'drizzle-orm'
 import { getDb, reels, channels, stories, assets, publications } from '@reels/db'
 import { enqueueStep } from '@reels/queue'
 import { listVoices, downloadBuffer, uploadToYouTube, isYouTubeConfigured } from '@reels/providers'
-import { PostingRulesSchema, PostMetaSchema, formatPostCaption, type ChannelVoice } from '@reels/core'
+import { PostingRulesSchema, PostMetaSchema, formatPostCaption, matchNarratorVoice, type ChannelVoice, type NarratorVoice } from '@reels/core'
 import { setReelStatus } from './harness.js'
 
 // The three steps where the pipeline normally STOPS for human review (resolveNextStep returns null):
@@ -32,7 +32,10 @@ export async function autoCrossGate(stepName: string, reelId: string): Promise<v
   } else if (stepName === 'generate_images') {
     if (reel.status !== 'storyboard') return
     // = trigger-render: pick a narrator voice, storyboard → rendering, run the render chain.
-    const voiceId = await pickAutoVoice(reel.language, channel.voicePool, channel.voiceSearchKeyword)
+    // Cast the narrator to the story's teller (gender/age) when the pool allows it.
+    const autoStory = reel.storyId ? await db.query.stories.findFirst({ where: eq(stories.id, reel.storyId) }) : null
+    const narrator = (autoStory?.elements as { narratorVoice?: NarratorVoice } | null)?.narratorVoice ?? null
+    const voiceId = await pickAutoVoice(reel.language, channel.voicePool, channel.voiceSearchKeyword, narrator)
     if (!voiceId) {
       // Don't stall silently: leave the reel at storyboard AND flag it so the channel page shows
       // what's needed. Cleared when the operator picks a voice and renders (trigger-render).
@@ -117,9 +120,12 @@ async function autoPublishYouTube(reelId: string): Promise<void> {
 // from the same source the wizard recommends from — retrying WITHOUT the keyword if the keyword
 // search comes back empty (a narrow keyword must not stall a hands-off channel). Null only if the
 // catalog itself has nothing for the language.
-async function pickAutoVoice(language: string, voicePool: unknown, searchKeyword: string | null): Promise<string | null> {
+async function pickAutoVoice(language: string, voicePool: unknown, searchKeyword: string | null, narrator?: NarratorVoice | null): Promise<string | null> {
   const pool = (voicePool ?? []) as ChannelVoice[]
-  if (pool[0]?.providerId) return pool[0].providerId
+  // Cast to the story's teller; matchNarratorVoice falls back to the pool's default voice on a
+  // neutral/absent profile or no fit, so this is a safe drop-in for the old pool[0] behavior.
+  const matched = matchNarratorVoice(pool, narrator)
+  if (matched?.providerId) return matched.providerId
   try {
     if (searchKeyword) {
       const keyed = await listVoices(language, { search: searchKeyword })

@@ -293,7 +293,9 @@ export async function generateStory(reelId: string, channelId: string, language:
         // on a line that no longer exists in the narration.
         twistAnchor: winner.peakMoment.trim() ? winner.peakMoment : null,
         subgenreTags: winner.subgenreTags,
-        elements,
+        // Fold the Writer's voice-casting profile in with the planner's element labels (jsonb, no new
+        // column) so the auto-voice picker can match a narrator's gender/age to a pool voice.
+        elements: { ...(elements ?? {}), narratorVoice: winner.narratorVoice },
       })
       .returning()
 

@@ -1,6 +1,15 @@
 import { z } from 'zod'
 import { CAMERA_MOVE_KEYS } from '../motion/motion.js'
 
+// The narrator's casting profile: the gender + apparent age band of the private person THE TELLER
+// instantiated, surfaced ONLY to auto-select a matching TTS voice. It is never rendered into the
+// narration (invisible embodiment stays intact). Defaults keep BYO/legacy/story.v1 output safe.
+export const NarratorVoiceSchema = z.object({
+  gender: z.enum(['m', 'f', 'neutral']),
+  ageBand: z.enum(['young', 'adult', 'older']),
+})
+export type NarratorVoice = z.infer<typeof NarratorVoiceSchema>
+
 // Mirrors story.v1 output schema (docs/04 §2.1).
 export const StoryOutputSchema = z.object({
   title: z.string().min(1),
@@ -10,6 +19,9 @@ export const StoryOutputSchema = z.object({
   subgenreTags: z.array(z.string()),
   peakMoment: z.string().min(1), // the reel's peak line (verbatim substring of narration) — drives music timing
   newCanon: z.array(z.string()).default([]),
+  // Voice-casting only (see NarratorVoiceSchema). Optional: a writer that omits it, or any legacy
+  // story.v1 output, simply carries no casting signal → the auto-picker uses the pool's default voice.
+  narratorVoice: NarratorVoiceSchema.optional(),
 })
 export type StoryOutput = z.infer<typeof StoryOutputSchema>
 
