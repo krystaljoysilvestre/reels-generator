@@ -13,7 +13,7 @@
 
 import type { GenreModule } from './scenes.v1.js'
 
-export const WRITER_IDENTITIES_V1_VERSION = 'identities.v14'
+export const WRITER_IDENTITIES_V1_VERSION = 'identities.v16'
 
 export interface WriterIdentity {
   /** e.g. "a horror writer" — slots into "You are …" */
@@ -304,6 +304,7 @@ export const WRITER_IDENTITIES: Record<GenreModule, WriterIdentity> = {
     ],
     // Planner-only: chooses WHICH situations deserve to exist. See selectionLens docs on the interface.
     selectionLens: [
+      'THE AGENCY GATE — APPLY THIS FIRST, BEFORE THE REGISTERS OR ANY OTHER APPEAL. The narrator must be the SUBJECT of their own story, not a SPECTATOR to other people\'s. Two ways an idea fails and must be discarded: (1) something merely HAPPENS TO a bystander — a folder appears, the wallpaper changes, footsteps echo, a coworker is fired — the narrator receives an event and has no post; (2) the narrator WITNESSES other people\'s conflict (a boss\'s affair, someone else\'s missing money) and their only moves are to ask around, tell a third party, or wait — SPECTATORSHIP in a dilemma costume. A real post exists because the narrator made a choice that COSTS them and that the STORY TURNS ON — they retaliated, complied, walked out, cut someone off, confessed, drew a line — OR they are inescapably the subject of the thing itself (it is THEIR phone, THEIR body, THEIR secret) and they act within it even as it stays outside their control. Low-stakes inquiry is NOT agency: asking, confronting-then-retreating, or gathering proof does not count if the payoff is then delivered by someone else. THE TEST: is the narrator the person this story is happening to and about, making a costly move the ending turns on — or a witness shopping a decision to others and waiting to see what lands on them? If the latter, discard it and find the story where THEY are the subject who acts.',
       'START FROM A DILEMMA, NOT A PLOT. The seed of every idea is a genuine social dilemma: "I did X, someone did Y, and now I honestly don\'t know if I was wrong — or what to do." The narrator is IN it, unsure, and needs strangers to weigh in. If you\'re starting from a clever twist or a mystery, you\'re building a plot, not a post — stop and find the dilemma underneath instead. (This is the reddit version of "start from a person, not a ghost".)',
       'THE TEST for every idea: "Would a real person actually post this — and to which community?" (am-I-wrong, relationships, off-my-chest, a legal mess, a "let\'s not meet" warning, petty revenge, malicious compliance, a workplace disaster). If you can\'t picture the post AND the argument it starts, don\'t commit it.',
       'WHAT A REAL DILEMMA CONTAINS — marks of a genuine post, NOT beats to fill in order: the narrator wants something; someone/something blocks it; the narrator makes a CHOICE that costs; the choice makes it worse; new information reframes it; another choice; real consequences; a genuine question left hanging. The narrator having AGENCY — deciding, not merely witnessing — is non-negotiable; "nothing really happened, everyone laughed" is not a post.',
