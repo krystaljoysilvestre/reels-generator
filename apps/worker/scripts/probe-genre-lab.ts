@@ -8,6 +8,7 @@
 //        tsx scripts/probe-genre-lab.ts reddit_story anthropic  (Claude writer — PRODUCTION since studio.v3, 5482675)
 // Cost: ~50-100¢ per genre.
 import '../src/env.js'
+import { z } from 'zod'
 import type { StoryElements } from '../src/prompts-bridge.js'
 void (async () => {
   const { llmCall } = await import('@reels/providers')
@@ -221,7 +222,7 @@ Pero yung tsinelas ko — may putik sa itaas, hindi sa ilalim.
 Hanggang ngayon, 'pag naglalakad ako sa gabi, nakayuko ako. Lagi.`
 
   // One Taglish probe channel per genre. Niches deliberately match the self-run channel vision.
-  const LAB: Record<string, { name: string; niche: string; hookHint: string; fewshot?: string; worldBible?: string; seeds?: string[] }> = {
+  const LAB: Record<string, { name: string; niche: string; hookHint: string; fewshot?: string; worldBible?: string; seeds?: string[]; evidenceBriefs?: string[] }> = {
     reddit_story: {
       name: 'Hatulan Niyo Ako',
       niche: 'Filipino confession & drama stories — family, barkada, office, money, and neighbor conflicts: someone did someone wrong, and the viewer has to take a side (am-I-wrong, petty revenge, malicious compliance, TIFU)',
@@ -285,6 +286,15 @@ Hanggang ngayon, 'pag naglalakad ako sa gabi, nakayuko ako. Lagi.`
         'why the Tacoma Narrows Bridge collapsed in 1940',
         'how Blockbuster passed on buying Netflix and then collapsed',
       ],
+      // Vetted Evidence briefs (operator/curator-supplied DNA), aligned 1:1 with seeds — the ONLY source
+      // of truth. Each flags the exact fabrications the baseline shipped, so grounding + the check can be
+      // measured against them.
+      evidenceBriefs: [
+        `Bubble wrap was invented in 1957 by Alfred Fielding and Marc Chavannes. They were trying to make textured 3D plastic WALLPAPER — it failed. They next marketed it as greenhouse INSULATION — that also failed. Its breakthrough came around 1959–1960 when IBM used it to protect the IBM 1401 computer during shipping; packaging protection became its real purpose. Their company was later named Sealed Air. FALSE (contradict if the script says these): that it was invented as packaging; that a TOY COMPANY first used it for shipping (it was IBM); that an inventor was named "Jerry" (the inventor is Marc Chavannes).`,
+        `In 1975, Kodak engineer Steven Sasson built the first self-contained digital camera — about 0.01 megapixels, recording a black-and-white image to a cassette tape in ~23 seconds. Kodak's profits came from film and photo paper, so it feared a digital camera would cannibalize that business and declined to develop or market it. Kodak held many early digital-imaging patents but failed to capitalize in time and filed for bankruptcy in 2012; Canon and Sony led the digital market. Do not invent verbatim quotes or a specific dramatized boardroom meeting.`,
+        `The Tacoma Narrows Bridge (Washington State) opened July 1, 1940 and collapsed on November 7, 1940. Nicknamed "Galloping Gertie" for large vertical oscillations seen even during construction. CAUSE OF COLLAPSE: aeroelastic FLUTTER — a self-excited, wind-driven TORSIONAL oscillation in which the deck's own twisting altered the airflow and fed energy back into the motion, growing until failure. This is NOT simple mechanical resonance with an external wind frequency matching the bridge's natural frequency — the "resonance" explanation is a well-known MYTH (corrected by Billah & Scanlan, 1991). The wind was only ~40 mph (64 km/h), far below the design wind speed. No people died; the only casualty was a dog named Tubby. CONTRADICT any claim that the cause was "resonance" or that "the wind matched the bridge's natural/resonant frequency". There is no tradition of toy soldiers made from the bridge — invent no such object.`,
+        `In 2000, Netflix co-founders Reed Hastings and Marc Randolph offered to sell Netflix to Blockbuster for about $50 million. The meeting was at Blockbuster's HEADQUARTERS IN DALLAS, Texas, with Blockbuster CEO John Antioco; Blockbuster declined, seeing online rental/streaming as a niche. Blockbuster filed for bankruptcy in 2010; Netflix became a streaming giant. CONTRADICT any claim that the meeting was in Los Angeles. Do not invent verbatim boardroom dialogue — none is documented.`,
+      ],
     },
   }
 
@@ -323,6 +333,17 @@ Hanggang ngayon, 'pag naglalakad ako sa gabi, nakayuko ako. Lagi.`
   if (process.env.PROBE_RUNS) console.log(`⚗ cheap mode → ${RUN_LIMIT}/${RUNS.length} run(s)`)
   if (process.env.PROBE_NAT_MODEL) console.log(`⚗ naturalizer model override → ${process.env.PROBE_NAT_MODEL}`)
 
+  // Evidence check (probe prototype of the Evidence layer): judge each claim ONLY against the vetted brief.
+  const EvidenceCheckSchema = z.object({
+    pass: z.boolean(),
+    claims: z.array(
+      z.object({
+        claim: z.string(),
+        verdict: z.enum(['supported', 'unsupported', 'contradicted']),
+        note: z.string(),
+      }),
+    ),
+  })
   const wordCount = (s: string) => s.trim().split(/\s+/).filter(Boolean).length
   const beatLines = (s: string) => s.split('\n').filter((l) => l.trim()).length
   const PH_BIBLE = JSON.stringify({ region: process.env.PROBE_REGION || 'Philippines', era: 'present day', canonLocations: [], canonObjects: [], vocabulary: {} })
@@ -343,11 +364,23 @@ Hanggang ngayon, 'pag naglalakad ako sa gabi, nakayuko ako. Lagi.`
    try {
     const run = RUNS[i]!
     const angle = selectAngles(1, i * 3 + 1)[0]!
+    // FACTUAL GROUNDING: a vetted Evidence brief (operator/curator-supplied DNA) becomes the ONLY source
+    // of truth for this real subject — the planner + writer narrate FROM it, never from the model's memory.
+    const brief = ch.evidenceBriefs?.[i]
+    const wb = brief
+      ? JSON.stringify({
+          subject: ch.seeds?.[i],
+          note: 'FACTUAL GROUNDING — the evidenceBrief is the ONLY source of truth about this real subject.',
+          evidenceBrief: brief,
+          RULES:
+            'Assert ONLY what the evidenceBrief supports. Add NO facts (names, dates, numbers, places, causes) from memory. Invent NO scenes, quotes, or anchor objects. If the brief lacks a detail, leave it out rather than guess.',
+        })
+      : worldBible
     const plannerPrompt = buildStoryPlannerPrompt({
       channelName: ch.name,
       nicheDescription: ch.niche,
       toneConfig: tone,
-      worldBibleJson: worldBible,
+      worldBibleJson: wb,
       genreCategory: genre,
       targetSeconds: run.targetSeconds,
       angleDirective: angle.directive,
@@ -377,7 +410,7 @@ Hanggang ngayon, 'pag naglalakad ako sa gabi, nakayuko ako. Lagi.`
         toneConfig: tone,
         language: lang,
         audienceDescriptor: aud,
-        worldBibleJson: worldBible,
+        worldBibleJson: wb,
         fewshotStories: (lang === 'taglish' ? ch.fewshot : undefined) ?? '(no reference stories yet — write in the channel voice)',
         targetSeconds: run.targetSeconds,
         targetWords: run.targetWords,
@@ -506,6 +539,37 @@ Hanggang ngayon, 'pag naglalakad ako sa gabi, nakayuko ako. Lagi.`
       gateLines.push(`gate errored: ${String(err).slice(0, 120)}`)
     }
 
+    // ── EVIDENCE CHECK — verify each factual claim against the vetted brief (external, not model memory).
+    // This is the layer the story-gate can't be: it judges truth against a supplied source, so it catches
+    // the confident myths (e.g. Tacoma "resonance") the gate waves through.
+    const evidenceLines: string[] = []
+    if (brief) {
+      try {
+        const ev = await llmCall({
+          templateVersion: 'evidence-check.v0-probe',
+          schema: EvidenceCheckSchema,
+          system: `You are a fact-checker. The BRIEF is the ONLY source of truth about "${ch.seeds?.[i]}" — treat it as vetted and authoritative, and do NOT use your own knowledge; judge every claim ONLY against the brief.\n\nBRIEF:\n${brief}\n\nExtract each distinct factual claim the SCRIPT makes about the real subject (names, dates, numbers, places, causes, sequence). For each: "supported" = the brief affirms it; "unsupported" = the brief neither affirms nor denies it (possibly added from memory); "contradicted" = the brief says otherwise (a factual ERROR). pass=true only if NO claim is contradicted.`,
+          messages: [
+            {
+              role: 'user',
+              content: `SCRIPT:\n${attempt.narration}\n\nOUTPUT (JSON only):\n{ "pass": true, "claims": [ { "claim": "", "verdict": "supported", "note": "" } ] }`,
+            },
+          ],
+          provider: 'anthropic' as const,
+          maxTokens: 1200,
+        })
+        totalCost += ev.costCents
+        const contra = ev.data.claims.filter((c) => c.verdict === 'contradicted').length
+        const unsup = ev.data.claims.filter((c) => c.verdict === 'unsupported').length
+        evidenceLines.push(
+          `${ev.data.pass ? '✅ EVIDENCE PASS' : '❌ EVIDENCE FAIL'} — ${contra} contradicted, ${unsup} unsupported, ${ev.data.claims.length} claims`,
+        )
+        for (const c of ev.data.claims) evidenceLines.push(`  [${c.verdict}] ${c.claim}${c.note ? ` — ${c.note}` : ''}`)
+      } catch (err) {
+        evidenceLines.push(`evidence check errored: ${String(err).slice(0, 140)}`)
+      }
+    }
+
     const el = plan.data.elements
     console.log(`\n${'═'.repeat(70)}`)
     console.log(`[${genre.toUpperCase()} · ${run.form.toUpperCase()} ${run.targetSeconds}s · ${i + 1}/${RUN_LIMIT}] "${attempt.story.data.title}"  register=${el.register ?? '-'}${retried ? '  (rewritten once)' : ''}`)
@@ -521,6 +585,7 @@ Hanggang ngayon, 'pag naglalakad ako sa gabi, nakayuko ako. Lagi.`
     console.log(`  elements:   structure=${el.structure} | role=${el.role} | setting=${el.setting} | anchor=${el.anchor ?? '-'} | trigger=${el.trigger} | turn=${el.turn} | aftereffect=${el.aftereffect}`)
     console.log(`  stages: ${attempt.stageNotes.join(' | ')}  words=${wordCount(attempt.narration)}`)
     for (const g of gateLines) console.log(`  GATE: ${g}`)
+    for (const e of evidenceLines) console.log(`  EVIDENCE: ${e}`)
     console.log(`${'─'.repeat(70)}\n[RAW WRITER]\n${attempt.story.data.narration}`)
     console.log(`${'─'.repeat(70)}\n[FINAL · post editor+naturalizer]\n${attempt.narration}`)
     const finalGate = gateLines[gateLines.length - 1] ?? '(no gate)'
