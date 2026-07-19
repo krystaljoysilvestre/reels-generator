@@ -168,8 +168,60 @@ Iniabot ko sa kanya 'yung apo niya. Kinuha niya — kinakabahan, parang baguhan 
 Limang taon. Hindi na mababawi.
 Pero nung araw na 'yon, hindi na kami mag-isa ng anak ko.`
 
+  // Filipino FOLK-HORROR channel DNA (2026-07-20). The baseline showed the model defaults to
+  // globalized creepypasta (reflections/impostors/cursed objects) in ANY language — so the Filipino
+  // tradition has to come from channel DNA, not code. The PLANNER reads the world bible (this is what
+  // moves premise SELECTION off creepypasta); the WRITER reads the exemplars (voice + texture).
+  const HORROR_WORLD_BIBLE = `{
+  "region": "a Philippine province",
+  "era": "present day",
+  "canonLocations": ["the old two-story bahay na bato at the edge of the barangay", "the rice fields and the pilapil you cross to get home", "the balete tree by the river that no one goes near", "the sari-sari store lit by a single bulb", "the dark provincial road with no streetlights"],
+  "canonObjects": ["tsinelas left by the door", "the gasera lit when the brownout hits", "a jar of asin and dried tawas", "a bolo kept under the bed", "the santo and agua bendita on the altar"],
+  "creatures": ["the aswang that wears a neighbor's face by day and hunts the sick and the unborn by night", "the manananggal that leaves its lower half in the field and flies with its viscera trailing", "the thing outside that borrows a loved one's voice", "the tiyanak that cries like an abandoned baby to lure you off the path"],
+  "folkRules": ["a real person calls your name twice at night; the aswang calls once", "say 'tabi-tabi po' before you pass or relieve yourself in an unfamiliar place", "do not sweep the floor at night", "if you hear heavy wings above you in the dark, do not run and do not look up — stop and pray", "salt at the threshold and a bolo under the pillow keep it out", "do not open the door after the Angelus, no matter whose voice it is"],
+  "vocabulary": {"aswang": "shapeshifting eater of the sick and unborn; often an ordinary neighbor by day", "manananggal": "a creature that severs itself at the waist and flies at night", "tabi-tabi po": "excuse me, spirits — said to avoid offending the unseen", "albularyo": "a folk healer who drives out kulam", "tawas": "alum used to diagnose usog and curses"}
+}`
+
+  const HORROR_FEWSHOT = `--- REFERENCE STORY 1 (folk rule: the aswang calls once, a real person twice · a CHOICE to obey the rule · contaminated ordinary: a mother's voice · lingering) ---
+Title: Dalawang beses tatawag ang totoong tao.
+Sabi ni Lola, 'pag may tumawag sa'yo sa gabi, huwag kang sasagot agad. Ang totoong tao, dalawang beses tatawag. Ang hindi tao, isa lang.
+Nag-iisa ako sa bahay nung gabing 'yon. Brownout. Gasera lang ang ilaw.
+Mula sa labas — 'Nak. Pauwi na ako, buksan mo.' Boses ni Mama. Malinaw na malinaw.
+Halos tumakbo na ako sa pinto. Pero naghintay ako ng pangalawa.
+Wala.
+Tahimik. Tapos, 'Nak.' Isang beses pa. Pero iba na — parang galing sa ilalim ng bintana, hindi sa gate.
+Hindi ako gumalaw. Pinatay ko ang gasera. Umupo ako sa sulok.
+Makalipas ang isang oras, kumatok si Mama sa pinto — dala ang pinamili, pagod. 'Bakit madilim?' tanong niya. Tapos, 'Tumawag ba ako? Hindi ah.'
+Hanggang ngayon, 'pag may tumatawag sa pangalan ko sa gabi, binibilang ko muna.
+Yung gabing 'yon, hindi ko pa rin alam kung nasaan si Mama nung una akong tinawag.
+
+--- REFERENCE STORY 2 (the aswang wears a neighbor's face by day · a CHOICE to salt the door and watch · a planted detail — salt — rereads at the end) ---
+Title: Mabait si Manang Coring.
+Mabait si Manang Coring. Siya ang nagpapahiram ng asin 'pag naghahanap ka. Siya ang unang dumadalaw 'pag may maysakit sa barangay.
+Kaya nung nagkasakit ang sanggol ng kapitbahay namin, si Manang Coring agad ang nag-alaga. Gabi-gabi, nandun.
+Pero may napansin ako. Yung aso namin, na hindi umaalma kahit kanino, umuungol at nakatindig ang balahibo tuwing dadaan si Manang.
+Isang gabi, umihi ako sa likod-bahay. Nakalimutan kong magsabi ng tabi-tabi po.
+Nakatingin pala siya sa'kin mula sa bintana niya. Nakangiti. Pero ang mata — nung tinamaan ng flashlight ko, kumislap na parang sa pusa.
+Kinaumagahan, patay na ang sanggol. 'Bumigat na lang bigla,' sabi nila.
+Nagwisik ako ng asin sa may pinto namin nung gabing 'yon. Hindi ako natulog.
+Mabait pa rin si Manang Coring. Nagpapahiram pa rin ng asin.
+Iniisip ko lang minsan — bakit siya, na laging kapos, ang laging may sobrang asin na maipamigay.
+
+--- REFERENCE STORY 3 (folk rule: heavy wings above, don't run, don't look up · a CHOICE to stop and pray · the tsinelas detail rereads) ---
+Title: Huwag kang titingala 'pag may pagaspas sa itaas.
+Late na nung umuwi ako galing sa kabilang barangay. Wala nang tricycle, kaya naglakad ako sa pilapil.
+Sabi ng matatanda: 'pag gabi sa bukid, at may marinig kang mabigat na pagaspas sa itaas — parang malaking ibon — huwag kang tatakbo, at huwag kang titingala. Tumigil ka lang, at magdasal.
+Kwentong-barbero lang 'yan, akala ko.
+Nasa gitna ako ng bukid nung narinig ko. Pagaspas. Mabigat. Mula sa itaas.
+Hindi ibon 'yon.
+Tumigil ako. Yumuko. Dasal nang dasal, habang yung pagaspas umiikot sa ulunan ko. Paikot. Paikot.
+Tapos, huminto. Nawala.
+Nakauwi ako. Buo.
+Pero yung tsinelas ko — may putik sa itaas, hindi sa ilalim.
+Hanggang ngayon, 'pag naglalakad ako sa gabi, nakayuko ako. Lagi.`
+
   // One Taglish probe channel per genre. Niches deliberately match the self-run channel vision.
-  const LAB: Record<string, { name: string; niche: string; hookHint: string; fewshot?: string; seeds?: string[] }> = {
+  const LAB: Record<string, { name: string; niche: string; hookHint: string; fewshot?: string; worldBible?: string; seeds?: string[] }> = {
     reddit_story: {
       name: 'Hatulan Niyo Ako',
       niche: 'Filipino confession & drama stories — family, barkada, office, money, and neighbor conflicts: someone did someone wrong, and the viewer has to take a side (am-I-wrong, petty revenge, malicious compliance, TIFU)',
@@ -183,12 +235,15 @@ Pero nung araw na 'yon, hindi na kami mag-isa ng anak ko.`
       fewshot: INFO_FEWSHOT,
     },
     horror: {
-      // Deliberately GENERIC + sub-tradition-spanning (urban legend / found-footage / psychological /
-      // paranormal / domestic) — NOT a specific channel's DNA. This is an adversarial test of the
-      // narrative-grammar abstraction, not a showcase of any one horror channel.
+      // Filipino FOLK-HORROR channel DNA (2026-07-20): replaces the old deliberately-generic entry.
+      // The baseline showed the model defaults to globalized creepypasta (reflections/impostors/cursed
+      // objects) in ANY language — so the Filipino tradition must come from channel DNA (world bible +
+      // exemplars), not from the culture-neutral genre code.
       name: 'Hatinggabi',
-      niche: 'first-person Taglish horror — ordinary life interrupted by something wrong; spans urban legend, found-footage, psychological, paranormal, and domestic horror (apartments, hospitals, phones, commutes, elevators, old houses)',
+      niche: 'first-person Filipino folk horror — ordinary provincial and barangay life turned wrong by the old fears: the aswang wearing a neighbor\'s face, a loved one\'s voice calling from outside, the manananggal over the rice fields, the price of breaking a folk rule; grounded in real texture (the brownout and the gasera, tsinelas by the door, lola\'s warnings, tabi-tabi po, the balete tree) — the dread is the ordinary turning unsafe, and the old rules the only defense',
       hookHint: 'instant pattern-interrupt in the first 1–2s with a bold on-screen text hook',
+      worldBible: HORROR_WORLD_BIBLE,
+      fewshot: HORROR_FEWSHOT,
     },
     lifestyle: {
       name: 'Sarap ng Buhay',
@@ -271,6 +326,11 @@ Pero nung araw na 'yon, hindi na kami mag-isa ng anak ko.`
   const wordCount = (s: string) => s.trim().split(/\s+/).filter(Boolean).length
   const beatLines = (s: string) => s.split('\n').filter((l) => l.trim()).length
   const PH_BIBLE = JSON.stringify({ region: process.env.PROBE_REGION || 'Philippines', era: 'present day', canonLocations: [], canonObjects: [], vocabulary: {} })
+  // World-bible resolution: PROBE_WORLDBIBLE (cross-culture test) wins; else the channel's own — but the
+  // built-in ones (e.g. HORROR_WORLD_BIBLE) are FILIPINO, so they apply only for Taglish and are dropped
+  // for other languages so they can't leak; else the region-generic default. Same discipline as fewshot.
+  const worldBible = process.env.PROBE_WORLDBIBLE || (lang === 'taglish' ? ch.worldBible : undefined) || PH_BIBLE
+  if (process.env.PROBE_WORLDBIBLE) console.log(`⚗ world bible override (${process.env.PROBE_WORLDBIBLE.length} chars)`)
   const tone = JSON.stringify({ intensity: 7, warmth: 5, energy: 5, pacing: 5, humor: genre === 'comedy' ? 8 : 3 })
   let totalCost = 0
   // Accumulate across runs so the planner's anti-sameness guard fires like production (spreads
@@ -287,7 +347,7 @@ Pero nung araw na 'yon, hindi na kami mag-isa ng anak ko.`
       channelName: ch.name,
       nicheDescription: ch.niche,
       toneConfig: tone,
-      worldBibleJson: PH_BIBLE,
+      worldBibleJson: worldBible,
       genreCategory: genre,
       targetSeconds: run.targetSeconds,
       angleDirective: angle.directive,
@@ -317,7 +377,7 @@ Pero nung araw na 'yon, hindi na kami mag-isa ng anak ko.`
         toneConfig: tone,
         language: lang,
         audienceDescriptor: aud,
-        worldBibleJson: PH_BIBLE,
+        worldBibleJson: worldBible,
         fewshotStories: (lang === 'taglish' ? ch.fewshot : undefined) ?? '(no reference stories yet — write in the channel voice)',
         targetSeconds: run.targetSeconds,
         targetWords: run.targetWords,
