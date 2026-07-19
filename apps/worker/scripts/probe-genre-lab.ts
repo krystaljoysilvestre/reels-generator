@@ -521,7 +521,8 @@ Hanggang ngayon, 'pag naglalakad ako sa gabi, nakayuko ako. Lagi.`
     console.log(`  elements:   structure=${el.structure} | role=${el.role} | setting=${el.setting} | anchor=${el.anchor ?? '-'} | trigger=${el.trigger} | turn=${el.turn} | aftereffect=${el.aftereffect}`)
     console.log(`  stages: ${attempt.stageNotes.join(' | ')}  words=${wordCount(attempt.narration)}`)
     for (const g of gateLines) console.log(`  GATE: ${g}`)
-    console.log(`${'─'.repeat(70)}\n${attempt.narration}`)
+    console.log(`${'─'.repeat(70)}\n[RAW WRITER]\n${attempt.story.data.narration}`)
+    console.log(`${'─'.repeat(70)}\n[FINAL · post editor+naturalizer]\n${attempt.narration}`)
     const finalGate = gateLines[gateLines.length - 1] ?? '(no gate)'
     summary.push(`${run.form.padEnd(5)} | ${attempt.story.data.title.slice(0, 40).padEnd(40)} | ${(el.register ?? '-').slice(0, 24).padEnd(24)} | ${finalGate.startsWith('gate errored') ? 'ERROR' : /(^|: )PASS — /.test(finalGate) ? 'PASS' : 'FAIL'}${retried ? ' (retried)' : ''}`)
    } catch (err) {
