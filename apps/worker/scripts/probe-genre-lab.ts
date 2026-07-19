@@ -120,6 +120,54 @@ Yung mga snack, yung mga naka-sale sa gitna, yung mga bagay na hindi mo naman ba
 May tawag pa sila dito: "the milk run."
 Kaya sa susunod na pupunta ka ng grocery para lang sa gatas — bilangin mo kung ilang bagay ang naisama mo pauwi. Malamang, hindi lang gatas.`
 
+  // Authentic Filipino drama exemplars (ORIGINAL, hand-authored). Each is a want-vs-need collision
+  // resolved by a CHOICE the protagonist makes among the LIVING (never a truth delivered by an object
+  // or a dead elder), grounded in a specific present-tense world, carried in subtext, and landing a
+  // DIFFERENT emotional truth (irony / tragic / redemption) — deliberate range against the confirmed
+  // dead-elder-object-revelation monoculture. In production the operator supplies the channel's own.
+  const DRAMA_FEWSHOT = `--- REFERENCE STORY 1 (the debt of the sacrificing eldest · a CHOICE among the living · irony/bittersweet · the gut-punch lands mid-story, the ending is quiet) ---
+Title: "Ate ka, ikaw na bahala."
+Alas-dose na, gising pa rin ako. Bukas ang enrollment ng bunso.
+Nasa lamesa 'yung naka-tape na brown envelope. Tatlong taon ko nang dinadagdagan — review fee, para makapag-board exam na rin ako balang-araw. Galing sa sahod na, akala ng lahat, pang-pamilya lang.
+Kanina, tinapik lang ako ni Mama. "Ate ka. Ikaw na bahala sa tuition." Ngiting-ngiti. Parang ang gaan sabihin.
+Sampung taong gulang ako nung una kong narinig 'yun. Twenty-nine na ako ngayon.
+Kaya heto ako, tinititigan 'yung pera na kapag inabot ko, wala nang matitira sa akin.
+Dati, hindi ko na pinag-iisipan. Inaabot ko lang.
+Pero ngayong gabi — ayaw kong galawin.
+Kinatok ko 'yung pinto ni Mama. "Ma. Ngayong taon, hindi ko kaya."
+Hindi siya nagalit. Hindi rin nagulat. Parang matagal na niyang inaantay na sabihin ko 'yon.
+"Sige," sabi niya. Tapos sinara 'yung pinto.
+Kinabukasan, nakahanap din sila ng pang-enroll. Hindi na sa akin.
+Wala nang tumapik sa balikat ko. Wala nang "ate ka."
+Iba pala 'yung katahimikan kapag hindi ka na kailangan.
+Hawak ko 'yung envelope ko. Buo pa. Akin na talaga.
+Pero buong araw, hinihintay ko pa rin 'yung tapik na hindi na dumating.
+
+--- REFERENCE STORY 2 (pride/jealousy inside a living marriage · a CHOICE: he lets the flaw win · tragic) ---
+Title: Nag-promote si misis. Ako, hindi.
+Anim na taon kaming nag-apply ni Len sa parehong posisyon. Siya 'yung tinanggap.
+Masaya ako para sa kanya. Sabi ko sa sarili ko, masaya ako.
+Nung gabi ng celebration niya, nagtagal ako sa banyo. Hinugasan ko 'yung mukha ko, pinilit ngumiti sa salamin.
+Palabas na sana ako. Tapos narinig ko siya sa kabila — tumatawa, 'yung tawa na dati, parang sa'kin lang.
+Hindi ako lumabas.
+Nag-text na lang ako: "Uuwi muna ako, masama pakiramdam ko."
+Totoo naman. Masama nga.
+Kinabukasan, ngiti pa rin siya. "Okay ka na?" Hindi niya alam.
+Anim na taong pinagsamahan — kaya ko palang itago sa kanya 'to. Yun pala 'yung madaling parte.
+'Yung mahirap: tinitingnan ko siyang masaya, at hindi ko na maalala kung kailan huli akong natuwa para sa kanya nang totoo.
+
+--- REFERENCE STORY 3 (estrangement/pride between a father and a grown child · a CHOICE: he crosses the distance · redemption, paid for) ---
+Title: Sundo.
+Limang taon kaming hindi nag-uusap ni Papa. Simula nung nabuntis ako, hindi kasal.
+Kaya nung nanganak ako, wala akong inaasahan. Ako lang at 'yung anak ko.
+Pero pagdilat ko, nandun siya sa may pinto. Hawak 'yung lumang thermos — 'yung dinadala niya dati sa'kin pag may exam ako.
+Hindi siya lumapit agad. Parang hindi alam kung pwede pa.
+"Pinagtimplahan kita ng lugaw," sabi niya. Yun lang.
+Hindi siya humingi ng tawad. Hindi rin ako.
+Iniabot ko sa kanya 'yung apo niya. Kinuha niya — kinakabahan, parang baguhan ulit.
+Limang taon. Hindi na mababawi.
+Pero nung araw na 'yon, hindi na kami mag-isa ng anak ko.`
+
   // One Taglish probe channel per genre. Niches deliberately match the self-run channel vision.
   const LAB: Record<string, { name: string; niche: string; hookHint: string; fewshot?: string; seeds?: string[] }> = {
     reddit_story: {
@@ -154,8 +202,9 @@ Kaya sa susunod na pupunta ka ng grocery para lang sa gatas — bilangin mo kung
     },
     drama: {
       name: 'Hindi Ko Nasabi',
-      niche: 'Filipino family drama — the things we never say to the people we love, told first-person',
+      niche: 'Filipino drama — ordinary people forced into hard, human choices: family, marriage, money, pride, love, and the debts we owe each other; told first-person',
       hookHint: 'an emotional hook in the first 2s — a line that makes you stay',
+      fewshot: DRAMA_FEWSHOT,
     },
     commentary: {
       name: 'Totoo Naman, Diba?',
@@ -198,6 +247,11 @@ Kaya sa susunod na pupunta ka ng grocery para lang sa gatas — bilangin mo kung
   if (process.env.PROBE_NICHE) ch.niche = process.env.PROBE_NICHE
   if (process.env.PROBE_NAME) ch.name = process.env.PROBE_NAME
   if (process.env.PROBE_NICHE) console.log(`⚗ DNA override → "${ch.name}": ${ch.niche}`)
+  // CROSS-CULTURE experiment: PROBE_LANG + PROBE_REGION swap the channel's language/world off the
+  // Taglish/Philippines default (built-in exemplars are Filipino, so they're DROPPED for non-Taglish).
+  const lang = process.env.PROBE_LANG || 'taglish'
+  const aud = defaultAudienceDescriptor(lang)
+  if (process.env.PROBE_LANG) console.log(`⚗ language override → ${lang} (audience: ${aud})`)
 
   const RUNS = [
     { form: 'short', targetSeconds: 75, targetWords: 190, writerTokens: 4096 },
@@ -216,7 +270,7 @@ Kaya sa susunod na pupunta ka ng grocery para lang sa gatas — bilangin mo kung
 
   const wordCount = (s: string) => s.trim().split(/\s+/).filter(Boolean).length
   const beatLines = (s: string) => s.split('\n').filter((l) => l.trim()).length
-  const PH_BIBLE = JSON.stringify({ region: 'Philippines', era: 'present day', canonLocations: [], canonObjects: [], vocabulary: {} })
+  const PH_BIBLE = JSON.stringify({ region: process.env.PROBE_REGION || 'Philippines', era: 'present day', canonLocations: [], canonObjects: [], vocabulary: {} })
   const tone = JSON.stringify({ intensity: 7, warmth: 5, energy: 5, pacing: 5, humor: genre === 'comedy' ? 8 : 3 })
   let totalCost = 0
   // Accumulate across runs so the planner's anti-sameness guard fires like production (spreads
@@ -261,10 +315,10 @@ Kaya sa susunod na pupunta ka ng grocery para lang sa gatas — bilangin mo kung
         channelName: ch.name,
         nicheDescription: ch.niche,
         toneConfig: tone,
-        language: 'taglish',
-        audienceDescriptor: defaultAudienceDescriptor('taglish'),
+        language: lang,
+        audienceDescriptor: aud,
         worldBibleJson: PH_BIBLE,
-        fewshotStories: ch.fewshot ?? '(no reference stories yet — write in the channel voice)',
+        fewshotStories: (lang === 'taglish' ? ch.fewshot : undefined) ?? '(no reference stories yet — write in the channel voice)',
         targetSeconds: run.targetSeconds,
         targetWords: run.targetWords,
         genreCategory: genre,
@@ -303,8 +357,8 @@ Kaya sa susunod na pupunta ka ng grocery para lang sa gatas — bilangin mo kung
               ? buildStoryEditorPrompt({
                   nicheDescription: ch.niche,
                   genreCategory: genre,
-                  language: 'taglish',
-                  audienceDescriptor: defaultAudienceDescriptor('taglish'),
+                  language: lang,
+                  audienceDescriptor: aud,
                   narration,
                   peakMoment,
                   emotionalDestination: plan.data.emotionalDestination,
@@ -312,8 +366,8 @@ Kaya sa susunod na pupunta ka ng grocery para lang sa gatas — bilangin mo kung
                   targetWords: run.targetWords,
                 })
               : buildStoryNaturalizerPrompt({
-                  language: 'taglish',
-                  audienceDescriptor: defaultAudienceDescriptor('taglish'),
+                  language: lang,
+                  audienceDescriptor: aud,
                   narration,
                   peakMoment,
                 })
@@ -356,7 +410,7 @@ Kaya sa susunod na pupunta ka ng grocery para lang sa gatas — bilangin mo kung
       const gp = buildStoryGatePrompt({
         channelName: ch.name,
         nicheDescription: ch.niche,
-        language: 'taglish',
+        language: lang,
         tasteRubric: defaultTasteRubric(genre, ch.niche),
         narration,
         title,

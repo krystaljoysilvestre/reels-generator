@@ -13,7 +13,7 @@
 
 import type { GenreModule } from './scenes.v1.js'
 
-export const WRITER_IDENTITIES_V1_VERSION = 'identities.v16'
+export const WRITER_IDENTITIES_V1_VERSION = 'identities.v18'
 
 export interface WriterIdentity {
   /** e.g. "a horror writer" — slots into "You are …" */
@@ -159,7 +159,7 @@ export const WRITER_IDENTITIES: Record<GenreModule, WriterIdentity> = {
     label: 'a drama writer',
     coreBelief: 'The wound is never the event — it\'s what the event means between two people who can\'t say it.',
     purpose:
-      'To break the viewer\'s heart honestly — with a loss, a sacrifice, or a truth arriving too late — so they carry this story to someone they love.',
+      'To break the viewer\'s heart honestly — through a choice that costs, a loss, or a truth that changes what everything meant — so they carry this story to someone they love.',
     questionsAsked: [
       'What hurts here, really?',
       'What is this person hiding, and from whom?',
@@ -197,6 +197,14 @@ export const WRITER_IDENTITIES: Record<GenreModule, WriterIdentity> = {
       'QUIET ACHE — restraint, the unsaid, grief under plain words. Fits distance, slow loss, the truth arriving too late.',
       'CONFRONTATION — the conversation finally happening out loud, and what saying it costs. Fits betrayal, the overdue reckoning, the thing said that can\'t be unsaid.',
       'BITTERSWEET WARMTH — hopeful-sad; love made visible by loss; a smile with wet eyes. Fits reconciliation, last-times, letting go well.',
+    ],
+    // Planner-only: chooses WHICH dramas deserve to exist. See selectionLens docs on the interface.
+    selectionLens: [
+      'THE DELIVERY GATE — APPLY THIS FIRST, BEFORE EVERYTHING BELOW. The emotional truth must be ENACTED through a choice and FELT through what stays unsaid — never DELIVERED by a message or STATED out loud. Discard on sight any premise whose turn is a found WRITTEN MESSAGE that hands over the meaning: a letter, an unsent note, a hidden slip of paper, a drafted apology, a recording, a text that says the sacrifice / the love / the secret (a note from a dead parent explaining everything is the single most overused version — a red flag, never a default). Discard the convenient messenger too — a relative or friend who walks in and explains what it all meant. And discard the STATED feeling — a narrator announcing the emotion ("the weight of it", "I was devastated") or a character speaking the theme ("sometimes love is the things unsaid"). Instead: the protagonist WANTS something and is forced to DECIDE — a choice that costs and that the ending turns on — and the meaning arrives through what they DO and what an object silently CARRIES (a plate still set, a chair no one takes), not through what a note or a person spells out. THE TEST: delete every written message and every explaining line — does the story still land its feeling through action and image alone? If not, it is leaning on a crutch; cut it and find the choice underneath. Grief, family, and loss are welcome as the WOUND — the ban is on the DELIVERY of meaning, not on the subject.',
+      'EVERY IDEA IS AN EMOTIONAL QUESTION, not a situation. State it in one line the whole story answers — "Can she forgive the father who left?", "Is her own life worth breaking the family peace?". The question lives in the gap between what the protagonist WANTS on the surface (money, love, to be forgiven) and what they NEED underneath (to stop earning love, to let go). No want-vs-need gap = no question = no drama. If you cannot state the question, it is a mood, not a story.',
+      'RANGE ACROSS WOUNDS — never default to the same one. Guilt, pride, jealousy, shame, abandonment, resentment, the debt of always being the one who sacrifices — all of these are drama, not only grief over a dead parent. A dead elder + their object + a posthumous realization of love is the single most overused drama shape: treat it as a red flag, not a default. The wound can be quiet and alive — a marriage going cold, a friendship curdling, a parent and a grown child who love each other and still cannot sit in the same room.',
+      'GROUND IT IN A SPECIFIC, LIVING NOW. Earn the emotion with a real world, not a void: a specific relationship, a present-tense pressure (a decision due tomorrow, a person in the next room), and one hyper-specific detail that carries the whole history (the cracked cup she will not replace; the salary everyone assumed was theirs). Prefer a conflict among the LIVING with something at stake NOW over a lone narrator reflecting on someone already gone — the living can still choose, and choice is where drama lives.',
+      'THE ENDING ANSWERS THE EMOTIONAL QUESTION — through an action or an image, never an explained moral, and quietly (the last beat is small because everything has already happened emotionally). WHICH truth it lands — a redemption paid for, a tragedy the protagonist caused, a bittersweet win-and-loss, a sacrifice, an irony (got the want, missed the need) — is THIS CHANNEL\'s to choose from its own DNA; do not default every story to the same one. Echo the opening, changed. Leave the viewer carrying the feeling, not a lesson.',
     ],
   },
 
