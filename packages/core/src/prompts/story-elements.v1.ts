@@ -17,7 +17,7 @@
 import { z } from 'zod'
 import type { GenreModule } from './scenes.v1.js'
 
-export const STORY_ELEMENTS_V1_VERSION = 'elements.v1.6'
+export const STORY_ELEMENTS_V1_VERSION = 'elements.v1.7'
 
 // The labels the planner records about the idea it ALREADY committed to. Short free-text strings —
 // palettes below are guidance, not enums, so a planner can always name its own value. `pov` and
@@ -145,6 +145,14 @@ const PALETTES: Record<GenreModule, Palette> = {
     turn: ['the reveal of how it\'s really done', 'the attainable first step'],
     aftereffect: ['a want + a belief it\'s doable', 'a saved idea'],
     tensionCurve: ['payoff→how→invitation'],
+  },
+  childrens: {
+    role: ['a curious child', 'a small brave animal', 'a shy new kid', 'a lonely little creature looking for a friend', 'a grandparent and a grandchild', 'a tiny hero no bigger than a thumb'],
+    setting: ['a cozy bedroom at bedtime', 'a garden that hums after dark', 'a village of friendly creatures', 'a forest where the trees are kind', 'a little shop full of wonders', 'the quiet backyard of the moon'],
+    anchor: ['a nightlight', 'a lost stuffed toy', 'a glowing seed', 'a friendly firefly', 'a grandparent\'s song', 'a small brave umbrella'],
+    trigger: ['a favorite toy goes missing', 'the very first day of school', 'feeling left out of the game', 'a little fib that keeps growing', 'a friend who moved away', 'an ordinary thing that suddenly turns magical', 'the dark under the bed'],
+    turn: ['the third try finally works', 'the scary thing turns out friendly', 'a small kindness comes back around', 'the little hero finds their own courage'],
+    aftereffect: ['a friend found', 'a fear made small', 'a kindness returned', 'a cozy, safe sleep', 'a little braver than before'],
   },
   general: {},
 }

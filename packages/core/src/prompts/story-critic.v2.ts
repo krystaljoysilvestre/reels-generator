@@ -11,7 +11,7 @@
 import { z } from 'zod'
 import { asGenreModule, classifyGenre, type GenreModule } from './scenes.v1.js'
 
-export const STORY_CRITIC_V2_VERSION = 'story-critic.v2.8'
+export const STORY_CRITIC_V2_VERSION = 'story-critic.v2.10'
 
 export const StoryGateSchema = z.object({
   pass: z.boolean(),
@@ -152,6 +152,33 @@ SUBSTANCE
 
 NEVER
 - Glossy perfection without texture; a feature list instead of a moment.`,
+
+  childrens: `GOAL
+- ONE simple, clear thing the little hero wants, easy for a small child to follow — no subplots, no two threads to track.
+- The problem feels BIG to a child even if small to an adult (a lost sock, the dark, a first day) — taken seriously, never belittled.
+
+DELIGHT & WONDER
+- A genuine spark of wonder or delight a child would light up at — ideally an ordinary thing turned marvelous-but-safe.
+- The tone stays warm and playful throughout — never sarcastic, grim, or cynical.
+
+HERO
+- A small hero (a child or a friendly creature) a child can root for, who DOES a small brave or kind thing themselves.
+
+SAFETY (disqualifying if failed)
+- Age-appropriate throughout; any scare or problem is gentle and quickly made safe.
+- The ending leaves the child SAFE, warm, and reassured — never frightened, grieving, or left hanging.
+
+HEART
+- A gentle truth or kindness the child carries away — carried by what the HERO DOES, not lectured. Warm FEELING said plainly is on-register (a directly-kind line, a refrain); a stapled-on MORAL is not.
+
+VOICE
+- Simple, musical, read-aloud rhythm; short lines; a refrain a child could chant along with.
+- Concrete and picturable — a child can SEE every beat ("ribbons danced like butterflies", not "she was happy"). Gentle, inclusive humor welcome; never mean.
+
+NEVER
+- Real cruelty, peril, or loss left unresolved; an adult, bittersweet, or sad-without-comfort ending.
+- A lesson so preachy the story disappears.
+- "Show, don't tell" pushed so hard that the warmth and the refrain get stripped out.`,
 
   general: `HOOK
 - The first spoken line earns the next ten seconds: a question opened, a tension entered, a promise made — never scene-setting or a greeting.
