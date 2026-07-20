@@ -54,3 +54,10 @@ export { buildVideoQAPrompt, VIDEO_QA_V1_VERSION, VideoQASchema } from '@reels/c
 export { buildFoleySpotPrompt, FOLEY_SPOT_V1_VERSION, FoleySpotSchema } from '@reels/core/prompts/foley-spot.v1'
 export { buildCompilationPrompt, COMPILATION_V1_VERSION } from '@reels/core/prompts/compilation.v1'
 export { buildPostMetaPrompt, PostMetaLlmSchema, POST_META_V1_VERSION } from '@reels/core/prompts/post-meta.v1'
+export {
+  buildPlaceSourceDecidePrompt,
+  buildPlaceVerifyPrompt,
+  PlaceSourceDecisionSchema,
+  PlaceVerifySchema,
+  PLACE_SOURCE_V1_VERSION,
+} from '@reels/core/prompts/place-source.v1'

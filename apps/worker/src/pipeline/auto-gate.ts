@@ -2,7 +2,7 @@ import { eq, and } from 'drizzle-orm'
 import { getDb, reels, channels, stories, assets, publications } from '@reels/db'
 import { enqueueStep } from '@reels/queue'
 import { listVoices, downloadBuffer, uploadToYouTube, isYouTubeConfigured } from '@reels/providers'
-import { PostingRulesSchema, PostMetaSchema, formatPostCaption, matchNarratorVoice, type ChannelVoice, type NarratorVoice } from '@reels/core'
+import { PostingRulesSchema, PostMetaSchema, formatPostCaption, formatImageCredits, StoryBibleSchema, matchNarratorVoice, type ChannelVoice, type NarratorVoice } from '@reels/core'
 import { setReelStatus } from './harness.js'
 
 // The three steps where the pipeline normally STOPS for human review (resolveNextStep returns null):
@@ -94,7 +94,11 @@ async function autoPublishYouTube(reelId: string): Promise<void> {
   const story = reel.storyId ? await db.query.stories.findFirst({ where: eq(stories.id, reel.storyId) }) : null
   const meta = PostMetaSchema.safeParse(reel.postMeta)
   const title = meta.success ? meta.data.title : (story?.title ?? 'Untitled')
-  const description = meta.success ? formatPostCaption(meta.data) : (story?.logline ?? '')
+  // Append image-attribution credits for any real SOURCED plates (Wikimedia etc.) so licence terms are met.
+  const bibleParse = reel.storyBible ? StoryBibleSchema.safeParse(reel.storyBible) : null
+  const imageCredits = bibleParse?.success ? formatImageCredits(bibleParse.data) : ''
+  const baseDescription = meta.success ? formatPostCaption(meta.data) : (story?.logline ?? '')
+  const description = imageCredits ? `${baseDescription}\n\n${imageCredits}` : baseDescription
   const tags = meta.success ? meta.data.hashtags.map((h) => h.replace(/^#/, '')) : []
 
   const video = await downloadBuffer(renderAsset.storageKey)

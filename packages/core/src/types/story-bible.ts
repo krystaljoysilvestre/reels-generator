@@ -24,6 +24,19 @@ export const BibleEntitySchema = z.object({
   // overwritten if present); the assembler/resolver treat it as optional, so a missing plate degrades the
   // scene to text-only — never a failure. Absent on channel-canon entities until they're given a plate.
   referenceImageKey: z.string().optional(),
+  // Provenance of the reference plate. A SOURCED real photograph (documentary/factual places, from Wikimedia
+  // Commons) carries its licence + author so the reel can attribute it; a 'generated' plate (the default,
+  // and the only kind for non-factual genres) needs none. Additive/optional → old reels and generated plates
+  // simply omit it. Populated post-analysis alongside referenceImageKey; never authored by the analyzer LLM.
+  referenceOrigin: z
+    .object({
+      type: z.enum(['generated', 'sourced']),
+      provider: z.string().optional(), // e.g. 'wikimedia'
+      url: z.string().optional(), // source / description page
+      license: z.string().optional(), // e.g. 'CC BY-SA 4.0', 'Public domain'
+      author: z.string().optional(),
+    })
+    .optional(),
   // Operator override marker. true = a human edited this entity's description (the analyzer's guess was
   // wrong/under-specified). Locked entities are HUMAN TRUTH: re-deriving the bible (analyze_story) must
   // carry them forward verbatim instead of overwriting them with a fresh machine guess. Not set by the
@@ -83,3 +96,22 @@ export type StoryBible = z.infer<typeof StoryBibleSchema>
 // Fail-soft empty bible: a valid bible with no entities. Every reference is unresolved, which the
 // assembler tolerates (it drops the splice), so the pipeline degrades to invent-inline, never fails.
 export const EMPTY_STORY_BIBLE: StoryBible = StoryBibleSchema.parse({})
+
+// Attribution credits for any SOURCED reference plates (real licensed photos, e.g. Wikimedia Commons) —
+// appended to a reel's PUBLISHED description so licence terms (attribution, share-alike) are honoured.
+// Returns '' when nothing was sourced (the common case — generated plates need no credit), so callers can
+// append unconditionally. NOTE: this satisfies attribution; it does NOT resolve freedom-of-panorama, which
+// stays a human/legal check before publishing photos of modern structures in no-FoP countries.
+export function formatImageCredits(bible: StoryBible): string {
+  const sourced = bible.entities.filter((e) => e.referenceOrigin?.type === 'sourced')
+  if (!sourced.length) return ''
+  const lines = sourced.map((e) => {
+    const o = e.referenceOrigin!
+    const label = e.id.split('-').map((w) => (w ? w[0]!.toUpperCase() + w.slice(1) : w)).join(' ')
+    const who = o.author ? ` by ${o.author}` : ''
+    const lic = o.license ? ` (${o.license})` : ''
+    const via = o.provider === 'wikimedia' ? ', via Wikimedia Commons' : o.provider ? `, via ${o.provider}` : ''
+    return `• ${label}${who}${lic}${via}`
+  })
+  return `Image credits:\n${lines.join('\n')}`
+}

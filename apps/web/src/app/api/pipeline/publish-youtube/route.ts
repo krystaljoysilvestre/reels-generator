@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { eq, and } from 'drizzle-orm'
 import { getDb, reels, assets, publications } from '@reels/db'
-import { transition, PostMetaSchema, formatPostCaption } from '@reels/core'
+import { transition, PostMetaSchema, formatPostCaption, formatImageCredits, StoryBibleSchema } from '@reels/core'
 import { downloadBuffer, uploadToYouTube, isYouTubeConfigured } from '@reels/providers'
 import { getSession } from '@/lib/auth'
 
@@ -45,7 +45,11 @@ export async function POST(req: NextRequest) {
 
   const meta = PostMetaSchema.safeParse(reel.postMeta)
   const title = meta.success ? meta.data.title : (reel.story?.title ?? 'Untitled')
-  const description = meta.success ? formatPostCaption(meta.data) : (reel.story?.logline ?? '')
+  // Append image-attribution credits for any real SOURCED plates (Wikimedia etc.) so licence terms are met.
+  const bibleParse = reel.storyBible ? StoryBibleSchema.safeParse(reel.storyBible) : null
+  const imageCredits = bibleParse?.success ? formatImageCredits(bibleParse.data) : ''
+  const baseDescription = meta.success ? formatPostCaption(meta.data) : (reel.story?.logline ?? '')
+  const description = imageCredits ? `${baseDescription}\n\n${imageCredits}` : baseDescription
   const tags = meta.success ? meta.data.hashtags.map((h) => h.replace(/^#/, '')) : []
 
   const video = await downloadBuffer(renderAsset.storageKey)

@@ -16,8 +16,12 @@ export async function POST(req: NextRequest) {
   // mode: 'vary' (default) conditions on the CURRENT image so the regen stays close (fix a hand, small
   // variation); 'fresh' ignores the current image and re-rolls a new composition from scratch. Both keep the
   // character/location plates so faces stay consistent. instruction is optional (a plain re-roll needs none).
-  const { reelId, sceneIdx, instruction, mode, referenceKey } = (await req.json().catch(() => ({}))) as {
+  // anchor: how strongly an operator-attached reference (referenceKey) leads the render. Set by the
+  // AI-grounded feedback options (see grounded-feedback.v1) so a 📎 attachment is no longer just the weakest
+  // extra reference. Unset → legacy behaviour (attachment added last, current image dominates).
+  const { reelId, sceneIdx, instruction, mode, referenceKey, anchor } = (await req.json().catch(() => ({}))) as {
     reelId: string; sceneIdx: number; instruction?: string; mode?: 'vary' | 'fresh'; referenceKey?: string
+    anchor?: 'current-first' | 'reference-first' | 'reference-only'
   }
   const db = getDb()
 
@@ -108,7 +112,9 @@ export async function POST(req: NextRequest) {
     : []
   // 'vary' (default): put the CURRENT image first as the reference so the regen stays close to it (a small
   // fix keeps the composition). 'fresh': omit it → a new composition, plates-only. Faces stay locked either way.
-  const currentImage = mode !== 'fresh' && !reviseReplace && scene.imageAssetId
+  // anchor 'reference-only' also drops the current image — the attachment renders fresh (a full replace).
+  const dropCurrent = mode === 'fresh' || reviseReplace || anchor === 'reference-only'
+  const currentImage = !dropCurrent && scene.imageAssetId
     ? await db.query.assets.findFirst({ where: eq(assets.id, scene.imageAssetId) })
     : null
   // Vary/tweak: the DISPLAYED image is the identity source — condition on it ALONE, not the entity plates.
@@ -116,9 +122,16 @@ export async function POST(req: NextRequest) {
   // (the bug behind "revert to an image, tweak it, get a different woman"). Fresh/replace has no current
   // image, so it injects identity from the entity plates instead.
   const baseRefs = currentImage ? [currentImage.storageKey] : entityPlateKeys
-  // An operator-attached reference image (📎 in the regenerate field) is added as an EXTRA reference — the
-  // model conditions on it for the change ("make her wardrobe like this [photo]"), like attaching in chat.
-  const referenceImageKeys = referenceKey ? [...baseRefs, referenceKey] : baseRefs
+  // An operator-attached reference image (📎). `anchor` (from the AI-grounded feedback options) decides how
+  // strongly it leads — ordering matters, the FIRST image is weighted most by the edit model:
+  //   reference-only  → the attachment ALONE (full replace; current image already dropped above)
+  //   reference-first → attachment leads, current image / plates follow (strong adoption)
+  //   current-first / unset → attachment appended last as a nudge (legacy default: keep the current shot)
+  let referenceImageKeys: string[]
+  if (!referenceKey) referenceImageKeys = baseRefs
+  else if (anchor === 'reference-only') referenceImageKeys = [referenceKey]
+  else if (anchor === 'reference-first') referenceImageKeys = [referenceKey, ...baseRefs]
+  else referenceImageKeys = [...baseRefs, referenceKey]
 
   // Write each regen to a UNIQUE key so previous images survive (the pipeline overwrites one shared key; if
   // regens did too, undo/redo would have nothing to go back to). This is what makes image history possible.

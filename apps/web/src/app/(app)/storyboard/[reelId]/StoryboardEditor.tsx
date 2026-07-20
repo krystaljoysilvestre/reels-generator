@@ -268,11 +268,11 @@ export function StoryboardEditor({
   //                       variation. An optional `instruction` ("lower the hand") steers the tweak.
   //   'fresh' — ignore the current image; re-roll a brand-new composition (plates only → faces still match).
   // The plain "Regenerate" button sends 'vary' with no instruction; "Fresh take" sends 'fresh'.
-  async function handleRegenImage(sceneIdx: number, opts?: { instruction?: string; mode?: 'vary' | 'fresh'; referenceKey?: string }) {
+  async function handleRegenImage(sceneIdx: number, opts?: { instruction?: string; mode?: 'vary' | 'fresh'; referenceKey?: string; anchor?: 'current-first' | 'reference-first' | 'reference-only' }) {
     setLoading(`regen-${sceneIdx}`)
     const res = await fetch('/api/pipeline/regen-image', {
       method: 'POST',
-      body: JSON.stringify({ reelId: reel.id, sceneIdx, instruction: opts?.instruction?.trim() || undefined, mode: opts?.mode ?? 'vary', referenceKey: opts?.referenceKey }),
+      body: JSON.stringify({ reelId: reel.id, sceneIdx, instruction: opts?.instruction?.trim() || undefined, mode: opts?.mode ?? 'vary', referenceKey: opts?.referenceKey, anchor: opts?.anchor }),
       headers: { 'Content-Type': 'application/json' },
     })
     if (!res.ok) {
@@ -299,6 +299,24 @@ export function StoryboardEditor({
     setScenes((prev) => prev.map((s) => (s.idx === sceneIdx ? { ...s, tier: 'still' } : s)))
     setLoading(null)
     router.refresh()
+  }
+
+  // AI-grounded feedback (opt-in, only when a reference is attached): ask the vision model for concrete,
+  // image-grounded ways to use the attachment. Returns [] on any failure so the caller falls back to a
+  // plain attach-and-regenerate — the assist never blocks the operator.
+  async function handleRegenOptions(sceneIdx: number, referenceKey: string): Promise<{ observation: string | null; options: GroundedOption[] }> {
+    try {
+      const res = await fetch('/api/pipeline/regen-options', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reelId: reel.id, sceneIdx, referenceKey }),
+      })
+      const j = await res.json().catch(() => null)
+      if (!res.ok || !Array.isArray(j?.options)) return { observation: null, options: [] }
+      return { observation: j.observation ?? null, options: j.options as GroundedOption[] }
+    } catch {
+      return { observation: null, options: [] }
+    }
   }
 
   // "Upload image for this scene": use an operator-uploaded image directly as the scene's image (no
@@ -605,6 +623,7 @@ export function StoryboardEditor({
       onPreview={handlePreview}
       onSuggestMotion={handleSuggestMotion}
       onReshoot={handleRegenImage}
+      onRequestOptions={handleRegenOptions}
       onUploadImage={handleUploadImage}
       history={sceneImageHistory[selectedScene.idx] ?? []}
       onSetSceneImage={handleSetSceneImage}
@@ -1550,9 +1569,13 @@ function sceneBeat(idx: number, total: number, twistIdx: number | null): 'Hook' 
 }
 
 // ── Inspector (detail) ─────────────────────────────────────────────────────────
+// One AI-grounded option offered when the operator attaches a reference (see grounded-feedback.v1). `anchor`
+// controls how strongly the reference leads; `directive` is the ready-to-send image-prompt phrasing.
+type GroundedOption = { label: string; description: string; intent: string; anchor: 'current-first' | 'reference-first' | 'reference-only'; directive: string }
+
 function SceneInspector({
   scene, beat, imgSrc, variations, activeVar, setActiveVar, loaded, markLoaded, loading, moodTint,
-  sceneSaving, setScenes, setSceneSaving, onSetSceneType, onPreview, onSuggestMotion, onReshoot, onUploadImage, history, onSetSceneImage, onSaveText,
+  sceneSaving, setScenes, setSceneSaving, onSetSceneType, onPreview, onSuggestMotion, onReshoot, onRequestOptions, onUploadImage, history, onSetSceneImage, onSaveText,
   sounds, soundPreviews, onAddSound, onPreviewSound, onRemoveSound,
 }: {
   scene: Scene; beat: 'Hook' | 'Build-up' | 'Twist' | 'Payoff'; imgSrc?: string | undefined; variations: string[]; activeVar: number
@@ -1564,7 +1587,8 @@ function SceneInspector({
   onSetSceneType: (idx: number, type: 'static' | 'video') => void
   onPreview: (idx: number) => void
   onSuggestMotion: (idx: number, request: string) => Promise<boolean>
-  onReshoot: (idx: number, opts?: { instruction?: string; mode?: 'vary' | 'fresh'; referenceKey?: string }) => void
+  onReshoot: (idx: number, opts?: { instruction?: string; mode?: 'vary' | 'fresh'; referenceKey?: string; anchor?: 'current-first' | 'reference-first' | 'reference-only' }) => void
+  onRequestOptions: (idx: number, referenceKey: string) => Promise<{ observation: string | null; options: GroundedOption[] }>
   onUploadImage: (idx: number, key: string) => void
   history: { assetId: string; url: string }[] // this scene's images oldest→newest (for Undo/Redo)
   onSetSceneImage: (idx: number, assetId: string, url: string) => void
@@ -1608,6 +1632,28 @@ function SceneInspector({
     const j = await res.json().catch(() => null)
     if (!res.ok || !j?.key) { setUploadErr(j?.error ?? 'Upload failed.'); return null }
     return j.key as string
+  }
+  // AI-grounded feedback dialog — appears ONLY when a reference is attached and the vision model returns
+  // options (opt-in, operator-initiated; never on a plain regenerate). Each option's anchor + directive is
+  // sent straight to the reshoot, so the operator picks an intent without touching the mechanism.
+  const [fbOpen, setFbOpen] = useState(false)
+  const [fbLoading, setFbLoading] = useState(false)
+  const [fbData, setFbData] = useState<{ observation: string | null; options: GroundedOption[] }>({ observation: null, options: [] })
+  const [fbOther, setFbOther] = useState('') // the "Other…" free-text (prefilled with anything the operator typed)
+  const clearChange = () => { setChangeText(''); setRefKey(null); setFbOther('') }
+  const applyOption = (o: GroundedOption) => {
+    if (!refKey) return
+    setFbOpen(false)
+    // reference-only renders fresh from the attachment (full replace); the others vary the current image.
+    onReshoot(scene.idx, { instruction: o.directive, mode: o.anchor === 'reference-only' ? 'fresh' : 'vary', referenceKey: refKey, anchor: o.anchor })
+    clearChange()
+  }
+  const applyOther = () => {
+    const text = fbOther.trim()
+    if (!text || !refKey) return
+    setFbOpen(false)
+    onReshoot(scene.idx, { instruction: text, mode: 'vary', referenceKey: refKey })
+    clearChange()
   }
   // Per-scene "Add a sound" (manual cue) — targeted SFX or an off-screen spoken line for THIS scene.
   // Collapsed by default (sound is automatic; this is an optional extra) — expands on click.
@@ -1826,13 +1872,22 @@ function SceneInspector({
           const settings = resolveMotionSettings(scene.motionSettings)
           const isVideoType = scene.tier === 'video'
           const previewCost = `$${(motionCostCents(settings) / 100).toFixed(2)}`
-          const runChange = () => {
+          const runChange = async () => {
             const instruction = changeText.trim()
-            if ((!instruction && !refKey) || regenerating) return
-            // A described tweak varies the CURRENT image so only what you asked for changes; an attached
-            // reference image is passed alongside for the model to condition on ("make it like this").
-            onReshoot(scene.idx, { instruction, mode: 'vary', ...(refKey ? { referenceKey: refKey } : {}) })
-            setChangeText(''); setRefKey(null)
+            if ((!instruction && !refKey) || regenerating || fbLoading) return
+            // NO reference → apply the described tweak directly (unchanged behaviour). The assist only ever
+            // appears when a reference is attached, so a plain change never sees a dialog.
+            if (!refKey) { onReshoot(scene.idx, { instruction, mode: 'vary' }); setChangeText(''); return }
+            // Reference attached → ask the vision model how to use it, then let the operator pick. Fail soft:
+            // no options (e.g. no current image, or the call failed) → fall back to a plain attach-and-regen.
+            setFbLoading(true)
+            const r = await onRequestOptions(scene.idx, refKey)
+            setFbLoading(false)
+            if (r.options.length) {
+              setFbData(r); setFbOther(instruction); setFbOpen(true)
+            } else {
+              onReshoot(scene.idx, { instruction, mode: 'vary', referenceKey: refKey }); clearChange()
+            }
           }
           return (
             <>
@@ -1972,8 +2027,8 @@ function SceneInspector({
                     </label>
                     {refKey && <span className="flex items-center gap-1 text-[11px] text-positive">reference attached<button type="button" onClick={() => setRefKey(null)} className="text-faint hover:text-ink" aria-label="Remove reference">✕</button></span>}
                   </div>
-                  <button type="button" onClick={runChange} disabled={regenerating || (!changeText.trim() && !refKey)} className="btn-secondary btn-sm w-full active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-50">
-                    {regenerating ? (<><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />Applying…</>) : 'Apply change'}
+                  <button type="button" onClick={runChange} disabled={regenerating || fbLoading || (!changeText.trim() && !refKey)} className="btn-secondary btn-sm w-full active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-50">
+                    {fbLoading ? (<><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />Reading your reference…</>) : regenerating ? (<><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />Applying…</>) : (refKey ? 'Use reference…' : 'Apply change')}
                   </button>
                 </div>
 
@@ -1996,6 +2051,41 @@ function SceneInspector({
         })()}
       </div>
       </div>
+
+      {/* AI-grounded feedback — how to use the attached reference. Portaled to <body> (same reason as the
+          lightbox below: the rail's transform would otherwise trap this `fixed` overlay). Shown only when a
+          reference is attached AND the vision model returned options. */}
+      {fbOpen && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-ink/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" onClick={() => setFbOpen(false)}>
+          <div className="card animate-fade-in w-full max-w-md p-5 text-left" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-sm font-semibold text-ink">How should I use your reference?</h3>
+            <div className="mt-3 flex gap-2">
+              {imgSrc && <div className="flex-1"><img src={imgSrc} alt="Current scene" className="h-20 w-full rounded-lg border border-border object-cover" /><p className="mt-1 text-[10px] uppercase tracking-wide text-faint">Current</p></div>}
+              {refKey && <div className="flex-1"><img src={`/api/asset?key=${encodeURIComponent(refKey)}`} alt="Your reference" className="h-20 w-full rounded-lg border border-dashed border-border object-cover" /><p className="mt-1 text-[10px] uppercase tracking-wide text-faint">📎 Reference</p></div>}
+            </div>
+            {fbData.observation && <p className="mt-3 rounded-lg bg-surface p-2.5 text-[11px] leading-relaxed text-muted">{fbData.observation}</p>}
+            <div className="mt-3 flex flex-col gap-1.5">
+              {fbData.options.map((o, i) => (
+                <button key={i} type="button" onClick={() => applyOption(o)}
+                  className="rounded-lg border border-border bg-surface px-3 py-2 text-left transition-colors hover:border-border-strong hover:text-ink">
+                  <span className="block text-xs font-semibold text-ink">{o.label}</span>
+                  <span className="mt-0.5 block text-[11px] leading-relaxed text-muted">{o.description}</span>
+                </button>
+              ))}
+              {/* Other — free text, always available (the escape hatch). */}
+              <div className="rounded-lg border border-dashed border-border px-3 py-2">
+                <label className="block text-xs font-semibold text-ink" htmlFor={`fb-other-${scene.idx}`}>Other…</label>
+                <input id={`fb-other-${scene.idx}`} value={fbOther} onChange={(e) => setFbOther(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') applyOther() }}
+                  placeholder="Describe the change in your own words…" className="input mt-1.5 w-full text-xs" />
+                <button type="button" onClick={applyOther} disabled={!fbOther.trim()} className="btn-secondary btn-sm mt-2 w-full disabled:opacity-50">Apply</button>
+              </div>
+            </div>
+            <button type="button" onClick={() => setFbOpen(false)} className="btn-ghost btn-sm mt-3 w-full">Cancel</button>
+          </div>
+        </div>,
+        document.body,
+      )}
 
       {/* Large preview lightbox — portaled to <body> so its `fixed` overlay isn't trapped by the collapsing
           rail's translate transform (a transformed ancestor would become its containing block). */}

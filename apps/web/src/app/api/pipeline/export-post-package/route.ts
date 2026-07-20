@@ -5,7 +5,7 @@ import { NextResponse } from 'next/server'
 import { getDb, reels, assets, scenes, channels } from '@reels/db'
 import { eq, and, asc, sql } from 'drizzle-orm'
 import { downloadBuffer, llmCall } from '@reels/providers'
-import { PostMetaSchema, PostingRulesSchema, formatPostCaption, type PostMeta } from '@reels/core'
+import { PostMetaSchema, PostingRulesSchema, formatPostCaption, formatImageCredits, StoryBibleSchema, type PostMeta } from '@reels/core'
 import { buildPostMetaPrompt, PostMetaLlmSchema, POST_META_V1_VERSION } from '@reels/core/prompts/post-meta.v1'
 import { getSession } from '@/lib/auth'
 
@@ -189,9 +189,13 @@ export async function GET(req: NextRequest) {
   // Build the caption from the reel's post package (title/hook/caption/hashtags).
   const story = reel.story
   const meta = await resolvePostMeta(reel, story, channel ?? null)
-  const caption = meta
+  // Image-attribution credits for any real SOURCED plates (Wikimedia etc.) — appended so licence terms are met.
+  const bibleParse = reel.storyBible ? StoryBibleSchema.safeParse(reel.storyBible) : null
+  const imageCredits = bibleParse?.success ? formatImageCredits(bibleParse.data) : ''
+  const captionBody = meta
     ? [`TITLE: ${meta.title}`, '', formatPostCaption(meta)].join('\n')
     : (story?.logline ?? story?.title ?? '')
+  const caption = imageCredits ? `${captionBody}\n\n${imageCredits}` : captionBody
 
   // AI disclosure note (required by platform policies)
   const disclosure = [

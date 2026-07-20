@@ -1,9 +1,9 @@
 import { eq, and, sql } from 'drizzle-orm'
 import { getDb, reels, scenes, assets, channels, stories } from '@reels/db'
-import { generateImage, generateImageFal, imageEngineForGenre, FLUX_IMAGE_ENGINE, buildInputHash, ContentFilterError, llmCall, downloadBuffer, uploadBuffer, SCENE_IMAGE_MODEL, SCENE_IMAGE_QUALITY, type ImageEngine } from '@reels/providers'
+import { generateImage, generateImageFal, imageEngineForGenre, FLUX_IMAGE_ENGINE, buildInputHash, ContentFilterError, llmCall, downloadBuffer, uploadBuffer, sourcePlaceImage, SCENE_IMAGE_MODEL, SCENE_IMAGE_QUALITY, type ImageEngine } from '@reels/providers'
 import { assembleImagePrompt, assembleNegativePrompt, assembleReferencePrompt, castNationality, reelLightingDirective, sceneEntities, slug, PLATFORM_PRESETS, StoryBibleSchema } from '@reels/core'
 import { z } from 'zod'
-import { buildRephrasePrompt, REPHRASE_V1_VERSION, buildImageQAPrompt, IMAGE_QA_V1_VERSION, ImageQASchema, buildFilterSafePrompt, FILTER_SAFE_V1_VERSION, FilterSafeSchema } from '../../prompts-bridge.js'
+import { buildRephrasePrompt, REPHRASE_V1_VERSION, buildImageQAPrompt, IMAGE_QA_V1_VERSION, ImageQASchema, buildFilterSafePrompt, FILTER_SAFE_V1_VERSION, FilterSafeSchema, buildPlaceSourceDecidePrompt, buildPlaceVerifyPrompt, PlaceSourceDecisionSchema, PlaceVerifySchema, PLACE_SOURCE_V1_VERSION } from '../../prompts-bridge.js'
 import { runStep } from '../harness.js'
 
 // generate_images — step 4
@@ -95,6 +95,59 @@ async function renderImage(
   }
 }
 
+// ── FACTUAL real-place sourcing ─────────────────────────────────────────────────────────────────────────
+// Fill a real, named PLACE's reference plate with a REAL licensed photograph (Wikimedia Commons) instead of a
+// generated one — informational genre only. Two guards keep it honest: an LLM decides the location is a
+// specific, named place worth sourcing (a generic setting — a bedroom, a street — falls through to a
+// generated plate), and a vision check confirms the sourced photo actually depicts it. Never throws (fails
+// soft to {sourced:false}); the Wikimedia fetch is free, the two small QA calls are cost-accounted by the
+// caller. On success the real photo becomes the entity's plate, so the normal reference-conditioning path
+// renders every scene of that place from the real building.
+const PLACE_SOURCE_MODEL = 'claude-haiku-4-5-20251001'
+const PLACE_VERIFY_MIN_CONFIDENCE = 0.6
+
+type PlateSourceResult =
+  | { sourced: true; key: string; origin: { type: 'sourced'; provider: string; url: string; license: string; author: string }; costCents: number }
+  | { sourced: false; costCents: number }
+
+async function sourceLocationPlate(entity: { id: string; description: string }, reelId: string, region: string | undefined): Promise<PlateSourceResult> {
+  let costCents = 0
+  try {
+    // The bible entity id IS the place name in kebab-case (e.g. "paoay-church"); de-kebab it so the decider
+    // judges by the NAME, not only the feature-list description (which often doesn't name the place).
+    const name = entity.id.split('-').map((w) => (w ? w[0]!.toUpperCase() + w.slice(1) : w)).join(' ')
+    // 1) Specific, real, named place worth sourcing? (skip generic settings) + best search query.
+    const dp = buildPlaceSourceDecidePrompt(name, entity.description, region)
+    const decide = await llmCall({ templateVersion: PLACE_SOURCE_V1_VERSION, schema: PlaceSourceDecisionSchema, provider: 'anthropic', model: PLACE_SOURCE_MODEL, system: dp.system, messages: [{ role: 'user', content: dp.userMessage }] })
+    costCents += decide.costCents
+    const query = (decide.data.query ?? '').trim()
+    if (!decide.data.sourceable || !query) return { sourced: false, costCents }
+
+    // 2) Find a licence-clean photo of it (free API; null → fall through to a generated plate).
+    const img = await sourcePlaceImage(query)
+    if (!img) return { sourced: false, costCents }
+
+    // 3) Confidence FILTER — does the photo actually depict the described place? (catches obvious mismatches).
+    const vp = buildPlaceVerifyPrompt(name, entity.description)
+    const verify = await llmCall({
+      templateVersion: PLACE_SOURCE_V1_VERSION, schema: PlaceVerifySchema, provider: 'anthropic', model: PLACE_SOURCE_MODEL,
+      system: vp.system,
+      messages: [{ role: 'user', content: [{ type: 'image', mediaType: img.mime, base64: img.buffer.toString('base64') }, { type: 'text', text: vp.userMessage }] }],
+    })
+    costCents += verify.costCents
+    if (!verify.data.matches || verify.data.confidence < PLACE_VERIFY_MIN_CONFIDENCE) return { sourced: false, costCents }
+
+    // The key stays .webp regardless of the real bytes — every downstream reader sniffs magic bytes, not the
+    // extension (see sniffMediaType / fal refDataUri), so the real jpeg/png conditions scenes identically.
+    const key = `reels/${reelId}/refs/${slug(entity.id)}.webp`
+    await uploadBuffer(key, img.buffer, img.mime)
+    return { sourced: true, key, origin: { type: 'sourced', provider: 'wikimedia', url: img.sourceUrl, license: img.license, author: img.author }, costCents }
+  } catch (err) {
+    console.warn(`[generate-images] real-place sourcing failed for "${entity.id}": ${err instanceof Error ? err.message : String(err)}`)
+    return { sourced: false, costCents }
+  }
+}
+
 export async function generateImages(reelId: string): Promise<void> {
   const db = getDb()
 
@@ -126,7 +179,8 @@ export async function generateImages(reelId: string): Promise<void> {
 
   // Cast nationality from the channel's language (region as fallback) — locked into both the character
   // plates and every scene so the cast matches the channel's audience instead of the model's default look.
-  const cast = castNationality(channel.languages, (channel.worldBible as { region?: string } | null)?.region)
+  const region = (channel.worldBible as { region?: string } | null)?.region
+  const cast = castNationality(channel.languages, region)
 
   // Lazy reference plates: mint ONE plate per entity the SCENES actually reference (and that lacks one),
   // then persist. Done HERE — not in analyze_story — so we never pay for plates on entities the story
@@ -147,6 +201,13 @@ export async function generateImages(reelId: string): Promise<void> {
       storyBible.entities.map(async (entity) => {
         if (entity.referenceImageKey || !referenced.has(slug(entity.id))) return
         try {
+          // FACTUAL genre: for a real, named PLACE, try a REAL sourced photograph before inventing one. A
+          // generic setting, or a failed / low-confidence source, falls through to the generated plate below.
+          if (channel.genreCategory === 'informational' && entity.kind === 'location') {
+            const sourced = await sourceLocationPlate(entity, reelId, region)
+            plateCost += sourced.costCents
+            if (sourced.sourced) { entity.referenceImageKey = sourced.key; entity.referenceOrigin = sourced.origin; return }
+          }
           // The supernatural threat mints on the grittier Flux engine for horror — Gemini beautifies faces,
           // sanding the dread off the scare. Every other entity uses the channel's normal engine.
           const plateEngine = channel.genreCategory === 'horror' && entity.role === 'threat' ? FLUX_IMAGE_ENGINE : imageEngine
