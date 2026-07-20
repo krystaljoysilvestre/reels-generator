@@ -21,9 +21,18 @@ function extractCritic(stepOutput: unknown, shownBody: string): CriticSummary | 
     // v3 (studio)
     plan?: { whyThisStory?: string; elements?: Record<string, string | undefined> | null } | null
     gate?: { status?: string; verdicts?: Array<{ pass?: boolean; reason?: string }>; retried?: boolean }
+    finishingQA?: { status?: string; issues?: Array<{ axis?: string; problem?: string }>; summary?: string }
   } | null
   if (!out) return null
   if (out.winner?.narration !== shownBody) return null // stale round or BYO story — don't mislabel it
+
+  // Finishing QA punch-list (detection-only) — present only when the judge ran and flagged something.
+  const qaIssues =
+    out.finishingQA?.status === 'ok'
+      ? (out.finishingQA.issues ?? [])
+          .map((i) => ({ axis: (i.axis ?? '').replace(/_/g, ' '), problem: i.problem ?? '' }))
+          .filter((i) => i.problem)
+      : []
 
   if (out.v === 3) {
     const why = out.plan?.whyThisStory?.trim() ?? ''
@@ -40,7 +49,7 @@ function extractCritic(stepOutput: unknown, shownBody: string): CriticSummary | 
           .filter((s): s is string => !!s)
           .map((s) => s.replace(/_/g, ' '))
       : []
-    return rationale || elements.length ? { rationale, runnersUp: [], elements } : null
+    return rationale || elements.length || qaIssues.length ? { rationale, runnersUp: [], elements, qaIssues } : null
   }
 
   if (out.v !== 2 || !Array.isArray(out.candidates) || out.critic?.status !== 'ok') return null
@@ -49,7 +58,7 @@ function extractCritic(stepOutput: unknown, shownBody: string): CriticSummary | 
     .map((c, idx) => ({ idx, title: c.story?.title ?? '', logline: c.story?.logline ?? null }))
     .filter((c) => c.idx !== out.winnerIdx && c.title)
     .map((c) => ({ title: c.title, logline: c.logline, note: noteByIdx.get(c.idx) ?? '' }))
-  return { rationale: out.critic.rationale ?? '', runnersUp, elements: [] }
+  return { rationale: out.critic.rationale ?? '', runnersUp, elements: [], qaIssues: [] }
 }
 
 export const dynamic = 'force-dynamic'

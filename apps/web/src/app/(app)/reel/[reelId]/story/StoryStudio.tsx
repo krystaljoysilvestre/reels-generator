@@ -14,6 +14,9 @@ export interface CriticSummary {
   rationale: string
   runnersUp: Array<{ title: string; logline: string | null; note: string }>
   elements: string[]
+  // Finishing QA punch-list (detection-only) — a quick, targeted "worth a look before you approve"
+  // list from the finishing judge. Empty/absent = nothing flagged.
+  qaIssues: Array<{ axis: string; problem: string }>
 }
 
 interface StoryStudioProps {
@@ -232,6 +235,19 @@ export function StoryStudio({ reelId, channelId, channelName, mood, genre, initi
                 <p className="text-xs leading-relaxed text-muted">
                   <span className="font-medium text-ink">Why this one:</span> {critic.rationale}
                 </p>
+                )}
+                {critic.qaIssues.length > 0 && (
+                  <div className="mt-2.5 rounded-lg bg-warning/5 px-3 py-2 ring-1 ring-inset ring-warning/20">
+                    <p className="text-xs font-medium text-ink">Worth a look before you approve ({critic.qaIssues.length})</p>
+                    <ul className="mt-1.5 space-y-1.5">
+                      {critic.qaIssues.map((q, i) => (
+                        <li key={i} className="text-xs leading-relaxed text-muted">
+                          <span className="badge mr-1.5 bg-subtle text-faint ring-1 ring-inset ring-border">{q.axis}</span>
+                          {q.problem}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
                 {critic.runnersUp.length > 0 && (
                   <details className="mt-2 group">

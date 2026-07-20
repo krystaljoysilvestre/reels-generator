@@ -35,6 +35,16 @@ import {
   StoryGateSchema,
   defaultTasteRubric,
   type StyleInfluence,
+  buildStoryPlanCriticPrompt,
+  STORY_PLAN_CRITIC_V1_VERSION,
+  PlanCriticSchema,
+  buildStoryPlanDoctorPrompt,
+  STORY_PLAN_DOCTOR_V1_VERSION,
+  PlanDoctorSchema,
+  buildStoryFinishingJudgePrompt,
+  STORY_FINISHING_JUDGE_V1_VERSION,
+  FinishingJudgeSchema,
+  type FinishingIssue,
 } from '../../prompts-bridge.js'
 import {
   selectFewShot,
@@ -65,6 +75,27 @@ const RECENT_PREMISES_LIMIT = 15
 const WRITER_TEMPERATURE = 1.0
 const REWRITE_TEMPERATURE = 0.7 // editor + naturalizer: refinement, not invention
 
+// PLAN-LEVEL JUDGE-AND-FORCE (OPT-IN, 2026-07-20). Between the planner and the writer, a plan gate
+// (story-plan-critic.v1) checks the committed idea for structural agency; on a fail a plan doctor
+// (story-plan-doctor.v1) REPAIRS the plan (up to PLAN_DOCTOR_MAX_REPAIRS) before the Writer sees it.
+// OPT-IN by design: per the ratified universal-vs-cultural craft line, "agency vs. endurance" is a
+// channel-DNA choice, never universal — so this runs ONLY when explicitly enabled and NEVER changes
+// behavior for a channel that hasn't opted in. Fail-safe: any error keeps the original plan. Validated
+// as a probe (apps/worker/scripts/probe-plan-force.ts); the plan doctor converges where a re-roll does
+// not. NOTE: this improves the KIND of story (agency); it does not by itself guarantee the final gate —
+// the writer can still collapse the turn (a separate landing pass is the follow-up).
+// Enable via STORY_PLAN_GATE=1 (single-operator switch for now; a per-channel setting is the proper
+// long-term home so channels whose form is endurance are never forced into agency).
+const PLAN_GATE_ENABLED = process.env.STORY_PLAN_GATE === '1'
+const PLAN_DOCTOR_MAX_REPAIRS = 2
+
+// FINISHING QA JUDGE (OPT-IN, 2026-07-20). A DETECTION-only layer: after the winner is settled, a judge
+// reads it as a first-time listener and records a per-story punch-list (naturalness/orientation/turn/
+// announced-theme/rhythm) that story_review surfaces, so human review is fast + targeted. It NEVER
+// edits the story and NEVER gates — the probe showed the JUDGE is reliable but the auto-fixer isn't, so
+// fixing stays human-in-the-loop. Fail-safe: any error just records nothing. Enable via STORY_FINISHING_QA=1.
+const FINISHING_QA_ENABLED = process.env.STORY_FINISHING_QA === '1'
+
 type RewriteStatus = 'ok' | 'failed' | 'discarded_wordcount' | 'discarded_peak' | 'discarded_formatting'
 
 // Persisted as pipeline_steps.output (studio mode) — the full attribution trail. Any bad story
@@ -76,12 +107,24 @@ interface StudioOutput {
   prose: { style: string; voice: string; influence: StyleInfluence } // resolved prose dimensions (attribution)
   plannerStatus: 'ok' | 'failed_fell_back_to_v1_draft'
   plan: StoryPlan | null // includes whyThisStory + mechanics (audit only — the Writer never saw them)
+  // Plan-level judge-and-force audit (only present when STORY_PLAN_GATE is enabled). `verdicts` is the
+  // plan gate's pass/reason at each step (original, then each repair); `repaired` = how many doctor
+  // passes ran; `originalLogline` preserves what the planner first reached for (the doctored plan is in
+  // `plan`). `status:'failed'` = the gate/doctor errored and the ORIGINAL plan shipped (fail-safe).
+  planGate?:
+    | { status: 'ok'; version: string; doctorVersion: string; verdicts: Array<{ pass: boolean; reason: string }>; repaired: number; originalLogline: string }
+    | { status: 'failed'; error: string }
   winner: StoryOutput // FINAL story (post edit + naturalize + peak chain) — the one persisted
   writerRaw: StoryOutput // pre-edit, for the raw-vs-final diff
   editor: { status: RewriteStatus; detail?: string }
   naturalizer: { status: RewriteStatus; detail?: string }
   gate:
     | { status: 'ok'; version: string; verdicts: Array<{ pass: boolean; reason: string }>; retried: boolean }
+    | { status: 'failed'; error: string }
+  // Finishing QA punch-list (only present when STORY_FINISHING_QA is enabled). Detection-only — surfaced
+  // to the human at story_review; never edits or gates. `issues` empty ⇒ read clean.
+  finishingQA?:
+    | { status: 'ok'; version: string; issues: FinishingIssue[]; summary: string }
     | { status: 'failed'; error: string }
   peakResolution: 'stage' | 'writer_restored' | 'dropped'
 }
@@ -410,6 +453,12 @@ async function runStudio(a: StudioArgs) {
     narrativeStyle: narrativeStyle ?? '',
     narrativeVoice: narrativeVoice ?? '',
     styleInfluence,
+    // Only perturb the cache key when the plan gate is ON — a channel that hasn't opted in keeps its
+    // existing hashes (no mass re-run). When on, the versions make enabling/disabling produce distinct keys.
+    ...(PLAN_GATE_ENABLED
+      ? { planCriticVersion: STORY_PLAN_CRITIC_V1_VERSION, planDoctorVersion: STORY_PLAN_DOCTOR_V1_VERSION }
+      : {}),
+    ...(FINISHING_QA_ENABLED ? { finishingJudgeVersion: STORY_FINISHING_JUDGE_V1_VERSION } : {}),
   })
 
   return runStep<StudioOutput>({ reelId: a.reelId, stepName: 'generate_story', inputHash }, async () => {
@@ -434,6 +483,75 @@ async function runStudio(a: StudioArgs) {
       // (the pre-pivot behavior, minus best-of-N). Editor/Naturalizer/Gate still run on it.
       console.warn(`[generate_story] planner failed, falling back to a direct v1 draft: ${String(err)}`)
       plannerStatus = 'failed_fell_back_to_v1_draft'
+    }
+
+    // ── 1b. Plan gate + doctor (OPT-IN) — judge the idea for agency, repair on fail ──────────
+    // Runs only when opted in and the planner produced a plan. Fail-safe: any error keeps the original
+    // plan and records status:'failed'. The doctored plan (writer-visible fields) is merged over the
+    // original so elements/mechanics/register carry through unchanged.
+    let planGate: StudioOutput['planGate']
+    if (PLAN_GATE_ENABLED && plan) {
+      try {
+        const judge = async (p: StoryPlan) => {
+          const { system, userMessage } = buildStoryPlanCriticPrompt({
+            channelName: v.channelName,
+            nicheDescription: v.nicheDescription,
+            plan: p,
+          })
+          const res = await llmCall({
+            templateVersion: STORY_PLAN_CRITIC_V1_VERSION,
+            schema: PlanCriticSchema,
+            system,
+            messages: [{ role: 'user', content: userMessage }],
+            provider: 'anthropic',
+            maxTokens: 2048,
+          })
+          costCents += res.costCents
+          const d = res.data
+          // Effective pass is the conjunction — a top-level pass=true with a failed sub-check does not slip through.
+          return { verdict: { pass: d.pass && d.decision.pass && d.chain.pass && d.causedEnding.pass, reason: d.reason } }
+        }
+        const originalLogline = plan.logline
+        const verdicts: Array<{ pass: boolean; reason: string }> = []
+        let { verdict } = await judge(plan)
+        verdicts.push(verdict)
+        let repaired = 0
+        while (!verdict.pass && repaired < PLAN_DOCTOR_MAX_REPAIRS) {
+          repaired++
+          const { system, userMessage } = buildStoryPlanDoctorPrompt({
+            channelName: v.channelName,
+            nicheDescription: v.nicheDescription,
+            targetSeconds: a.targetSeconds,
+            plan,
+            reason: verdict.reason,
+          })
+          const docRes = await llmCall({
+            templateVersion: STORY_PLAN_DOCTOR_V1_VERSION,
+            schema: PlanDoctorSchema,
+            system,
+            messages: [{ role: 'user', content: userMessage }],
+            provider: 'anthropic',
+            temperature: REWRITE_TEMPERATURE,
+            maxTokens: 1200,
+          })
+          costCents += docRes.costCents
+          plan = { ...plan, ...docRes.data } // repair writer-visible fields; keep elements/mechanics/register
+          ;({ verdict } = await judge(plan))
+          verdicts.push(verdict)
+        }
+        planGate = {
+          status: 'ok',
+          version: STORY_PLAN_CRITIC_V1_VERSION,
+          doctorVersion: STORY_PLAN_DOCTOR_V1_VERSION,
+          verdicts,
+          repaired,
+          originalLogline,
+        }
+      } catch (err) {
+        // Never fail the step over the plan gate — the original plan ships, exactly as if this were off.
+        console.warn(`[generate_story] plan gate/doctor failed, using the original plan: ${String(err)}`)
+        planGate = { status: 'failed', error: String(err) }
+      }
     }
 
     // ── 2. The Genre Writer: ONE excellent prose execution ──────────────────
@@ -643,6 +761,35 @@ async function runStudio(a: StudioArgs) {
 
     const winner: StoryOutput = { ...raw, narration: natural.narration, peakMoment: peak }
 
+    // ── Finishing QA (OPT-IN, detection only) — record a punch-list for the human reviewer ──────────
+    let finishingQA: StudioOutput['finishingQA']
+    if (FINISHING_QA_ENABLED) {
+      try {
+        const { system, userMessage } = buildStoryFinishingJudgePrompt({
+          channelName: v.channelName,
+          nicheDescription: v.nicheDescription,
+          language: v.language,
+          narration: winner.narration,
+          title: winner.title,
+          logline: winner.logline ?? '',
+        })
+        const res = await llmCall({
+          templateVersion: STORY_FINISHING_JUDGE_V1_VERSION,
+          schema: FinishingJudgeSchema,
+          system,
+          messages: [{ role: 'user', content: userMessage }],
+          provider: 'anthropic',
+          maxTokens: 1500,
+        })
+        costCents += res.costCents
+        finishingQA = { status: 'ok', version: STORY_FINISHING_JUDGE_V1_VERSION, issues: res.data.issues, summary: res.data.summary }
+      } catch (err) {
+        // Never fail the step over QA — it's advisory. Record the failure and move on.
+        console.warn(`[generate_story] finishing QA failed, skipping punch-list: ${String(err)}`)
+        finishingQA = { status: 'failed', error: String(err) }
+      }
+    }
+
     const output: StudioOutput = {
       v: 3,
       mode: 'studio',
@@ -650,11 +797,13 @@ async function runStudio(a: StudioArgs) {
       prose: { style: narrativeStyle ?? '', voice: narrativeVoice ?? '', influence: styleInfluence },
       plannerStatus,
       plan,
+      ...(planGate ? { planGate } : {}),
       winner,
       writerRaw: raw,
       editor: { status: edited.status, ...(edited.detail ? { detail: edited.detail } : {}) },
       naturalizer: { status: natural.status, ...(natural.detail ? { detail: natural.detail } : {}) },
       gate,
+      ...(finishingQA ? { finishingQA } : {}),
       peakResolution,
     }
     return { output, costCents }

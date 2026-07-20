@@ -43,6 +43,25 @@ export {
   StoryGateSchema,
   defaultTasteRubric,
 } from '@reels/core/prompts/story-critic.v2'
+// Plan-level judge-and-force (OPT-IN, 2026-07-20): the plan gate + the plan doctor run BETWEEN the
+// planner and the writer when a channel opts into agency-driven planning (see generate-story.ts).
+export {
+  buildStoryPlanCriticPrompt,
+  STORY_PLAN_CRITIC_V1_VERSION,
+  PlanCriticSchema,
+} from '@reels/core/prompts/story-plan-critic.v1'
+export {
+  buildStoryPlanDoctorPrompt,
+  STORY_PLAN_DOCTOR_V1_VERSION,
+  PlanDoctorSchema,
+} from '@reels/core/prompts/story-plan-doctor.v1'
+// Finishing QA judge (2026-07-20): a detection-only per-story punch-list surfaced at story_review.
+export {
+  buildStoryFinishingJudgePrompt,
+  STORY_FINISHING_JUDGE_V1_VERSION,
+  FinishingJudgeSchema,
+  type FinishingIssue,
+} from '@reels/core/prompts/story-finishing-judge.v1'
 export { buildSoundDesignerPrompt, SOUND_DESIGNER_V1_VERSION, SoundDesignSchema, type DesignerScene } from '@reels/core/prompts/sound-designer.v1'
 export { buildScenesPrompt, SCENES_V1_VERSION } from '@reels/core/prompts/scenes.v1'
 export { buildStoryAnalyzerPrompt, STORY_ANALYZER_V1_VERSION } from '@reels/core/prompts/story-analyzer.v1'
