@@ -12,7 +12,7 @@ import { STORY_STYLES_V1_VERSION, resolveStyle, renderStyleTellingForWriter, typ
 import { STORY_VOICES_V1_VERSION, resolveVoice, renderVoice } from './story-voices.v1.js'
 import { asGenreModule, classifyGenre } from './scenes.v1.js'
 
-export const CHANNEL_SAMPLE_V2_VERSION = `channel-sample.v2.1+${STORY_CRAFT_V1_VERSION}+${WRITER_IDENTITIES_V1_VERSION}+${STORY_STYLES_V1_VERSION}+${STORY_VOICES_V1_VERSION}`
+export const CHANNEL_SAMPLE_V2_VERSION = `channel-sample.v2.2+${STORY_CRAFT_V1_VERSION}+${WRITER_IDENTITIES_V1_VERSION}+${STORY_STYLES_V1_VERSION}+${STORY_VOICES_V1_VERSION}`
 
 export const ChannelSampleSchema = z.object({
   title: z.string(),
@@ -70,7 +70,7 @@ ${v.promptHint ? `\nOPERATOR'S DIRECTION FOR THIS ONE: ${v.promptHint}\nHonor wh
 Craft:
 - Open on a hook (never setting description or a greeting); build with grounded, specific detail; land on an ending that pays off something planted earlier — whatever paying off means in this niche.
 - Use whatever point of view + register this story naturally wants (first-hand account, retold to a friend, reported, explainer) — choose what serves it, not a default.
-- Write it the way it is SPOKEN — short lines, roughly one beat per line — for natural narration cadence.
+- Write it the way it is SPOKEN, in the natural VARIED rhythm of real speech — sentences of different lengths, some longer and flowing, a short clipped line only where it earns emphasis; never a uniform one-beat-per-line cadence (a templated rhythm is a dead AI tell).
 
 OUTPUT (JSON only):
 {

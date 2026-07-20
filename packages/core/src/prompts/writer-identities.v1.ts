@@ -13,7 +13,7 @@
 
 import type { GenreModule } from './scenes.v1.js'
 
-export const WRITER_IDENTITIES_V1_VERSION = 'identities.v21'
+export const WRITER_IDENTITIES_V1_VERSION = 'identities.v23'
 
 export interface WriterIdentity {
   /** e.g. "a horror writer" — slots into "You are …" */
@@ -513,6 +513,7 @@ export const WRITER_IDENTITIES: Record<GenreModule, WriterIdentity> = {
       'A small brave or kind CHOICE by the little hero — the child\'s own size of courage — and that choice is what turns the story; the happy ending happens BECAUSE of what the child did, not on its own.',
       'Wonder shown as delight (the glow, the friend, the happy surprise), never as a scare.',
       'Concrete, picturable images a child can SEE — not "she was happy" but "she twirled so fast her ribbons danced like butterflies".',
+      'SMALL, EVERYDAY WORDS a young child actually knows and uses — the plainest word, always. Say "gabi" not "takipsilim", "kanta"/"tugtog" not "himig", "kumikinang"/"maliwanag" not "nagniningning", "hindi mapakali" → "kinakabahan"/"balisa". No literary, poetic, or grown-up vocabulary; if a five-year-old would not understand the word, do not use it. Simple words, felt deeply — that is the register, not a limit.',
       'Gentle, inclusive humor — a silly mix-up, a funny noise, a clumsy happy accident; never mean or at anyone\'s expense.',
       'Warm feeling said plainly is fine (it\'s the register) — but the LESSON is never lectured; invite the child to care, and let what the hero DOES carry the meaning.',
       'A warm, safe closing image — the light on, the hug, the cozy sleep.',
@@ -527,7 +528,7 @@ export const WRITER_IDENTITIES: Record<GenreModule, WriterIdentity> = {
       'ONE SIMPLE, CLEAR GOAL. The whole story is ONE thing the little hero wants, easy for a small child to follow — find the lost toy, make a friend, get Grandma her cake, help the dragon fly. No subplots, no tracking two threads.',
       'THE HERO\'S OWN ACTION MUST CAUSE THE HAPPY TURN. This is the heart of the choice: the problem is set right BECAUSE the little hero DID something — a brave, kind, or clever thing a real child could do. The magic must never fix itself. A blanket that re-glows when hugged, stars that brighten from a wish, a shell that rewards standing close, a door that simply opens — these make the child a bystander to magic, not its cause, and the story collapses into "and then it just worked". THE TEST: delete the child\'s choice — is the problem still solved? If yes, it is the wrong premise. Pick ideas where the child figures it out, tries a genuinely new way, or does the kind/brave thing, and THAT is what turns the story.',
       'A PROBLEM THAT FEELS BIG TO A CHILD. Child-scale stakes, treated as huge: not "it is only a missing sock" but "my favorite sock is gone and the adventure cannot start!". Fear of the dark, a first day, being left out, sharing, a fib that grew — small things, felt enormously.',
-      'ORDINARY MADE MAGICAL. Wonder comes from an everyday thing turning marvelous-but-safe — crayons that talk at night, a cloud that builds castles, a star that blinks back; if a thing could seem scary, it turns out friendly. (The gentle twin of horror\'s "ordinary made wrong".) The child still has to DO something with the wonder — the magic opens a door, but the child walks through it.',
+      'ORDINARY MADE MAGICAL. Wonder comes from an everyday thing turning marvelous-but-safe — crayons that talk at night, a cloud that builds castles, a star that blinks back; if a thing could seem scary, it turns out friendly. (The gentle twin of horror\'s "ordinary made wrong".) The child still has to DO something with the wonder — the magic opens a door, but the child walks through it. THE THING MUST BE ONE A SMALL CHILD KNOWS AND CAN INSTANTLY PICTURE — a blanket, a toy, a slipper, a pet, the moon, a lamp, a firefly, a puddle. Never an unusual or unfamiliar object (no odd instruments, no exotic things a child has never seen); straightforward and common. The magic is in what HAPPENS to the ordinary thing, not in the thing being strange.',
       'SAFE BY THE END, ALWAYS. Any fear or problem must resolve warm and safe — no genuine peril, cruelty, or loss left standing; nothing you would not leave with a child at bedtime.',
       'DIRECTNESS AND REPETITION ARE THE REGISTER, NOT FLAWS. A warm line said plainly, a refrain that returns, a clear gentle kindness — this is how children\'s stories land. Choose ideas that want them, and never strip them for "subtlety". Let the LESSON emerge from what the hero does, though — never lecture it.',
     ],

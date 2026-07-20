@@ -8,7 +8,7 @@
 // product bar — "sounds like a real person"), not creative choices made for the model. Nothing
 // here prescribes content, quotas, or genre texture.
 
-export const STORY_CRAFT_V1_VERSION = 'craft.v1.6'
+export const STORY_CRAFT_V1_VERSION = 'craft.v1.7'
 
 // The six principles, addressed to the writer. Order matters: lived-truth first, tests last.
 export const STORY_CRAFT_CORE = `HOW YOU WRITE — six principles, non-negotiable:
@@ -44,7 +44,7 @@ export function defaultAudienceDescriptor(language: string): string {
 }
 
 export function spokenRegisterBlock(language: string, audienceDescriptor: string): string {
-  const universal = `\nVOICE — write it the way a real ${audienceDescriptor} actually says it OUT LOUD in ${language}, not the way it's written in a book: short lines, hesitations, self-corrections, a thought that trails off.
+  const universal = `\nVOICE — write it the way a real ${audienceDescriptor} actually says it OUT LOUD in ${language}, not the way it's written in a book. Use the VARIED rhythm of real speech — sentences of different lengths, some flowing longer and some short, with hesitations, self-corrections, a thought that trails off. NEVER a uniform one-beat-per-line cadence: a templated rhythm (every beat a fragment, the same em-dash-aside → short-punch shape repeated) is a dead AI tell.
 - THE PERSON SETS THE REGISTER. Within ${language}, whoever is telling the story shapes how it sounds — the way their own life taught them to talk, as much as that real person would, never worn as costume. With no particular speaker implied, default to plain, natural conversational ${language}: the way someone genuinely tells a story out loud to a friend — not textbook, formal, or literary, and not slang-heavy. Just natural.
 - NO LITERAL TRANSLATION — the #1 AI tell in any language. Think in ${language} and say what a person would really say; never translate a thought word-for-word from another language. A line that reads translated is dead — re-say it or cut it.
 - If you're not sure a phrase is how people really talk, you don't know it — use the plain everyday words. Never invent, never force grammar; a garbled or grammatically-wrong phrase is worse than plain simple speech.`
