@@ -82,6 +82,7 @@ export const STORY_MECHANICS: Record<GenreModule, StoryMechanic[]> = {
     { id: 'attainability', name: 'Attainability', why: 'A visible first step turns envy into intention — saves become attempts.' },
     { id: 'honest_cost', name: 'The honest cost', why: 'Naming what it really takes (the time, the mess, the failed first try) — candor converts aspiration into trust.' },
   ],
+  childrens: [],
   general: [],
 }
 

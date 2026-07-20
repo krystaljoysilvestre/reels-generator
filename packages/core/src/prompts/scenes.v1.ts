@@ -17,6 +17,7 @@ export type GenreModule =
   | 'commentary'
   | 'reddit_story'
   | 'comedy'
+  | 'childrens'
   | 'general'
 
 // Single source of truth for the bucket values — the wizard/settings validators import this
@@ -29,6 +30,7 @@ export const GENRE_MODULE_VALUES = [
   'commentary',
   'reddit_story',
   'comedy',
+  'childrens',
   'general',
 ] as const satisfies readonly GenreModule[]
 
@@ -78,6 +80,7 @@ export interface ScenesPromptVars {
 // Used as the fallback when a channel has no stored genreCategory (pre-dates the column).
 export function classifyGenre(niche: string): GenreModule {
   const n = niche.toLowerCase()
+  if (/children|kids|kiddie|bedtime|fairy[- ]?tale|nursery|storybook|picture[- ]?book|toddler|preschool|for kids/.test(n)) return 'childrens'
   if (/horror|thriller|paranormal|aswang|multo|kulam|true[- ]?crime|creepy|scary|ghost|haunt|spooky|nightmare|eerie/.test(n)) return 'horror'
   if (/news|explain|educat|tutorial|histor|science|finance|document|how[- ]?to|fact|tech|business|review/.test(n)) return 'informational'
   if (/cook|food|recipe|travel|vlog|lifestyle|fashion|beauty|fitness|product|diy|craft|makeup/.test(n)) return 'lifestyle'
@@ -104,6 +107,7 @@ DARKNESS: night beats are shadow-DOMINATED — ceiling, far corners and deep bac
   commentary: `GENRE — COMMENTARY / OPINION: show the receipts. The visual language is evidence — documents, screens, storefronts, price tags, the actual place or thing under discussion — shot plainly, like news inserts. Clean, neutral-to-cool light; frames composed for credibility, not mood. CONTRAST IS THE ARGUMENT: the promise beside the reality, the ad beside the receipt, then beside now — put the two truths in comparable frames (or one frame) and let the gap speak. TEXT NEVER CARRIES THE FACT: image models garble written words, so a document reads as "a dense printed page", a screen as "a glowing chat thread" — texture and form, never legible sentences the viewer must read; the exact number or quote belongs to the caption layer, so compose the frame with clean space for it. THE PEAK: the single most damning piece of evidence filling the frame — the paper, the storefront, the empty lot where the project should be — plain, sharp, undeniable. The frame states; the narration argues.`,
   reddit_story: `GENRE — CONFESSION / REDDIT STORY: phone-real, never cinematic. Frames look like life caught, not composed — home interiors with clutter, the kitchen counter, a parked car, fluorescent office light; eye-level, slightly imperfect, the way a real person's photo roll looks. Nothing staged, nothing moody, no dramatic grades — over-produced frames break the "this actually happened" spell. THE DRAMA LIVES IN ORDINARY OBJECTS: the wedding invitation, the Tupperware, the group-chat screen glow, the receipt on the table — mundane things photographed like they matter, because in this story they do. THE PEAK: the object or scene that proves the story — shot plainly, close enough to read, like evidence photographed on a phone to show a friend. The more mundane the frame, the more believable the bomb inside it.`,
   comedy: `GENRE — COMEDY: clarity is the punchline's oxygen — comedy dies in shadow and in crops. Bright, even, almost flat light (daytime-sitcom plain); the absurd thing shown WHOLE and in focus, framed with deadpan matter-of-factness — a centered, symmetrical, almost bureaucratic composition of something ridiculous IS the joke. Play the frame straight: the more absurd the content, the more mundane and orderly the shot (document it like real estate photography, never wacky angles or fisheye — the composition never laughs at its own joke). REACTION LOGIC: alternate the absurd thing (plain, full view) with the unbothered or quietly devastated face; the gap between them is where the laugh lives. Escalation = the SAME calm framing, one notch worse content each time. THE PEAK: the full absurd picture finally seen WHOLE — often a step WIDER, not tighter, so the entire situation lands in one look (the reveal of just how far this has gone). Never darken or dramatize a funny beat; a moody grade smothers it.`,
+  childrens: `GENRE — CHILDREN'S STORY: bright, warm, storybook wonder — safe and delightful, never dark or frightening. Soft, rounded, colorful shapes; friendly light (golden afternoon, a cozy lamp, gentle moonlight for bedtime); a small, endearing hero (a child or a friendly creature) the eye loves. SHOW THE WONDER AS DELIGHT: the glowing thing, the kind creature, the magical-but-safe moment — awe a child would gasp at, never a scare. ORDINARY MADE MAGICAL: render an everyday thing (crayons, a cloud, a sock, a star) turning marvelous-but-safe. Room for GENTLE VISUAL HUMOR — a silly mix-up, an exaggerated happy face, a clumsy friendly creature; playful, never mean. Keep any problem or danger GENTLE and always tilting back toward safety. THE PEAK: the warmest, most wondrous or reassuring beat — the hug, the friend found, the light coming on, the safe landing home — a soft, glowing, storybook image. Motion is gentle and playful. NEVER dark, gory, threatening, or lonely-sad; render nothing a child shouldn't see right before sleep.`,
   general: ``,
 }
 

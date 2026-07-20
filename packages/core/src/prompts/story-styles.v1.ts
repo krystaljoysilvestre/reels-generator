@@ -252,6 +252,7 @@ export const STORY_STYLES: Record<GenreModule, Record<string, StyleSpec>> = {
     },
   },
 
+  childrens: {},
   general: {},
 }
 

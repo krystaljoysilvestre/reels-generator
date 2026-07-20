@@ -267,6 +267,11 @@ Hanggang ngayon, 'pag naglalakad ako sa gabi, nakayuko ako. Lagi.`
       niche: 'sharp takes on everyday Filipino culture — work, money habits, family expectations, internet behavior',
       hookHint: 'state the take itself, flat, in the first line',
     },
+    childrens: {
+      name: 'Bago Matulog',
+      niche: 'gentle Filipino bedtime stories for little kids — a small hero, a spark of safe wonder, and a warm little lesson to fall asleep on',
+      hookHint: 'open on the little hero and a spark of wonder in the first 2s — warm and inviting, never scary',
+    },
     general: {
       name: 'Kwentuhan Tayo',
       niche: 'true-feeling everyday Filipino stories — whatever the barangay would actually retell',
