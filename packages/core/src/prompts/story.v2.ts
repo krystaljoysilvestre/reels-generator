@@ -12,7 +12,7 @@ import { STORY_VOICES_V1_VERSION, resolveVoice, renderVoice } from './story-voic
 import { asGenreModule, classifyGenre } from './scenes.v1.js'
 
 // Craft + identities + style/voice are baked into the prompt text, so their versions ride along.
-export const STORY_V2_VERSION = `story.v2.8+${STORY_CRAFT_V1_VERSION}+${WRITER_IDENTITIES_V1_VERSION}+${STORY_STYLES_V1_VERSION}+${STORY_VOICES_V1_VERSION}`
+export const STORY_V2_VERSION = `story.v2.9+${STORY_CRAFT_V1_VERSION}+${WRITER_IDENTITIES_V1_VERSION}+${STORY_STYLES_V1_VERSION}+${STORY_VOICES_V1_VERSION}`
 
 // The story's physics — what makes a telling a STORY rather than a mood or a report. Sits beside the
 // six craft principles (which govern the sentences; these govern the chain). Authored under
@@ -134,7 +134,7 @@ Write it as one original ${v.language} narrated script for a ${v.targetSeconds}-
 Craft:
 - ${hookRule}
 - Point of view + register follow what this story naturally wants (first-hand account, retold to a friend, reported, direct address) — choose what serves it, not a default.
-- Write it the way it is SPOKEN — short lines, roughly one beat per line — for natural narration cadence.
+- Write it the way it is SPOKEN, in the natural VARIED rhythm of real speech — sentences of different lengths, some longer and flowing, a short clipped line only where it truly earns emphasis. NEVER a uniform one-beat-per-line cadence, and don't repeat the same em-dash-aside → short-punch shape every beat: that templated rhythm is a dead AI tell.
 - Grounded and specific; stay consistent with the world and its canonical names.
 ${
     v.operatorFeedback

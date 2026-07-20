@@ -11,7 +11,7 @@
 import { z } from 'zod'
 import { asGenreModule, classifyGenre, type GenreModule } from './scenes.v1.js'
 
-export const STORY_CRITIC_V2_VERSION = 'story-critic.v2.10'
+export const STORY_CRITIC_V2_VERSION = 'story-critic.v2.14'
 
 export const StoryGateSchema = z.object({
   pass: z.boolean(),
@@ -48,7 +48,7 @@ PAYOFF
 - Predictable-twist patterns are disqualifying: narrator-was-the-creature, it-was-a-dream, it-was-just-the-wind.
 
 VOICE
-- Reads as SPOKEN confession, not written prose: short lines, hesitations, one beat per line.
+- Reads as SPOKEN confession, not written prose: hesitations and self-corrections, in the VARIED rhythm of real speech — never a uniform one-beat-per-line / all-fragments cadence (a templated rhythm is its own AI tell).
 - Committed to ONE register — intimate 2AM dread, coiled suspense, or kinetic shock all pass; a story that blends registers into mush fails. Loud is legitimate when the story earns it; gore never is.
 
 WORLD
@@ -172,8 +172,10 @@ HEART
 - A gentle truth or kindness the child carries away — carried by what the HERO DOES, not lectured. Warm FEELING said plainly is on-register (a directly-kind line, a refrain); a stapled-on MORAL is not.
 
 VOICE
-- Simple, musical, read-aloud rhythm; short lines; a refrain a child could chant along with.
+- Simple, musical, read-aloud rhythm with a refrain a child could chant along with; vary the line length naturally — not every line a fragment.
 - Concrete and picturable — a child can SEE every beat ("ribbons danced like butterflies", not "she was happy"). Gentle, inclusive humor welcome; never mean.
+- SIMPLE ENOUGH FOR A SMALL CHILD: everyday words a young child actually knows. Literary, poetic, or grown-up vocabulary is a fail — e.g. "takipsilim", "himig", "nagniningning", "hindi mapakali", or abstract phrasing like "hinawakan ang lamig ng hangin" are too deep. If a five-year-old wouldn't understand a word, it doesn't belong.
+- FAMILIAR OBJECTS: the things in the story are common, everyday objects a child instantly knows (a blanket, a toy, a slipper, a pet, the moon, a lamp, a firefly). An unusual or unfamiliar object a small child wouldn't recognize (an odd instrument, an exotic or made-up thing) is a fail.
 
 NEVER
 - Real cruelty, peril, or loss left unresolved; an adult, bittersweet, or sad-without-comfort ending.
@@ -221,12 +223,14 @@ A finished ${v.language} narration script is about to ship. You answer ONE quest
 How you judge:
 - THE CREDIBILITY TEST comes first: read it as a skeptical listener who instantly smells over-polished, constructed, or AI-flavored writing. If you would not believe a real person said this out loud, it fails.
 - LANGUAGE NATURALNESS (any language) is a hard fail: any line that reads like a sentence translated word-for-word from another language, any garbled or grammatically-wrong phrase, or a title in the wrong language, = FAIL — name the exact line in your reason so the rewrite can fix it.${v.language.toLowerCase() === 'taglish' ? '\n- For this Taglish channel specifically: textbook/literary Tagalog or forced, perfectly-balanced code-switching also fails — it should read as natural, contemporary spoken Taglish.' : ''}
+- SENTENCE-RHYTHM VARIETY: real speech is bursty — sentences of varied length. A uniform, templated cadence — nearly every beat a short fragment or one-beat-per-line, the same em-dash-aside → short-punch shape repeated, mechanical one/two-word punch lines — is an AI tell and fails, even when each line is individually fine. (Intentional refrains are welcome; a monotonous rhythm is not.)
 - STORY PHYSICS — where this script tells a story (someone lived something), four script-doctor checks. A clear miss on any is a fail worth naming:
   · AGENCY: does the narrator DECIDE anything, or do things merely happen to a passive witness?
   · CAUSALITY: do the beats force each other ("therefore/but"), or just follow each other ("and then")?
   · THE DEBT: does the ending answer the question the opening planted — or twist from nowhere?
   · THE CHANGE: is anything different at the end (in the narrator, their world, or the viewer's understanding) — or does it just stop?
   (An explainer or argument answers these in its own terms: a claim advanced, a question paid off, an understanding changed. A Reddit post answers them in ITS terms: AGENCY = the narrator or their target DID something, not just felt something; THE CHANGE = the payoff landed — revenge taken, rule backfired, disaster arrived — OR, for an "am I wrong?" post, the verdict question thrown hard to the viewer. An open verdict is a real ending; a revenge or disaster story that just trails off is not.)
+- SHOW THE TURN — the beat the whole story turns on (the decision, the reversal, the near-failure, the moment of doubt that EARNS the ending) must be dramatized as a concrete, felt moment, not collapsed into a bald summary ("tapos wala", "gusto niyang sumuko", "and everything changed", "napagtanto niya"). Where the payoff depends on a low or doubting beat first, that beat must be FELT (the breath that catches then the light that dies, the trembling voice) so the turn is earned, not asserted. A hollow or summarized turn fails. This is NOT a ban on plainness or warm, directly-stated feeling — only on flattening the one beat the whole story rides on.
 - Then the channel's rubric below. A clear violation of a rubric line fails; judge against the rubric, not your personal taste.
 - You do not rewrite, rank, or score. Pass or fail, with ONE blunt sentence of reason. On fail, the reason must point at the text (what fails and where), because it steers exactly one rewrite.
 - On a FAIL, also judge rewriteCanFix: could a better TELLING of this SAME idea plausibly pass — a prose/voice problem, an announced feeling, a translated line, a fumbled ending's execution? Then true. Or is the failure in the IDEA itself — the premise has no dilemma to argue, it's the wrong grammar for this genre, nothing is at stake, a structure a rewrite of the same plan cannot repair? Then false (a rewrite would just re-run and fail again). When unsure, true. On a pass, ignore it.
