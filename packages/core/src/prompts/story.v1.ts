@@ -1,7 +1,7 @@
 // story.v1 — story generation template (docs/04 §2.1)
 // Versioned source code. Never edit after a reel ships on this version — bump to v2.
 
-export const STORY_V1_VERSION = 'story.v1.2'
+export const STORY_V1_VERSION = 'story.v1.3'
 
 export interface StoryPromptVars {
   channelName: string
@@ -71,7 +71,7 @@ Shape it to the niche — do NOT force a fiction twist onto a channel that isn't
 Craft:
 - ${hookRule}
 - Point of view + register follow what the niche naturally wants (first-hand account, retold legend, reported, explainer, direct second-person address) — do NOT default to a first-person confession.
-- Write it the way it is SPOKEN — short lines, roughly one beat per line — for natural narration cadence.
+- Write it the way it is SPOKEN, in the natural VARIED rhythm of real speech — sentences of different lengths, some longer and flowing, a short clipped line only where it truly earns emphasis. NEVER a uniform one-beat-per-line cadence: that templated rhythm is a dead AI tell.
 - Grounded and specific; stay consistent with the world and its canonical names.
 
 Avoid (anti-patterns from rejected reels): ${v.rejectionAvoidList || 'none yet'}

@@ -12,7 +12,7 @@ import { STORY_VOICES_V1_VERSION, resolveVoice, renderVoice } from './story-voic
 import { asGenreModule, classifyGenre } from './scenes.v1.js'
 
 // Craft + identities + style/voice are baked into the prompt text, so their versions ride along.
-export const STORY_V2_VERSION = `story.v2.9+${STORY_CRAFT_V1_VERSION}+${WRITER_IDENTITIES_V1_VERSION}+${STORY_STYLES_V1_VERSION}+${STORY_VOICES_V1_VERSION}`
+export const STORY_V2_VERSION = `story.v2.10+${STORY_CRAFT_V1_VERSION}+${WRITER_IDENTITIES_V1_VERSION}+${STORY_STYLES_V1_VERSION}+${STORY_VOICES_V1_VERSION}`
 
 // The story's physics — what makes a telling a STORY rather than a mood or a report. Sits beside the
 // six craft principles (which govern the sentences; these govern the chain). Authored under
@@ -116,7 +116,7 @@ GUARDS:
 
   const hookRule = isLongForm
     ? `COLD OPEN = the first few sentences (~15–30 seconds spoken): open mid-tension or on the story's central unresolvable question — the promise the whole video pays off. Never open with setting description or a greeting.
-- A long video must EARN its length: let the story move in a few natural movements/chapters, and end each one pulling the viewer forward — a new question, a turn, a decision, a door literally or figuratively opening. If a stretch exists only to fill time, cut it; write the story the length IT wants within the target.`
+- A long video must EARN its length: let the story move in a few natural movements/chapters, and end each one pulling the viewer forward — a new question, a turn, a decision, a door literally or figuratively opening. If a stretch exists only to fill time, cut it; write the story the length IT wants within the target.${v.platformHookHint ? `\n- Where this will be watched, attention is held like this: ${v.platformHookHint}. Serve that instinct in this story's own voice — never as a formula.` : ''}`
     : `HOOK = the first 1–2 sentences (≤3 seconds spoken): open mid-tension or on a curiosity gap / unresolvable detail. Never open with setting description or a greeting.${v.platformHookHint ? `\n- Where this will be watched, the first seconds work like this: ${v.platformHookHint}. Serve that instinct in this story's own voice — never as a formula.` : ''}`
 
   const userMessage = `The story is decided. Your job is the telling — decide who lived it, then write it from inside them.
