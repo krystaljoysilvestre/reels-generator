@@ -1,6 +1,6 @@
 # Spec: Evidence Bible — the owner of factual truth
 
-Status: **hypothesis, written down** — NOT committed architecture. No stage, field, or schema exists or should be built yet. · Owner: PM · Eng: senior
+Status: **graduating → committed.** True Crime (a real product, owner-committed 2026-07-21) is the consumer this hypothesis needed; it now lives inside the [Evidence-Based Narrative RFC](specs/evidence-based-narrative.md), which extends the contract below with per-fact truth-stance + source + evidence-weight and a dedicated Fact-Fidelity Checker. This document remains the reasoning behind the Narrative-vs-Evidence boundary; the EBN spec is where it gets built. · Owner: PM · Eng: senior
 
 > This is a design hypothesis, not a commitment. Leave implementation completely untouched until the spec survives review. The bar it has already cleared is the one written into [narrative-planning-grammar.md](hypotheses/narrative-planning-grammar.md): *a product actually needs it* — documentary cannot reliably keep its core promise without it.
 

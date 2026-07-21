@@ -221,6 +221,32 @@ Nakauwi ako. Buo.
 Pero yung tsinelas ko — may putik sa itaas, hindi sa ilalim.
 Hanggang ngayon, 'pag naglalakad ako sa gabi, nakayuko ako. Lagi.`
 
+  // FICTIONALIZED true-crime exemplars (ORIGINAL, Taglish). True crime is NOT a first-class genre
+  // module — the niche classifies to `horror` (scenes.v1 classifyGenre), so the writer gets horror's
+  // dread craft; these exemplars keep it GROUNDED and HUMAN (a trusted person, a scam, a disappearance)
+  // with procedural/restrained detail, NO supernatural and NO gore, ending on the chilling ordinariness.
+  // Invented people/cases only — never real individuals or real cases (no Evidence Bible yet).
+  const TRUE_CRIME_FEWSHOT = `--- REFERENCE STORY 1 (the trusted neighbor · first-person community witness · grounded + restrained · the ordinary detail that was wrong · ends unresolved) ---
+Title: Ang bait-bait ni Kuya Dennis.
+Sa amin, si Kuya Dennis 'yung laging tumutulong. Siya 'yung may hatid-sundo ng mga bata pag umuulan. Siya 'yung nagpapahiram pag gipit ka.
+Kaya nung nawala si Aling Nena — 'yung matandang nakatira sa dulo — si Kuya Dennis pa 'yung unang nag-organisa ng paghahanap.
+May napansin lang ako. 'Yung sasakyan niya, nililinis niya nang husto nung mga araw na 'yon. Alas-tres ng umaga, naririnig ko 'yung hose sa labas.
+Sabi ko sa sarili ko, wala 'yun. Malinisin lang talaga siya.
+Makalipas ng dalawang linggo, may nakitang gamit ni Aling Nena sa likod-bahay niya. Sabi niya, naiwan lang daw nung tumulong siyang mag-empake.
+Naniwala kami. Kasi si Kuya Dennis 'yon.
+Ngayon, nasa piitan na siya. Pero hindi 'yon ang gumugulo sa akin.
+'Yung gumugulo sa akin — ilang beses ko na siyang pinasakay ng anak ko sa sasakyan na 'yon.
+
+--- REFERENCE STORY 2 (a scam that turned · first-person, someone close · the slow realization · ends on the chilling ordinariness) ---
+Title: Pautang lang sana.
+Pinautang ko si pinsan ko — tatlong buwang ipon, para daw sa negosyo.
+Bumalik siya nang may dala, para patunayan. Totoo naman, may kita. Kaya nagdagdag pa ako. Nagdagdag din 'yung kumare ko.
+Isang araw, hindi na sumagot sa text. Pinuntahan ko 'yung bahay niya. Wala nang tao. 'Yung mga gamit, nilipat na.
+Doon ko lang nalaman — hindi lang pala ako. May listahan. Dalawampu't pito kaming naiwan.
+'Yung iba, galit. 'Yung iba, takot — kasi may umutang din daw sa maling tao para may maipambayad sa kanya.
+Hanggang ngayon, hindi ko alam kung nasaan siya. O kung buhay pa.
+Pero tuwing may nag-a-alok sa akin ng "sigurado 'to, kita agad" — naaalala ko 'yung mukha niya nung nagbabalik siya ng pera, ngiting-ngiti, para lang mapaniwala kami.`
+
   // One Taglish probe channel per genre. Niches deliberately match the self-run channel vision.
   const LAB: Record<string, { name: string; niche: string; hookHint: string; fewshot?: string; worldBible?: string; seeds?: string[]; evidenceBriefs?: string[] }> = {
     reddit_story: {
@@ -277,6 +303,16 @@ Hanggang ngayon, 'pag naglalakad ako sa gabi, nakayuko ako. Lagi.`
       niche: 'true-feeling everyday Filipino stories — whatever the barangay would actually retell',
       hookHint: 'earn the next ten seconds with the first line',
     },
+    // True crime is NOT a first-class module — this niche classifies to `horror` (classifyGenre matches
+    // "true-crime"), so it borrows horror's dread craft; the fewshot keeps it grounded + human. Fictionalized
+    // on purpose (no real people/cases): we have no Evidence Bible, and asserting real crimes about real
+    // (often private) people is a factual + harm risk.
+    true_crime: {
+      name: 'Malapit sa Bahay',
+      niche: 'gripping first-person true-crime-style stories — dramatized, real-feeling accounts of ordinary Filipinos and the crimes that shattered a barangay, a family, a friendship: the trusted neighbor, the scam that turned, the person who vanished; grounded and restrained (procedural detail, the ordinary thing that was wrong), NO supernatural and never gory; based on real-feeling patterns, not real people or real cases',
+      hookHint: 'open on the unsettling ordinary detail or the moment it turned — the viewer must feel the wrongness by second 3',
+      fewshot: TRUE_CRIME_FEWSHOT,
+    },
     // Documentary is a PRODUCT-DIRECTION probe, run against the CURRENT architecture ON PURPOSE
     // (no documentary genre module, no grammar, no evidence seam) to observe whether the stack is
     // sufficient. `seeds` are real, checkable subjects passed as operatorSeed so the output can be
@@ -323,12 +359,13 @@ Hanggang ngayon, 'pag naglalakad ako sa gabi, nakayuko ako. Lagi.`
   const aud = defaultAudienceDescriptor(lang)
   if (process.env.PROBE_LANG) console.log(`⚗ language override → ${lang} (audience: ${aud})`)
 
-  const RUNS = [
-    { form: 'short', targetSeconds: 75, targetWords: 190, writerTokens: 4096 },
-    { form: 'short', targetSeconds: 75, targetWords: 190, writerTokens: 4096 },
-    { form: 'long', targetSeconds: 240, targetWords: 600, writerTokens: 16384 },
-    { form: 'long', targetSeconds: 240, targetWords: 600, writerTokens: 16384 },
-  ]
+  const SHORT = { form: 'short', targetSeconds: 75, targetWords: 190, writerTokens: 4096 }
+  const LONG = { form: 'long', targetSeconds: 240, targetWords: 600, writerTokens: 16384 }
+  // PROBE_FORMS overrides the run set, e.g. PROBE_FORMS=short,long → exactly one of each. Default = 2+2.
+  const RUNS = process.env.PROBE_FORMS
+    ? process.env.PROBE_FORMS.split(',').map((f) => (f.trim() === 'long' ? LONG : SHORT))
+    : [SHORT, SHORT, LONG, LONG]
+  if (process.env.PROBE_FORMS) console.log(`⚗ forms → ${RUNS.map((r) => r.form).join(', ')}`)
   // Cheap mode: PROBE_RUNS=1 runs only the first N of the 4 configs (1 short ≈ 1/4 the cost) for a
   // fast smoke; unset = the full 4-run batch. PROBE_NAT_MODEL overrides the naturalizer's model
   // (e.g. a Haiku id) to A/B a cheaper finishing stage against the default Sonnet.

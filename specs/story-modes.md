@@ -2,6 +2,8 @@
 
 Status: draft — pending probe · Owner: PM · Eng: senior
 
+> The **Factual branch** of this contract (`knowledgeRequirement: dossier`) is now realized by the [Evidence-Based Narrative RFC](specs/evidence-based-narrative.md) — the evidence-constrained pipeline whose first specialization is True Crime. The seven mode clauses here still hold; EBN makes the Evidence Bible seam concrete and adds per-fact truth-stance/weight + a Fact-Fidelity Checker.
+
 ## Why
 
 Kendrix has been quietly converging on an abstraction it never named. The horror work didn't build "a horror genre" — it encoded *how horror works* (tension, concealment, reveal timing) and fed that knowledge into genre-agnostic machinery. The same shape repeated everywhere: writer identities per genre ([writer-identities.v1.ts](packages/core/src/prompts/writer-identities.v1.ts)), per-genre taste rubrics at the Gate ([story-critic.v2.ts:157](packages/core/src/prompts/story-critic.v2.ts#L157)), per-genre scene-craft blocks ([scenes.v1.ts:97](packages/core/src/prompts/scenes.v1.ts#L97)). The machinery stays generic; the *expertise that prepares and judges the work* is what swaps.

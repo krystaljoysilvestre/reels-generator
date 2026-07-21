@@ -62,6 +62,24 @@ export {
   FinishingJudgeSchema,
   type FinishingIssue,
 } from '@reels/core/prompts/story-finishing-judge.v1'
+// Evidence-Based Narrative (2026-07-21): dossier → extractor → Evidence Bible → planner(claims) →
+// writer(cited) → Fact-Fidelity Checker. Probe-validated; not yet wired into a live pipeline path.
+export {
+  buildEbnExtractorPrompt,
+  STORY_EBN_EXTRACTOR_V1_VERSION,
+  EvidenceBibleSchema,
+  EbnFactSchema,
+  type EbnFact,
+} from '@reels/core/prompts/story-ebn-extractor.v1'
+export { buildEbnPlannerPrompt, STORY_EBN_PLANNER_V1_VERSION, EbnClaimsSchema } from '@reels/core/prompts/story-ebn-planner.v1'
+export {
+  buildEbnWriterPrompt,
+  STORY_EBN_WRITER_V1_VERSION,
+  EbnWriterSchema,
+  TRUE_CRIME_PERMISSIONS,
+  type EbnPermissions,
+} from '@reels/core/prompts/story-ebn-writer.v1'
+export { buildEbnFidelityPrompt, STORY_EBN_FIDELITY_V1_VERSION, EbnFidelitySchema } from '@reels/core/prompts/story-ebn-fidelity.v1'
 export { buildSoundDesignerPrompt, SOUND_DESIGNER_V1_VERSION, SoundDesignSchema, type DesignerScene } from '@reels/core/prompts/sound-designer.v1'
 export { buildScenesPrompt, SCENES_V1_VERSION } from '@reels/core/prompts/scenes.v1'
 export { buildStoryAnalyzerPrompt, STORY_ANALYZER_V1_VERSION } from '@reels/core/prompts/story-analyzer.v1'
