@@ -1,8 +1,9 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
-import { getDb, reels, channels } from '@reels/db'
+import { getDb, reels, channels, getUserUsage } from '@reels/db'
 import { eq } from 'drizzle-orm'
 import { enqueueStep } from '@reels/queue'
+import { checkUserLimits, DEFAULT_USER_LIMITS } from '@reels/core'
 import { getCurrentUser } from '@/lib/auth'
 import { userOwnsChannel } from '@/lib/access'
 
@@ -21,6 +22,18 @@ export async function POST(req: NextRequest) {
   const channel = await db.query.channels.findFirst({ where: eq(channels.id, channelId) })
   if (!channel) return NextResponse.json({ error: 'Channel not found' }, { status: 404 })
   if (!(await userOwnsChannel(user, channelId))) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  // Per-user budget/quota (multi-tenant cost safety). Admins are unlimited.
+  if (user.role !== 'admin') {
+    const usage = await getUserUsage(user.id)
+    if (usage) {
+      const res = checkUserLimits(usage, {
+        monthlyBudgetCents: usage.monthlyBudgetCents ?? DEFAULT_USER_LIMITS.monthlyBudgetCents,
+        dailyReelQuota: usage.dailyReelQuota ?? DEFAULT_USER_LIMITS.dailyReelQuota,
+      })
+      if (!res.ok) return NextResponse.json({ error: res.reason }, { status: 429 })
+    }
+  }
 
   // First reel sets how this channel produces reels — 'review' (stop at the human gates) or 'auto'
   // (run end-to-end to a finished render). Persisted on the channel; the worker reads it per gate.

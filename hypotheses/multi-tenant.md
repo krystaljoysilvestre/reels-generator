@@ -1,6 +1,8 @@
 # Hypothesis: Multi-tenancy — a trigger, not an architecture
 
-Status: **hypothesis, written down** — NOT committed architecture. Nothing multi-tenant exists or should be built yet: no auth, no users/orgs tables, no per-tenant isolation, quotas, or billing. · Owner: PM · Eng: senior
+Status: **partially overridden by owner decision (2026-07-21).** The original deferral (below) stood until the owner chose to build production auth + the app-layer tenant boundary ahead of the trigger — now committed: Auth.js v5 accounts (Google SSO + email/password), open-signup-with-admin-approval + invite links, `channels.userId` (migration `0040`), and an `/admin` console. What was **not** built, and what the deferral's cost/quota reasoning still rightly warns about, is the **job-tier scaling** (per-tenant fairness, enforced budgets/quotas, provider-throttle-under-scale) — that moved to [scaling-concurrent-users.md](scaling-concurrent-users.md). The trigger analysis below is preserved as the record of *why* deferral was the default and what the owner traded away by overriding it.
+
+Original status (for the record): **hypothesis, written down** — NOT committed architecture. Nothing multi-tenant exists or should be built yet: no auth, no users/orgs tables, no per-tenant isolation, quotas, or billing. · Owner: PM · Eng: senior
 
 > This document's job is the **inverse** of its siblings. The others (Evidence Bible, Narrative Planning Grammar) argue *for* a new responsibility. This one exists to **name a build we keep being tempted into and to hold it off until specific conditions fire** — and to record the cheap discipline that keeps the eventual build small. Leave implementation completely untouched. If you are reading this because "we should probably add users while we're in here," the answer is in [The trigger](#the-trigger).
 

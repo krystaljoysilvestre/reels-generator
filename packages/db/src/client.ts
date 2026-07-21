@@ -3,7 +3,11 @@ import postgres from 'postgres'
 import * as schema from './schema.js'
 
 function createDb(url: string) {
-  const conn = postgres(url, { max: 10 })
+  // PgBouncer in transaction-pooling mode can't hold server-side prepared statements across pooled
+  // connections, so disable them when routed through a bouncer (set PGBOUNCER=true). Direct-Postgres
+  // (local + today's prod) keeps prepared statements for their perf benefit.
+  const usingPgBouncer = process.env['PGBOUNCER'] === 'true'
+  const conn = postgres(url, { max: 10, prepare: !usingPgBouncer })
   return drizzle(conn, { schema })
 }
 

@@ -17,6 +17,7 @@ export function getConnection() {
 
 export const QUEUE = {
   PIPELINE: 'pipeline',
+  RENDER: 'render',       // heavy Remotion+ffmpeg step, on its own queue/worker so it can't starve generation
   SCHEDULER: 'scheduler', // the auto-produce tick (consistency engine) — see apps/worker/src/scheduler.ts
   LLM: 'llm',
   FAL_IMAGE: 'fal-image',
@@ -47,10 +48,17 @@ export interface PipelineJobData {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-let pipelineQueue: Queue<any> | null = null
-function getPipelineQueue() {
-  if (!pipelineQueue) pipelineQueue = makeQueue(QUEUE.PIPELINE)
-  return pipelineQueue
+const queueSingletons: Partial<Record<QueueName, Queue<any>>> = {}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getQueue(name: QueueName): Queue<any> {
+  return (queueSingletons[name] ??= makeQueue(name))
+}
+
+// The heavy render step runs on its own queue/worker so a multi-minute render can't hold a slot that
+// generation needs. Everything else (incl. the cheap render_qa) stays on the pipeline queue.
+const RENDER_STEPS = new Set(['render'])
+export function queueForStep(stepName: string): QueueName {
+  return RENDER_STEPS.has(stepName) ? QUEUE.RENDER : QUEUE.PIPELINE
 }
 
 // Enqueue one pipeline step. The deterministic jobId dedupes BullMQ retries of the *enqueuing* job
@@ -59,7 +67,7 @@ function getPipelineQueue() {
 export async function enqueueStep(data: PipelineJobData): Promise<void> {
   // jobId can't contain ':' (BullMQ reserves it), so use '__' as the separator.
   const jobId = `${data.reelId}__${data.stepName}`
-  const q = getPipelineQueue()
+  const q = getQueue(queueForStep(data.stepName))
   const existing = await q.getJob(jobId)
   if (existing) {
     const state = await existing.getState()

@@ -10,6 +10,8 @@
 // Caps are sized at/above today's peak concurrency so current throughput is unchanged; they only bite if
 // someone scales the worker up. Tune here.
 
+import { acquireRateToken, type RateLimit } from './redis-limiter.js'
+
 export type LimitedProvider = 'openai' | 'anthropic' | 'elevenlabs' | 'fal'
 
 const MAX_CONCURRENT: Record<LimitedProvider, number> = {
@@ -17,6 +19,16 @@ const MAX_CONCURRENT: Record<LimitedProvider, number> = {
   anthropic: 4,   // QA only
   elevenlabs: 4,  // TTS + SFX (sequential within a step today)
   fal: 4,         // image→video
+}
+
+// GLOBAL (cross-process) request-rate cap — see redis-limiter.ts. Sized generously above today's
+// single-worker throughput so nothing is throttled now; they exist to bound a multi-worker fleet's
+// aggregate call rate (protects provider account limits + spend). Tune to the real account RPM tier.
+const RATE_LIMITS: Record<LimitedProvider, RateLimit> = {
+  openai: { max: 600, windowMs: 60_000 },
+  anthropic: { max: 300, windowMs: 60_000 },
+  elevenlabs: { max: 120, windowMs: 60_000 },
+  fal: { max: 120, windowMs: 60_000 },
 }
 
 // Minimal FIFO counting semaphore — no external dependency (keeps the package's dep surface small).
@@ -60,7 +72,9 @@ const semaphores: Record<LimitedProvider, Semaphore> = {
   fal: new Semaphore(MAX_CONCURRENT.fal),
 }
 
-// Run `fn` under the provider's concurrency cap. Excess calls queue (FIFO) until a slot frees.
-export function withProviderLimit<T>(provider: LimitedProvider, fn: () => Promise<T>): Promise<T> {
+// Run `fn` under (1) the GLOBAL cross-process rate cap (Redis) then (2) this process's concurrency
+// semaphore. Rate-gating first means a rate-limited call waits WITHOUT holding a local concurrency slot.
+export async function withProviderLimit<T>(provider: LimitedProvider, fn: () => Promise<T>): Promise<T> {
+  await acquireRateToken(provider, RATE_LIMITS[provider])
   return semaphores[provider].run(fn)
 }

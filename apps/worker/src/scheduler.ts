@@ -14,8 +14,8 @@
 
 import { and, eq, gte, inArray } from 'drizzle-orm'
 import { count } from 'drizzle-orm'
-import { getDb, channels, reels } from '@reels/db'
-import { PostingRulesSchema, UNSHIPPED_REEL_STATUSES, autoProduceBacklogCap } from '@reels/core'
+import { getDb, channels, reels, getUserUsage } from '@reels/db'
+import { PostingRulesSchema, UNSHIPPED_REEL_STATUSES, autoProduceBacklogCap, checkUserLimits, DEFAULT_USER_LIMITS } from '@reels/core'
 import { makeQueue, enqueueStep, QUEUE } from '@reels/queue'
 
 export const AUTO_PRODUCE_JOB = 'auto_produce_tick'
@@ -58,6 +58,22 @@ export async function runAutoProduceTick(): Promise<void> {
     if ((unshipped?.value ?? 0) >= backlogCap) {
       console.warn(`${tag} paused — ${unshipped?.value} unshipped reels (cap ${backlogCap}). Ship or clear some to resume.`)
       continue
+    }
+
+    // Per-user budget/quota (multi-tenant safety): skip if the channel owner is over their caps, so
+    // auto-produce can never drain a tester's wallet. Admins are unlimited.
+    if (channel.userId) {
+      const usage = await getUserUsage(channel.userId)
+      if (usage && usage.role !== 'admin') {
+        const res = checkUserLimits(usage, {
+          monthlyBudgetCents: usage.monthlyBudgetCents ?? DEFAULT_USER_LIMITS.monthlyBudgetCents,
+          dailyReelQuota: usage.dailyReelQuota ?? DEFAULT_USER_LIMITS.dailyReelQuota,
+        })
+        if (!res.ok) {
+          console.warn(`${tag} skipped — owner limit: ${res.reason}`)
+          continue
+        }
+      }
     }
 
     // Create ONE reel this tick (mirrors the create-reel route).

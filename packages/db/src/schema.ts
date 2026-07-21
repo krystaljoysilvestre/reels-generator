@@ -421,6 +421,10 @@ export const users = pgTable('users', {
   status: text('status').notNull().default('pending'), // 'pending' | 'active' | 'suspended'
   passwordHash: text('password_hash'),                 // null for SSO-only accounts
   lastSeenAt: timestamp('last_seen_at'),
+  // Per-user cost/quota caps (multi-tenant safety). Null → the global DEFAULT_USER_LIMITS in core;
+  // set to override for a specific user (admin action / future plan tiering).
+  monthlyBudgetCents: integer('monthly_budget_cents'),
+  dailyReelQuota: integer('daily_reel_quota'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })
 

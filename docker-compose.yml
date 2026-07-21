@@ -32,6 +32,29 @@ services:
       timeout: 5s
       retries: 5
 
+  # Optional connection pooler for when many web/worker processes run (each opens its own pool → they
+  # exhaust Postgres's connection limit fast). Opt-in: `docker compose --profile scale up pgbouncer`.
+  # To route through it, point DATABASE_URL at localhost:6432 and set PGBOUNCER=true (disables prepared
+  # statements — required for transaction pooling; see packages/db/src/client.ts). Starting point — tune
+  # pool sizes to the deploy.
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    profiles: ["scale"]
+    environment:
+      DB_HOST: postgres
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: reels_dev
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: "1000"
+      DEFAULT_POOL_SIZE: "25"
+      AUTH_TYPE: scram-sha-256
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:6432:5432"
+
 volumes:
   postgres_data:
   redis_data:
