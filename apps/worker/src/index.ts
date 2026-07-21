@@ -5,6 +5,7 @@ import { startBullBoard } from './monitoring/bull-board.js'
 import { makeWorker, QUEUE } from './queues/index.js'
 import { dispatchPipelineJob } from './pipeline/dispatcher.js'
 import { markReelFailed } from './pipeline/harness.js'
+import { withJobTimeout, reapStuckReels, PIPELINE_STEP_TIMEOUT_MS, RENDER_STEP_TIMEOUT_MS } from './pipeline/liveness.js'
 import { registerAutoProduceSchedule, runAutoProduceTick, AUTO_PRODUCE_JOB } from './scheduler.js'
 import { registerDigestSchedule, runDailyDigest, DAILY_DIGEST_JOB } from './digest.js'
 import { registerMetricsPollSchedule, runMetricsPoll, METRICS_POLL_JOB } from './metrics-poll.js'
@@ -45,15 +46,25 @@ function attachHandlers(worker: Worker, label: string): Worker {
 // ── Pipeline worker (everything except the heavy render step) ────────────────
 if (runs('pipeline')) {
   const concurrency = Number(process.env['PIPELINE_CONCURRENCY'] ?? 4) // render moved to its own queue
-  started.push(attachHandlers(makeWorker(QUEUE.PIPELINE, (job) => dispatchPipelineJob(job), concurrency), 'pipeline'))
+  const proc = (job: Parameters<typeof dispatchPipelineJob>[0]) =>
+    withJobTimeout(dispatchPipelineJob(job), PIPELINE_STEP_TIMEOUT_MS, `${job.data.stepName} ${job.data.reelId}`)
+  started.push(attachHandlers(makeWorker(QUEUE.PIPELINE, proc, concurrency), 'pipeline'))
   console.log(`[worker] pipeline worker started (concurrency ${concurrency})`)
 }
 
 // ── Render worker (Remotion + ffmpeg — CPU/RAM bound, low concurrency) ───────
 if (runs('render')) {
   const concurrency = Number(process.env['RENDER_CONCURRENCY'] ?? 1)
-  started.push(attachHandlers(makeWorker(QUEUE.RENDER, (job) => dispatchPipelineJob(job), concurrency), 'render'))
+  const proc = (job: Parameters<typeof dispatchPipelineJob>[0]) =>
+    withJobTimeout(dispatchPipelineJob(job), RENDER_STEP_TIMEOUT_MS, `${job.data.stepName} ${job.data.reelId}`)
+  started.push(attachHandlers(makeWorker(QUEUE.RENDER, proc, concurrency), 'render'))
   console.log(`[worker] render worker started (concurrency ${concurrency})`)
+}
+
+// Boot reaper: fail reels a previous run left stuck 'running' so they surface (retryable) instead of
+// holding a slot. Idempotent + best-effort; only where this process runs job workers.
+if (runs('pipeline') || runs('render')) {
+  void reapStuckReels().catch((e) => console.error('[liveness] reaper failed:', e))
 }
 
 // ── Scheduler: auto-produce ticks + daily digest + metrics poll ──────────────
