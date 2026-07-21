@@ -11,7 +11,7 @@
 import { z } from 'zod'
 import { asGenreModule, classifyGenre, type GenreModule } from './scenes.v1.js'
 
-export const STORY_CRITIC_V2_VERSION = 'story-critic.v2.15'
+export const STORY_CRITIC_V2_VERSION = 'story-critic.v2.16'
 
 export const StoryGateSchema = z.object({
   pass: z.boolean(),
@@ -168,14 +168,17 @@ SAFETY (disqualifying if failed)
 - Age-appropriate throughout; any scare or problem is gentle and quickly made safe.
 - The ending leaves the child SAFE, warm, and reassured — never frightened, grieving, or left hanging.
 
-HEART
-- A gentle truth or kindness the child carries away — carried by what the HERO DOES, not lectured. Warm FEELING said plainly is on-register (a directly-kind line, a refrain); a stapled-on MORAL is not.
+HEART (the storybook close)
+- A gentle truth the child carries away, SHOWN through what the hero does AND named warmly in a simple closing line — the way storybooks end ("…and she learned that even the smallest light can lead you home"). This warm, named takeaway is on-register and welcome, NOT a flaw.
+- What fails is PREACHINESS: a moral the story didn't earn, or a lecture ("dapat lagi kang mabait") instead of a warm, felt line that grows out of what the hero just did. An ending with NO gentle takeaway at all also misses the register.
 
 VOICE
 - Simple, musical, read-aloud rhythm with a refrain a child could chant along with; vary the line length naturally — not every line a fragment.
 - Concrete and picturable — a child can SEE every beat ("ribbons danced like butterflies", not "she was happy"). Gentle, inclusive humor welcome; never mean.
-- SIMPLE ENOUGH FOR A SMALL CHILD: everyday words a young child actually knows. Literary, poetic, or grown-up vocabulary is a fail — e.g. "takipsilim", "himig", "nagniningning", "hindi mapakali", or abstract phrasing like "hinawakan ang lamig ng hangin" are too deep. If a five-year-old wouldn't understand a word, it doesn't belong.
+- SIMPLE ENOUGH FOR A SMALL CHILD: everyday words a young child actually knows. Literary, poetic, or grown-up vocabulary is a fail ("takipsilim", "himig", "nagniningning"). PREFER plain Tagalog over English when a common word exists — English loanwords like "pattern", "frustration", "copycat", "humming" where a child would use a Tagalog word are a fail. Abstract or introspective grown-up phrasing and similes a child cannot picture ("parang may tinatanong ka sa kisame", "yung klase ng frustration na hindi galit kundi malungkot") are a fail. If a five-year-old wouldn't understand or picture it, it doesn't belong.
+- SENTENCE STRUCTURE stays childlike — short, clear sentences, one simple thought at a time. The variety wanted here is childlike (a short line, a slightly longer warm one, a refrain), never adult winding run-ons or stacked introspection.
 - FAMILIAR OBJECTS: the things in the story are common, everyday objects a child instantly knows (a blanket, a toy, a slipper, a pet, the moon, a lamp, a firefly). An unusual or unfamiliar object a small child wouldn't recognize (an odd instrument, an exotic or made-up thing) is a fail.
+- OPENER & CLOSE: a warm storybook opener that invites the child in, and a cozy closing frame that lets the tale settle — in the SPIRIT of "once upon a time…" / "…happily ever after", never the literal cliché.
 
 NEVER
 - Real cruelty, peril, or loss left unresolved; an adult, bittersweet, or sad-without-comfort ending.

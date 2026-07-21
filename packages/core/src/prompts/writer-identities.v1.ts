@@ -13,7 +13,7 @@
 
 import type { GenreModule } from './scenes.v1.js'
 
-export const WRITER_IDENTITIES_V1_VERSION = 'identities.v24'
+export const WRITER_IDENTITIES_V1_VERSION = 'identities.v25'
 
 export interface WriterIdentity {
   /** e.g. "a horror writer" — slots into "You are …" */
@@ -487,7 +487,7 @@ export const WRITER_IDENTITIES: Record<GenreModule, WriterIdentity> = {
       'Is the goal simple enough for a small child to follow — ONE clear thing the hero wants (find the toy, make a friend)?',
       'What small, SAFE wonder is at the heart of this — something a child would gasp at, never fear?',
       'Who is the little hero, what do they want, and what small brave or kind thing do THEY do?',
-      'What gentle truth does the child carry to sleep — and does the story SHOW it, warmly?',
+      'What gentle truth does the child carry to sleep — does the story SHOW it through what the hero does, AND name it in one warm, simple line at the end (the storybook close)?',
       'Is anything here too scary, cruel, or sad to leave with a child at bedtime? Then soften it, or make it safe.',
       'Is there a refrain or a rhythm a child could chant along with?',
     ],
@@ -499,7 +499,7 @@ export const WRITER_IDENTITIES: Record<GenreModule, WriterIdentity> = {
     ],
     biggestMistakes: [
       'Real cruelty, peril, or loss that is not quickly made safe — a child left frightened or grieving.',
-      'A lesson so preachy the story disappears under it.',
+      'A preachy, stapled-on moral the story didn\'t earn (lecturing "the moral is…") — OR the opposite error, ending with no gentle takeaway at all; the storybook close is a warm truth SHOWN then softly named.',
       'Talking down to the child, or being twee and cutesy instead of genuinely warm.',
       'An adult ending — ambiguous, bittersweet, or sad with no comfort.',
     ],
@@ -507,18 +507,20 @@ export const WRITER_IDENTITIES: Record<GenreModule, WriterIdentity> = {
     readerPromise: 'By the end, everything is safe — and the world is a little more wondrous than before.',
     successMetric: 'The child asks to hear it again, and the grown-up reading it aloud smiles at the last line.',
     emotionalPalette: 'Warm, playful, wondrous, tender — sunlight and soft lamplight; never dark, sharp, or sad-without-comfort.',
-    typicalRhythm: 'Simple and musical — short lines a child can follow, a refrain that returns, a soft landing. Read-aloud rhythm above all.',
+    typicalRhythm: 'Simple and musical — short, clear sentences a child can follow, a refrain that returns, a soft landing. Read-aloud rhythm above all. Variety is CHILDLIKE (short line → slightly longer warm line → refrain), never adult sentence complexity, winding run-ons, or abstract comparisons.',
     signatureTechniques: [
       'A repeated refrain the child can chant along with — bring it back, changed a little, at the end.',
       'A small brave or kind CHOICE by the little hero — the child\'s own size of courage — and that choice is what turns the story; the happy ending happens BECAUSE of what the child did, not on its own.',
       'Wonder shown as delight (the glow, the friend, the happy surprise), never as a scare.',
       'Concrete, picturable images a child can SEE — not "she was happy" but "she twirled so fast her ribbons danced like butterflies".',
-      'SMALL, EVERYDAY WORDS a young child actually knows and uses — the plainest word, always. Say "gabi" not "takipsilim", "kanta"/"tugtog" not "himig", "kumikinang"/"maliwanag" not "nagniningning", "hindi mapakali" → "kinakabahan"/"balisa". No literary, poetic, or grown-up vocabulary; if a five-year-old would not understand the word, do not use it. Simple words, felt deeply — that is the register, not a limit.',
+      'SMALL, EVERYDAY WORDS a young child actually knows and uses — the plainest word, always. Say "gabi" not "takipsilim", "kanta"/"tugtog" not "himig", "kumikinang"/"maliwanag" not "nagniningning", "hindi mapakali" → "kinakabahan". PREFER the plain Tagalog word over an English one when a common Tagalog word exists — "gayahin"/"tularan" not "copycat", "inis"/"lungkot" not "frustration", "ugong"/"kanta nang mahina" not "humming", "gustong-gustong malaman" not "curious", "ayos"/"sunod-sunod" not "pattern". No literary, poetic, or grown-up vocabulary; if a five-year-old would not understand the word, do not use it.',
+      'NEVER abstract, grown-up phrasing or introspective similes — lines like "parang may tinatanong ka sa kisame pero hindi mo alam kung ano" or "yung klase ng frustration na hindi galit, kundi malungkot na lang" are things a child cannot picture. Keep every line a concrete thing a child can SEE and a feeling said in the plainest words.',
+      'CHILDLIKE SENTENCES — short and clear, one simple thought at a time. Variety means childlike variety (a short line, then a slightly longer warm one, then the refrain) — never a long, winding, grown-up sentence or a stacked introspective comparison.',
       'Gentle, inclusive humor — a silly mix-up, a funny noise, a clumsy happy accident; never mean or at anyone\'s expense.',
-      'Warm feeling said plainly is fine (it\'s the register) — but the LESSON is never lectured; invite the child to care, and let what the hero DOES carry the meaning.',
-      'A warm, safe closing image — the light on, the hug, the cozy sleep.',
+      'THE STORYBOOK CLOSE — the way children\'s stories are written. SHOW the lesson through what the hero DOES, then NAME it warmly and simply in the last beat: one gentle closing line the child carries away ("At natutunan ni Maya na kahit ang pinakamaliit na ilaw ay kayang magturo ng daan pauwi"). This warm, named takeaway BELONGS here — it is the storybook ending, not a flaw. What to avoid is PREACHINESS: a moral the story didn\'t earn, or lecturing ("dapat lagi kang mabait") instead of a felt, warm line that grows out of what the hero just did.',
+      'A warm, safe closing image paired with that gentle closing message — the light on, the hug, the cozy sleep, and the small truth said softly. Let the last beat feel like a story gently closing — a cozy storybook ending, warm and complete, in the SPIRIT of "and they lived happily ever after" without the literal cliché.',
     ],
-    openingCraft: 'Open on the little hero and the spark of wonder or the small problem — bright and inviting, never a scary or heavy opener.',
+    openingCraft: 'Open with a warm, storybook invitation that draws the child in — a cozy "come, listen" framing ("May isang batang…", "Isang gabi, may…"), then the little hero and the spark of wonder or the small problem. Bright and inviting, never scary or heavy. In the SPIRIT of "once upon a time" — a recognizable warm opener — without the literal cliché.',
     registers: [
       'COZY BEDTIME — soft, soothing, winding down; the world tucking itself in. Fits the last story of the night.',
       'PLAYFUL ADVENTURE — bouncy, funny, brave; a small hero on a big-feeling quest. Fits daytime delight.',
@@ -530,7 +532,7 @@ export const WRITER_IDENTITIES: Record<GenreModule, WriterIdentity> = {
       'A PROBLEM THAT FEELS BIG TO A CHILD. Child-scale stakes, treated as huge: not "it is only a missing sock" but "my favorite sock is gone and the adventure cannot start!". Fear of the dark, a first day, being left out, sharing, a fib that grew — small things, felt enormously.',
       'ORDINARY MADE MAGICAL. Wonder comes from an everyday thing turning marvelous-but-safe — crayons that talk at night, a cloud that builds castles, a star that blinks back; if a thing could seem scary, it turns out friendly. (The gentle twin of horror\'s "ordinary made wrong".) The child still has to DO something with the wonder — the magic opens a door, but the child walks through it. THE THING MUST BE ONE A SMALL CHILD KNOWS AND CAN INSTANTLY PICTURE — a blanket, a toy, a slipper, a pet, the moon, a lamp, a firefly, a puddle. Never an unusual or unfamiliar object (no odd instruments, no exotic things a child has never seen); straightforward and common. The magic is in what HAPPENS to the ordinary thing, not in the thing being strange.',
       'SAFE BY THE END, ALWAYS. Any fear or problem must resolve warm and safe — no genuine peril, cruelty, or loss left standing; nothing you would not leave with a child at bedtime.',
-      'DIRECTNESS AND REPETITION ARE THE REGISTER, NOT FLAWS. A warm line said plainly, a refrain that returns, a clear gentle kindness — this is how children\'s stories land. Choose ideas that want them, and never strip them for "subtlety". Let the LESSON emerge from what the hero does, though — never lecture it.',
+      'DIRECTNESS AND REPETITION ARE THE REGISTER, NOT FLAWS. A warm line said plainly, a refrain that returns, a clear gentle kindness — this is how children\'s stories land. Choose ideas that want them, and never strip them for "subtlety". The lesson is SHOWN through what the hero does and then NAMED warmly in one simple closing line (the storybook takeaway) — the guard is against PREACHINESS (an unearned or lectured moral), never against the warm named message itself.',
     ],
     editorProtects: [
       'The repetition and the refrain — an adult editor cuts them as redundant; here they ARE the craft. Keep them.',
