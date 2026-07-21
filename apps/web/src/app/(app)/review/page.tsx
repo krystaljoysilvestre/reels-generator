@@ -1,6 +1,8 @@
-import { getDb, reels, stories } from '@reels/db'
-import { eq } from 'drizzle-orm'
+import { getDb, reels } from '@reels/db'
+import { and, eq, inArray } from 'drizzle-orm'
 import { ReviewCard } from './ReviewCard'
+import { requireUser } from '@/lib/auth'
+import { accessibleChannelIds } from '@/lib/access'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,11 +12,15 @@ export default async function ReviewPage({
   searchParams: Promise<{ reelId?: string }>
 }) {
   const { reelId } = await searchParams
+  const user = await requireUser()
   const db = getDb()
 
-  // Load all reels awaiting story review
+  // Reels awaiting story review — scoped to the caller's channels (admins see all).
+  const ids = await accessibleChannelIds(user)
   const pendingReels = await db.query.reels.findMany({
-    where: eq(reels.status, 'story_review'),
+    where: ids === null
+      ? eq(reels.status, 'story_review')
+      : and(eq(reels.status, 'story_review'), inArray(reels.channelId, ids)),
     with: { story: true },
   })
 

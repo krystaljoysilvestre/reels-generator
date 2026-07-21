@@ -1,7 +1,7 @@
 import { getDb, reels, scenes, assets, channels, pipelineSteps } from '@reels/db'
 import { and, desc, eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
-import { requireAuth } from '@/lib/auth'
+import { assertReelAccess } from '@/lib/access'
 import { type ChannelVoice, type VoiceSettings, moodToVoiceSettings, ToneConfigSchema, AudioPacksSchema, OperatorSfxSchema, PRESET_BEDS } from '@reels/core'
 import { isYouTubeConfigured } from '@reels/providers'
 import { channelMood, MOOD_TINT } from '@/lib/pipeline-phases'
@@ -10,8 +10,8 @@ import { StoryboardEditor } from './StoryboardEditor'
 export const dynamic = 'force-dynamic'
 
 export default async function StoryboardPage({ params }: { params: Promise<{ reelId: string }> }) {
-  await requireAuth()
   const { reelId } = await params
+  await assertReelAccess(reelId)
   const db = getDb()
 
   const reel = await db.query.reels.findFirst({

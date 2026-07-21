@@ -3,10 +3,12 @@ import { NextResponse } from 'next/server'
 import { getDb, reels, channels } from '@reels/db'
 import { eq } from 'drizzle-orm'
 import { enqueueStep } from '@reels/queue'
-import { getSession } from '@/lib/auth'
+import { getCurrentUser } from '@/lib/auth'
+import { userOwnsChannel } from '@/lib/access'
 
 export async function POST(req: NextRequest) {
-  if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const user = await getCurrentUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { channelId, generationMode, seed } = (await req.json().catch(() => ({}))) as {
     channelId?: string
@@ -18,6 +20,7 @@ export async function POST(req: NextRequest) {
   const db = getDb()
   const channel = await db.query.channels.findFirst({ where: eq(channels.id, channelId) })
   if (!channel) return NextResponse.json({ error: 'Channel not found' }, { status: 404 })
+  if (!(await userOwnsChannel(user, channelId))) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   // First reel sets how this channel produces reels — 'review' (stop at the human gates) or 'auto'
   // (run end-to-end to a finished render). Persisted on the channel; the worker reads it per gate.

@@ -1,15 +1,19 @@
 import { getDb, channels, reels } from '@reels/db'
-import { and, desc, eq, count, gte, sum } from 'drizzle-orm'
+import { and, desc, eq, count, gte, sum, inArray } from 'drizzle-orm'
 import Link from 'next/link'
 import { CreateChannelButton } from './CreateChannelButton'
 import { ChannelAvatar } from '@/components/ChannelAvatar'
+import { requireUser } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
 export default async function DashboardPage() {
+  const user = await requireUser()
   const db = getDb()
 
+  // Testers see only their own channels; admins see the whole portfolio.
   const channelRows = await db.query.channels.findMany({
+    where: user.role === 'admin' ? undefined : eq(channels.userId, user.id),
     orderBy: [desc(channels.createdAt)],
   })
 
@@ -44,12 +48,24 @@ export default async function DashboardPage() {
     }
   }
 
+  // Portfolio spend rollup (this user's channels): month-to-date from the per-channel stats, plus an
+  // all-time total across the same channels.
+  const portfolioMonthCents = Object.values(stats).reduce((a, s) => a + s.monthSpendCents, 0)
+  const activeIds = activeRows.map((ch) => ch.id)
+  let portfolioAllTimeCents = 0
+  if (activeIds.length) {
+    const [tot] = await db.select({ n: sum(reels.costCents) }).from(reels).where(inArray(reels.channelId, activeIds))
+    portfolioAllTimeCents = Number(tot?.n ?? 0)
+  }
+
   const isEmpty = activeRows.length === 0 && draftRows.length === 0
   const subtitle = isEmpty
     ? 'No channels yet'
     : [
         activeRows.length > 0 ? `${activeRows.length} channel${activeRows.length === 1 ? '' : 's'}` : null,
         draftRows.length > 0 ? `${draftRows.length} draft${draftRows.length === 1 ? '' : 's'}` : null,
+        portfolioMonthCents > 0 ? `$${(portfolioMonthCents / 100).toFixed(2)} this month` : null,
+        portfolioAllTimeCents > 0 ? `$${(portfolioAllTimeCents / 100).toFixed(2)} all-time` : null,
       ]
         .filter(Boolean)
         .join(' · ')

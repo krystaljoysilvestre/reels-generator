@@ -1,7 +1,7 @@
 import { getDb, channels } from '@reels/db'
 import { eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
-import { requireAuth } from '@/lib/auth'
+import { assertChannelAccess } from '@/lib/access'
 import { ToneConfigSchema, WorldBibleSchema, CaptionStyleSchema, AudioPacksSchema, TargetPlatformSchema, PostingRulesSchema } from '@reels/core'
 import { isYouTubeConfigured } from '@reels/providers'
 import { ChannelSettings } from './ChannelSettings'
@@ -9,8 +9,8 @@ import { ChannelSettings } from './ChannelSettings'
 export const dynamic = 'force-dynamic'
 
 export default async function ChannelSettingsPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireAuth()
   const { id } = await params
+  await assertChannelAccess(id)
   const db = getDb()
   const channel = await db.query.channels.findFirst({ where: eq(channels.id, id) })
   if (!channel) notFound()

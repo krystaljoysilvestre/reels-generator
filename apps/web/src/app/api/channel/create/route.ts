@@ -8,7 +8,7 @@ import { ToneConfigSchema, WorldBibleSchema, ChannelVoiceSchema, VoiceModeSchema
 import { classifyGenre, GENRE_MODULE_VALUES, asGenreModule } from '@reels/core/prompts/scenes.v1'
 import { STYLE_VALUES, resolveStyle } from '@reels/core/prompts/story-styles.v1'
 import { VOICE_VALUES, resolveVoice } from '@reels/core/prompts/story-voices.v1'
-import { getSession } from '@/lib/auth'
+import { getCurrentUser } from '@/lib/auth'
 
 const InputSchema = z.object({
   name: z.string().trim().min(1).max(80),
@@ -59,7 +59,8 @@ const InputSchema = z.object({
 })
 
 export async function POST(req: NextRequest) {
-  if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const user = await getCurrentUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const parsed = InputSchema.safeParse(await req.json().catch(() => null))
   if (!parsed.success) {
@@ -96,6 +97,7 @@ export async function POST(req: NextRequest) {
 
   const values = {
     name: c.name,
+    userId: user.id, // owning user (multi-tenancy)
     avatarKey: c.avatarKey ?? null,
     description: c.description ?? null,
     nicheDescription: c.nicheDescription,
@@ -134,7 +136,8 @@ export async function POST(req: NextRequest) {
   let channel: typeof channels.$inferSelect | undefined
   if (c.draftChannelId) {
     const existing = await db.query.channels.findFirst({ where: eq(channels.id, c.draftChannelId) })
-    if (existing && existing.status === 'draft') {
+    const owns = user.role === 'admin' || existing?.userId === user.id || existing?.userId == null
+    if (existing && existing.status === 'draft' && owns) {
       const updated = await db
         .update(channels)
         .set({ ...values, status: 'active', draftState: null, updatedAt: new Date() })

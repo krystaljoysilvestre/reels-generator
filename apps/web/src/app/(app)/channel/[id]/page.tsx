@@ -3,15 +3,15 @@ import { desc, eq } from 'drizzle-orm'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { PostingRulesSchema, UNSHIPPED_REEL_STATUSES, autoProduceBacklogCap } from '@reels/core'
-import { requireAuth } from '@/lib/auth'
+import { assertChannelAccess } from '@/lib/access'
 import { ChannelAvatar } from '@/components/ChannelAvatar'
 import { CreateReelButton } from './CreateReelButton'
 
 export const dynamic = 'force-dynamic'
 
 export default async function ChannelPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireAuth()
   const { id } = await params
+  await assertChannelAccess(id)
   const db = getDb()
 
   const channel = await db.query.channels.findFirst({ where: eq(channels.id, id) })

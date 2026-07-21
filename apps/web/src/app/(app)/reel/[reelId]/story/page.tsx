@@ -2,7 +2,7 @@ import { eq, and } from 'drizzle-orm'
 import { redirect } from 'next/navigation'
 import { getDb, reels, channels, pipelineSteps } from '@reels/db'
 import { ToneConfigSchema } from '@reels/core'
-import { requireAuth } from '@/lib/auth'
+import { assertReelAccess } from '@/lib/access'
 import { channelMood } from '@/lib/pipeline-phases'
 import { StoryStudio, type CriticSummary } from './StoryStudio'
 
@@ -66,8 +66,8 @@ export const dynamic = 'force-dynamic'
 // Per-reel Story Studio — the guided story phase (generate/BYO → watch it write → review →
 // regenerate-with-reason). Once past the story phase, the reel's home is the storyboard.
 export default async function ReelStoryPage({ params }: { params: Promise<{ reelId: string }> }) {
-  await requireAuth()
   const { reelId } = await params
+  await assertReelAccess(reelId)
   const db = getDb()
 
   const reel = await db.query.reels.findFirst({ where: eq(reels.id, reelId), with: { story: true } })

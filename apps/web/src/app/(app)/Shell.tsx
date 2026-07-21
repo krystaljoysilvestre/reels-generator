@@ -4,8 +4,17 @@ import { Sidebar } from './Sidebar'
 import { ToastProvider } from '@/components/Toast'
 import { RenderAlertWatcher } from '@/components/RenderAlertWatcher'
 
-export function Shell({ children }: { children: React.ReactNode }) {
+export function Shell({
+  children,
+  isAdmin = false,
+  userLabel = 'Account',
+}: {
+  children: React.ReactNode
+  isAdmin?: boolean
+  userLabel?: string
+}) {
   const [open, setOpen] = useState(false)
+  const initials = userLabel.trim().slice(0, 2).toUpperCase() || 'AC'
 
   return (
     <ToastProvider>
@@ -14,7 +23,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     <div className="flex h-screen overflow-hidden bg-bg">
       {/* Desktop sidebar — fixed full-height; only <main> scrolls (see h-screen + overflow-hidden above). */}
       <div className="hidden md:flex">
-        <Sidebar />
+        <Sidebar isAdmin={isAdmin} userLabel={userLabel} />
       </div>
 
       {/* Mobile drawer */}
@@ -22,7 +31,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <div className="fixed inset-0 z-50 md:hidden">
           <div className="animate-fade-in absolute inset-0 bg-ink/30 backdrop-blur-sm" onClick={() => setOpen(false)} />
           <div className="animate-slide-in-left absolute left-0 top-0 h-full">
-            <Sidebar onNavigate={() => setOpen(false)} />
+            <Sidebar onNavigate={() => setOpen(false)} isAdmin={isAdmin} userLabel={userLabel} />
           </div>
         </div>
       )}
@@ -35,8 +44,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
               <path d="M3 6h18M3 12h18M3 18h18" />
             </svg>
           </button>
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-ink text-[11px] font-semibold text-white">OP</div>
-          <span className="text-sm font-semibold text-ink">Operator</span>
+          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-ink text-[11px] font-semibold text-white">{initials}</div>
+          <span className="text-sm font-semibold text-ink">{userLabel}</span>
         </div>
 
         <main className="flex-1 overflow-y-auto [scrollbar-gutter:stable]">{children}</main>

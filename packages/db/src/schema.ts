@@ -9,6 +9,7 @@ import {
   uuid,
   index,
   uniqueIndex,
+  primaryKey,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
@@ -82,6 +83,10 @@ export const rejectionReasonEnum = pgEnum('rejection_reason', [
 export const channels = pgTable('channels', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
+  // Owning user (multi-tenancy). Nullable: legacy rows predate auth and are backfilled to the admin
+  // in migration 0040; every new channel sets it. onDelete set null so removing a user never
+  // silently destroys their content.
+  userId: uuid('user_id').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
   avatarKey: text('avatar_key'),   // optional R2 key for the channel avatar image
   description: text('description'), // optional short blurb shown on the card/header
   nicheDescription: text('niche_description').notNull(),
@@ -400,9 +405,77 @@ export const rejections = pgTable('rejections', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })
 
+// ── Auth & tenancy (Auth.js Drizzle adapter tables + app extensions) ───────────
+
+// The adapter accesses these by their drizzle property names (id/email/emailVerified/… on users;
+// provider/providerAccountId/refresh_token/… on accounts), so those names must match its contract;
+// DB column names stay snake_case per repo convention. ids are uuid to line up with existing FKs.
+export const users = pgTable('users', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name'),
+  email: text('email').unique(),
+  emailVerified: timestamp('email_verified', { mode: 'date' }),
+  image: text('image'),
+  // App extensions (not part of the adapter contract):
+  role: text('role').notNull().default('tester'),      // 'admin' | 'tester'
+  status: text('status').notNull().default('pending'), // 'pending' | 'active' | 'suspended'
+  passwordHash: text('password_hash'),                 // null for SSO-only accounts
+  lastSeenAt: timestamp('last_seen_at'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+})
+
+export const accounts = pgTable('accounts', {
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  type: text('type').$type<'oauth' | 'oidc' | 'email' | 'webauthn'>().notNull(),
+  provider: text('provider').notNull(),
+  providerAccountId: text('provider_account_id').notNull(),
+  refresh_token: text('refresh_token'),
+  access_token: text('access_token'),
+  expires_at: integer('expires_at'),
+  token_type: text('token_type'),
+  scope: text('scope'),
+  id_token: text('id_token'),
+  session_state: text('session_state'),
+}, (account) => ({
+  compoundKey: primaryKey({ columns: [account.provider, account.providerAccountId] }),
+}))
+
+// Present for adapter completeness; unused under the JWT session strategy.
+export const sessions = pgTable('sessions', {
+  sessionToken: text('session_token').primaryKey(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  expires: timestamp('expires', { mode: 'date' }).notNull(),
+})
+
+export const verificationTokens = pgTable('verification_tokens', {
+  identifier: text('identifier').notNull(),
+  token: text('token').notNull(),
+  expires: timestamp('expires', { mode: 'date' }).notNull(),
+}, (vt) => ({
+  compoundKey: primaryKey({ columns: [vt.identifier, vt.token] }),
+}))
+
+// Invite links — pre-approve a signup with a role; consumed once (usedAt/usedByUserId set on accept).
+export const invites = pgTable('invites', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  token: text('token').notNull().unique(),
+  email: text('email'),                                 // optional: bind the invite to an address
+  role: text('role').notNull().default('tester'),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  expiresAt: timestamp('expires_at'),
+  usedByUserId: uuid('used_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  usedAt: timestamp('used_at'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+})
+
 // ── Relations ─────────────────────────────────────────────────────────────────
 
-export const channelsRelations = relations(channels, ({ many }) => ({
+export const usersRelations = relations(users, ({ many }) => ({
+  channels: many(channels),
+}))
+
+export const channelsRelations = relations(channels, ({ one, many }) => ({
+  user: one(users, { fields: [channels.userId], references: [users.id] }),
   stories: many(stories),
   reels: many(reels),
   compilations: many(compilations),

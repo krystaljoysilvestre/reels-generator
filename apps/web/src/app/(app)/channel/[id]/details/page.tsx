@@ -2,7 +2,7 @@ import { getDb, channels } from '@reels/db'
 import { eq } from 'drizzle-orm'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { requireAuth } from '@/lib/auth'
+import { assertChannelAccess } from '@/lib/access'
 import { ChannelAvatar } from '@/components/ChannelAvatar'
 import { CaptionPreview } from '@/components/CaptionPreview'
 import type { ToneConfig, WorldBible, ChannelVoice } from '@reels/core'
@@ -33,8 +33,8 @@ const CAPTION_LABELS: Record<string, string> = {
 // Read-only view of the channel's creative genome (its DNA). The channel page itself stays focused on
 // reels; this is the "what defines this channel" reference. Edit it on the Settings page.
 export default async function ChannelDetailsPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireAuth()
   const { id } = await params
+  await assertChannelAccess(id)
   const db = getDb()
 
   const channel = await db.query.channels.findFirst({ where: eq(channels.id, id) })
