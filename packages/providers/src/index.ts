@@ -14,5 +14,6 @@ export * from './elevenlabs/client.js'
 export * from './elevenlabs/types.js'
 export * from './youtube/client.js'
 export * from './wikimedia/source.js'
+export { checkRateLimit } from './shared/redis-limiter.js'
 // Assembly helpers re-exported from core for convenience
 export { assembleImagePrompt, assembleNegativePrompt } from '@reels/core/assembly/imageprompt'

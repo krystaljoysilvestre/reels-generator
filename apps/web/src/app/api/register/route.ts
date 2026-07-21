@@ -3,7 +3,9 @@ import { getDb, users } from '@reels/db'
 import { eq } from 'drizzle-orm'
 import bcrypt from 'bcryptjs'
 import { z } from 'zod'
+import { checkRateLimit } from '@reels/providers'
 import { consumeInviteForUser } from '@/lib/invite'
+import { clientIp } from '@/lib/request'
 
 // Email/password sign-up. Creates a pending user (or active, if a valid invite cookie is present),
 // then the client signs them in via the credentials provider.
@@ -14,6 +16,15 @@ const Schema = z.object({
 })
 
 export async function POST(req: NextRequest) {
+  // Brute-force / mass-signup guard: cap sign-up attempts per IP per hour. Fail-open if Redis is down.
+  const rl = await checkRateLimit(`register:ip:${clientIp(req)}`, 10, 60 * 60 * 1000)
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: 'Too many sign-up attempts. Please try again later.' },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfterSec) } },
+    )
+  }
+
   const parsed = Schema.safeParse(await req.json().catch(() => null))
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error?.issues[0]?.message ?? 'Invalid input' }, { status: 400 })

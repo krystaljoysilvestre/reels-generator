@@ -55,3 +55,26 @@ export async function acquireRateToken(key: string, limit: RateLimit): Promise<v
     await sleep(waitMs + Math.floor(Math.random() * 100))
   }
 }
+
+// Non-blocking fixed-window check for request-facing paths (auth: register / sign-in brute-force). Unlike
+// acquireRateToken it never waits — it reports whether THIS hit is within `max` for the current window and
+// how long until the window resets. Fail-OPEN if Redis is unset/erroring: this is defense-in-depth, and a
+// Redis blip must never lock legitimate users out of signing in.
+export async function checkRateLimit(
+  key: string,
+  max: number,
+  windowMs: number,
+): Promise<{ ok: boolean; retryAfterSec: number }> {
+  const r = getRedis()
+  if (!r) return { ok: true, retryAfterSec: 0 }
+  const now = Date.now()
+  const bucket = Math.floor(now / windowMs)
+  const redisKey = `ratelimit:${key}:${bucket}`
+  try {
+    const count = (await r.eval(INCR_WINDOW, 1, redisKey, String(windowMs * 2))) as number
+    if (count <= max) return { ok: true, retryAfterSec: 0 }
+    return { ok: false, retryAfterSec: Math.ceil(((bucket + 1) * windowMs - now) / 1000) }
+  } catch {
+    return { ok: true, retryAfterSec: 0 } // Redis unavailable → don't block legitimate auth
+  }
+}

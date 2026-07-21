@@ -5,6 +5,7 @@ import { DrizzleAdapter } from '@auth/drizzle-adapter'
 import { getDb, users, accounts, sessions, verificationTokens } from '@reels/db'
 import { eq } from 'drizzle-orm'
 import bcrypt from 'bcryptjs'
+import { checkRateLimit } from '@reels/providers'
 import { consumeInviteForUser } from '@/lib/invite'
 
 const db = getDb()
@@ -32,6 +33,10 @@ export const authConfig: NextAuthConfig = {
         const email = (creds?.email as string | undefined)?.toLowerCase().trim()
         const password = creds?.password as string | undefined
         if (!email || !password) return null
+        // Brute-force guard: cap attempts per email per 15-min window BEFORE the expensive bcrypt compare.
+        // Over-limit returns null (a generic auth failure), so it neither confirms the email nor burns CPU.
+        const rl = await checkRateLimit(`signin:email:${email}`, 8, 15 * 60 * 1000)
+        if (!rl.ok) return null
         const row = await db.select().from(users).where(eq(users.email, email)).then((r) => r[0])
         if (!row?.passwordHash) return null
         const ok = await bcrypt.compare(password, row.passwordHash)
