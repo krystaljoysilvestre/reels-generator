@@ -1,5 +1,5 @@
 import { cookies } from 'next/headers'
-import { eq } from 'drizzle-orm'
+import { and, eq, isNull } from 'drizzle-orm'
 import { getDb, invites, users } from '@reels/db'
 
 const INVITE_COOKIE = 'invite_token'
@@ -47,7 +47,35 @@ export async function consumeInviteForUser(userId: string): Promise<void> {
     return
   }
   const db = getDb()
+
+  // Email binding: an invite bound to an address may only be consumed by the user with that address.
+  // Without this, whoever holds the token (incl. a leaked admin invite) could claim it under any email.
+  if (invite.email) {
+    const u = await db
+      .select({ email: users.email })
+      .from(users)
+      .where(eq(users.id, userId))
+      .then((r) => r[0])
+    const userEmail = u?.email?.toLowerCase().trim()
+    if (!userEmail || userEmail !== invite.email.toLowerCase().trim()) {
+      await clearInviteCookie()
+      return
+    }
+  }
+
+  // Atomic single-use: claim the invite only if it is still unused. Two concurrent signups carrying the
+  // same token would otherwise both pass validateInvite and both upgrade — one invite minting several
+  // (possibly admin) accounts. The conditional UPDATE lets exactly one win; only the winner upgrades.
+  const [claimed] = await db
+    .update(invites)
+    .set({ usedByUserId: userId, usedAt: new Date() })
+    .where(and(eq(invites.id, invite.id), isNull(invites.usedAt)))
+    .returning({ id: invites.id })
+  if (!claimed) {
+    await clearInviteCookie()
+    return
+  }
+
   await db.update(users).set({ role: invite.role, status: 'active' }).where(eq(users.id, userId))
-  await db.update(invites).set({ usedByUserId: userId, usedAt: new Date() }).where(eq(invites.id, invite.id))
   await clearInviteCookie()
 }
