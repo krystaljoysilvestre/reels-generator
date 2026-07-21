@@ -1,7 +1,13 @@
 import { eq, and, sql } from 'drizzle-orm'
-import { getDb } from '@reels/db'
+import { getDb, getGlobalSpendTodayCents } from '@reels/db'
 import { pipelineSteps, reels } from '@reels/db'
-import { assertBudget, DEFAULT_BUDGET_CAPS_CENTS, type PipelineStepName } from '@reels/core'
+import {
+  assertBudget,
+  assertGlobalDailyBudget,
+  GLOBAL_DAILY_SPEND_CAP_CENTS,
+  DEFAULT_BUDGET_CAPS_CENTS,
+  type PipelineStepName,
+} from '@reels/core'
 
 // Worker harness — every pipeline step calls runStep() instead of doing raw DB work.
 // Guarantees:
@@ -50,6 +56,12 @@ export async function runStep<T>(
   const reel = await db.query.reels.findFirst({ where: eq(reels.id, ctx.reelId) })
   if (!reel) throw new Error(`Reel not found: ${ctx.reelId}`)
   assertBudget(ctx.reelId, reel.costCents, cap)
+
+  // App-wide daily kill-switch (backstop across all tenants). Only queries when a cap is configured, so
+  // it's free in the default (off) case. Terminal when tripped — halts rather than retry-spinning.
+  if (GLOBAL_DAILY_SPEND_CAP_CENTS !== null) {
+    assertGlobalDailyBudget(await getGlobalSpendTodayCents())
+  }
 
   // ── 3. Mark step running ──────────────────────────────────────────────────
   const attempt = (existing?.attempt ?? 0) + 1

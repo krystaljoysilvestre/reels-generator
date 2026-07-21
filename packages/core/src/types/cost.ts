@@ -27,6 +27,37 @@ export function assertBudget(reelId: string, costCents: number, capCents: number
   }
 }
 
+// ── App-wide daily spend kill-switch ────────────────────────────────────────
+// A backstop against a runaway loop / leaked key / many tenants summing past what the per-user caps
+// bound — the per-user monthly cap protects one wallet, this protects the whole app. Env-configured;
+// empty/invalid = OFF (no ceiling), so it's inert until an operator sets it. Enforced in the worker
+// harness before every paid step.
+export const GLOBAL_DAILY_SPEND_CAP_CENTS: number | null = (() => {
+  const raw = process.env['GLOBAL_DAILY_SPEND_CAP_CENTS']
+  if (!raw) return null
+  const n = Number(raw)
+  return Number.isFinite(n) && n > 0 ? n : null
+})()
+
+export class GlobalBudgetExceededError extends Error {
+  constructor(
+    public readonly spentTodayCents: number,
+    public readonly capCents: number,
+  ) {
+    super(
+      `App-wide daily spend cap reached: ${spentTodayCents}¢ >= ${capCents}¢ (~$${(capCents / 100).toFixed(2)}). Paid steps are halted until the cap resets or is raised.`,
+    )
+    this.name = 'GlobalBudgetExceededError'
+  }
+}
+
+// Throws when the app's spend today has reached the configured global cap. No-op when the cap is unset.
+export function assertGlobalDailyBudget(spentTodayCents: number): void {
+  if (GLOBAL_DAILY_SPEND_CAP_CENTS !== null && spentTodayCents >= GLOBAL_DAILY_SPEND_CAP_CENTS) {
+    throw new GlobalBudgetExceededError(spentTodayCents, GLOBAL_DAILY_SPEND_CAP_CENTS)
+  }
+}
+
 // ── Per-user limits (multi-tenant cost safety) ──────────────────────────────
 // A coarse gate at reel-CREATION, complementing the per-reel assertBudget (mid-render cutoff): the
 // reel cap stops one runaway reel; these stop many reels draining a user's wallet. Env-overridable so

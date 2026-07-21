@@ -44,3 +44,17 @@ export async function getUserUsage(userId: string): Promise<UserUsage | null> {
     reelsToday: Number(cnt?.n ?? 0),
   }
 }
+
+// App-wide spend today, across every tenant — feeds the global daily kill-switch (assertGlobalDailyBudget).
+// Approximated by reels CREATED today (we have no per-charge ledger; cost accrues on the reel row shortly
+// after creation), matching the createdAt-window convention getUserUsage uses for the monthly figure.
+export async function getGlobalSpendTodayCents(): Promise<number> {
+  const db = getDb()
+  const now = new Date()
+  const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+  const [row] = await db
+    .select({ cents: sum(reels.costCents) })
+    .from(reels)
+    .where(gte(reels.createdAt, dayStart))
+  return Number(row?.cents ?? 0)
+}
