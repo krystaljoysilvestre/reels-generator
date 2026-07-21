@@ -13,7 +13,7 @@
 
 import type { GenreModule } from './scenes.v1.js'
 
-export const WRITER_IDENTITIES_V1_VERSION = 'identities.v25'
+export const WRITER_IDENTITIES_V1_VERSION = 'identities.v26'
 
 export interface WriterIdentity {
   /** e.g. "a horror writer" — slots into "You are …" */
@@ -513,14 +513,14 @@ export const WRITER_IDENTITIES: Record<GenreModule, WriterIdentity> = {
       'A small brave or kind CHOICE by the little hero — the child\'s own size of courage — and that choice is what turns the story; the happy ending happens BECAUSE of what the child did, not on its own.',
       'Wonder shown as delight (the glow, the friend, the happy surprise), never as a scare.',
       'Concrete, picturable images a child can SEE — not "she was happy" but "she twirled so fast her ribbons danced like butterflies".',
-      'SMALL, EVERYDAY WORDS a young child actually knows and uses — the plainest word, always. Say "gabi" not "takipsilim", "kanta"/"tugtog" not "himig", "kumikinang"/"maliwanag" not "nagniningning", "hindi mapakali" → "kinakabahan". PREFER the plain Tagalog word over an English one when a common Tagalog word exists — "gayahin"/"tularan" not "copycat", "inis"/"lungkot" not "frustration", "ugong"/"kanta nang mahina" not "humming", "gustong-gustong malaman" not "curious", "ayos"/"sunod-sunod" not "pattern". No literary, poetic, or grown-up vocabulary; if a five-year-old would not understand the word, do not use it.',
-      'NEVER abstract, grown-up phrasing or introspective similes — lines like "parang may tinatanong ka sa kisame pero hindi mo alam kung ano" or "yung klase ng frustration na hindi galit, kundi malungkot na lang" are things a child cannot picture. Keep every line a concrete thing a child can SEE and a feeling said in the plainest words.',
+      'SMALL, EVERYDAY WORDS a young child actually knows and uses — the plainest word in the story\'s language, always. No literary, poetic, or grown-up vocabulary; if a five-year-old would not understand the word, do not use it. Prefer the plain everyday NATIVE word over a fancy, literary, or borrowed/imported one — a child reaches for the ordinary word, not the elevated synonym or the loanword when a common native word exists.',
+      'NEVER abstract, grown-up phrasing or introspective similes — a child cannot picture "a question you can\'t quite name" or "the kind of sadness that isn\'t anger, just a little heavy." Keep every line a concrete thing a child can SEE and a feeling said in the plainest words.',
       'CHILDLIKE SENTENCES — short and clear, one simple thought at a time. Variety means childlike variety (a short line, then a slightly longer warm one, then the refrain) — never a long, winding, grown-up sentence or a stacked introspective comparison.',
       'Gentle, inclusive humor — a silly mix-up, a funny noise, a clumsy happy accident; never mean or at anyone\'s expense.',
-      'THE STORYBOOK CLOSE — the way children\'s stories are written. SHOW the lesson through what the hero DOES, then NAME it warmly and simply in the last beat: one gentle closing line the child carries away ("At natutunan ni Maya na kahit ang pinakamaliit na ilaw ay kayang magturo ng daan pauwi"). This warm, named takeaway BELONGS here — it is the storybook ending, not a flaw. What to avoid is PREACHINESS: a moral the story didn\'t earn, or lecturing ("dapat lagi kang mabait") instead of a felt, warm line that grows out of what the hero just did.',
+      'THE STORYBOOK CLOSE — the way children\'s stories are written. SHOW the lesson through what the hero DOES, then NAME it warmly and simply in the last beat: one gentle closing line the child carries away ("And Maya learned that even the smallest light can help someone find their way home"). This warm, named takeaway BELONGS here — it is the storybook ending, not a flaw. What to avoid is PREACHINESS: a moral the story didn\'t earn, or lecturing ("you should always be kind") instead of a felt, warm line that grows out of what the hero just did.',
       'A warm, safe closing image paired with that gentle closing message — the light on, the hug, the cozy sleep, and the small truth said softly. Let the last beat feel like a story gently closing — a cozy storybook ending, warm and complete, in the SPIRIT of "and they lived happily ever after" without the literal cliché.',
     ],
-    openingCraft: 'Open with a warm, storybook invitation that draws the child in — a cozy "come, listen" framing ("May isang batang…", "Isang gabi, may…"), then the little hero and the spark of wonder or the small problem. Bright and inviting, never scary or heavy. In the SPIRIT of "once upon a time" — a recognizable warm opener — without the literal cliché.',
+    openingCraft: 'Open with a warm, storybook invitation that draws the child in — a cozy "come, listen" framing (the story\'s own language\'s version of "there was once a little one who…"), then the little hero and the spark of wonder or the small problem. Bright and inviting, never scary or heavy. In the SPIRIT of "once upon a time" — a recognizable warm opener — without the literal cliché.',
     registers: [
       'COZY BEDTIME — soft, soothing, winding down; the world tucking itself in. Fits the last story of the night.',
       'PLAYFUL ADVENTURE — bouncy, funny, brave; a small hero on a big-feeling quest. Fits daytime delight.',
@@ -583,9 +583,9 @@ export const WRITER_IDENTITIES: Record<GenreModule, WriterIdentity> = {
       'Rising trials, each testing a virtue; the magical helper enables but never rescues.',
       'The darkest moment where the magic FAILS and the hero wins through their own character; then a final MORAL choice.',
       'Close on a RESTORATIVE image — the forest blooming, the stars returning, spring coming back — the reward mirrors the lesson.',
-      'SIMPLE, FAMILIAR words carrying deep feeling — the plainest word a listener (even a child) instantly knows, holding the deepest truth ("simple words, felt deeply"). Never obscure or literary vocabulary. Name a magical being with a familiar word (a diwata, a fairy) or make what it is instantly clear — never an obscure term the listener must already know (e.g. "lambana") without saying plainly what it is. Concrete, archetypal images anyone across generations would picture.',
+      'SIMPLE, FAMILIAR words carrying deep feeling — the plainest word a listener (even a child) instantly knows, holding the deepest truth ("simple words, felt deeply"). Never obscure or literary vocabulary. Name a magical being with a familiar word from the story\'s own tradition (a fairy, a spirit, a sprite) or make plain what it is in the same breath — never an obscure being-name the listener must already know without saying what it is. Concrete, archetypal images anyone across generations would picture.',
     ],
-    openingCraft: 'Open in the timeless ordinary and what the hero LACKS — the told-aloud voice, a hero small against an ancient world ("Noong unang panahon…", "Every winter…"), a first breath of the wonder to come.',
+    openingCraft: 'Open in the timeless ordinary and what the hero LACKS — the told-aloud voice, a hero small against an ancient world (the story\'s own "once upon a time…" or "Every winter, the forest grew one tree no one dared touch…"), a first breath of the wonder to come.',
     registers: [
       'GENTLE WONDER — warm and hopeful; kindness quietly rewarded, a soft marvel. The lightest fairytale temperature.',
       'SHADOWED TRIAL — real darkness the hero must pass THROUGH (grief, fear, a cruel enchantment), but the light always returns; earns its restoration.',

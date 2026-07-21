@@ -11,7 +11,7 @@
 import { z } from 'zod'
 import { asGenreModule, classifyGenre, type GenreModule } from './scenes.v1.js'
 
-export const STORY_CRITIC_V2_VERSION = 'story-critic.v2.16'
+export const STORY_CRITIC_V2_VERSION = 'story-critic.v2.17'
 
 export const StoryGateSchema = z.object({
   pass: z.boolean(),
@@ -170,12 +170,12 @@ SAFETY (disqualifying if failed)
 
 HEART (the storybook close)
 - A gentle truth the child carries away, SHOWN through what the hero does AND named warmly in a simple closing line — the way storybooks end ("…and she learned that even the smallest light can lead you home"). This warm, named takeaway is on-register and welcome, NOT a flaw.
-- What fails is PREACHINESS: a moral the story didn't earn, or a lecture ("dapat lagi kang mabait") instead of a warm, felt line that grows out of what the hero just did. An ending with NO gentle takeaway at all also misses the register.
+- What fails is PREACHINESS: a moral the story didn't earn, or a lecture ("you should always be kind") instead of a warm, felt line that grows out of what the hero just did. An ending with NO gentle takeaway at all also misses the register.
 
 VOICE
 - Simple, musical, read-aloud rhythm with a refrain a child could chant along with; vary the line length naturally — not every line a fragment.
 - Concrete and picturable — a child can SEE every beat ("ribbons danced like butterflies", not "she was happy"). Gentle, inclusive humor welcome; never mean.
-- SIMPLE ENOUGH FOR A SMALL CHILD: everyday words a young child actually knows. Literary, poetic, or grown-up vocabulary is a fail ("takipsilim", "himig", "nagniningning"). PREFER plain Tagalog over English when a common word exists — English loanwords like "pattern", "frustration", "copycat", "humming" where a child would use a Tagalog word are a fail. Abstract or introspective grown-up phrasing and similes a child cannot picture ("parang may tinatanong ka sa kisame", "yung klase ng frustration na hindi galit kundi malungkot") are a fail. If a five-year-old wouldn't understand or picture it, it doesn't belong.
+- SIMPLE ENOUGH FOR A SMALL CHILD: everyday words a young child actually knows. Literary, poetic, or grown-up vocabulary is a fail. Prefer the plain everyday NATIVE word over a fancy synonym or a borrowed/imported word when a common native word exists — a child uses the ordinary word, not the elevated or loaned one. Abstract or introspective grown-up phrasing and similes a child cannot picture ("a question you can't quite name", "the kind of sadness that isn't anger, just heavy") are a fail. If a five-year-old wouldn't understand or picture it, it doesn't belong.
 - SENTENCE STRUCTURE stays childlike — short, clear sentences, one simple thought at a time. The variety wanted here is childlike (a short line, a slightly longer warm one, a refrain), never adult winding run-ons or stacked introspection.
 - FAMILIAR OBJECTS: the things in the story are common, everyday objects a child instantly knows (a blanket, a toy, a slipper, a pet, the moon, a lamp, a firefly). An unusual or unfamiliar object a small child wouldn't recognize (an odd instrument, an exotic or made-up thing) is a fail.
 - OPENER & CLOSE: a warm storybook opener that invites the child in, and a cozy closing frame that lets the tale settle — in the SPIRIT of "once upon a time…" / "…happily ever after", never the literal cliché.
@@ -200,7 +200,7 @@ TRIAL & TURN (disqualifying if failed)
 - The ending RESTORES — the world healed, not merely saved (the forest blooms, spring returns, the family reunites). A merely-saved or unresolved ending is a fail.
 
 VOICE
-- SIMPLE, FAMILIAR words carrying deep feeling ("simple words, felt deeply"), in a timeless told-aloud cadence. A listener — even a child — should understand every word; obscure or literary vocabulary is a fail. If a magical being appears, use a familiar name (a diwata, a fairy) OR make plain what it is in the same breath — an obscure creature-name the listener must already know (e.g. "lambana") is a fail unless the story instantly makes clear what it is.
+- SIMPLE, FAMILIAR words carrying deep feeling ("simple words, felt deeply"), in a timeless told-aloud cadence. A listener — even a child — should understand every word; obscure or literary vocabulary is a fail. If a magical being appears, use a familiar name from the story's own tradition (a fairy, a spirit) OR make plain what it is in the same breath — an obscure being-name the listener must already know is a fail unless the story instantly makes clear what it is.
 - The DEPTH is all-ages — real trials, a bittersweet cost, a moral choice — but the WORDS stay simple; never sand the meaning down to a toddler story, and never dress it up in fancy vocabulary. Concrete, archetypal images anyone across generations could picture.
 
 NEVER

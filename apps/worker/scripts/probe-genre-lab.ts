@@ -326,6 +326,14 @@ Pero tuwing may nag-a-alok sa akin ng "sigurado 'to, kita agad" — naaalala ko 
       hookHint: 'open like an elder beginning a tale by lamplight — pull the listener into the legend in the first line',
       worldBible: HORROR_WORLD_BIBLE,
     },
+    // Mystery is NOT a genre module — the niche has no horror keywords, so it routes to `general` (neutral
+    // storyteller). A test of whether the writer produces clean passing stories on a fresh genre whose
+    // literary instincts ALIGN with it (unlike childrens' simplicity, which the writer fights).
+    mystery: {
+      name: 'Sino Ang Gumawa?',
+      niche: 'Filipino mystery stories — a puzzle that grabs you: something does not add up, a clue that does not fit, an ordinary person or a sharp observer piecing it together through misdirection and red herrings, and a satisfying reveal that makes you rethink everything you just heard; grounded and clever, first-person or close, never supernatural',
+      hookHint: 'open on the wrong detail — the one thing that does not add up — so the viewer is pulled into the puzzle by second 3',
+    },
     // Fairy tales route to the `childrens` module (classifyGenre matches "fairy tale") — our wonder genre.
     // Enchanted world bible (NOT horror) so it leans storybook-wonder. A humble hero, a magical test, a lesson.
     fairytale: {
