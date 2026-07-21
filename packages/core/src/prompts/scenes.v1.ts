@@ -18,6 +18,7 @@ export type GenreModule =
   | 'reddit_story'
   | 'comedy'
   | 'childrens'
+  | 'fairytale'
   | 'general'
 
 // Single source of truth for the bucket values — the wizard/settings validators import this
@@ -31,6 +32,7 @@ export const GENRE_MODULE_VALUES = [
   'reddit_story',
   'comedy',
   'childrens',
+  'fairytale',
   'general',
 ] as const satisfies readonly GenreModule[]
 
@@ -80,7 +82,8 @@ export interface ScenesPromptVars {
 // Used as the fallback when a channel has no stored genreCategory (pre-dates the column).
 export function classifyGenre(niche: string): GenreModule {
   const n = niche.toLowerCase()
-  if (/children|kids|kiddie|bedtime|fairy[- ]?tale|nursery|storybook|picture[- ]?book|toddler|preschool|for kids/.test(n)) return 'childrens'
+  if (/fairy[- ]?tale|fairytale|enchanted tale|once upon a time/.test(n)) return 'fairytale'
+  if (/children|kids|kiddie|bedtime|nursery|storybook|picture[- ]?book|toddler|preschool|for kids/.test(n)) return 'childrens'
   if (/horror|thriller|paranormal|aswang|multo|kulam|true[- ]?crime|creepy|scary|ghost|haunt|spooky|nightmare|eerie/.test(n)) return 'horror'
   if (/news|explain|educat|tutorial|histor|science|finance|document|how[- ]?to|fact|tech|business|review/.test(n)) return 'informational'
   if (/cook|food|recipe|travel|vlog|lifestyle|fashion|beauty|fitness|product|diy|craft|makeup/.test(n)) return 'lifestyle'
@@ -108,6 +111,7 @@ DARKNESS: night beats are shadow-DOMINATED — ceiling, far corners and deep bac
   reddit_story: `GENRE — CONFESSION / REDDIT STORY: phone-real, never cinematic. Frames look like life caught, not composed — home interiors with clutter, the kitchen counter, a parked car, fluorescent office light; eye-level, slightly imperfect, the way a real person's photo roll looks. Nothing staged, nothing moody, no dramatic grades — over-produced frames break the "this actually happened" spell. THE DRAMA LIVES IN ORDINARY OBJECTS: the wedding invitation, the Tupperware, the group-chat screen glow, the receipt on the table — mundane things photographed like they matter, because in this story they do. THE PEAK: the object or scene that proves the story — shot plainly, close enough to read, like evidence photographed on a phone to show a friend. The more mundane the frame, the more believable the bomb inside it.`,
   comedy: `GENRE — COMEDY: clarity is the punchline's oxygen — comedy dies in shadow and in crops. Bright, even, almost flat light (daytime-sitcom plain); the absurd thing shown WHOLE and in focus, framed with deadpan matter-of-factness — a centered, symmetrical, almost bureaucratic composition of something ridiculous IS the joke. Play the frame straight: the more absurd the content, the more mundane and orderly the shot (document it like real estate photography, never wacky angles or fisheye — the composition never laughs at its own joke). REACTION LOGIC: alternate the absurd thing (plain, full view) with the unbothered or quietly devastated face; the gap between them is where the laugh lives. Escalation = the SAME calm framing, one notch worse content each time. THE PEAK: the full absurd picture finally seen WHOLE — often a step WIDER, not tighter, so the entire situation lands in one look (the reveal of just how far this has gone). Never darken or dramatize a funny beat; a moody grade smothers it.`,
   childrens: `GENRE — CHILDREN'S STORY: bright, warm, storybook wonder — safe and delightful, never dark or frightening. Soft, rounded, colorful shapes; friendly light (golden afternoon, a cozy lamp, gentle moonlight for bedtime); a small, endearing hero (a child or a friendly creature) the eye loves. SHOW THE WONDER AS DELIGHT: the glowing thing, the kind creature, the magical-but-safe moment — awe a child would gasp at, never a scare. ORDINARY MADE MAGICAL: render an everyday thing (crayons, a cloud, a sock, a star) turning marvelous-but-safe. Room for GENTLE VISUAL HUMOR — a silly mix-up, an exaggerated happy face, a clumsy friendly creature; playful, never mean. Keep any problem or danger GENTLE and always tilting back toward safety. THE PEAK: the warmest, most wondrous or reassuring beat — the hug, the friend found, the light coming on, the safe landing home — a soft, glowing, storybook image. Motion is gentle and playful. NEVER dark, gory, threatening, or lonely-sad; render nothing a child shouldn't see right before sleep.`,
+  fairytale: `GENRE — FAIRYTALE: timeless STORYBOOK ILLUSTRATION, never photoreal and never a slick 3D render. Painterly, enchanted, archetypal — the look of a classic illustrated fairy-tale book (watercolor, oil, or ink), hand-illustrated and ancient-feeling. Warm golden or moonlit-silver light, deep storybook color, soft edges. THE MAGIC IS SYMBOLIC: render the enchanted element (the cursed rose, the endless winter, the glowing gift, the tiny fairy) as ONE wondrous focal image that carries the story's feeling — awe, or a beautiful unease — never cheap spectacle. Real shadow is allowed (a fairytale can pass through darkness), but the frame always keeps a thread of light or hope; never grimdark, never gory. THE HERO is small and ordinary against a vast, ancient world — the tiny figure at the forest's edge, dwarfed by the wonder. THE PEAK: the wondrous or RESTORATIVE turn — the forest blooming, the curse lifting, the helper appearing, spring returning — a luminous storybook image. Keep places archetypal and instantly readable (misty forest, forgotten castle, moonlit meadow, enchanted bridge), never cluttered with realistic detail.`,
   general: ``,
 }
 

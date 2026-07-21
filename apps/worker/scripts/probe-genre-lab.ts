@@ -247,6 +247,19 @@ Doon ko lang nalaman — hindi lang pala ako. May listahan. Dalawampu't pito kam
 Hanggang ngayon, hindi ko alam kung nasaan siya. O kung buhay pa.
 Pero tuwing may nag-a-alok sa akin ng "sigurado 'to, kita agad" — naaalala ko 'yung mukha niya nung nagbabalik siya ng pera, ngiting-ngiti, para lang mapaniwala kami.`
 
+  // Enchanted (wonder-forward) world for FAIRY TALES — deliberately NOT the horror world bible, so the
+  // tone leans to storybook wonder, not dread. Filipino-flavored: diwata/engkanto as magical helpers or
+  // testers, enchanted places, a magical gift, and a moral core (kindness rewarded, greed punished).
+  const FAIRYTALE_WORLD_BIBLE = `{
+  "region": "a Philippine province, long ago",
+  "era": "noong unang panahon (once upon a time)",
+  "canonLocations": ["the enchanted forest at the edge of the village", "a humble nipa hut", "a clear spring the spirits guard", "the great balete tree where the diwata dwells", "moonlit rice terraces"],
+  "canonObjects": ["a magical seed that grows overnight", "an enchanted comb", "a clay jar that never empties", "a woven salakot passed down for luck", "a golden bracelet from the forest"],
+  "beings": ["the diwata, a benevolent nature-guardian who quietly tests the kind and the greedy", "the lambana, a tiny winged forest fairy — playful, glowing, easily offended", "an engkanto who grants a wish with a hidden price", "a talking creature — a bird or a turtle — that guides the humble hero"],
+  "folkValues": ["kindness to the small and poor is always repaid", "greed and pride are gently punished", "keep your word to the unseen", "a brave, gentle heart wins where force fails"],
+  "vocabulary": {"diwata": "a benevolent nature spirit or goddess", "engkanto": "an enchanted being of the forest", "alamat": "a legend or origin tale"}
+}`
+
   // One Taglish probe channel per genre. Niches deliberately match the self-run channel vision.
   const LAB: Record<string, { name: string; niche: string; hookHint: string; fewshot?: string; worldBible?: string; seeds?: string[]; evidenceBriefs?: string[] }> = {
     reddit_story: {
@@ -302,6 +315,24 @@ Pero tuwing may nag-a-alok sa akin ng "sigurado 'to, kita agad" — naaalala ko 
       name: 'Kwentuhan Tayo',
       niche: 'true-feeling everyday Filipino stories — whatever the barangay would actually retell',
       hookHint: 'earn the next ten seconds with the first line',
+    },
+    // Filipino FOLKLORE as LEGEND/WONDER (not folk-horror). The niche deliberately avoids horror keywords
+    // (aswang/multo/kulam/ghost/scary) so classifyGenre routes it to `general` (mythic storytelling identity)
+    // rather than horror — the creatures live in the world bible, told as legend, not as scares. Owner asked
+    // for folklore INSTEAD of horror. (Reveals the same "folklore is a WORLD, not a genre" gap as true crime.)
+    folklore: {
+      name: 'Alamat',
+      niche: 'retellings of Philippine folklore and alamat — the legends of the diwata and the enchanted mountains like Maria Makiling, the tikbalang and the kapre of the old forests, the engkanto and the nuno sa punso, and the alamat behind rivers, fireflies, and the first fruits; told as mythic oral tales the elders pass down, full of wonder and quiet warning',
+      hookHint: 'open like an elder beginning a tale by lamplight — pull the listener into the legend in the first line',
+      worldBible: HORROR_WORLD_BIBLE,
+    },
+    // Fairy tales route to the `childrens` module (classifyGenre matches "fairy tale") — our wonder genre.
+    // Enchanted world bible (NOT horror) so it leans storybook-wonder. A humble hero, a magical test, a lesson.
+    fairytale: {
+      name: 'Noong Unang Panahon',
+      niche: 'enchanted Filipino fairy tales where a humble hero crosses paths with a FAIRY of the forest — a diwata, a tiny winged lambana, or a mischievous engkanto — who grants a wish with a catch, quietly tests a kind heart, or strikes a bargain to keep; the fairy is a CHARACTER the hero meets and speaks with, not just ambient magic; warm or gently bittersweet, in the storybook tradition',
+      hookHint: 'open on the hero meeting the fairy — a diwata or a glowing lambana appears in the first beat, wondrous and a little uncanny',
+      worldBible: FAIRYTALE_WORLD_BIBLE,
     },
     // True crime is NOT a first-class module — this niche classifies to `horror` (classifyGenre matches
     // "true-crime"), so it borrows horror's dread craft; the fewshot keeps it grounded + human. Fictionalized

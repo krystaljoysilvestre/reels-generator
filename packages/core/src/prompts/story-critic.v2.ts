@@ -11,7 +11,7 @@
 import { z } from 'zod'
 import { asGenreModule, classifyGenre, type GenreModule } from './scenes.v1.js'
 
-export const STORY_CRITIC_V2_VERSION = 'story-critic.v2.14'
+export const STORY_CRITIC_V2_VERSION = 'story-critic.v2.15'
 
 export const StoryGateSchema = z.object({
   pass: z.boolean(),
@@ -181,6 +181,27 @@ NEVER
 - Real cruelty, peril, or loss left unresolved; an adult, bittersweet, or sad-without-comfort ending.
 - A lesson so preachy the story disappears.
 - "Show, don't tell" pushed so hard that the warmth and the refrain get stripped out.`,
+
+  fairytale: `MORAL SPINE
+- ONE clear moral truth at the core, and every major beat reinforces it (kindness over cruelty, humility over pride, keeping a promise, love over fear). A tale with no moral center is just fantasy — fail it.
+
+SYMBOLIC MAGIC
+- The central magic MEANS something human (a wilting rose = a life running out; an endless winter = grief; a mirror = self-acceptance). Magic that is pure decoration or spectacle, signifying nothing, is a fail.
+- Magic follows a rule with a felt cost or consequence; magic that solves the problem for free, with no choice or price, is a fail.
+
+HERO
+- An ordinary hero defined by CHARACTER, not power, and never "chosen/special". They EARN the wonder through a virtuous act (a kindness, a kept promise, a spared creature) BEFORE magic rewards them. If the magic would come regardless of what the hero did, fail it.
+
+TRIAL & TURN (disqualifying if failed)
+- At the darkest moment the hero prevails through their own character, not a bigger spell; the climax is a MORAL choice (revenge or forgiveness, power or love). Show the turn as a felt moment, never summarized.
+- The ending RESTORES — the world healed, not merely saved (the forest blooms, spring returns, the family reunites). A merely-saved or unresolved ending is a fail.
+
+VOICE
+- SIMPLE, FAMILIAR words carrying deep feeling ("simple words, felt deeply"), in a timeless told-aloud cadence. A listener — even a child — should understand every word; obscure or literary vocabulary is a fail. If a magical being appears, use a familiar name (a diwata, a fairy) OR make plain what it is in the same breath — an obscure creature-name the listener must already know (e.g. "lambana") is a fail unless the story instantly makes clear what it is.
+- The DEPTH is all-ages — real trials, a bittersweet cost, a moral choice — but the WORDS stay simple; never sand the meaning down to a toddler story, and never dress it up in fancy vocabulary. Concrete, archetypal images anyone across generations could picture.
+
+NEVER
+- A hero rewarded for being special instead of virtuous; magic with no rule or cost; obscure or literary words that lose a child; modern sarcasm or self-aware irony that breaks the timeless tone (unless deliberately fractured/comic); a grimdark or gory tale with no thread of hope; a world left merely saved, not healed.`,
 
   general: `HOOK
 - The first spoken line earns the next ten seconds: a question opened, a tension entered, a promise made — never scene-setting or a greeting.

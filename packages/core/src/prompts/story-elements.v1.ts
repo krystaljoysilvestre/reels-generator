@@ -146,6 +146,14 @@ const PALETTES: Record<GenreModule, Palette> = {
     aftereffect: ['a want + a belief it\'s doable', 'a saved idea'],
     tensionCurve: ['payoff→how→invitation'],
   },
+  fairytale: {
+    role: ['a youngest child', 'a poor girl', 'a shepherd', 'a woodcutter', 'a servant', 'an orphan', 'a misunderstood prince or princess', 'a kind-hearted fool'],
+    setting: ['a misty forest', 'a forgotten castle', 'a moonlit meadow', 'a humble cottage at the wood\'s edge', 'a hidden valley', 'an ancient tower', 'an enchanted bridge', 'a village under a long winter'],
+    anchor: ['a cursed rose losing its petals', 'an enchanted mirror', 'a magic ring or comb', 'a river that grants one truthful wish', 'a broken crown', 'a shared crust of bread', 'a promise made to a stranger'],
+    trigger: ['a curse spreads over the land', 'a child or a light vanishes', 'a talking animal arrives with a plea', 'an enchanted object appears overnight', 'an endless winter falls', 'a bargain is offered with a hidden cost'],
+    turn: ['the magic fails and the hero prevails through their own heart', 'the final choice is forgiveness over revenge', 'a kept promise unlocks the wonder', 'the humble hero\'s kindness is what breaks the spell'],
+    aftereffect: ['the forest blooms again', 'the curse lifts forever', 'the family is reunited', 'spring returns to the frozen land', 'true worth is revealed', 'an ordinary home made extraordinary'],
+  },
   childrens: {
     role: ['a curious child', 'a small brave animal', 'a shy new kid', 'a lonely little creature looking for a friend', 'a grandparent and a grandchild', 'a tiny hero no bigger than a thumb'],
     setting: ['a cozy bedroom at bedtime', 'a garden that hums after dark', 'a village of friendly creatures', 'a forest where the trees are kind', 'a little shop full of wonders', 'the quiet backyard of the moon'],
