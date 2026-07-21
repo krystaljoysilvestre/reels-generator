@@ -300,9 +300,8 @@ export async function generateImages(reelId: string): Promise<void> {
 
     await runStep(
       { reelId, stepName: 'generate_images', inputHash: `${inputHash}:scene${scene.idx}` as never },
-      async () => {
+      async (cost) => {
         const qa = isQATarget(scene)
-        let totalCost = 0
         let chosen: Awaited<ReturnType<typeof generateImageWithRetry>> | undefined
         let extraNeg = '' // targeted negatives added across re-rolls to push the model off the flagged failure
         let lastIssues: string[] = [] // QA verdict of the kept image ([] = passed / not QA'd)
@@ -329,14 +328,14 @@ export async function generateImages(reelId: string): Promise<void> {
             referenceImageKeys,
             engine: sceneEngine,
           })
-          totalCost += result.costCents
+          cost.add(result.costCents) // record spend the moment it's incurred, so a throw below doesn't lose it
           chosen = result
 
           if (!qa) break
 
           const buffer = await downloadBuffer(result.asset.storageKey)
           const { verdict, costCents } = await imageQA(buffer, scene.visualPrompt!)
-          totalCost += costCents
+          cost.add(costCents)
           lastIssues = verdict.issues
           if (!best || verdict.issues.length < best.issues.length) best = { buffer, issues: verdict.issues, attempt }
           if (verdict.pass) {
@@ -380,12 +379,12 @@ export async function generateImages(reelId: string): Promise<void> {
             kind: 'image',
             storageKey: chosen!.asset.storageKey,
             provider: chosen!.provider,
-            costCents: totalCost,
+            costCents: cost.total,
             meta,
           })
           .onConflictDoUpdate({
             target: [assets.reelId, assets.storageKey],
-            set: { provider: chosen!.provider, costCents: totalCost, meta, createdAt: new Date() },
+            set: { provider: chosen!.provider, costCents: cost.total, meta, createdAt: new Date() },
           })
           .returning()
 
@@ -394,7 +393,7 @@ export async function generateImages(reelId: string): Promise<void> {
           .set({ imageAssetId: asset!.id })
           .where(and(eq(scenes.reelId, reelId), eq(scenes.idx, scene.idx)))
 
-        return { output: { assetId: asset!.id }, costCents: totalCost }
+        return { output: { assetId: asset!.id }, costCents: cost.total }
       },
     )
   }

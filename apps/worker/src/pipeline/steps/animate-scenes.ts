@@ -137,8 +137,7 @@ export async function animateScenes(reelId: string): Promise<void> {
 
       await runStep(
         { reelId, stepName: 'animate_scenes', inputHash: `${inputHash}:s${scene.idx}v${v}` as never },
-        async () => {
-          let totalCost = 0
+        async (cost) => {
           let chosen: Awaited<ReturnType<typeof generateVideo>> | undefined
           let lastIssues: string[] = []
 
@@ -155,11 +154,11 @@ export async function animateScenes(reelId: string): Promise<void> {
               variationIdx: v,
               engine,
             })
-            totalCost += result.costCents
+            cost.add(result.costCents) // record spend the moment it's incurred, so a throw below doesn't lose it
             chosen = result
 
             const qa = await videoQA(result.asset.storageKey, durationSec, reelId, scene.idx)
-            totalCost += qa.costCents
+            cost.add(qa.costCents)
             lastIssues = qa.issues
             if (qa.pass) {
               lastIssues = []
@@ -187,20 +186,20 @@ export async function animateScenes(reelId: string): Promise<void> {
             storageKey: chosen!.asset.storageKey,
             provider: 'fal',
             providerJobId: chosen!.providerJobId ?? null,
-            costCents: totalCost,
+            costCents: cost.total,
             meta: videoMeta,
           }).onConflictDoUpdate({
             target: [assets.reelId, assets.storageKey],
             set: {
               provider: 'fal',
               providerJobId: chosen!.providerJobId ?? null,
-              costCents: totalCost,
+              costCents: cost.total,
               meta: videoMeta,
               createdAt: new Date(),
             },
           })
 
-          return { output: { storageKey: chosen!.asset.storageKey }, costCents: totalCost }
+          return { output: { storageKey: chosen!.asset.storageKey }, costCents: cost.total }
         },
       )
     }

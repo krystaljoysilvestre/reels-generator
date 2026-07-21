@@ -31,12 +31,24 @@ export interface StepResult<T> {
   skipped: boolean   // true = idempotency hit, output from cache
 }
 
+// A step reports each paid provider call through this sink (cost.add(cents)) the moment it's incurred.
+// runStep persists the accrued total on BOTH success and failure, so cost spent before a mid-step throw
+// isn't lost — otherwise the budget under-counts real money and its caps under-enforce. `total` is the
+// authoritative sum a step returns as its costCents. Steps that don't use the sink behave exactly as
+// before (accrued stays 0; nothing extra persisted on failure).
+export interface CostSink {
+  add: (cents: number) => void
+  readonly total: number
+}
+
 export async function runStep<T>(
   ctx: StepContext,
-  fn: () => Promise<{ output: T; costCents: number }>,
+  fn: (cost: CostSink) => Promise<{ output: T; costCents: number }>,
 ): Promise<StepResult<T>> {
   const db = getDb()
   const cap = ctx.budgetCap ?? DEFAULT_BUDGET_CAPS_CENTS.short
+  let accrued = 0
+  const cost: CostSink = { add: (c) => { if (c > 0) accrued += c }, get total() { return accrued } }
 
   // ── 1. Check idempotency (same inputHash already done → return cached) ─────
   const existing = await db.query.pipelineSteps.findFirst({
@@ -93,7 +105,7 @@ export async function runStep<T>(
 
   // ── 4. Execute ────────────────────────────────────────────────────────────
   try {
-    const { output, costCents } = await fn()
+    const { output, costCents } = await fn(cost)
 
     // ── 5. Write output + accumulate cost atomically ──────────────────────
     await db.transaction(async (tx) => {
@@ -124,6 +136,21 @@ export async function runStep<T>(
 
     return { output, costCents, skipped: false }
   } catch (err) {
+    // Persist any spend that landed BEFORE the throw (only steps using the cost sink accrue). This makes
+    // reels.costCents reflect money actually spent — incl. across retries — so the budget gates enforce
+    // against reality instead of under-counting partial failures. Best-effort: a bookkeeping failure here
+    // must not mask the real step error.
+    if (accrued > 0) {
+      try {
+        await db
+          .update(reels)
+          .set({ costCents: sql`${reels.costCents} + ${accrued}`, updatedAt: new Date() })
+          .where(eq(reels.id, ctx.reelId))
+      } catch (costErr) {
+        console.error(`[harness] failed to record partial cost for ${ctx.reelId}/${ctx.stepName}:`, costErr)
+      }
+    }
+
     // Mark step failed; worker BullMQ retry logic handles re-queueing
     await db
       .update(pipelineSteps)

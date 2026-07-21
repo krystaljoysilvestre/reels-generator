@@ -143,8 +143,8 @@ export async function breakdownScenes(reelId: string): Promise<void> {
 
   const result = await runStep(
     { reelId, stepName: 'breakdown_scenes', inputHash },
-    async () => {
-      let cost = peakCost
+    async (cost) => {
+      cost.add(peakCost) // spend already incurred resolving the peak, before this step
 
       // Character-consistency backstop: in a first-person reel the narrator's own body/reflection edges most
       // POV frames, and the LLM often forgets to reference the narrator entity, so they render as a different
@@ -245,7 +245,7 @@ export async function breakdownScenes(reelId: string): Promise<void> {
               ]
           // Up to 16 scenes, each with a 45-75 word imagePrompt, overruns the 4096 default → truncated JSON.
           const llm = await llmCall({ templateVersion: SCENES_V1_VERSION, schema: ScenesOutputSchema, system, messages, maxTokens: 8192 })
-          cost += llm.costCents
+          cost.add(llm.costCents)
           const output = llm.data
 
           applyNarratorBackstop(output.scenes)
@@ -301,7 +301,7 @@ export async function breakdownScenes(reelId: string): Promise<void> {
         }
       }
 
-      return { output: { scenes: stitched } as BreakdownData, costCents: cost }
+      return { output: { scenes: stitched } as BreakdownData, costCents: cost.total }
     },
   )
 

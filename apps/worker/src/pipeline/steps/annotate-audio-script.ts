@@ -68,7 +68,7 @@ export async function annotateAudioScript(reelId: string): Promise<void> {
 
   const result = await runStep(
     { reelId, stepName: 'annotate_audio_script', inputHash },
-    async () => {
+    async (cost) => {
       const llm = await llmCall({
         templateVersion: SOUND_DESIGNER_V1_VERSION,
         schema: SoundDesignSchema,
@@ -80,7 +80,7 @@ export async function annotateAudioScript(reelId: string): Promise<void> {
       // pass the full design (SoundDesignSchema is a superset of AudioScript; validateAnchorUniqueness only
       // reads .sfx/.silenceDrop/.music/.ambient, so voices are checked separately in realizeDesignerVoices).
       let design = llm.data
-      let cost = llm.costCents
+      cost.add(llm.costCents)
       const errors = validateAnchorUniqueness(story.body, design)
       if (errors.length > 0) {
         const repairLlm = await llmCall({
@@ -97,7 +97,7 @@ export async function annotateAudioScript(reelId: string): Promise<void> {
           ],
         })
         design = repairLlm.data
-        cost += repairLlm.costCents
+        cost.add(repairLlm.costCents)
       }
 
       // Split the design: AudioScript fields (bed/score/sfx/silence) + pivotal voices → smart speech cues.
@@ -158,7 +158,7 @@ export async function annotateAudioScript(reelId: string): Promise<void> {
       const smart = (await realizeDesignerVoices((design.voices ?? []) as DesignerVoice[], story.body, reel.language))
         .filter((c) => !manualAnchors.has(c.anchor))
 
-      return { output: { audioScript, smart }, costCents: cost }
+      return { output: { audioScript, smart }, costCents: cost.total }
     },
   )
 

@@ -461,8 +461,7 @@ async function runStudio(a: StudioArgs) {
     ...(FINISHING_QA_ENABLED ? { finishingJudgeVersion: STORY_FINISHING_JUDGE_V1_VERSION } : {}),
   })
 
-  return runStep<StudioOutput>({ reelId: a.reelId, stepName: 'generate_story', inputHash }, async () => {
-    let costCents = 0
+  return runStep<StudioOutput>({ reelId: a.reelId, stepName: 'generate_story', inputHash }, async (cost) => {
 
     // ── 1. Planner: explore internally, commit to ONE idea ──────────────────
     let plan: StoryPlan | null = null
@@ -476,7 +475,7 @@ async function runStudio(a: StudioArgs) {
         temperature: 1.0,
         maxTokens: 1500,
       })
-      costCents += planRes.costCents
+      cost.add(planRes.costCents)
       plan = { ...planRes.data, mechanics: planRes.data.mechanics ?? [] }
     } catch (err) {
       // Never fail the step over the planner: fall back to ONE story.v1 draft on the angle
@@ -506,7 +505,7 @@ async function runStudio(a: StudioArgs) {
             provider: 'anthropic',
             maxTokens: 2048,
           })
-          costCents += res.costCents
+          cost.add(res.costCents)
           const d = res.data
           // Effective pass is the conjunction — a top-level pass=true with a failed sub-check does not slip through.
           return { verdict: { pass: d.pass && d.decision.pass && d.chain.pass && d.causedEnding.pass, reason: d.reason } }
@@ -534,7 +533,7 @@ async function runStudio(a: StudioArgs) {
             temperature: REWRITE_TEMPERATURE,
             maxTokens: 1200,
           })
-          costCents += docRes.costCents
+          cost.add(docRes.costCents)
           plan = { ...plan, ...docRes.data } // repair writer-visible fields; keep elements/mechanics/register
           ;({ verdict } = await judge(plan))
           verdicts.push(verdict)
@@ -596,7 +595,7 @@ async function runStudio(a: StudioArgs) {
           temperature: WRITER_TEMPERATURE,
           maxTokens: a.storyMaxTokens,
         })
-        costCents += res.costCents
+        cost.add(res.costCents)
         return { ...res.data, newCanon: res.data.newCanon ?? [] }
       }
       // Planner-failure fallback: a single legacy draft pinned to the angle.
@@ -609,7 +608,7 @@ async function runStudio(a: StudioArgs) {
         temperature: CANDIDATE_TEMPERATURE,
         maxTokens: a.storyMaxTokens,
       })
-      costCents += res.costCents
+      cost.add(res.costCents)
       return { ...res.data, newCanon: res.data.newCanon ?? [] }
     }
 
@@ -657,7 +656,7 @@ async function runStudio(a: StudioArgs) {
           temperature: REWRITE_TEMPERATURE,
           maxTokens: a.storyMaxTokens,
         })
-        costCents += res.costCents
+        cost.add(res.costCents)
         const inWords = wordCount(narration)
         const outWords = wordCount(res.data.narration)
         if (inWords > 0 && Math.abs(outWords - inWords) / inWords > tolerance) {
@@ -711,7 +710,7 @@ async function runStudio(a: StudioArgs) {
         provider: 'anthropic',
         maxTokens: 512,
       })
-      costCents += res.costCents
+      cost.add(res.costCents)
       return res.data
     }
 
@@ -781,7 +780,7 @@ async function runStudio(a: StudioArgs) {
           provider: 'anthropic',
           maxTokens: 1500,
         })
-        costCents += res.costCents
+        cost.add(res.costCents)
         finishingQA = { status: 'ok', version: STORY_FINISHING_JUDGE_V1_VERSION, issues: res.data.issues, summary: res.data.summary }
       } catch (err) {
         // Never fail the step over QA — it's advisory. Record the failure and move on.
@@ -806,6 +805,6 @@ async function runStudio(a: StudioArgs) {
       ...(finishingQA ? { finishingQA } : {}),
       peakResolution,
     }
-    return { output, costCents }
+    return { output, costCents: cost.total }
   })
 }
