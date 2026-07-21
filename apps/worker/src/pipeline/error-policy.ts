@@ -1,4 +1,4 @@
-import { BudgetExceededError, GlobalBudgetExceededError } from '@reels/core'
+import { BudgetExceededError, GlobalBudgetExceededError, QuotaExceededError } from '@reels/core'
 import { ProviderError } from '@reels/providers'
 
 // Decides whether a pipeline-step failure is TERMINAL (retrying can't help and would just re-bill the
@@ -13,6 +13,7 @@ import { ProviderError } from '@reels/providers'
 export function isTerminalError(err: unknown): boolean {
   if (err instanceof BudgetExceededError) return true
   if (err instanceof GlobalBudgetExceededError) return true
+  if (err instanceof QuotaExceededError) return true // per-user monthly budget reached mid-pipeline
   if (
     err instanceof ProviderError &&
     err.statusCode != null &&

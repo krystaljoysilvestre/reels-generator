@@ -1,11 +1,13 @@
 import { eq, and, sql } from 'drizzle-orm'
-import { getDb, getGlobalSpendTodayCents } from '@reels/db'
+import { getDb, getGlobalSpendTodayCents, getReelOwnerUsage } from '@reels/db'
 import { pipelineSteps, reels } from '@reels/db'
 import {
   assertBudget,
   assertGlobalDailyBudget,
+  assertUserBudget,
   GLOBAL_DAILY_SPEND_CAP_CENTS,
   DEFAULT_BUDGET_CAPS_CENTS,
+  DEFAULT_USER_LIMITS,
   type PipelineStepName,
 } from '@reels/core'
 
@@ -56,6 +58,15 @@ export async function runStep<T>(
   const reel = await db.query.reels.findFirst({ where: eq(reels.id, ctx.reelId) })
   if (!reel) throw new Error(`Reel not found: ${ctx.reelId}`)
   assertBudget(ctx.reelId, reel.costCents, cap)
+
+  // Per-user monthly budget (mid-pipeline). The create-time gate is lagging — a burst of creates all
+  // pass at $0, then accrue in parallel past the cap. Re-check the owner's month-to-date spend before
+  // each paid step; terminal once reached, so the owner's remaining in-flight reels stop too. Admins are
+  // exempt; owner-less legacy reels (null owner) return null and skip the check.
+  const owner = await getReelOwnerUsage(ctx.reelId)
+  if (owner && owner.role !== 'admin') {
+    assertUserBudget(owner.spendCentsThisMonth, owner.monthlyBudgetCents ?? DEFAULT_USER_LIMITS.monthlyBudgetCents)
+  }
 
   // App-wide daily kill-switch (backstop across all tenants). Only queries when a cap is configured, so
   // it's free in the default (off) case. Terminal when tripped — halts rather than retry-spinning.

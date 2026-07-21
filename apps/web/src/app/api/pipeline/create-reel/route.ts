@@ -1,9 +1,9 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { getDb, reels, channels, getUserUsage } from '@reels/db'
-import { eq } from 'drizzle-orm'
+import { and, count, eq, inArray } from 'drizzle-orm'
 import { enqueueStep } from '@reels/queue'
-import { checkUserLimits, DEFAULT_USER_LIMITS } from '@reels/core'
+import { checkUserLimits, DEFAULT_USER_LIMITS, MAX_INFLIGHT_REELS_PER_USER, UNSHIPPED_REEL_STATUSES } from '@reels/core'
 import { getCurrentUser } from '@/lib/auth'
 import { userOwnsChannel } from '@/lib/access'
 
@@ -32,6 +32,21 @@ export async function POST(req: NextRequest) {
         dailyReelQuota: usage.dailyReelQuota ?? DEFAULT_USER_LIMITS.dailyReelQuota,
       })
       if (!res.ok) return NextResponse.json({ error: res.reason }, { status: 429 })
+    }
+
+    // In-flight concurrency cap: bound how many reels this user can have building at once, so a burst of
+    // creates can't all clear the (lagging) budget gate at $0 and then run past it in parallel. The
+    // mid-pipeline assertUserBudget re-check enforces the dollar total; this smooths the burst.
+    const [inflight] = await db
+      .select({ n: count() })
+      .from(reels)
+      .innerJoin(channels, eq(reels.channelId, channels.id))
+      .where(and(eq(channels.userId, user.id), inArray(reels.status, [...UNSHIPPED_REEL_STATUSES])))
+    if ((inflight?.n ?? 0) >= MAX_INFLIGHT_REELS_PER_USER) {
+      return NextResponse.json(
+        { error: `Too many reels in progress (max ${MAX_INFLIGHT_REELS_PER_USER}). Finish or clear some first.` },
+        { status: 429 },
+      )
     }
   }
 

@@ -15,7 +15,7 @@
 import { and, eq, gte, inArray } from 'drizzle-orm'
 import { count } from 'drizzle-orm'
 import { getDb, channels, reels, getUserUsage } from '@reels/db'
-import { PostingRulesSchema, UNSHIPPED_REEL_STATUSES, autoProduceBacklogCap, checkUserLimits, DEFAULT_USER_LIMITS } from '@reels/core'
+import { PostingRulesSchema, UNSHIPPED_REEL_STATUSES, autoProduceBacklogCap, checkUserLimits, DEFAULT_USER_LIMITS, MAX_INFLIGHT_REELS_PER_USER } from '@reels/core'
 import { makeQueue, enqueueStep, QUEUE } from '@reels/queue'
 
 export const AUTO_PRODUCE_JOB = 'auto_produce_tick'
@@ -73,6 +73,18 @@ export async function runAutoProduceTick(): Promise<void> {
           console.warn(`${tag} skipped — owner limit: ${res.reason}`)
           continue
         }
+      }
+
+      // Per-user in-flight cap across ALL the owner's channels (the backlog guard above is per-channel):
+      // don't let auto-produce push a user past the same concurrency ceiling the manual create path enforces.
+      const [userInflight] = await db
+        .select({ value: count() })
+        .from(reels)
+        .innerJoin(channels, eq(reels.channelId, channels.id))
+        .where(and(eq(channels.userId, channel.userId), inArray(reels.status, [...UNSHIPPED_REEL_STATUSES])))
+      if ((userInflight?.value ?? 0) >= MAX_INFLIGHT_REELS_PER_USER) {
+        console.warn(`${tag} skipped — owner has ${userInflight?.value} reels in progress (cap ${MAX_INFLIGHT_REELS_PER_USER}).`)
+        continue
       }
     }
 

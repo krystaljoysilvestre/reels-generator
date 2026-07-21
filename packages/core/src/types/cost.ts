@@ -67,6 +67,11 @@ export const DEFAULT_USER_LIMITS = {
   dailyReelQuota: Number(process.env['DEFAULT_USER_DAILY_REEL_QUOTA'] ?? 20),
 }
 
+// How many reels one user may have building at once. Bounds concurrent in-flight spend so a burst of
+// reel-creates can't all clear the (lagging) create-time budget gate at $0 and then run past it in
+// parallel — a companion to the mid-pipeline assertUserBudget re-check. Env-overridable.
+export const MAX_INFLIGHT_REELS_PER_USER = Number(process.env['MAX_INFLIGHT_REELS_PER_USER'] ?? 5)
+
 export type UserLimits = { monthlyBudgetCents: number; dailyReelQuota: number }
 export type UserUsageSnapshot = { spendCentsThisMonth: number; reelsToday: number }
 
@@ -74,6 +79,17 @@ export class QuotaExceededError extends Error {
   constructor(public readonly reason: string) {
     super(reason)
     this.name = 'QuotaExceededError'
+  }
+}
+
+// Mid-pipeline enforcement of the monthly budget: the create-time checkUserLimits gate is lagging (a
+// burst passes at $0, then accrues), so the worker harness re-checks the owner's month-to-date spend
+// before every paid step and throws this (terminal) once the cap is reached. Admins are exempt upstream.
+export function assertUserBudget(spendCentsThisMonth: number, monthlyBudgetCents: number): void {
+  if (spendCentsThisMonth >= monthlyBudgetCents) {
+    throw new QuotaExceededError(
+      `Monthly budget reached ($${(monthlyBudgetCents / 100).toFixed(2)}). This reel was stopped; ask the admin to raise the cap.`,
+    )
   }
 }
 

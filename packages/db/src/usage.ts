@@ -45,6 +45,38 @@ export async function getUserUsage(userId: string): Promise<UserUsage | null> {
   }
 }
 
+// The reel owner's role + monthly cap + month-to-date spend — feeds the harness's mid-pipeline per-user
+// budget re-check (assertUserBudget). Returns null when the reel has no owner (legacy owner-less channel),
+// so the harness simply skips the per-user check for those.
+export async function getReelOwnerUsage(
+  reelId: string,
+): Promise<{ userId: string; role: string; monthlyBudgetCents: number | null; spendCentsThisMonth: number } | null> {
+  const db = getDb()
+  const owner = await db
+    .select({ userId: channels.userId, role: users.role, monthlyBudgetCents: users.monthlyBudgetCents })
+    .from(reels)
+    .innerJoin(channels, eq(reels.channelId, channels.id))
+    .innerJoin(users, eq(channels.userId, users.id))
+    .where(eq(reels.id, reelId))
+    .then((r) => r[0])
+  if (!owner?.userId) return null
+
+  const now = new Date()
+  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
+  const [spend] = await db
+    .select({ cents: sum(reels.costCents) })
+    .from(reels)
+    .innerJoin(channels, eq(reels.channelId, channels.id))
+    .where(and(eq(channels.userId, owner.userId), gte(reels.createdAt, monthStart)))
+
+  return {
+    userId: owner.userId,
+    role: owner.role,
+    monthlyBudgetCents: owner.monthlyBudgetCents,
+    spendCentsThisMonth: Number(spend?.cents ?? 0),
+  }
+}
+
 // App-wide spend today, across every tenant — feeds the global daily kill-switch (assertGlobalDailyBudget).
 // Approximated by reels CREATED today (we have no per-charge ledger; cost accrues on the reel row shortly
 // after creation), matching the createdAt-window convention getUserUsage uses for the monthly figure.
