@@ -3,12 +3,13 @@ import { NextResponse } from 'next/server'
 import { ElevenLabsTtsProvider, ProviderRateLimitError } from '@reels/providers'
 import { downloadBuffer } from '@reels/providers'
 import type { VoiceSettings } from '@reels/core'
-import { getSession } from '@/lib/auth'
+import { requireApiUser } from '@/lib/api-access'
 
 const tts = new ElevenLabsTtsProvider()
 
 export async function POST(req: NextRequest) {
-  if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const gate = await requireApiUser()
+  if (gate instanceof NextResponse) return gate
 
   const { voiceId, text, voiceSettings } = (await req.json().catch(() => ({}))) as { voiceId: string; text: string; voiceSettings?: VoiceSettings }
   if (!voiceId || !text) return NextResponse.json({ error: 'Missing voiceId or text' }, { status: 400 })

@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { getDb, reels } from '@reels/db'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
-import { getSession } from '@/lib/auth'
+import { requireReelOwner } from '@/lib/api-access'
 
 // Persist the reel's narrator voice + delivery as the operator adjusts them on the storyboard — so a
 // picked voice / tweaked delivery survives a reload WITHOUT needing to render. Both fields optional:
@@ -23,10 +23,11 @@ const InputSchema = z.object({
 })
 
 export async function POST(req: NextRequest) {
-  if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   const parsed = InputSchema.safeParse(await req.json().catch(() => null))
   if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
+
+  const gate = await requireReelOwner(parsed.data.reelId)
+  if (gate instanceof NextResponse) return gate
 
   const { reelId, voiceId, voiceSettings } = parsed.data
   const updates: Record<string, unknown> = { updatedAt: new Date() }

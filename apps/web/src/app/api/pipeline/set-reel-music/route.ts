@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { getDb, reels } from '@reels/db'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
-import { getSession } from '@/lib/auth'
+import { requireReelOwner, callerMayUseStorageKey } from '@/lib/api-access'
 
 // Point a reel at an operator-UPLOADED music bed (already uploaded to R2 via /api/channel/music-upload),
 // or clear it (key: null). When set, this bed overrides AI generation / the preset pool at render.
@@ -14,10 +14,16 @@ const InputSchema = z.object({
 })
 
 export async function POST(req: NextRequest) {
-  if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   const parsed = InputSchema.safeParse(await req.json().catch(() => null))
   if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
+
+  const gate = await requireReelOwner(parsed.data.reelId)
+  if (gate instanceof NextResponse) return gate
+  // A bed must be the caller's own upload, not a pointer at another tenant's reels/ audio (the mixer
+  // reads musicUploadKey straight from R2 at render, bypassing the /api/asset guard).
+  if (parsed.data.key !== null && !(await callerMayUseStorageKey(gate, parsed.data.key))) {
+    return NextResponse.json({ error: 'Invalid audio' }, { status: 400 })
+  }
 
   const db = getDb()
   await db

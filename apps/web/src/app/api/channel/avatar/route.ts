@@ -2,7 +2,7 @@ import type { NextRequest} from 'next/server';
 import { NextResponse } from 'next/server'
 import { randomUUID } from 'node:crypto'
 import { uploadBuffer } from '@reels/providers'
-import { getSession } from '@/lib/auth'
+import { requireApiUser } from '@/lib/api-access'
 
 const EXT: Record<string, string> = {
   'image/png': 'png',
@@ -12,7 +12,8 @@ const EXT: Record<string, string> = {
 const MAX_BYTES = 2 * 1024 * 1024 // 2 MB
 
 export async function POST(req: NextRequest) {
-  if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const gate = await requireApiUser()
+  if (gate instanceof NextResponse) return gate
 
   const form = await req.formData().catch(() => null)
   const file = form?.get('file')

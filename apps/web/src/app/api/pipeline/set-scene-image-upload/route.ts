@@ -2,16 +2,20 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { getDb, scenes, assets, channels, reels } from '@reels/db'
 import { eq, and, inArray } from 'drizzle-orm'
-import { getSession } from '@/lib/auth'
+import { requireReelOwner, callerMayUseStorageKey } from '@/lib/api-access'
 
 // "Upload image for this scene": use an operator-uploaded image (key from scene-image-upload) directly AS
 // the scene's image — no generation. We register it as an image asset (so it joins undo/redo history) and
 // point the scene at it. A new still invalidates any motion clip, same as a reshoot.
 export async function POST(req: NextRequest) {
-  if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   const { reelId, sceneIdx, key } = (await req.json().catch(() => ({}))) as { reelId: string; sceneIdx: number; key: string }
   if (!key) return NextResponse.json({ error: 'No image' }, { status: 400 })
+
+  const gate = await requireReelOwner(reelId)
+  if (gate instanceof NextResponse) return gate
+  // Don't let a scene point at another tenant's reels/ object.
+  if (!(await callerMayUseStorageKey(gate, key))) return NextResponse.json({ error: 'Invalid image' }, { status: 400 })
+
   const db = getDb()
 
   const reel = await db.query.reels.findFirst({ where: eq(reels.id, reelId) })

@@ -3,17 +3,20 @@ import { NextResponse } from 'next/server'
 import { getDb, scenes, assets } from '@reels/db'
 import { eq, and, inArray } from 'drizzle-orm'
 import { resolveMotionSettings } from '@reels/core'
-import { getSession } from '@/lib/auth'
+import { requireReelOwner } from '@/lib/api-access'
 
 // Persist a scene's motion: how it moves (motionPrompt text) and/or its clip length (motionSettings).
 // Both are used by the on-demand preview and the render-time animation, so editing either changes the
 // clip. When anything actually changes, the cached clip is now stale — delete it so the next preview/
 // render re-animates with the new settings.
 export async function POST(req: NextRequest) {
-  if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { reelId, sceneIdx, motionPrompt, motionSettings } = (await req.json().catch(() => ({}))) as {
     reelId: string; sceneIdx: number; motionPrompt?: string; motionSettings?: unknown
   }
+
+  const gate = await requireReelOwner(reelId)
+  if (gate instanceof NextResponse) return gate
+
   const db = getDb()
 
   const scene = await db.query.scenes.findFirst({ where: and(eq(scenes.reelId, reelId), eq(scenes.idx, sceneIdx)) })

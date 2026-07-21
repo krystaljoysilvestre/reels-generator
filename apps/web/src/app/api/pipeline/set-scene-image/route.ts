@@ -2,15 +2,17 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { getDb, scenes, assets } from '@reels/db'
 import { eq, and } from 'drizzle-orm'
-import { getSession } from '@/lib/auth'
+import { requireReelOwner } from '@/lib/api-access'
 
 // Undo/redo: re-point a scene to one of its PREVIOUSLY generated images. Every regen keeps its old image
 // assets, so this just swaps which one the scene uses — no regeneration, no cost. The client walks the
 // scene's image history (ordered by createdAt) and posts the target assetId.
 export async function POST(req: NextRequest) {
-  if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   const { reelId, sceneIdx, assetId } = (await req.json().catch(() => ({}))) as { reelId: string; sceneIdx: number; assetId: string }
+
+  const gate = await requireReelOwner(reelId)
+  if (gate instanceof NextResponse) return gate
+
   const db = getDb()
 
   // The asset must belong to THIS reel and be an image (don't let an arbitrary id be pointed in).

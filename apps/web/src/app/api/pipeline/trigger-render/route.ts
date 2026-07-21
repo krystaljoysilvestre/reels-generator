@@ -4,16 +4,18 @@ import { getDb, reels } from '@reels/db'
 import { eq } from 'drizzle-orm'
 import { transition, type VoiceSettings } from '@reels/core'
 import { enqueueStep } from '@reels/queue'
-import { getSession } from '@/lib/auth'
+import { requireReelOwner } from '@/lib/api-access'
 
 // Transitions the reel to 'rendering' and sets the voiceId (+ optional delivery override).
 // The worker picks up the pipeline from here via BullMQ.
 
 export async function POST(req: NextRequest) {
-  if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   const { reelId, voiceId, voiceSettings } = (await req.json().catch(() => ({}))) as { reelId?: string; voiceId?: string; voiceSettings?: VoiceSettings }
   if (!reelId) return NextResponse.json({ error: 'reelId is required' }, { status: 400 })
+
+  const gate = await requireReelOwner(reelId)
+  if (gate instanceof NextResponse) return gate
+
   const db = getDb()
 
   // TTS (generate_tts) hard-requires a voice; reject empty up front so the worker

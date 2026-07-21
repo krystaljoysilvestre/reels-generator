@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { eq } from 'drizzle-orm'
 import { getDb, reels, channels, stories } from '@reels/db'
 import { enqueueStep } from '@reels/queue'
-import { getSession } from '@/lib/auth'
+import { requireChannelOwner } from '@/lib/api-access'
 
 const InputSchema = z.object({
   channelId: z.string().uuid(),
@@ -17,13 +17,14 @@ const InputSchema = z.object({
 // at 'storyboard' and kick off the build (analyze_story → breakdown → images), which stops at the storyboard
 // gate as usual. (source='user' story; not a reference — only spot-check approval promotes one to few-shot.)
 export async function POST(req: NextRequest) {
-  if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   const parsed = InputSchema.safeParse(await req.json().catch(() => null))
   if (!parsed.success) {
     return NextResponse.json({ error: 'Invalid input', issues: parsed.error.flatten() }, { status: 400 })
   }
   const { channelId, body, title } = parsed.data
+
+  const gate = await requireChannelOwner(channelId)
+  if (gate instanceof NextResponse) return gate
 
   const db = getDb()
   const channel = await db.query.channels.findFirst({ where: eq(channels.id, channelId) })

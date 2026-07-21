@@ -3,13 +3,13 @@ import { NextResponse } from 'next/server'
 import { getDb, reels } from '@reels/db'
 import { eq } from 'drizzle-orm'
 import { OperatorSfxSchema } from '@reels/core'
-import { getSession } from '@/lib/auth'
+import { requireReelOwner } from '@/lib/api-access'
 
 // Remove one manual sound cue from the reel.
 export async function POST(req: NextRequest) {
-  if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   const { reelId, cueId } = (await req.json().catch(() => ({}))) as { reelId: string; cueId: string }
+  const gate = await requireReelOwner(reelId)
+  if (gate instanceof NextResponse) return gate
   const db = getDb()
   const reel = await db.query.reels.findFirst({ where: eq(reels.id, reelId) })
   if (!reel) return NextResponse.json({ error: 'Reel not found' }, { status: 404 })

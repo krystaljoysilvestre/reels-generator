@@ -4,7 +4,7 @@ import type { NextRequest} from 'next/server';
 import { NextResponse } from 'next/server'
 import { Readable } from 'node:stream'
 import { downloadStream } from '@reels/providers'
-import { getSession } from '@/lib/auth'
+import { requireApiUser, callerMayUseStorageKey } from '@/lib/api-access'
 
 const MIME: Record<string, string> = {
   mp4: 'video/mp4',
@@ -25,10 +25,19 @@ function s3Status(err: unknown): number | undefined {
 }
 
 export async function GET(req: NextRequest) {
-  if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const gate = await requireApiUser()
+  if (gate instanceof NextResponse) return gate
+  const user = gate
 
   const key = req.nextUrl.searchParams.get('key')
   if (!key) return NextResponse.json({ error: 'Missing key' }, { status: 400 })
+
+  // Tenant isolation: `reels/<reelId>/...` keys (renders, scenes, voiceover, stems — the sensitive,
+  // structurally-guessable content) must belong to a reel the caller owns. Shared presets and
+  // random-UUID keys (avatars/uploads/beds) are allowed to any active user. 404 hides existence.
+  if (!(await callerMayUseStorageKey(user, key))) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
 
   const ext = key.split('.').at(-1) ?? ''
   const contentType = MIME[ext] ?? 'application/octet-stream'

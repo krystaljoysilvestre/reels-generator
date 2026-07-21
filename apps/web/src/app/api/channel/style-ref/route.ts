@@ -8,7 +8,7 @@ import {
   StyleRefSchema,
   STYLE_REF_V1_VERSION,
 } from '@reels/core/prompts/style-ref.v1'
-import { getSession } from '@/lib/auth'
+import { requireApiUser } from '@/lib/api-access'
 
 // Operator uploads 1–3 reference images; a vision pass distills their shared visual
 // STYLE into the channel's stylePreset DNA (so the text-to-image pipeline can apply it
@@ -32,7 +32,8 @@ function sniffMime(buf: Buffer): ImageMedia | null {
 }
 
 export async function POST(req: NextRequest) {
-  if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const gate = await requireApiUser()
+  if (gate instanceof NextResponse) return gate
 
   const form = await req.formData().catch(() => null)
   if (!form) return NextResponse.json({ error: 'Invalid form' }, { status: 400 })

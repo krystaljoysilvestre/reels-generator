@@ -6,7 +6,7 @@ import {
   TRENDING_NICHES_V1_VERSION,
   type TrendingNiches,
 } from '@reels/core/prompts/trending-niches.v1'
-import { getSession } from '@/lib/auth'
+import { requireApiUser } from '@/lib/api-access'
 
 // "Trending now" suggestions for the channel wizard — LIVE web-searched niches with strong current
 // RPM, refreshed at most once a day (module cache) so the whole app shares one ~5¢ search call.
@@ -17,7 +17,8 @@ let cache: { at: number; data: TrendingNiches; costCents: number } | null = null
 let inflight: Promise<{ data: TrendingNiches; costCents: number }> | null = null
 
 export async function GET() {
-  if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const gate = await requireApiUser()
+  if (gate instanceof NextResponse) return gate
 
   if (cache && Date.now() - cache.at < TTL_MS) {
     return NextResponse.json({ niches: cache.data.niches, costCents: 0, cached: true })

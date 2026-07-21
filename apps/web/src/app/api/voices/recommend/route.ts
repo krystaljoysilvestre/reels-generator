@@ -8,7 +8,7 @@ import {
   VoiceRecommendationSchema,
   VOICE_RECOMMEND_V1_VERSION,
 } from '@reels/core/prompts/voice-recommend.v1'
-import { getSession } from '@/lib/auth'
+import { requireApiUser } from '@/lib/api-access'
 
 const InputSchema = z.object({
   nicheDescription: z.string().trim().min(1).max(8000),
@@ -18,7 +18,8 @@ const InputSchema = z.object({
 })
 
 export async function POST(req: NextRequest) {
-  if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const gate = await requireApiUser()
+  if (gate instanceof NextResponse) return gate
 
   const parsed = InputSchema.safeParse(await req.json().catch(() => null))
   if (!parsed.success) {

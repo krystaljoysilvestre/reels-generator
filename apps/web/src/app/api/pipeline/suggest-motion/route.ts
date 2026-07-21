@@ -5,15 +5,13 @@ import { eq, and, inArray, sql } from 'drizzle-orm'
 import { llmCall, ProviderRateLimitError } from '@reels/providers'
 import { animatorMotionPrompt } from '@reels/core'
 import { buildSuggestMotionPrompt, SuggestMotionSchema, MOTION_V1_VERSION } from '@reels/core/prompts/motion.v1'
-import { getSession } from '@/lib/auth'
+import { requireReelOwner } from '@/lib/api-access'
 
 // Translate an operator's plain-language motion request into a scene's animation instruction (motion.v1),
 // then arm the scene for (re)animation: mark it video tier and drop any stale clip so the next preview or
 // render animates the CURRENT image with the new motion. Never touches the image itself — this is the
 // motion analog of the reshoot/revise flow. (This is the productized version of hand-editing motionPrompt.)
 export async function POST(req: NextRequest) {
-  if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   const { reelId, sceneIdx, request: motionRequest } = (await req.json().catch(() => ({}))) as {
     reelId?: string
     sceneIdx?: number
@@ -21,6 +19,9 @@ export async function POST(req: NextRequest) {
   }
   if (!reelId || sceneIdx == null) return NextResponse.json({ error: 'reelId and sceneIdx are required' }, { status: 400 })
   if (!motionRequest?.trim()) return NextResponse.json({ error: 'Describe how the shot should move.' }, { status: 400 })
+
+  const gate = await requireReelOwner(reelId)
+  if (gate instanceof NextResponse) return gate
 
   const db = getDb()
   const reel = await db.query.reels.findFirst({ where: eq(reels.id, reelId) })

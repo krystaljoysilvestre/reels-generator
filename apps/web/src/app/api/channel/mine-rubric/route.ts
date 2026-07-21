@@ -10,7 +10,7 @@ import {
   RUBRIC_MINER_V1_VERSION,
 } from '@reels/core/prompts/rubric-miner.v1'
 import { REJECTION_REASON_LABELS } from '@reels/core/assembly/avoidlist'
-import { getSession } from '@/lib/auth'
+import { requireChannelOwner } from '@/lib/api-access'
 
 const InputSchema = z.object({
   channelId: z.string().uuid(),
@@ -20,12 +20,13 @@ const InputSchema = z.object({
 // at spot-check (isReference) as positives, rejection reasons+notes as anti-patterns. Returns a
 // DRAFT only — saving goes through the normal channel PATCH after the operator reviews/edits it.
 export async function POST(req: NextRequest) {
-  if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   const parsed = InputSchema.safeParse(await req.json().catch(() => null))
   if (!parsed.success) {
     return NextResponse.json({ error: 'Invalid input', issues: parsed.error.flatten() }, { status: 400 })
   }
+
+  const gate = await requireChannelOwner(parsed.data.channelId)
+  if (gate instanceof NextResponse) return gate
 
   const db = getDb()
   const channel = await db.query.channels.findFirst({ where: eq(channels.id, parsed.data.channelId) })

@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { and, eq, desc } from 'drizzle-orm'
 import { getDb, assets } from '@reels/db'
-import { getSession } from '@/lib/auth'
+import { requireReelOwner } from '@/lib/api-access'
 
 // GET /api/pipeline/stems?reelId=  → the reel's 4 mix layers (voice/music/sfx/ambient) as playable URLs.
 // Stems are persisted by mix_audio (pre-loudnorm layers) for per-layer listening / debugging / a future
@@ -10,10 +10,11 @@ import { getSession } from '@/lib/auth'
 const LAYERS = ['voice', 'music', 'sfx', 'ambient'] as const
 
 export async function GET(req: NextRequest) {
-  if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   const reelId = req.nextUrl.searchParams.get('reelId')
   if (!reelId) return NextResponse.json({ error: 'reelId is required' }, { status: 400 })
+
+  const gate = await requireReelOwner(reelId)
+  if (gate instanceof NextResponse) return gate
 
   const db = getDb()
   const rows = await db.query.assets.findMany({

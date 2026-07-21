@@ -10,7 +10,7 @@ import {
   PERFORMANCE_PROMOTION_MIN_LOGGED,
   type ReelMetrics,
 } from '@reels/core'
-import { getSession } from '@/lib/auth'
+import { requireReelOwner } from '@/lib/api-access'
 
 // Manual performance logging (Phase 1): the operator pastes platform numbers for a published reel.
 // Saving recomputes performanceScore for EVERY logged story in the channel — the score is channel-
@@ -26,13 +26,14 @@ const InputSchema = z.object({
 })
 
 export async function POST(req: NextRequest) {
-  if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   const parsed = InputSchema.safeParse(await req.json().catch(() => null))
   if (!parsed.success) {
     return NextResponse.json({ error: 'Invalid input', issues: parsed.error.flatten() }, { status: 400 })
   }
   const { reelId, views, likes, comments } = parsed.data
+
+  const gate = await requireReelOwner(reelId)
+  if (gate instanceof NextResponse) return gate
 
   const db = getDb()
   const reel = await db.query.reels.findFirst({ where: eq(reels.id, reelId) })

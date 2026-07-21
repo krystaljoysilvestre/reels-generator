@@ -7,7 +7,7 @@ import { eq, and, asc, sql } from 'drizzle-orm'
 import { downloadBuffer, llmCall } from '@reels/providers'
 import { PostMetaSchema, PostingRulesSchema, formatPostCaption, formatImageCredits, StoryBibleSchema, type PostMeta } from '@reels/core'
 import { buildPostMetaPrompt, PostMetaLlmSchema, POST_META_V1_VERSION } from '@reels/core/prompts/post-meta.v1'
-import { getSession } from '@/lib/auth'
+import { requireReelOwner } from '@/lib/api-access'
 
 // Minimal ZIP builder without native deps (zip is just stored entries)
 function buildZip(files: Array<{ name: string; data: Buffer }>): Buffer {
@@ -132,10 +132,11 @@ async function resolvePostMeta(
 }
 
 export async function GET(req: NextRequest) {
-  if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   const reelId = req.nextUrl.searchParams.get('reelId')
   if (!reelId) return NextResponse.json({ error: 'Missing reelId' }, { status: 400 })
+
+  const gate = await requireReelOwner(reelId)
+  if (gate instanceof NextResponse) return gate
 
   const db = getDb()
   const reel = await db.query.reels.findFirst({

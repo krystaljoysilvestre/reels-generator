@@ -8,7 +8,7 @@ import {
   StyleOptionsSchema,
   STYLE_OPTIONS_V1_VERSION,
 } from '@reels/core/prompts/style-options.v1'
-import { getSession } from '@/lib/auth'
+import { requireApiUser } from '@/lib/api-access'
 
 // Proposes a content-safe sample scene + 4 distinct visual "looks" for a channel.
 // Text-only LLM call (cheap/fast); the wizard falls back to the single derived stylePreset on failure.
@@ -20,7 +20,8 @@ const InputSchema = z.object({
 })
 
 export async function POST(req: NextRequest) {
-  if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const gate = await requireApiUser()
+  if (gate instanceof NextResponse) return gate
 
   const parsed = InputSchema.safeParse(await req.json().catch(() => null))
   if (!parsed.success) {

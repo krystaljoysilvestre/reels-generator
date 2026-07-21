@@ -1,12 +1,13 @@
 import type { NextRequest} from 'next/server';
 import { NextResponse } from 'next/server'
 import { listVoices } from '@reels/providers'
-import { getSession } from '@/lib/auth'
+import { requireApiUser } from '@/lib/api-access'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
-  if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const gate = await requireApiUser()
+  if (gate instanceof NextResponse) return gate
   try {
     const language = req.nextUrl.searchParams.get('language') ?? undefined
     const voices = await listVoices(language)

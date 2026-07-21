@@ -6,11 +6,9 @@ import { generateImage, generateImageFal, imageEngineForGenre, FLUX_IMAGE_ENGINE
 import { assembleImagePrompt, assembleReferencePrompt, assembleNegativePrompt, castNationality, reelLightingDirective, sceneEntities, slug, StoryBibleSchema, PLATFORM_PRESETS } from '@reels/core'
 import { buildReviseScenePrompt, REVISE_SCENE_V1_VERSION, ReviseSceneSchema } from '@reels/core/prompts/revise-scene.v1'
 import { buildFilterSafePrompt, FILTER_SAFE_V1_VERSION, FilterSafeSchema } from '@reels/core/prompts/filter-safe.v1'
-import { getSession } from '@/lib/auth'
+import { requireReelOwner, callerMayUseStorageKey } from '@/lib/api-access'
 
 export async function POST(req: NextRequest) {
-  if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   // `instruction` = an optional plain-language change ("lights off", "make them talk while walking"); it's
   // turned into a proper image prompt by the LLM below, never fed to the image model raw.
   // mode: 'vary' (default) conditions on the CURRENT image so the regen stays close (fix a hand, small
@@ -23,6 +21,14 @@ export async function POST(req: NextRequest) {
     reelId: string; sceneIdx: number; instruction?: string; mode?: 'vary' | 'fresh'; referenceKey?: string
     anchor?: 'current-first' | 'reference-first' | 'reference-only'
   }
+
+  const gate = await requireReelOwner(reelId)
+  if (gate instanceof NextResponse) return gate
+  // A 📎 attachment is fed to the image model server-side — don't let it reference another tenant's asset.
+  if (referenceKey && !(await callerMayUseStorageKey(gate, referenceKey))) {
+    return NextResponse.json({ error: 'Invalid reference image' }, { status: 400 })
+  }
+
   const db = getDb()
 
   const reel = await db.query.reels.findFirst({ where: eq(reels.id, reelId) })

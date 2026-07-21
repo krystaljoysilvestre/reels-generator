@@ -4,7 +4,7 @@ import { getDb, scenes, assets, reels, channels } from '@reels/db'
 import { eq, and, sql } from 'drizzle-orm'
 import { generateVideo, FalEngineSchema, ContentFilterError, ProviderRateLimitError } from '@reels/providers'
 import { resolveMotionSettings, PLATFORM_PRESETS } from '@reels/core'
-import { getSession } from '@/lib/auth'
+import { requireReelOwner } from '@/lib/api-access'
 
 // Best-effort in-flight guard (B5): a fast double-click would otherwise launch two paid clips before
 // either insert lands, since the have-variation check below only catches already-finished ones. An
@@ -25,9 +25,9 @@ const VARIATION_COUNT = 1
 export const maxDuration = 300
 
 export async function POST(req: NextRequest) {
-  if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   const { reelId, sceneIdx } = (await req.json().catch(() => ({}))) as { reelId: string; sceneIdx: number }
+  const gate = await requireReelOwner(reelId)
+  if (gate instanceof NextResponse) return gate
   const db = getDb()
 
   const reel = await db.query.reels.findFirst({ where: eq(reels.id, reelId) })

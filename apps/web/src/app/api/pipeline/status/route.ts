@@ -2,16 +2,18 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { eq } from 'drizzle-orm'
 import { getDb, reels, pipelineSteps, scenes } from '@reels/db'
-import { getSession } from '@/lib/auth'
+import { requireReelOwner } from '@/lib/api-access'
 
 // Lightweight poll endpoint powering the live "what's going on" UX (story loading + render progress).
 // GET ?reelId=...[&scenes=1] → reel status + per-step status + (optionally) per-scene image readiness.
 export async function GET(req: NextRequest) {
-  if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   const url = new URL(req.url)
   const reelId = url.searchParams.get('reelId')
   if (!reelId) return NextResponse.json({ error: 'reelId required' }, { status: 400 })
+
+  const gate = await requireReelOwner(reelId)
+  if (gate instanceof NextResponse) return gate
+
   const withScenes = url.searchParams.get('scenes') === '1'
 
   const db = getDb()

@@ -4,20 +4,22 @@ import { eq, and } from 'drizzle-orm'
 import { getDb, reels, assets, publications } from '@reels/db'
 import { transition, PostMetaSchema, formatPostCaption, formatImageCredits, StoryBibleSchema } from '@reels/core'
 import { downloadBuffer, uploadToYouTube, isYouTubeConfigured } from '@reels/providers'
-import { getSession } from '@/lib/auth'
+import { requireReelOwner } from '@/lib/api-access'
 
 // Post an approved reel straight to YouTube (env-gated — the manual zip flow is untouched when the
 // YOUTUBE_* vars are unset). Uploads the render with the reel's post package as title/description,
 // records the yt publications row, and marks the reel published. The worker's auto-publish path
 // (auto-gate) mirrors this — keep the two in sync.
 export async function POST(req: NextRequest) {
-  if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (!isYouTubeConfigured()) {
     return NextResponse.json({ error: 'YouTube isn’t connected yet — add the YOUTUBE_* keys to .env.local' }, { status: 501 })
   }
 
   const { reelId } = (await req.json().catch(() => ({}))) as { reelId?: string }
   if (!reelId) return NextResponse.json({ error: 'reelId is required' }, { status: 400 })
+
+  const gate = await requireReelOwner(reelId)
+  if (gate instanceof NextResponse) return gate
 
   const db = getDb()
   const reel = await db.query.reels.findFirst({ where: eq(reels.id, reelId), with: { story: true } })

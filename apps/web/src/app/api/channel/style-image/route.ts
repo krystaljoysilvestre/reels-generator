@@ -9,7 +9,7 @@ import {
   ContentFilterError,
   SCENE_IMAGE_QUALITY,
 } from '@reels/providers'
-import { getSession } from '@/lib/auth'
+import { requireApiUser } from '@/lib/api-access'
 
 // On-demand preview for ONE style option. Called only when the operator clicks "Preview" on a card.
 // Not auto-retried — Retry on the card is the manual path.
@@ -19,7 +19,8 @@ const InputSchema = z.object({
 })
 
 export async function POST(req: NextRequest) {
-  if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const gate = await requireApiUser()
+  if (gate instanceof NextResponse) return gate
 
   const parsed = InputSchema.safeParse(await req.json().catch(() => null))
   if (!parsed.success) {

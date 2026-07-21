@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { randomUUID } from 'node:crypto'
 import { uploadBuffer } from '@reels/providers'
-import { getSession } from '@/lib/auth'
+import { requireApiUser } from '@/lib/api-access'
 
 // Operator image upload → R2. The returned key is used two ways: (1) as an extra REFERENCE in a scene
 // reshoot ("attach a reference image"), and (2) as a character's face plate ("use my photo"). Real-person
@@ -11,7 +11,8 @@ const EXT: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', '
 const MAX_BYTES = 12 * 1024 * 1024 // 12 MB
 
 export async function POST(req: NextRequest) {
-  if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const gate = await requireApiUser()
+  if (gate instanceof NextResponse) return gate
 
   const form = await req.formData().catch(() => null)
   const file = form?.get('file')

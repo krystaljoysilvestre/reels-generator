@@ -3,15 +3,17 @@ import { NextResponse } from 'next/server'
 import { getDb, reels, stories } from '@reels/db'
 import { eq } from 'drizzle-orm'
 import { transition } from '@reels/core'
-import { getSession } from '@/lib/auth'
+import { requireReelOwner } from '@/lib/api-access'
 
 // Operator signs off on the rendered reel at the spot-check gate → 'approved'.
 // (transition() throws unless the reel is actually in spot_check — never silently accept bad state.)
 export async function POST(req: NextRequest) {
-  if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   const { reelId, opMinutes } = (await req.json().catch(() => ({}))) as { reelId?: string; opMinutes?: number }
   if (!reelId) return NextResponse.json({ error: 'reelId is required' }, { status: 400 })
+
+  const gate = await requireReelOwner(reelId)
+  if (gate instanceof NextResponse) return gate
+
   const db = getDb()
 
   const reel = await db.query.reels.findFirst({ where: eq(reels.id, reelId) })

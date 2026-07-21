@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { and, asc, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { getDb, reels, scenes, stories } from '@reels/db'
-import { getSession } from '@/lib/auth'
+import { requireReelOwner } from '@/lib/api-access'
 
 const InputSchema = z.object({
   reelId: z.string().uuid(),
@@ -16,13 +16,14 @@ const InputSchema = z.object({
 // also rebuild story.body from ALL scenes in order, so the next render's audio + timings stay consistent
 // with the edited script. (compute_timings skips whitespace between scenes, so a '\n' join is safe.)
 export async function POST(req: NextRequest) {
-  if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   const parsed = InputSchema.safeParse(await req.json().catch(() => null))
   if (!parsed.success) {
     return NextResponse.json({ error: 'Invalid input', issues: parsed.error.flatten() }, { status: 400 })
   }
   const { reelId, sceneIdx, narrationText } = parsed.data
+
+  const gate = await requireReelOwner(reelId)
+  if (gate instanceof NextResponse) return gate
 
   const db = getDb()
   const reel = await db.query.reels.findFirst({ where: eq(reels.id, reelId) })

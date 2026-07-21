@@ -5,7 +5,7 @@ import { eq, and } from 'drizzle-orm'
 import { llmCall, listVoices, ProviderRateLimitError } from '@reels/providers'
 import { OperatorSfxSchema, cueVolumeDb, type OperatorCue } from '@reels/core'
 import { buildAddSoundPrompt, AddSoundSchema, ADD_SOUND_V1_VERSION } from '@reels/core/prompts/add-sound.v1'
-import { getSession } from '@/lib/auth'
+import { requireReelOwner } from '@/lib/api-access'
 
 const MAX_MANUAL_CUES = 5
 
@@ -19,10 +19,11 @@ function countOccurrences(text: string, sub: string): number {
 // Add ONE operator-authored sound to a specific scene (manual cue) — e.g. an off-screen voice saying
 // "Buti gising ka pa". Separate from the reel-level smart Sound design; both render together.
 export async function POST(req: NextRequest) {
-  if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   const { reelId, sceneIdx, instruction } = (await req.json().catch(() => ({}))) as { reelId: string; sceneIdx?: number; instruction: string }
   if (!instruction?.trim()) return NextResponse.json({ error: 'Describe the sound you want.' }, { status: 400 })
+
+  const gate = await requireReelOwner(reelId)
+  if (gate instanceof NextResponse) return gate
 
   const db = getDb()
   const reel = await db.query.reels.findFirst({ where: eq(reels.id, reelId) })

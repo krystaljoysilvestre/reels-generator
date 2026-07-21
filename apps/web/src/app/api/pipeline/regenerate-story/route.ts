@@ -5,7 +5,7 @@ import { getDb, reels, rejections } from '@reels/db'
 import type { rejectionReasonEnum } from '@reels/db'
 import { transition } from '@reels/core'
 import { enqueueStep } from '@reels/queue'
-import { getSession } from '@/lib/auth'
+import { requireReelOwner } from '@/lib/api-access'
 
 type ReasonCode = (typeof rejectionReasonEnum.enumValues)[number]
 
@@ -13,8 +13,6 @@ type ReasonCode = (typeof rejectionReasonEnum.enumValues)[number]
 // next generate_story reads back to reshape the prompt + bump the attempt #), then loops the reel
 // rejected → drafting and re-runs generation. Distinct from reject-story, which dead-ends a reel.
 export async function POST(req: NextRequest) {
-  if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   const { reelId, reasonCode, note, opMinutes } = (await req.json().catch(() => ({}))) as {
     reelId?: string
     reasonCode?: ReasonCode
@@ -24,6 +22,9 @@ export async function POST(req: NextRequest) {
   if (!reelId || !reasonCode) {
     return NextResponse.json({ error: 'reelId and reasonCode are required' }, { status: 400 })
   }
+
+  const gate = await requireReelOwner(reelId)
+  if (gate instanceof NextResponse) return gate
 
   const db = getDb()
   const reel = await db.query.reels.findFirst({ where: eq(reels.id, reelId) })

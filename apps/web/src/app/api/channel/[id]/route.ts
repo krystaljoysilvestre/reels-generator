@@ -7,7 +7,7 @@ import { ToneConfigSchema, WorldBibleSchema, CaptionStyleSchema, TargetPlatformS
 import { STYLE_VALUES } from '@reels/core/prompts/story-styles.v1'
 import { GENRE_MODULE_VALUES } from '@reels/core/prompts/scenes.v1'
 import { VOICE_VALUES } from '@reels/core/prompts/story-voices.v1'
-import { getSession } from '@/lib/auth'
+import { requireChannelOwner } from '@/lib/api-access'
 
 // Edit a channel's creative bible after creation. Only the fields below are editable here;
 // voices/avatar/language stay out of V1 (each needs its own picker flow). Every field is
@@ -49,9 +49,11 @@ const UpdateSchema = z
   .strict()
 
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   const { id } = await ctx.params
+
+  const gate = await requireChannelOwner(id)
+  if (gate instanceof NextResponse) return gate
+
   const parsed = UpdateSchema.safeParse(await req.json().catch(() => null))
   if (!parsed.success) {
     return NextResponse.json({ error: 'Invalid input', issues: parsed.error.flatten() }, { status: 400 })

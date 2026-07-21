@@ -3,15 +3,17 @@ import { NextResponse } from 'next/server'
 import { getDb, reels, channels, publications } from '@reels/db'
 import { eq } from 'drizzle-orm'
 import { transition, PostingRulesSchema } from '@reels/core'
-import { getSession } from '@/lib/auth'
+import { requireReelOwner } from '@/lib/api-access'
 
 // Operator has posted the exported package to the platform(s) → 'published' (terminal).
 // Phase 1 posting is manual (export-post-package zip), so this is the operator confirming the upload.
 export async function POST(req: NextRequest) {
-  if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   const { reelId } = (await req.json().catch(() => ({}))) as { reelId?: string }
   if (!reelId) return NextResponse.json({ error: 'reelId is required' }, { status: 400 })
+
+  const gate = await requireReelOwner(reelId)
+  if (gate instanceof NextResponse) return gate
+
   const db = getDb()
 
   const reel = await db.query.reels.findFirst({ where: eq(reels.id, reelId) })

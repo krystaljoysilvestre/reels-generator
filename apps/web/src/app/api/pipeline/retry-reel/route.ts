@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { getDb, reels, pipelineSteps } from '@reels/db'
 import { and, desc, eq } from 'drizzle-orm'
 import { enqueueStep } from '@reels/queue'
-import { getSession } from '@/lib/auth'
+import { requireReelOwner } from '@/lib/api-access'
 
 // Recover a reel that hard-failed: re-enqueue the step that failed (its prior steps are cached, so
 // they skip — no re-pay) and reset the reel to the in-progress status that step belongs to. The
@@ -25,9 +25,11 @@ const STEP_RESET_STATUS: Record<string, string> = {
 }
 
 export async function POST(req: NextRequest) {
-  if (!(await getSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   const { reelId } = (await req.json().catch(() => ({}))) as { reelId: string }
+
+  const gate = await requireReelOwner(reelId)
+  if (gate instanceof NextResponse) return gate
+
   const db = getDb()
 
   const reel = await db.query.reels.findFirst({ where: eq(reels.id, reelId) })
