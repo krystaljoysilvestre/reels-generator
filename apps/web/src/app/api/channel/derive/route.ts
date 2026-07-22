@@ -74,7 +74,9 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.json({ derived: result.data, costCents: result.costCents })
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Derivation failed'
-    return NextResponse.json({ error: message }, { status: 502 })
+    // Log the provider/SDK detail server-side; return a fixed message so internals (endpoints, model
+    // names, bucket keys) don't leak to the client.
+    console.error('[channel/derive] failed:', err)
+    return NextResponse.json({ error: 'Derivation failed' }, { status: 502 })
   }
 }

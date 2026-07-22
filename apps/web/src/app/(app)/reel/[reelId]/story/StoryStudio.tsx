@@ -98,6 +98,7 @@ export function StoryStudio({ reelId, channelId, channelName, mood, genre, initi
 
   async function regenerate(reasonCode: string) {
     setBusy(true)
+    setActionError(null)
     const res = await fetch('/api/pipeline/regenerate-story', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -109,18 +110,29 @@ export function StoryStudio({ reelId, channelId, channelName, mood, genre, initi
       setSelectedReason('')
       setNote('')
       setGenerating(true) // restart polling for the new draft
+    } else {
+      const body = (await res.json().catch(() => ({}))) as { error?: string }
+      setActionError(body.error ?? 'Could not regenerate this story. Refresh and try again.')
     }
     setBusy(false)
   }
 
   async function retry() {
     setBusy(true)
-    await fetch('/api/pipeline/retry-reel', {
+    setActionError(null)
+    // Only start polling if the retry actually kicked off — otherwise the UI would spin on "generating"
+    // forever against an error (e.g. "No failed step to retry").
+    const res = await fetch('/api/pipeline/retry-reel', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ reelId }),
     })
-    setGenerating(true)
+    if (res.ok) {
+      setGenerating(true)
+    } else {
+      const body = (await res.json().catch(() => ({}))) as { error?: string }
+      setActionError(body.error ?? 'Could not retry. Refresh and try again.')
+    }
     setBusy(false)
   }
 

@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
       costCents: result.costCents,
     })
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Style proposal failed'
-    return NextResponse.json({ error: message }, { status: 502 })
+    console.error('[channel/style-options] failed:', err)
+    return NextResponse.json({ error: 'Style proposal failed' }, { status: 502 })
   }
 }

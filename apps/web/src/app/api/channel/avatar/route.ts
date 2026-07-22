@@ -3,12 +3,8 @@ import { NextResponse } from 'next/server'
 import { randomUUID } from 'node:crypto'
 import { uploadBuffer } from '@reels/providers'
 import { requireApiUser } from '@/lib/api-access'
+import { sniffImageMime, IMAGE_EXT } from '@/lib/upload'
 
-const EXT: Record<string, string> = {
-  'image/png': 'png',
-  'image/jpeg': 'jpg',
-  'image/webp': 'webp',
-}
 const MAX_BYTES = 2 * 1024 * 1024 // 2 MB
 
 export async function POST(req: NextRequest) {
@@ -20,21 +16,22 @@ export async function POST(req: NextRequest) {
   if (!(file instanceof File)) {
     return NextResponse.json({ error: 'No file' }, { status: 400 })
   }
-  const ext = EXT[file.type]
-  if (!ext) {
-    return NextResponse.json({ error: 'Unsupported image type (use PNG, JPG, or WebP)' }, { status: 400 })
-  }
   if (file.size > MAX_BYTES) {
     return NextResponse.json({ error: 'Image too large (max 2 MB)' }, { status: 400 })
   }
 
+  // Verify the REAL image type from magic bytes rather than trusting the client Content-Type.
   const buf = Buffer.from(await file.arrayBuffer())
-  const key = `avatars/${randomUUID()}.${ext}`
+  const media = sniffImageMime(buf)
+  if (!media) {
+    return NextResponse.json({ error: 'Unsupported image type (use PNG, JPG, or WebP)' }, { status: 400 })
+  }
+  const key = `avatars/${randomUUID()}.${IMAGE_EXT[media]}`
   try {
-    await uploadBuffer(key, buf, file.type)
+    await uploadBuffer(key, buf, media)
     return NextResponse.json({ key })
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Upload failed'
-    return NextResponse.json({ error: message }, { status: 502 })
+    console.error('[avatar] upload failed:', err)
+    return NextResponse.json({ error: 'Upload failed' }, { status: 502 })
   }
 }

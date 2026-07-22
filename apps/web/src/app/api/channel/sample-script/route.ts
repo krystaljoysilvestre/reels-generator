@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
     })
     return NextResponse.json({ sample: result.data, costCents: result.costCents })
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Sample generation failed'
-    return NextResponse.json({ error: message }, { status: 502 })
+    console.error('[channel/sample-script] failed:', err)
+    return NextResponse.json({ error: 'Sample generation failed' }, { status: 502 })
   }
 }

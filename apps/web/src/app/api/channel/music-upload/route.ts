@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { randomUUID } from 'node:crypto'
 import { uploadBuffer } from '@reels/providers'
 import { requireApiUser } from '@/lib/api-access'
+import { looksLikeAudio } from '@/lib/upload'
 
 // Operator-uploaded background track for the Sound step. Stored as the channel's bed.
 // NOTE: the operator is warned in the UI that uploaded music can get reels muted/blocked by
@@ -37,12 +38,16 @@ export async function POST(req: NextRequest) {
   }
 
   const buf = Buffer.from(await file.arrayBuffer())
+  // Confirm the bytes are actually audio — don't store a non-audio blob mislabeled with an audio type.
+  if (!looksLikeAudio(buf)) {
+    return NextResponse.json({ error: "That file doesn't look like audio. Use MP3, M4A, WAV, AAC, or OGG." }, { status: 400 })
+  }
   const key = `channel-music/${randomUUID()}.${ext}`
   try {
     await uploadBuffer(key, buf, file.type)
     return NextResponse.json({ key })
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Upload failed'
-    return NextResponse.json({ error: message }, { status: 502 })
+    console.error('[music-upload] upload failed:', err)
+    return NextResponse.json({ error: 'Upload failed' }, { status: 502 })
   }
 }

@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
     const voices = await listVoices(language)
     return NextResponse.json({ voices })
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to load voices'
-    return NextResponse.json({ error: message }, { status: 502 })
+    console.error('[voices] failed to load:', err)
+    return NextResponse.json({ error: 'Failed to load voices' }, { status: 502 })
   }
 }
