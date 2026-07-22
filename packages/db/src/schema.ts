@@ -135,7 +135,11 @@ export const channels = pgTable('channels', {
   tasteRubric: text('taste_rubric'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
-})
+}, (t) => ({
+  // Tenant filter/join key: hit by every ownership check (api-access) and every paid step's usage
+  // aggregation (usage.ts joins reels/compilations → channels on this). Was unindexed.
+  idxUser: index('idx_channels_user').on(t.userId),
+}))
 
 // ── stories ───────────────────────────────────────────────────────────────────
 
@@ -225,6 +229,8 @@ export const reels = pgTable(
   (t) => ({
     idxChannel: index('idx_reels_channel').on(t.channelId),
     idxStatus: index('idx_reels_status').on(t.status),
+    // Budget/quota window predicate (usage.ts filters reels created within the day/month). Was unindexed.
+    idxCreated: index('idx_reels_created').on(t.createdAt),
   }),
 )
 
@@ -247,7 +253,10 @@ export const compilations = pgTable('compilations', {
   youtubeVideoId: text('youtube_video_id'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
-})
+}, (t) => ({
+  // Joined to channels by channelId in the per-user/global spend aggregations (usage.ts).
+  idxChannel: index('idx_compilations_channel').on(t.channelId),
+}))
 
 // ── scenes ────────────────────────────────────────────────────────────────────
 
@@ -368,7 +377,13 @@ export const publications = pgTable(
     disclosureApplied: boolean('disclosure_applied').notNull().default(false),
     killSwitchExpiresAt: timestamp('kill_switch_expires_at'),
   },
-  (t) => ({ idxReel: index('idx_publications_reel').on(t.reelId) }),
+  (t) => ({
+    idxReel: index('idx_publications_reel').on(t.reelId),
+    // One publication per reel per platform. A DB-level backstop against a double-publish: two concurrent
+    // render_qa runs (job-timeout overlap / stalled-job recovery) could each pass an app-level existence
+    // check and insert twice. This makes the second insert a no-op instead of a duplicate record.
+    uqReelPlatform: uniqueIndex('uq_publications_reel_platform').on(t.reelId, t.platform),
+  }),
 )
 
 // ── metrics ───────────────────────────────────────────────────────────────────

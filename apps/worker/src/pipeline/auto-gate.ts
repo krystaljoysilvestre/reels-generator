@@ -109,14 +109,20 @@ async function autoPublishYouTube(reelId: string): Promise<void> {
   const thumbnailJpeg = thumbAsset ? await downloadBuffer(thumbAsset.storageKey).catch(() => undefined) : undefined
   const result = await uploadToYouTube({ video, title, description, tags, ...(thumbnailJpeg ? { thumbnailJpeg } : {}) })
 
-  await db.insert(publications).values({
-    reelId,
-    platform: 'yt',
-    platformPostId: result.videoId,
-    status: 'published',
-    publishedAt: new Date(),
-    disclosureApplied: true, // containsSyntheticMedia is set on the upload itself
-  })
+  // Idempotent on the unique (reelId, platform) index: if a concurrent run already recorded this
+  // publication, don't create a second row (the early-return above handles the sequential-retry case;
+  // this closes the check-then-insert race between two concurrent runs).
+  await db
+    .insert(publications)
+    .values({
+      reelId,
+      platform: 'yt',
+      platformPostId: result.videoId,
+      status: 'published',
+      publishedAt: new Date(),
+      disclosureApplied: true, // containsSyntheticMedia is set on the upload itself
+    })
+    .onConflictDoNothing({ target: [publications.reelId, publications.platform] })
   await db.update(reels).set({ status: 'published', updatedAt: new Date() }).where(eq(reels.id, reelId))
 }
 

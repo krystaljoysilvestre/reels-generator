@@ -11,7 +11,7 @@ import {
   cueDurationSec,
   type VoiceSettings,
 } from '@reels/core'
-import { requireReelOwner } from '@/lib/api-access'
+import { requireReelOwner, requireSpendBudget } from '@/lib/api-access'
 
 // Generate (or regenerate) the clip for one manual sound cue so it can be heard at the storyboard.
 // SFX → sound-effects; speech → a second voice with delivery-tuned settings. Stored under a deterministic
@@ -23,6 +23,8 @@ export async function POST(req: NextRequest) {
   const { reelId, cueId } = (await req.json().catch(() => ({}))) as { reelId: string; cueId: string }
   const gate = await requireReelOwner(reelId)
   if (gate instanceof NextResponse) return gate
+  const budgetGate = await requireSpendBudget(gate)
+  if (budgetGate) return budgetGate
   const db = getDb()
   const reel = await db.query.reels.findFirst({ where: eq(reels.id, reelId) })
   if (!reel) return NextResponse.json({ error: 'Reel not found' }, { status: 404 })

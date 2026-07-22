@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm'
+import { eq, and, gt, sql } from 'drizzle-orm'
 import type { z } from 'zod'
 import { getDb, reels, stories, scenes, channels } from '@reels/db'
 import { llmCall, buildInputHash } from '@reels/providers'
@@ -346,7 +346,19 @@ export async function breakdownScenes(reelId: string): Promise<void> {
           primaryEntity: s.primaryEntity ?? null,
           supportingEntities: s.supportingEntities ?? [],
           sceneIntent: s.sceneIntent ?? null,
+          // A re-breakdown (regenerate) reuses the (reelId, idx) row; drop the render-derived state ONLY
+          // when this scene's content actually changed, so generate_images/animate_scenes don't composite
+          // the OLD story's image/clip under the NEW narration. `IS DISTINCT FROM` unchanged content →
+          // keep the asset (no needless re-pay); changed → NULL it so the pending filter regenerates.
+          imageAssetId: sql`CASE WHEN ${scenes.visualPrompt} IS DISTINCT FROM ${s.imagePrompt} OR ${scenes.narrationText} IS DISTINCT FROM ${s.narrationText} THEN NULL ELSE ${scenes.imageAssetId} END`,
+          videoAssetId: sql`CASE WHEN ${scenes.visualPrompt} IS DISTINCT FROM ${s.imagePrompt} OR ${scenes.motionPrompt} IS DISTINCT FROM ${motionPrompt} THEN NULL ELSE ${scenes.videoAssetId} END`,
         },
       })
   }
+
+  // Drop any trailing scenes a PRIOR, longer breakdown left behind: the loop only upserts idx 1..N, so a
+  // shorter re-breakdown would otherwise leave stale high-idx rows that compute_timings folds into the
+  // master clock (their narration is absent from the new story) — corrupting timings or rendering a ghost beat.
+  const sceneCount = result.output.scenes.length
+  await db.delete(scenes).where(and(eq(scenes.reelId, reelId), gt(scenes.idx, sceneCount)))
 }

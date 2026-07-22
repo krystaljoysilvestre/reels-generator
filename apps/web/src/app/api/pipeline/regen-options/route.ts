@@ -4,7 +4,7 @@ import { getDb, scenes, assets, reels } from '@reels/db'
 import { eq, and, sql } from 'drizzle-orm'
 import { downloadBuffer, llmCall } from '@reels/providers'
 import { buildGroundedFeedbackPrompt, GroundedFeedbackSchema, GROUNDED_FEEDBACK_V1_VERSION } from '@reels/core/prompts/grounded-feedback.v1'
-import { requireReelOwner } from '@/lib/api-access'
+import { requireReelOwner, callerMayUseStorageKey } from '@/lib/api-access'
 
 // AI-grounded feedback for the regenerate flow: when the operator attaches a reference (📎), a vision model
 // reads the CURRENT scene image + the attachment and returns a few concrete, image-grounded ways to use it
@@ -37,6 +37,11 @@ export async function POST(req: NextRequest) {
 
   const gate = await requireReelOwner(reelId)
   if (gate instanceof NextResponse) return gate
+  // The attachment is fetched server-side and fed to a vision model — don't let it point at another
+  // tenant's asset (same guard regen-image / set-reel-music apply to client-supplied keys).
+  if (!(await callerMayUseStorageKey(gate, referenceKey))) {
+    return NextResponse.json({ error: 'Invalid reference image' }, { status: 400 })
+  }
 
   const db = getDb()
   const scene = await db.query.scenes.findFirst({ where: and(eq(scenes.reelId, reelId), eq(scenes.idx, sceneIdx)) })

@@ -7,7 +7,11 @@ function createDb(url: string) {
   // connections, so disable them when routed through a bouncer (set PGBOUNCER=true). Direct-Postgres
   // (local + today's prod) keeps prepared statements for their perf benefit.
   const usingPgBouncer = process.env['PGBOUNCER'] === 'true'
-  const conn = postgres(url, { max: 10, prepare: !usingPgBouncer })
+  // Pin every connection's session timezone to UTC. Budget/quota/kill-switch windows are computed as UTC
+  // day/month boundaries (Date.UTC in usage.ts) and compared against timestamp columns; without this the
+  // session TZ defaults to the server's config, so those windows would silently shift off UTC and mis-bin
+  // spend near day/month edges. Set as a startup parameter → applied per connection, pool-safe (no leak).
+  const conn = postgres(url, { max: 10, prepare: !usingPgBouncer, connection: { TimeZone: 'UTC' } })
   return drizzle(conn, { schema })
 }
 

@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs'
 const rootEnv = resolve(process.cwd(), '../../.env.local')
 if (existsSync(rootEnv)) config({ path: rootEnv })
 
+import { eq } from 'drizzle-orm'
 import { getDb } from './client.js'
 import { channels } from './schema.js'
 
@@ -121,27 +122,28 @@ async function main() {
 
   console.log('Seeding Aswang Files channel...')
 
-  const [channel] = await db
-    .insert(channels)
-    .values({
-      name: ASWANG_FILES_CHANNEL.name,
-      nicheDescription: ASWANG_FILES_CHANNEL.nicheDescription,
-      languages: ASWANG_FILES_CHANNEL.languages,
-      toneConfig: ASWANG_FILES_CHANNEL.toneConfig,
-      stylePreset: ASWANG_FILES_CHANNEL.stylePreset,
-      worldBible: ASWANG_FILES_CHANNEL.worldBible,
-      lutConfig: ASWANG_FILES_CHANNEL.lutConfig,
-      voicePool: ASWANG_FILES_CHANNEL.voicePool,
-      audioPacks: ASWANG_FILES_CHANNEL.audioPacks,
-      postingRules: ASWANG_FILES_CHANNEL.postingRules,
-    })
-    .onConflictDoNothing()
-    .returning()
-
-  if (channel) {
-    console.log(`✓ Channel created: ${channel.name} (${channel.id})`)
-  } else {
+  // channels has no unique constraint on `name`, so the previous onConflictDoNothing() never fired and
+  // re-seeding kept inserting duplicate "Aswang Files" rows. Guard on name so re-seeding is idempotent.
+  const existing = await db.select().from(channels).where(eq(channels.name, ASWANG_FILES_CHANNEL.name)).then((r) => r[0])
+  if (existing) {
     console.log('Channel already exists, skipping.')
+  } else {
+    const [channel] = await db
+      .insert(channels)
+      .values({
+        name: ASWANG_FILES_CHANNEL.name,
+        nicheDescription: ASWANG_FILES_CHANNEL.nicheDescription,
+        languages: ASWANG_FILES_CHANNEL.languages,
+        toneConfig: ASWANG_FILES_CHANNEL.toneConfig,
+        stylePreset: ASWANG_FILES_CHANNEL.stylePreset,
+        worldBible: ASWANG_FILES_CHANNEL.worldBible,
+        lutConfig: ASWANG_FILES_CHANNEL.lutConfig,
+        voicePool: ASWANG_FILES_CHANNEL.voicePool,
+        audioPacks: ASWANG_FILES_CHANNEL.audioPacks,
+        postingRules: ASWANG_FILES_CHANNEL.postingRules,
+      })
+      .returning()
+    console.log(`✓ Channel created: ${channel!.name} (${channel!.id})`)
   }
 
   process.exit(0)

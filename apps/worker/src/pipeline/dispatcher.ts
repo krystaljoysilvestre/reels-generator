@@ -4,6 +4,8 @@
 
 import type { Job } from 'bullmq'
 import { UnrecoverableError } from 'bullmq'
+import { eq } from 'drizzle-orm'
+import { getDb, reels } from '@reels/db'
 import { resolveNextStep, enqueueStep } from '@reels/queue'
 import { captureException } from '../monitoring/sentry.js'
 import { isTerminalError } from './error-policy.js'
@@ -36,6 +38,16 @@ export async function dispatchPipelineJob(job: Job<PipelineJobData>): Promise<vo
   const { reelId, stepName, channelId, language } = job.data
 
   console.log(`[pipeline] ${stepName} reelId=${reelId}`)
+
+  // A reel the boot reaper marked 'failed' must not be dragged back through the pipeline by an orphaned
+  // job that BullMQ stalled-recovery later re-activates. A legitimate retry (retry-reel) resets the reel
+  // to a transient status BEFORE re-enqueueing, so seeing 'failed' here means this job is stale — no-op it
+  // (completing cleanly clears the orphan) instead of re-running the step and bouncing the reel out of failed.
+  const current = await getDb().query.reels.findFirst({ where: eq(reels.id, reelId), columns: { status: true } })
+  if (current?.status === 'failed') {
+    console.warn(`[pipeline] skip ${stepName} (${reelId.slice(0, 8)}): reel is failed — stale/orphaned job`)
+    return
+  }
 
   try {
     switch (stepName) {

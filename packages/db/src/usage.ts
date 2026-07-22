@@ -1,6 +1,6 @@
 import { and, count, eq, gte, sum } from 'drizzle-orm'
 import { getDb } from './client.js'
-import { users, channels, reels } from './schema.js'
+import { users, channels, reels, compilations } from './schema.js'
 
 // A user's current usage + their effective caps (null caps → caller applies the global default).
 // Usage is summed/counted across all channels the user owns (reels inherit ownership via channelId).
@@ -30,6 +30,13 @@ export async function getUserUsage(userId: string): Promise<UserUsage | null> {
     .from(reels)
     .innerJoin(channels, eq(reels.channelId, channels.id))
     .where(and(eq(channels.userId, userId), gte(reels.createdAt, monthStart)))
+  // Compilations spend money too (connective-tissue LLM + TTS) and bill to the same wallet — include
+  // them so the monthly budget can't be under-counted by the compilation path.
+  const [compSpend] = await db
+    .select({ cents: sum(compilations.costCents) })
+    .from(compilations)
+    .innerJoin(channels, eq(compilations.channelId, channels.id))
+    .where(and(eq(channels.userId, userId), gte(compilations.createdAt, monthStart)))
   const [cnt] = await db
     .select({ n: count() })
     .from(reels)
@@ -40,7 +47,7 @@ export async function getUserUsage(userId: string): Promise<UserUsage | null> {
     role: u.role,
     monthlyBudgetCents: u.monthlyBudgetCents,
     dailyReelQuota: u.dailyReelQuota,
-    spendCentsThisMonth: Number(spend?.cents ?? 0),
+    spendCentsThisMonth: Number(spend?.cents ?? 0) + Number(compSpend?.cents ?? 0),
     reelsToday: Number(cnt?.n ?? 0),
   }
 }
@@ -68,12 +75,18 @@ export async function getReelOwnerUsage(
     .from(reels)
     .innerJoin(channels, eq(reels.channelId, channels.id))
     .where(and(eq(channels.userId, owner.userId), gte(reels.createdAt, monthStart)))
+  // Include the owner's compilation spend so the mid-pipeline budget re-check sees their full month-to-date.
+  const [compSpend] = await db
+    .select({ cents: sum(compilations.costCents) })
+    .from(compilations)
+    .innerJoin(channels, eq(compilations.channelId, channels.id))
+    .where(and(eq(channels.userId, owner.userId), gte(compilations.createdAt, monthStart)))
 
   return {
     userId: owner.userId,
     role: owner.role,
     monthlyBudgetCents: owner.monthlyBudgetCents,
-    spendCentsThisMonth: Number(spend?.cents ?? 0),
+    spendCentsThisMonth: Number(spend?.cents ?? 0) + Number(compSpend?.cents ?? 0),
   }
 }
 
@@ -88,5 +101,10 @@ export async function getGlobalSpendTodayCents(): Promise<number> {
     .select({ cents: sum(reels.costCents) })
     .from(reels)
     .where(gte(reels.createdAt, dayStart))
-  return Number(row?.cents ?? 0)
+  // Compilations bill to the same app-wide wallet — count them so the kill-switch sees true daily spend.
+  const [compRow] = await db
+    .select({ cents: sum(compilations.costCents) })
+    .from(compilations)
+    .where(gte(compilations.createdAt, dayStart))
+  return Number(row?.cents ?? 0) + Number(compRow?.cents ?? 0)
 }

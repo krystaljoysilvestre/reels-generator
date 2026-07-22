@@ -33,6 +33,12 @@ export function withJobTimeout<T>(p: Promise<T>, ms: number, label: string): Pro
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => reject(new StepTimeoutError(ms, label)), ms)
   })
+  // When the timeout WINS the race, `p` is abandoned but keeps running (Promise.race can't cancel it).
+  // If that lingering work later rejects (a hung provider call finally erroring), its rejection would be
+  // unhandled — and with no process-level handler that crashes the ENTIRE worker, killing every other
+  // in-flight job. Attach a no-op catch so a post-timeout rejection is considered handled. This does not
+  // change the race outcome: the same `p` is still raced below; this only registers a second handler.
+  p.catch(() => {})
   return Promise.race([p, timeout]).finally(() => clearTimeout(timer)) as Promise<T>
 }
 

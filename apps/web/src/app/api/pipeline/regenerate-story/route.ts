@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { eq } from 'drizzle-orm'
 import { getDb, reels, rejections } from '@reels/db'
-import type { rejectionReasonEnum } from '@reels/db'
+import { rejectionReasonEnum } from '@reels/db'
 import { transition } from '@reels/core'
 import { enqueueStep } from '@reels/queue'
 import { requireReelOwner } from '@/lib/api-access'
@@ -22,6 +22,12 @@ export async function POST(req: NextRequest) {
   if (!reelId || !reasonCode) {
     return NextResponse.json({ error: 'reelId and reasonCode are required' }, { status: 400 })
   }
+  // reasonCode → PG enum column; validate so a bad value is a 400, not a 22P02 500. opMinutes → integer.
+  if (!rejectionReasonEnum.enumValues.includes(reasonCode)) {
+    return NextResponse.json({ error: 'Invalid reasonCode' }, { status: 400 })
+  }
+  const cleanOpMinutes =
+    typeof opMinutes === 'number' && Number.isFinite(opMinutes) && opMinutes >= 0 ? Math.round(opMinutes) : undefined
 
   const gate = await requireReelOwner(reelId)
   if (gate instanceof NextResponse) return gate
@@ -41,7 +47,7 @@ export async function POST(req: NextRequest) {
   await db.transaction(async (tx) => {
     await tx
       .update(reels)
-      .set({ status: 'rejected', operatorMinutes: opMinutes ?? reel.operatorMinutes, updatedAt: new Date() })
+      .set({ status: 'rejected', operatorMinutes: cleanOpMinutes ?? reel.operatorMinutes, updatedAt: new Date() })
       .where(eq(reels.id, reelId))
     await tx.insert(rejections).values({ reelId, reasonCode, note: note?.trim() || null })
   })

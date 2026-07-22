@@ -10,7 +10,13 @@ export async function POST(req: NextRequest) {
   const gate = await requireReelOwner(reelId)
   if (gate instanceof NextResponse) return gate
 
+  // operatorMinutes is a NOT NULL integer column — reject a non-numeric/negative value as a clean 400
+  // instead of letting it become a DB error or polluting cost analytics.
+  if (typeof opMinutes !== 'number' || !Number.isFinite(opMinutes) || opMinutes < 0) {
+    return NextResponse.json({ error: 'opMinutes must be a non-negative number' }, { status: 400 })
+  }
+
   const db = getDb()
-  await db.update(reels).set({ operatorMinutes: opMinutes, updatedAt: new Date() }).where(eq(reels.id, reelId))
+  await db.update(reels).set({ operatorMinutes: Math.round(opMinutes), updatedAt: new Date() }).where(eq(reels.id, reelId))
   return NextResponse.json({ ok: true })
 }

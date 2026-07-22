@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX IF NOT EXISTS "uq_publications_reel_platform" ON "publications" USING btree ("reel_id","platform");

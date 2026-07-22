@@ -295,6 +295,20 @@
       "when": 1784622406465,
       "tag": "0041_dashing_husk",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1784715396914,
+      "tag": "0042_unknown_morlocks",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1784718223316,
+      "tag": "0043_dashing_shinobi_shaw",
+      "breakpoints": true
     }
   ]
 }

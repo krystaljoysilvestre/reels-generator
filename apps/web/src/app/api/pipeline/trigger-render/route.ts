@@ -2,7 +2,7 @@ import type { NextRequest} from 'next/server';
 import { NextResponse } from 'next/server'
 import { getDb, reels } from '@reels/db'
 import { eq } from 'drizzle-orm'
-import { transition, type VoiceSettings } from '@reels/core'
+import { transition, VoiceSettingsSchema, type VoiceSettings } from '@reels/core'
 import { enqueueStep } from '@reels/queue'
 import { requireReelOwner } from '@/lib/api-access'
 
@@ -22,6 +22,12 @@ export async function POST(req: NextRequest) {
   // never fails mid-pipeline on a missing voiceId.
   if (!voiceId || !voiceId.trim()) {
     return NextResponse.json({ error: 'Pick a narrator voice before rendering.' }, { status: 400 })
+  }
+
+  // Validate a client-supplied delivery override to the same bounds set-voice enforces — an out-of-range
+  // value would otherwise be persisted and reach TTS mid-render.
+  if (voiceSettings !== undefined && !VoiceSettingsSchema.safeParse(voiceSettings).success) {
+    return NextResponse.json({ error: 'Invalid voice settings' }, { status: 400 })
   }
 
   const reel = await db.query.reels.findFirst({ where: eq(reels.id, reelId) })

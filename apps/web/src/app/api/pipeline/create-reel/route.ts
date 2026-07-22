@@ -4,12 +4,13 @@ import { getDb, reels, channels, getUserUsage } from '@reels/db'
 import { and, count, eq, inArray } from 'drizzle-orm'
 import { enqueueStep } from '@reels/queue'
 import { checkUserLimits, DEFAULT_USER_LIMITS, MAX_INFLIGHT_REELS_PER_USER, UNSHIPPED_REEL_STATUSES } from '@reels/core'
-import { getCurrentUser } from '@/lib/auth'
+import { requireApiUser } from '@/lib/api-access'
 import { userOwnsChannel } from '@/lib/access'
 
 export async function POST(req: NextRequest) {
-  const user = await getCurrentUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const gate = await requireApiUser()
+  if (gate instanceof NextResponse) return gate
+  const user = gate
 
   const { channelId, generationMode, seed } = (await req.json().catch(() => ({}))) as {
     channelId?: string

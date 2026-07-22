@@ -12,7 +12,7 @@ void (async () => {
   const { getDb, reels, scenes, pipelineSteps } = await import('@reels/db')
   const { generateImages } = await import('../src/pipeline/steps/generate-images.js')
   const { StoryBibleSchema } = await import('@reels/core')
-  const { eq, and, asc } = await import('drizzle-orm')
+  const { eq, and, asc, like } = await import('drizzle-orm')
   const db = getDb()
 
   const reel = await db.query.reels.findFirst({ where: eq(reels.id, reelId) })
@@ -32,7 +32,9 @@ void (async () => {
   } else {
     await db.update(scenes).set({ imageAssetId: null }).where(eq(scenes.reelId, reelId))
   }
-  await db.delete(pipelineSteps).where(and(eq(pipelineSteps.reelId, reelId), eq(pipelineSteps.stepName, 'generate_images')))
+  // generate_images now writes one row per scene ('generate_images:scene3'); clear the whole family so a
+  // re-run isn't short-circuited by a stale 'done' row after imageAssetId was nulled above.
+  await db.delete(pipelineSteps).where(and(eq(pipelineSteps.reelId, reelId), like(pipelineSteps.stepName, 'generate_images%')))
 
   console.log('\ngenerate_images (re-render with visibility splice) …')
   await generateImages(reelId)

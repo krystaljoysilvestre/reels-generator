@@ -101,8 +101,14 @@ export async function buildCompilation(compilationId: string): Promise<void> {
   await mkdir(tmp, { recursive: true })
   try {
 
+  // Sum every paid call so the compilation's recorded cost reflects its true spend (LLM + all TTS),
+  // not just the script LLM. Previously only llm.costCents was stored — the connective-tissue TTS
+  // (intro + N transitions + outro, ~a minute of narration) was dropped, hiding it from cost accounting.
+  let ttsCostCents = 0
+
   // Narrate intro
   const introTts = await tts.synthesize({ narration: script.intro_script, voiceId, reelId: `comp-${compilationId}-intro` })
+  ttsCostCents += introTts.costCents
   const introBuf = await downloadBuffer(introTts.audioStorageKey)
   const introPath = join(tmp, 'intro.mp3')
   await writeFile(introPath, introBuf)
@@ -112,6 +118,7 @@ export async function buildCompilation(compilationId: string): Promise<void> {
   for (let i = 0; i < script.transitions.length; i++) {
     const tr = script.transitions[i]!
     const trTts = await tts.synthesize({ narration: tr.script, voiceId, reelId: `comp-${compilationId}-tr${i}` })
+    ttsCostCents += trTts.costCents
     const trBuf = await downloadBuffer(trTts.audioStorageKey)
     const trPath = join(tmp, `transition_${i}.mp3`)
     await writeFile(trPath, trBuf)
@@ -120,9 +127,15 @@ export async function buildCompilation(compilationId: string): Promise<void> {
 
   // Narrate outro
   const outroTts = await tts.synthesize({ narration: script.outro_script, voiceId, reelId: `comp-${compilationId}-outro` })
+  ttsCostCents += outroTts.costCents
   const outroBuf = await downloadBuffer(outroTts.audioStorageKey)
   const outroPath = join(tmp, 'outro.mp3')
   await writeFile(outroPath, outroBuf)
+
+  // All paid work (LLM + TTS) is done. Halt a runaway compilation against its per-item cap before the
+  // (free, local) ffmpeg assembly — the same per-item ceiling assertBudget enforces for reels.
+  const totalCostCents = llm.costCents + ttsCostCents
+  assertBudget(compilationId, totalCostCents, DEFAULT_BUDGET_CAPS_CENTS.compilation)
 
   // ── Step 3: Assemble — concatenate existing reel renders ──────────────────
   const concatParts: string[] = []
@@ -201,7 +214,7 @@ export async function buildCompilation(compilationId: string): Promise<void> {
     renderUrl: storageKey,
     chapterMarks: chapterMarks as never,
     status: 'approved',
-    costCents: llm.costCents,
+    costCents: totalCostCents,
   }).where(eq(compilations.id, compilationId))
 
   console.log(`[compilation] done: ${compilationId} (${chapterMarks.length} chapters)`)

@@ -25,6 +25,16 @@ export type PipelineStepName = (typeof PIPELINE_STEPS)[number]
 
 export const PIPELINE_STEP_COUNT = PIPELINE_STEPS.length // 16
 
+// Fan-out steps (generate_images, animate_scenes) write ONE pipeline_steps row PER sub-unit, named
+// `<step>:scene<idx>` (images) / `<step>:s<idx>v<v>` (animation variations), so their rows no longer
+// collide on the unique (reelId, stepName) key — which previously corrupted the ledger (last-writer-wins
+// on status) and made retry/liveness blind to a partially-failed fan-out. The canonical step name is
+// everything before the first ':'. Non-fan-out step names have no ':' and pass through unchanged.
+export function baseStepName(stepName: string): string {
+  const i = stepName.indexOf(':')
+  return i === -1 ? stepName : stepName.slice(0, i)
+}
+
 // Provider call return contract (docs — E2.1): clients write nothing, workers persist.
 export const ProviderResultSchema = z.object({
   asset: z.object({

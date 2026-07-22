@@ -1,6 +1,6 @@
 import './env.js'
 import type { Worker } from 'bullmq'
-import { initSentry } from './monitoring/sentry.js'
+import { initSentry, captureException } from './monitoring/sentry.js'
 import { startBullBoard } from './monitoring/bull-board.js'
 import { makeWorker, QUEUE } from './queues/index.js'
 import { dispatchPipelineJob } from './pipeline/dispatcher.js'
@@ -11,6 +11,19 @@ import { registerDigestSchedule, runDailyDigest, DAILY_DIGEST_JOB } from './dige
 import { registerMetricsPollSchedule, runMetricsPoll, METRICS_POLL_JOB } from './metrics-poll.js'
 
 initSentry()
+
+// Process-level backstop: a stray unhandled rejection (e.g. an abandoned step that lost the job-timeout
+// race and later rejects) must NOT take the whole worker down with it — that would kill every other
+// in-flight job on this process. Log + report, then keep serving. Sentry.captureException is a no-op when
+// the DSN isn't set, so this is safe in dev too.
+process.on('unhandledRejection', (reason) => {
+  console.error('[worker] unhandledRejection (non-fatal, worker stays up):', reason)
+  captureException(reason, { source: 'unhandledRejection' })
+})
+process.on('uncaughtException', (err) => {
+  console.error('[worker] uncaughtException (non-fatal, worker stays up):', err)
+  captureException(err, { source: 'uncaughtException' })
+})
 
 // Process roles let the worker scale horizontally: run one `scheduler` process, N `pipeline`, and M
 // `render`. Default `all` = the single-process dev/box behavior. The global provider cap

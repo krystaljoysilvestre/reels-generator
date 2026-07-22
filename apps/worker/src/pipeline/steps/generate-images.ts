@@ -298,8 +298,10 @@ export async function generateImages(reelId: string): Promise<void> {
       engine: `${sceneEngine.imageModel}|${sceneEngine.editModel}`, // switching engine (incl. scare→Flux) busts the cache
     })
 
+    // Per-scene step row (not the bare 'generate_images') so concurrent scenes don't collide on one
+    // (reelId, stepName) ledger row — the collision hid failures from retry and stuck reels from the reaper.
     await runStep(
-      { reelId, stepName: 'generate_images', inputHash: `${inputHash}:scene${scene.idx}` as never },
+      { reelId, stepName: `generate_images:scene${scene.idx}` as never, inputHash },
       async (cost) => {
         const qa = isQATarget(scene)
         let chosen: Awaited<ReturnType<typeof generateImageWithRetry>> | undefined

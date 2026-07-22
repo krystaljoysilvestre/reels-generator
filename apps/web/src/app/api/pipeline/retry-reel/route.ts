@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { getDb, reels, pipelineSteps } from '@reels/db'
 import { and, desc, eq } from 'drizzle-orm'
 import { enqueueStep } from '@reels/queue'
+import { baseStepName } from '@reels/core'
 import { requireReelOwner } from '@/lib/api-access'
 
 // Recover a reel that hard-failed: re-enqueue the step that failed (its prior steps are cached, so
@@ -42,15 +43,18 @@ export async function POST(req: NextRequest) {
   })
   if (!failed) return NextResponse.json({ error: 'No failed step to retry' }, { status: 400 })
 
-  const resetStatus = STEP_RESET_STATUS[failed.stepName] ?? 'rendering'
+  // Fan-out steps record per-sub-unit rows ('generate_images:scene3'); re-enqueue the CANONICAL step
+  // ('generate_images') the dispatcher knows, and resolve its reset status from the base name.
+  const retryStep = baseStepName(failed.stepName)
+  const resetStatus = STEP_RESET_STATUS[retryStep] ?? 'rendering'
   await db.update(reels).set({ status: resetStatus as never, updatedAt: new Date() }).where(eq(reels.id, reelId))
 
   await enqueueStep({
     reelId,
-    stepName: failed.stepName,
+    stepName: retryStep,
     // generate_story needs the channel + language to (re)derive the story.
-    ...(failed.stepName === 'generate_story' ? { channelId: reel.channelId, language: reel.language } : {}),
+    ...(retryStep === 'generate_story' ? { channelId: reel.channelId, language: reel.language } : {}),
   })
 
-  return NextResponse.json({ ok: true, retriedStep: failed.stepName })
+  return NextResponse.json({ ok: true, retriedStep: retryStep })
 }

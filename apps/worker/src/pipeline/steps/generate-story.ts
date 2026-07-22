@@ -315,39 +315,49 @@ export async function generateStory(reelId: string, channelId: string, language:
     language,
   })
 
+  const winner = result.output.winner
+  // Story-elements labels → persisted for the cross-reel shape avoid-list + analytics.
+  // Planner metadata, NOT a Writer instruction (invariant 1). null for BYO.
+  const elements = result.output.plan?.elements ?? null
+
+  // Insert the winning story and link the reel to it ATOMICALLY. Previously the insert and the reel-link
+  // were two separate statements OUTSIDE the step's idempotency: a crash between them left the story
+  // orphaned and the reel stuck in story_review with storyId=null, so analyze_story later threw
+  // "Reel has no story" and the reel dead-ended. One transaction makes them all-or-nothing.
+  const persistStory = () =>
+    db.transaction(async (tx) => {
+      const [story] = await tx
+        .insert(stories)
+        .values({
+          channelId,
+          source: 'ai',
+          language,
+          title: winner.title,
+          body: winner.narration,
+          logline: winner.logline,
+          // Music-timing anchor. Studio mode may resolve to '' (all peak candidates edited away) —
+          // persist NULL so breakdown-scenes re-extracts via peak-extract.v1 instead of anchoring
+          // on a line that no longer exists in the narration.
+          twistAnchor: winner.peakMoment.trim() ? winner.peakMoment : null,
+          subgenreTags: winner.subgenreTags,
+          // Fold the Writer's voice-casting profile in with the planner's element labels (jsonb, no new
+          // column) so the auto-voice picker can match a narrator's gender/age to a pool voice.
+          elements: { ...(elements ?? {}), narratorVoice: winner.narratorVoice },
+        })
+        .returning()
+      await tx.update(reels).set({ storyId: story!.id, status: 'story_review', updatedAt: new Date() }).where(eq(reels.id, reelId))
+    })
+
   if (!result.skipped) {
-    const winner = result.output.winner
-    // Story-elements labels → persisted for the cross-reel shape avoid-list + analytics.
-    // Planner metadata, NOT a Writer instruction (invariant 1). null for BYO.
-    const elements = result.output.plan?.elements ?? null
-
-    // Persist the winning story to the stories table
-    const [story] = await db
-      .insert(stories)
-      .values({
-        channelId,
-        source: 'ai',
-        language,
-        title: winner.title,
-        body: winner.narration,
-        logline: winner.logline,
-        // Music-timing anchor. Studio mode may resolve to '' (all peak candidates edited away) —
-        // persist NULL so breakdown-scenes re-extracts via peak-extract.v1 instead of anchoring
-        // on a line that no longer exists in the narration.
-        twistAnchor: winner.peakMoment.trim() ? winner.peakMoment : null,
-        subgenreTags: winner.subgenreTags,
-        // Fold the Writer's voice-casting profile in with the planner's element labels (jsonb, no new
-        // column) so the auto-voice picker can match a narrator's gender/age to a pool voice.
-        elements: { ...(elements ?? {}), narratorVoice: winner.narratorVoice },
-      })
-      .returning()
-
-    // Link reel to the story and advance to story_review gate
-    const { reels } = await import('@reels/db')
-    await db.update(reels).set({ storyId: story!.id, status: 'story_review', updatedAt: new Date() }).where(eq(reels.id, reelId))
+    // Fresh generation (or a regeneration after rejection) → always a new story + relink.
+    await persistStory()
   } else {
-    // Even on skip, ensure status is story_review
-    await setReelStatus(reelId, 'story_review')
+    // Cached hit: the story was already created + linked on the original run. Self-heal the rare case
+    // where that run crashed after the step was marked 'done' but before the link landed — otherwise the
+    // idempotency skip would leave the reel permanently unlinked.
+    const linked = await db.query.reels.findFirst({ where: eq(reels.id, reelId), columns: { storyId: true } })
+    if (linked?.storyId) await setReelStatus(reelId, 'story_review')
+    else await persistStory()
   }
 
   return result.output.winner

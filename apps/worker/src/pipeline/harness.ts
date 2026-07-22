@@ -8,7 +8,10 @@ import {
   GLOBAL_DAILY_SPEND_CAP_CENTS,
   DEFAULT_BUDGET_CAPS_CENTS,
   DEFAULT_USER_LIMITS,
+  baseStepName,
+  canTransition,
   type PipelineStepName,
+  type ReelStatus,
 } from '@reels/core'
 
 // Worker harness — every pipeline step calls runStep() instead of doing raw DB work.
@@ -180,9 +183,28 @@ export async function setReelStatus(
 // that throw BEFORE runStep (e.g. validation), so the storyboard banner + retry always have data.
 export async function markReelFailed(reelId: string, stepName: string, error: string): Promise<void> {
   const db = getDb()
+  const reel = await db.query.reels.findFirst({ where: eq(reels.id, reelId), columns: { status: true } })
+  if (!reel) return
+  // Never illegally regress a reel that already moved past the pipeline (approved/scheduled→published) or
+  // was rejected: a late/duplicate/exhausted job must not flip a terminal-ish reel back to 'failed'. The
+  // state machine is the authority on which current statuses may transition to 'failed'.
+  if (!canTransition(reel.status as ReelStatus, 'failed')) {
+    console.warn(`[harness] skip markReelFailed ${reelId.slice(0, 8)}: ${reel.status} → failed not allowed (${stepName})`)
+    return
+  }
   await db.update(reels).set({ status: 'failed' as never, updatedAt: new Date() }).where(eq(reels.id, reelId))
+  // Only write a fallback row for a step that threw BEFORE runStep wrote anything. If a row for this step
+  // already exists — including a fan-out step's per-scene rows ('generate_images:scene3') — keep it: adding
+  // a bare 'generate_images' row here would linger 'failed' after a successful retry and falsely surface a
+  // retry banner (the per-scene rows are the source of truth). markReelFailed is rare (permanent failure),
+  // so scanning the reel's step rows is cheap.
+  const rows = await db.query.pipelineSteps.findMany({
+    where: eq(pipelineSteps.reelId, reelId),
+    columns: { stepName: true },
+  })
+  if (rows.some((r) => baseStepName(r.stepName) === stepName)) return
   await db
     .insert(pipelineSteps)
     .values({ reelId, stepName: stepName as never, status: 'failed', attempt: 1, error, finishedAt: new Date() })
-    .onConflictDoNothing()  // keep the harness's richer error if a row already exists
+    .onConflictDoNothing()
 }

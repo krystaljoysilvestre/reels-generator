@@ -2,12 +2,13 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { inArray } from 'drizzle-orm'
 import { getDb, compilations, reels } from '@reels/db'
-import { getCurrentUser } from '@/lib/auth'
+import { requireApiUser } from '@/lib/api-access'
 import { userOwnsChannel } from '@/lib/access'
 
 export async function POST(req: NextRequest) {
-  const user = await getCurrentUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const gate = await requireApiUser()
+  if (gate instanceof NextResponse) return gate
+  const user = gate
 
   const { reelIds, theme, title } = (await req.json().catch(() => ({}))) as {
     reelIds: string[]

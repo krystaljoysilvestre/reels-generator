@@ -25,7 +25,10 @@ export async function POST(req: NextRequest) {
   let changed = false
 
   if (motionPrompt !== undefined) {
-    const next = motionPrompt.trim() || null
+    if (typeof motionPrompt !== 'string') {
+      return NextResponse.json({ error: 'motionPrompt must be a string' }, { status: 400 })
+    }
+    const next = motionPrompt.trim().slice(0, 1000) || null
     if ((scene?.motionPrompt ?? null) !== next) { update.motionPrompt = next; changed = true }
   }
   if (motionSettings !== undefined) {

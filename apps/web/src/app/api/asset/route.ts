@@ -58,6 +58,9 @@ export async function GET(req: NextRequest) {
       'Content-Type': out.contentType ?? contentType,
       'Accept-Ranges': 'bytes',
       'Cache-Control': regenerable ? 'no-store, must-revalidate' : 'private, max-age=3600',
+      // Don't let the browser MIME-sniff a stored blob into something executable (e.g. treating an
+      // uploaded file as HTML) — serve it strictly as the declared Content-Type.
+      'X-Content-Type-Options': 'nosniff',
     }
     if (out.contentLength != null) headers['Content-Length'] = String(out.contentLength)
     if (out.contentRange) headers['Content-Range'] = out.contentRange

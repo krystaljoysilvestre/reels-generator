@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { and, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { getDb, channels } from '@reels/db'
-import { getCurrentUser } from '@/lib/auth'
+import { requireApiUser } from '@/lib/api-access'
 
 // Persist an in-progress wizard as a 'draft' channel so the operator can leave and resume later
 // (it shows on the dashboard, separate from finished channels). Lenient by design: a draft may be
@@ -17,8 +17,9 @@ const InputSchema = z.object({
 })
 
 export async function POST(req: NextRequest) {
-  const user = await getCurrentUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const gate = await requireApiUser()
+  if (gate instanceof NextResponse) return gate
+  const user = gate
 
   const parsed = InputSchema.safeParse(await req.json().catch(() => null))
   if (!parsed.success) {
@@ -52,8 +53,9 @@ export async function POST(req: NextRequest) {
 // Discard a saved draft (the "Discard" choice in the leave modal). Guarded to status='draft' and to
 // the caller's own drafts (admins may discard any) so it can never delete a finished or foreign channel.
 export async function DELETE(req: NextRequest) {
-  const user = await getCurrentUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const gate = await requireApiUser()
+  if (gate instanceof NextResponse) return gate
+  const user = gate
   const id = new URL(req.url).searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
   const db = getDb()

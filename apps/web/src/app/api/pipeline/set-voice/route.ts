@@ -3,19 +3,13 @@ import { NextResponse } from 'next/server'
 import { getDb, reels } from '@reels/db'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
+import { VoiceSettingsSchema } from '@reels/core'
 import { requireReelOwner } from '@/lib/api-access'
 
 // Persist the reel's narrator voice + delivery as the operator adjusts them on the storyboard — so a
 // picked voice / tweaked delivery survives a reload WITHOUT needing to render. Both fields optional:
 //   voiceId       — the chosen ElevenLabs voice id (persisted on select)
 //   voiceSettings — the delivery override (persisted, debounced, on slider change); null = clear → auto
-const VoiceSettingsSchema = z.object({
-  stability: z.number().min(0).max(1),
-  similarity_boost: z.number().min(0).max(1),
-  style: z.number().min(0).max(1),
-  use_speaker_boost: z.boolean(),
-  speed: z.number().min(0.5).max(1.5),
-})
 const InputSchema = z.object({
   reelId: z.string().uuid(),
   voiceId: z.string().min(1).optional(),

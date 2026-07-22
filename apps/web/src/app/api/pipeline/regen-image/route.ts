@@ -6,7 +6,7 @@ import { generateImage, generateImageFal, imageEngineForGenre, FLUX_IMAGE_ENGINE
 import { assembleImagePrompt, assembleReferencePrompt, assembleNegativePrompt, castNationality, reelLightingDirective, sceneEntities, slug, StoryBibleSchema, PLATFORM_PRESETS } from '@reels/core'
 import { buildReviseScenePrompt, REVISE_SCENE_V1_VERSION, ReviseSceneSchema } from '@reels/core/prompts/revise-scene.v1'
 import { buildFilterSafePrompt, FILTER_SAFE_V1_VERSION, FilterSafeSchema } from '@reels/core/prompts/filter-safe.v1'
-import { requireReelOwner, callerMayUseStorageKey } from '@/lib/api-access'
+import { requireReelOwner, callerMayUseStorageKey, requireSpendBudget } from '@/lib/api-access'
 
 export async function POST(req: NextRequest) {
   // `instruction` = an optional plain-language change ("lights off", "make them talk while walking"); it's
@@ -28,6 +28,8 @@ export async function POST(req: NextRequest) {
   if (referenceKey && !(await callerMayUseStorageKey(gate, referenceKey))) {
     return NextResponse.json({ error: 'Invalid reference image' }, { status: 400 })
   }
+  const budgetGate = await requireSpendBudget(gate)
+  if (budgetGate) return budgetGate
 
   const db = getDb()
 

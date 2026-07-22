@@ -63,19 +63,21 @@ export async function consumeInviteForUser(userId: string): Promise<void> {
     }
   }
 
-  // Atomic single-use: claim the invite only if it is still unused. Two concurrent signups carrying the
-  // same token would otherwise both pass validateInvite and both upgrade — one invite minting several
-  // (possibly admin) accounts. The conditional UPDATE lets exactly one win; only the winner upgrades.
-  const [claimed] = await db
-    .update(invites)
-    .set({ usedByUserId: userId, usedAt: new Date() })
-    .where(and(eq(invites.id, invite.id), isNull(invites.usedAt)))
-    .returning({ id: invites.id })
-  if (!claimed) {
-    await clearInviteCookie()
-    return
-  }
-
-  await db.update(users).set({ role: invite.role, status: 'active' }).where(eq(users.id, userId))
+  // Atomic single-use claim + upgrade, in ONE transaction. The conditional UPDATE lets exactly one of two
+  // concurrent signups carrying the same token win (so one invite can't mint several — possibly admin —
+  // accounts); wrapping the winner's user-upgrade in the same transaction means a crash between them can't
+  // burn the invite while leaving the user stuck pending. Either both land or neither does (invite stays
+  // claimable, user recoverable).
+  const claimed = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(invites)
+      .set({ usedByUserId: userId, usedAt: new Date() })
+      .where(and(eq(invites.id, invite.id), isNull(invites.usedAt)))
+      .returning({ id: invites.id })
+    if (!row) return false
+    await tx.update(users).set({ role: invite.role, status: 'active' }).where(eq(users.id, userId))
+    return true
+  })
   await clearInviteCookie()
+  if (!claimed) return
 }

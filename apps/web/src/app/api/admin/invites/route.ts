@@ -1,14 +1,14 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { randomBytes } from 'node:crypto'
 import { getDb, invites } from '@reels/db'
-import { getCurrentUser } from '@/lib/auth'
+import { requireApiAdmin } from '@/lib/api-access'
 
 // Create an invite link. The returned token is opened at /join/<token>, which pre-approves the
 // signup (active) with the invite's role.
 export async function POST(req: NextRequest) {
-  const admin = await getCurrentUser()
-  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (admin.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const gate = await requireApiAdmin()
+  if (gate instanceof NextResponse) return gate
+  const admin = gate
 
   const body = (await req.json().catch(() => ({}))) as { role?: string; email?: string; expiresInDays?: number }
   const role = body.role === 'admin' ? 'admin' : 'tester'

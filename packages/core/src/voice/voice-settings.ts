@@ -2,6 +2,7 @@
 // — the difference between a flat read and a slow, breathy, dread-soaked one. We DERIVE these (no
 // operator UI) from the channel's tone baseline + THIS reel's story mood, so a tense story is
 // delivered differently from a wistful one while staying in the channel's character.
+import { z } from 'zod'
 import type { ToneConfig } from '../types/channel.js'
 
 export interface VoiceSettings {
@@ -11,6 +12,17 @@ export interface VoiceSettings {
   use_speaker_boost: boolean
   speed: number            // ~0.7–1.2 · narration pace
 }
+
+// Runtime validation for a client-supplied delivery override. Any API route that accepts voiceSettings
+// from the client and feeds it to TTS must parse it against this (an out-of-range value would otherwise
+// reach the provider mid-pipeline). Bounds mirror the interface's documented ranges.
+export const VoiceSettingsSchema: z.ZodType<VoiceSettings> = z.object({
+  stability: z.number().min(0).max(1),
+  similarity_boost: z.number().min(0).max(1),
+  style: z.number().min(0).max(1),
+  use_speaker_boost: z.boolean(),
+  speed: z.number().min(0.5).max(1.5),
+})
 
 const clamp = (n: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, n))
 

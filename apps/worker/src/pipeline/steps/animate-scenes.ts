@@ -135,8 +135,10 @@ export async function animateScenes(reelId: string): Promise<void> {
         sceneIdx: scene.idx,
       })
 
+      // Per-scene/variation step row (not the bare 'animate_scenes') so concurrent clips don't collide on
+      // one (reelId, stepName) ledger row — the collision hid failures from retry and stuck reels from the reaper.
       await runStep(
-        { reelId, stepName: 'animate_scenes', inputHash: `${inputHash}:s${scene.idx}v${v}` as never },
+        { reelId, stepName: `animate_scenes:s${scene.idx}v${v}` as never, inputHash },
         async (cost) => {
           let chosen: Awaited<ReturnType<typeof generateVideo>> | undefined
           let lastIssues: string[] = []

@@ -5,7 +5,7 @@ import { eq, and } from 'drizzle-orm'
 import { llmCall, listVoices, ProviderRateLimitError } from '@reels/providers'
 import { OperatorSfxSchema, cueVolumeDb, type OperatorCue } from '@reels/core'
 import { buildAddSoundPrompt, AddSoundSchema, ADD_SOUND_V1_VERSION } from '@reels/core/prompts/add-sound.v1'
-import { requireReelOwner } from '@/lib/api-access'
+import { requireReelOwner, requireSpendBudget } from '@/lib/api-access'
 
 const MAX_MANUAL_CUES = 5
 
@@ -19,11 +19,17 @@ function countOccurrences(text: string, sub: string): number {
 // Add ONE operator-authored sound to a specific scene (manual cue) — e.g. an off-screen voice saying
 // "Buti gising ka pa". Separate from the reel-level smart Sound design; both render together.
 export async function POST(req: NextRequest) {
-  const { reelId, sceneIdx, instruction } = (await req.json().catch(() => ({}))) as { reelId: string; sceneIdx?: number; instruction: string }
-  if (!instruction?.trim()) return NextResponse.json({ error: 'Describe the sound you want.' }, { status: 400 })
+  const { reelId, sceneIdx, instruction } = (await req.json().catch(() => ({}))) as { reelId: string; sceneIdx?: number; instruction?: unknown }
+  // Must be a non-empty string — a non-string would crash on .trim(). Cap length (it's fed to an LLM).
+  if (typeof instruction !== 'string' || !instruction.trim()) {
+    return NextResponse.json({ error: 'Describe the sound you want.' }, { status: 400 })
+  }
+  const instructionText = instruction.trim().slice(0, 1000)
 
   const gate = await requireReelOwner(reelId)
   if (gate instanceof NextResponse) return gate
+  const budgetGate = await requireSpendBudget(gate)
+  if (budgetGate) return budgetGate
 
   const db = getDb()
   const reel = await db.query.reels.findFirst({ where: eq(reels.id, reelId) })
@@ -43,7 +49,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const { system, userMessage } = buildAddSoundPrompt({
-      instruction: instruction.trim(),
+      instruction: instructionText,
       sceneText: scene?.narrationText ?? story.body.slice(0, 400),
       fullNarration: story.body,
     })
@@ -80,7 +86,7 @@ export async function POST(req: NextRequest) {
       volumeDb: cueVolumeDb(data.kind),
       kind: data.kind,
       ...(data.kind === 'sfx'
-        ? { prompt: data.prompt || instruction.trim() }
+        ? { prompt: data.prompt || instructionText }
         : { words: data.words ?? '', speaker: data.speaker || undefined, delivery: data.delivery || undefined, voiceId }),
     }
 

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { eq } from 'drizzle-orm'
-import { getDb, channels, reels, stories } from '@reels/db'
+import { getDb, channels, reels, stories, getUserUsage, getGlobalSpendTodayCents } from '@reels/db'
+import { assertGlobalDailyBudget, GlobalBudgetExceededError, DEFAULT_USER_LIMITS } from '@reels/core'
 import { getCurrentUser, type SessionUser } from '@/lib/auth'
 
 // API-route authorization. The page layer uses the redirect/notFound guards in `lib/access.ts`;
@@ -124,4 +125,27 @@ export function reelIdFromKey(key: string): string | null | undefined {
   if (!key.startsWith('reels/')) return undefined
   const seg = key.split('/')[1]
   return isUuid(seg) ? seg : null
+}
+
+// Cost-safety gate for ON-DEMAND paid actions (previews, image/motion regen, add-sound) that spend
+// provider money OUTSIDE the reel-creation flow — where checkUserLimits and the mid-pipeline
+// assertUserBudget never run. Mirrors the two ceilings the worker harness enforces before every paid
+// step: the app-wide daily kill-switch, then the caller's month-to-date budget. Admins are exempt, as
+// they are at creation. Returns a 429 Denied to short-circuit the route, or null when spending is OK.
+export async function requireSpendBudget(user: SessionUser): Promise<Denied | null> {
+  if (user.role === 'admin') return null
+  try {
+    assertGlobalDailyBudget(await getGlobalSpendTodayCents())
+  } catch (e) {
+    if (e instanceof GlobalBudgetExceededError) return deny(429, e.message)
+    throw e
+  }
+  const usage = await getUserUsage(user.id)
+  if (usage && usage.role !== 'admin') {
+    const cap = usage.monthlyBudgetCents ?? DEFAULT_USER_LIMITS.monthlyBudgetCents
+    if (usage.spendCentsThisMonth >= cap) {
+      return deny(429, `Monthly budget reached ($${(cap / 100).toFixed(2)}). Ask the admin to raise it.`)
+    }
+  }
+  return null
 }

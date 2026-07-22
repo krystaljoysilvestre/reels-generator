@@ -8,7 +8,7 @@ import { ToneConfigSchema, WorldBibleSchema, ChannelVoiceSchema, VoiceModeSchema
 import { classifyGenre, GENRE_MODULE_VALUES, asGenreModule } from '@reels/core/prompts/scenes.v1'
 import { STYLE_VALUES, resolveStyle } from '@reels/core/prompts/story-styles.v1'
 import { VOICE_VALUES, resolveVoice } from '@reels/core/prompts/story-voices.v1'
-import { getCurrentUser } from '@/lib/auth'
+import { requireApiUser } from '@/lib/api-access'
 
 const InputSchema = z.object({
   name: z.string().trim().min(1).max(80),
@@ -59,8 +59,9 @@ const InputSchema = z.object({
 })
 
 export async function POST(req: NextRequest) {
-  const user = await getCurrentUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const gate = await requireApiUser()
+  if (gate instanceof NextResponse) return gate
+  const user = gate
 
   const parsed = InputSchema.safeParse(await req.json().catch(() => null))
   if (!parsed.success) {

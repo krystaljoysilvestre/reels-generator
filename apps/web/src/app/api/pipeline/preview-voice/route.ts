@@ -2,17 +2,26 @@ import type { NextRequest} from 'next/server';
 import { NextResponse } from 'next/server'
 import { ElevenLabsTtsProvider, ProviderRateLimitError } from '@reels/providers'
 import { downloadBuffer } from '@reels/providers'
-import type { VoiceSettings } from '@reels/core'
-import { requireApiUser } from '@/lib/api-access'
+import { VoiceSettingsSchema, type VoiceSettings } from '@reels/core'
+import { requireApiUser, requireSpendBudget } from '@/lib/api-access'
 
 const tts = new ElevenLabsTtsProvider()
 
 export async function POST(req: NextRequest) {
   const gate = await requireApiUser()
   if (gate instanceof NextResponse) return gate
+  const budgetGate = await requireSpendBudget(gate)
+  if (budgetGate) return budgetGate
 
   const { voiceId, text, voiceSettings } = (await req.json().catch(() => ({}))) as { voiceId: string; text: string; voiceSettings?: VoiceSettings }
   if (!voiceId || !text) return NextResponse.json({ error: 'Missing voiceId or text' }, { status: 400 })
+  // Cap the preview length — TTS is character-billed, so an unbounded body is a cost/timeout risk.
+  if (typeof text !== 'string' || text.length > 1500) {
+    return NextResponse.json({ error: 'Preview text is too long (max 1500 characters).' }, { status: 400 })
+  }
+  if (voiceSettings !== undefined && !VoiceSettingsSchema.safeParse(voiceSettings).success) {
+    return NextResponse.json({ error: 'Invalid voice settings' }, { status: 400 })
+  }
 
   // Use a temp reelId prefix for the preview — won't persist to a real reel. Honor the operator's
   // delivery tweak so the preview sounds like the final render will.

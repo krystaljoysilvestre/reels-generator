@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { eq } from 'drizzle-orm'
 import { getDb, reels, pipelineSteps, scenes } from '@reels/db'
+import { baseStepName } from '@reels/core'
 import { requireReelOwner } from '@/lib/api-access'
 
 // Lightweight poll endpoint powering the live "what's going on" UX (story loading + render progress).
@@ -23,18 +24,33 @@ export async function GET(req: NextRequest) {
   })
   if (!reel) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const steps = await db.query.pipelineSteps.findMany({
+  const rawSteps = await db.query.pipelineSteps.findMany({
     where: eq(pipelineSteps.reelId, reelId),
     columns: { stepName: true, status: true, attempt: true },
   })
+
+  // Fan-out steps (generate_images / animate_scenes) write one row PER scene ('generate_images:scene3').
+  // Collapse them to their base step so the UI shows a single entry per pipeline step. Aggregate status
+  // by "most active" across the sub-units: running > failed > pending > done (so a step reads 'done' only
+  // when every sub-unit is done, and surfaces a failure the moment any sub-unit fails). Max attempt wins.
+  const rank = (s: string) => (s === 'running' ? 3 : s === 'failed' ? 2 : s === 'pending' ? 1 : 0)
+  const byBase = new Map<string, { status: string; attempt: number }>()
+  for (const s of rawSteps) {
+    const base = baseStepName(s.stepName)
+    const cur = byBase.get(base)
+    const attempt = Math.max(cur?.attempt ?? 0, s.attempt ?? 0)
+    if (!cur || rank(s.status) > rank(cur.status)) byBase.set(base, { status: s.status, attempt })
+    else cur.attempt = attempt
+  }
+  const steps = [...byBase.entries()].map(([stepName, a]) => ({ stepName, status: a.status }))
   const failed = steps.find((s) => s.status === 'failed')
-  const storyStep = steps.find((s) => s.stepName === 'generate_story')
+  const storyStep = byBase.get('generate_story')
 
   const out: Record<string, unknown> = {
     reelStatus: reel.status,
     costCents: reel.costCents,
     storyId: reel.storyId,
-    steps: steps.map((s) => ({ stepName: s.stepName, status: s.status })),
+    steps,
     // generate_story substate (running vs failed) + attempt #, for the story-phase loader.
     step: storyStep ? { name: 'generate_story', status: storyStep.status, attempt: storyStep.attempt } : null,
     failedStep: failed?.stepName ?? null,

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { inArray, and, gt } from 'drizzle-orm'
 import { getDb, reels, stories } from '@reels/db'
-import { getCurrentUser } from '@/lib/auth'
+import { requireApiUser } from '@/lib/api-access'
 import { accessibleChannelIds } from '@/lib/access'
 
 // Powers the app-wide "reel is done" alert (RenderAlertWatcher). Returns reels currently rendering OR
@@ -10,8 +10,9 @@ import { accessibleChannelIds } from '@/lib/access'
 const TRACKED: Array<'rendering' | 'render_qa' | 'spot_check' | 'failed'> = ['rendering', 'render_qa', 'spot_check', 'failed']
 
 export async function GET() {
-  const user = await getCurrentUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const gate = await requireApiUser()
+  if (gate instanceof NextResponse) return gate
+  const user = gate
 
   const db = getDb()
   const cutoff = new Date(Date.now() - 30 * 60_000)

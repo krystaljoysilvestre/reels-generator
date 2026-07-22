@@ -5,7 +5,7 @@ import { eq, and, inArray, sql } from 'drizzle-orm'
 import { llmCall, ProviderRateLimitError } from '@reels/providers'
 import { animatorMotionPrompt } from '@reels/core'
 import { buildSuggestMotionPrompt, SuggestMotionSchema, MOTION_V1_VERSION } from '@reels/core/prompts/motion.v1'
-import { requireReelOwner } from '@/lib/api-access'
+import { requireReelOwner, requireSpendBudget } from '@/lib/api-access'
 
 // Translate an operator's plain-language motion request into a scene's animation instruction (motion.v1),
 // then arm the scene for (re)animation: mark it video tier and drop any stale clip so the next preview or
@@ -22,6 +22,8 @@ export async function POST(req: NextRequest) {
 
   const gate = await requireReelOwner(reelId)
   if (gate instanceof NextResponse) return gate
+  const budgetGate = await requireSpendBudget(gate)
+  if (budgetGate) return budgetGate
 
   const db = getDb()
   const reel = await db.query.reels.findFirst({ where: eq(reels.id, reelId) })

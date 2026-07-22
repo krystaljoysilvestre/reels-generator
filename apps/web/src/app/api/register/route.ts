@@ -38,10 +38,21 @@ export async function POST(req: NextRequest) {
   }
 
   const passwordHash = await bcrypt.hash(parsed.data.password, 10)
-  const [created] = await db
-    .insert(users)
-    .values({ email, name: parsed.data.name ?? null, passwordHash })
-    .returning({ id: users.id })
+  let created: { id: string } | undefined
+  try {
+    ;[created] = await db
+      .insert(users)
+      .values({ email, name: parsed.data.name ?? null, passwordHash })
+      .returning({ id: users.id })
+  } catch (err) {
+    // The existence check above is a TOCTOU; a concurrent signup with the same email can slip between it
+    // and this insert. The users.email UNIQUE constraint is the real guard — turn its violation (23505)
+    // into the same clean 409 instead of an opaque 500.
+    if (err && typeof err === 'object' && (err as { code?: string }).code === '23505') {
+      return NextResponse.json({ error: 'An account with this email already exists.' }, { status: 409 })
+    }
+    throw err
+  }
 
   if (created?.id) await consumeInviteForUser(created.id)
   return NextResponse.json({ ok: true })

@@ -1,15 +1,16 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { eq } from 'drizzle-orm'
 import { getDb, users } from '@reels/db'
-import { getCurrentUser } from '@/lib/auth'
+import { requireApiAdmin, isUuid } from '@/lib/api-access'
 
 // Admin user management: change status (approve / suspend / reset to pending) and/or role.
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const admin = await getCurrentUser()
-  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (admin.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const gate = await requireApiAdmin()
+  if (gate instanceof NextResponse) return gate
+  const admin = gate
 
   const { id } = await params
+  if (!isUuid(id)) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   const body = (await req.json().catch(() => ({}))) as { status?: string; role?: string }
   const patch: { status?: string; role?: string } = {}
   if (body.status && ['active', 'suspended', 'pending'].includes(body.status)) patch.status = body.status

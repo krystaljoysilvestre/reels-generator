@@ -4,7 +4,7 @@ import { getDb, scenes, assets, reels, channels } from '@reels/db'
 import { eq, and, sql } from 'drizzle-orm'
 import { generateVideo, FalEngineSchema, ContentFilterError, ProviderRateLimitError } from '@reels/providers'
 import { resolveMotionSettings, PLATFORM_PRESETS } from '@reels/core'
-import { requireReelOwner } from '@/lib/api-access'
+import { requireReelOwner, requireSpendBudget } from '@/lib/api-access'
 
 // Best-effort in-flight guard (B5): a fast double-click would otherwise launch two paid clips before
 // either insert lands, since the have-variation check below only catches already-finished ones. An
@@ -28,6 +28,8 @@ export async function POST(req: NextRequest) {
   const { reelId, sceneIdx } = (await req.json().catch(() => ({}))) as { reelId: string; sceneIdx: number }
   const gate = await requireReelOwner(reelId)
   if (gate instanceof NextResponse) return gate
+  const budgetGate = await requireSpendBudget(gate)
+  if (budgetGate) return budgetGate
   const db = getDb()
 
   const reel = await db.query.reels.findFirst({ where: eq(reels.id, reelId) })
