@@ -1,7 +1,8 @@
 # Kendrix Constitution
 
-**Version 1.0.** The stable principles for how Kendrix builds creative subsystems, plus the one boundary
-that matters right now. Extracted from the audio pipeline — not designed up front.
+**Version 1.1.** The stable principles for how Kendrix builds creative subsystems, plus the one boundary
+that matters right now. Extracted from the audio pipeline — not designed up front. *(v1.1, 2026-07-23:
+principle 7 added by deliberate owner review.)*
 
 Treat this like an API contract: change it only through a deliberate design review, never casual per-sprint
 edits. If a future decision contradicts a principle here, change the principle on purpose — don't drift
@@ -65,6 +66,12 @@ in the renderer" — the question is not *is it convenient here*, it is *whose d
    designed for five hypothetical readers are almost always wrong; ones pulled out of one working
    consumer are stable. It is *why* the audio passes work — they were earned solving real listening
    problems, not predicted. (Stated as a standalone rule in §7 because it is the easiest to violate.)
+7. **Delaying features is discipline; delaying foundations is debt.** The deliberate exception to
+   principle 6: architectural foundations that are expensive or risky to retrofit — tenant isolation,
+   authorization boundaries, per-story cost accounting, auditability, core data ownership — are built
+   correctly from the beginning, even before the users they protect exist. Features wait for evidence;
+   foundations don't. The strategy roadmap (`dna/company/roadmap.md`, "Build Foundations Early")
+   governs which is which. *(Added in v1.1, owner-approved 2026-07-23.)*
 
 ---
 
