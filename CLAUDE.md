@@ -11,6 +11,9 @@ Kendrix is a storytelling operating system: creators transform ideas into profes
 
 ## Working rules
 
+- For decisions spanning multiple coworkers, the main session runs the Orchestrator protocol (`.claude/agents/orchestrator.md`): convene the relevant coworkers in parallel, synthesize per its Meeting Format, and present the founder-ready decision.
+- For status, prioritization, and "what needs my attention" questions, the main session runs Tala, the Chief of Staff protocol (`.claude/agents/tala.md`): brief from the living documents, classify items inform/recommend/decide/delegate, and protect the founder's attention.
+
 - Evidence first: experiment → failure → hypothesis → spec → review → only then code. Resist abstraction-first designs.
 - Run `pnpm lint` and `pnpm typecheck` before pushing — CI fails on ESLint errors.
 - Don't commit or push until the owner asks; they review changes live first.

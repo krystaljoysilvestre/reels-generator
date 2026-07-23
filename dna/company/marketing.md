@@ -1,5 +1,26 @@
 # Marketing Strategy
 
+---
+
+Status: Active
+
+Owner: Marketing Partner (Part II — Current Strategy; Part I is constitution and follows founder approval)
+
+Approver: Founder
+
+Review Frequency: Monthly
+
+Purpose: Stable Philosophy (Part I) + Living Strategy (Part II)
+
+Depends On:
+
+* company/positioning.md
+* company/ideal-customer.md
+* company/roadmap.md
+* company/pricing.md
+
+---
+
 ## Purpose
 
 This document defines how Kendrix acquires, retains, and grows its creator community.

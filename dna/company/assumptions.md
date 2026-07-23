@@ -13,6 +13,7 @@ Contributors:
 * Finance & Operations Partner
 * Editorial Director
 * Creator Advocate
+* Research Partner
 
 Review Frequency: Monthly
 
