@@ -9,6 +9,10 @@ channel proves traction.
 Model today: **one operator, multiple channels.** Dashboard = the operator's
 channel portfolio.
 
+This file is the **execution backlog**. The strategy layer — why work is
+sequenced this way — lives in `dna/company/roadmap.md` (company DNA starts at
+`dna/START-HERE.md`).
+
 ---
 
 ## Done
