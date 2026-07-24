@@ -38,22 +38,32 @@ export interface MixAudioParams {
   stemPaths?: StemPaths       // when set, also persist the 4 layers as separate files
 }
 
-const DEFAULT_BED_DB = -22
-const DEFAULT_PEAK_DB = -12
-// Ambient (environmental room-tone) level — a fixed layer independent of the music-intensity slider.
-// The music path previously reused bedDb here, so ambient loudness drifted with the music setting; both
-// paths now use this constant so ambient sits at the same level whether or not a music bed is present.
-const AMBIENT_DB = -20
+// ── Reference gain-staging (Phase A, 2026-07-24) ──────────────────────────────────────────────────────
+// Every layer is normalized to VOICE_REF_LUFS *before* its offset is applied, so bedDb / AMBIENT_DB are
+// TRUE dB-under-the-voice, not offsets on each provider's arbitrary output loudness. Previously voice/music/
+// ambient entered the mix at whatever loudness ElevenLabs emitted and only the summed premaster was
+// loudnorm'd (voice-dominated) — so the voice:bed ratio drifted per reel and the bed sat ~22–27 dB under the
+// voice (below the WCAG 20 dB floor → "I can barely hear it"). Normalizing voice AND bed to the same
+// reference makes the final loudnorm gain deterministic, so bedDb is the ratio you actually hear.
+const VOICE_REF_LUFS = -16
+// Bed/peak fallback (dB UNDER the reference voice) when the caller passes none — matches musicIntensityToDb
+// 'balanced'. The pipeline always passes intensity-derived values; this only covers direct/test callers.
+const DEFAULT_BED_DB = -15
+const DEFAULT_PEAK_DB = -7
+// Ambient (environmental room-tone) level, dB under the reference voice — a fixed layer independent of the
+// music-intensity slider, so ambient sits at the same level whether or not a music bed is present.
+const AMBIENT_DB = -24
 // How far ambient dips during a silenceDrop. Music hard-zeros in the drop; ambient must NOT (a dead,
 // perfectly silent dropout reads as an encode glitch, not tension) — so it ducks by this much and stays
 // alive. The SFX bus is left un-dipped so the climax hit punches through the quiet.
 const AMBIENT_SILENCE_DIP_DB = 12
-// SFX-bus lift. A small presence lift so effects aren't buried — but NOT so much that ambient/realism/dread
-// climb up near the voice. Owner (2026-07-10): the voiceover is the reference; music + ambient + non-climax
-// SFX must sit clearly UNDER it, and only the payoff hit (a +6dB cue) should exceed the voice. Was +6 (which
-// pushed a -8 realism cue to ~-2, nearly voice level); +2 keeps realism ~4-8dB under the voice and the +6
-// climax cue clearly loudest.
-const SFX_BUS_DB = 2
+// SFX-bus lift. A presence lift so effects aren't buried — but NOT so much that ambient/realism/dread climb
+// up near the voice. Owner (2026-07-10): the voiceover is the reference; music + ambient + non-climax SFX
+// must sit clearly UNDER it, and only the payoff hit (a +6dB cue) exceeds the voice. History: +6 (pushed a
+// -8 realism cue to ~-2, near voice) → +2 → +4 (Phase A: with the bed re-leveled the +2 bus left presence
+// cues inaudible; +4 keeps realism a few dB under the voice, the +6 climax cue still clearly loudest). NOTE:
+// the SFX bus is intentionally NOT reference-normalized — a sparse cue bus has no meaningful integrated LUFS.
+const SFX_BUS_DB = 4
 
 // Final loudness normalization → render_qa requires -14 ±0.5 LUFS. ffmpeg's loudnorm (single- OR
 // two-pass) undershoots on speech-crest content: to honor the -1.5 dBTP ceiling it backs off the
@@ -68,10 +78,12 @@ const dbToLin = (db: number): number => 10 ** (db / 20)
 // the quiet reads as intentional, not as an audio bug. Loop is applied BEFORE the volume expression so
 // `t` runs on the reel timeline (looping first, then a time-varying volume, avoids the dip repeating each
 // loop of the source bed).
-function ambientFilter(silenceDrop: { atMs: number; durationMs: number } | null): string {
-  if (!silenceDrop) return `[1]volume=${AMBIENT_DB}dB,aloop=loop=-1:size=2e9[amb]`
-  const nom = dbToLin(AMBIENT_DB).toFixed(5)
-  const dip = dbToLin(AMBIENT_DB - AMBIENT_SILENCE_DIP_DB).toFixed(5)
+function ambientFilter(silenceDrop: { atMs: number; durationMs: number } | null, normGainDb: number): string {
+  // normGainDb brings the ambient FILE to VOICE_REF_LUFS; AMBIENT_DB is then the true offset under the voice.
+  const level = normGainDb + AMBIENT_DB
+  if (!silenceDrop) return `[1]volume=${level.toFixed(2)}dB,aloop=loop=-1:size=2e9[amb]`
+  const nom = dbToLin(level).toFixed(5)
+  const dip = dbToLin(level - AMBIENT_SILENCE_DIP_DB).toFixed(5)
   const s = (silenceDrop.atMs / 1000).toFixed(3)
   const en = ((silenceDrop.atMs + silenceDrop.durationMs) / 1000).toFixed(3)
   return `[1]aloop=loop=-1:size=2e9,volume='if(between(t,${s},${en}),${dip},${nom})':eval=frame[amb]`
@@ -105,6 +117,16 @@ async function measureFile(path: string): Promise<number | null> {
   } catch {
     return null
   }
+}
+
+// The gain (dB) that brings a file to VOICE_REF_LUFS — the heart of reference gain-staging. Each layer is
+// normalized to this reference before its own offset, so offsets are true voice-relative ratios (not offsets
+// on each provider's arbitrary loudness). Unmeasurable (silent/too-short/error) → 0 dB (the old un-normalized
+// behavior) with a log, never a throw.
+async function refGain(path: string, label: string): Promise<number> {
+  const i = await measureFile(path)
+  if (i == null) { console.log(`[mix] ${label} loudness unmeasurable → 0dB gain (no normalization)`); return 0 }
+  return VOICE_REF_LUFS - i
 }
 
 // Encode the mix normalized to TARGET_LUFS (gain-to-target + limiter, then one corrective gain pass).
@@ -188,6 +210,13 @@ export async function mixAudio(params: MixAudioParams): Promise<void> {
   }
   const gainExpr = buildGainExpr(gainParams)
 
+  // Reference gain-stage each layer to VOICE_REF_LUFS before its offset (see VOICE_REF_LUFS). These run as
+  // analysis-only ffmpeg passes (no output) before the mix, so the voice:bed ratio is deterministic.
+  const voiceGain = await refGain(params.voiceoverPath, 'voice')
+  const musicGain = await refGain(track.path, 'music')
+  const ambientGain = await refGain(params.ambientPath, 'ambient')
+  console.log(`[mix] gain-stage → ref ${VOICE_REF_LUFS} LUFS: voice ${voiceGain.toFixed(1)}dB, music ${musicGain.toFixed(1)}dB, ambient ${ambientGain.toFixed(1)}dB; bed ${bedDb}dB under voice`)
+
   // §3 Full filtergraph — everything up to [premaster]; the loudnorm tail is added by encodeWithLoudnorm.
   const inputs = [
     '-i', params.voiceoverPath,
@@ -196,16 +225,16 @@ export async function mixAudio(params: MixAudioParams): Promise<void> {
     '-i', params.sfxPremixedPath,
   ]
   const pre = [
-    // ambient: loop to cover full duration at a fixed level (dips inside a silenceDrop; see ambientFilter)
-    ambientFilter(params.timings.silenceDrop),
-    // music: loop the bed to cover the reel → volume envelope
-    `[2]aloop=loop=-1:size=2e9,volume='${gainExpr}':eval=frame[mus0]`,
-    // sidechain duck: music dips under the voiceover, but stays PRESENT. ratio 6 held the bed ~8–10dB
-    // down for the whole narration (VO is near-continuous) — the music read as silent/absent (owner
-    // feedback 2026-07-06). ratio 3 ducks ~4–5dB: VO stays clearly on top, the bed remains felt, and it
-    // swells back up in the dramatic pauses (release 400ms < the shortest pause).
-    `[0]asplit=2[vox][voxkey]`,
-    `[mus0][voxkey]sidechaincompress=threshold=0.04:ratio=3:attack=20:release=400[musduck]`,
+    // ambient: normalize to ref, then loop to cover full duration at AMBIENT_DB under voice (dips in a drop)
+    ambientFilter(params.timings.silenceDrop, ambientGain),
+    // music: normalize the bed to ref, loop to cover the reel, then the bedDb→peakDb volume envelope
+    `[2]volume=${musicGain.toFixed(2)}dB,aloop=loop=-1:size=2e9,volume='${gainExpr}':eval=frame[mus0]`,
+    // sidechain duck: music dips under the voiceover, but stays PRESENT. ratio 6 held the bed ~8–10dB down
+    // for the whole narration (VO is near-continuous) — read as silent/absent (owner 2026-07-06). ratio 3
+    // ducked ~4–5dB; Phase A → ratio 2 (~2.5–3.5dB) since the bed now sits at a true, higher baseline — the
+    // duck should shade it under the words, not bury it. Still releases (400ms) so it swells back in pauses.
+    `[0]volume=${voiceGain.toFixed(2)}dB,asplit=2[vox][voxkey]`,
+    `[mus0][voxkey]sidechaincompress=threshold=0.04:ratio=2:attack=20:release=400[musduck]`,
     // mix layers (SFX lifted so effects sit clearly under the voice, not buried)
     `[3]volume=${SFX_BUS_DB}dB[sfxb]`,
     `[vox][amb]amix=inputs=2:normalize=0[base]`,
@@ -219,10 +248,10 @@ export async function mixAudio(params: MixAudioParams): Promise<void> {
   // layer nodes are rebuilt here and each mapped to its own file in ONE ffmpeg process.
   if (params.stemPaths) {
     const stemGraph = [
-      ambientFilter(params.timings.silenceDrop),
-      `[2]aloop=loop=-1:size=2e9,volume='${gainExpr}':eval=frame[mus0]`,
-      `[0]asplit=2[vox][voxkey]`,
-      `[mus0][voxkey]sidechaincompress=threshold=0.04:ratio=3:attack=20:release=400[musduck]`,
+      ambientFilter(params.timings.silenceDrop, ambientGain),
+      `[2]volume=${musicGain.toFixed(2)}dB,aloop=loop=-1:size=2e9,volume='${gainExpr}':eval=frame[mus0]`,
+      `[0]volume=${voiceGain.toFixed(2)}dB,asplit=2[vox][voxkey]`,
+      `[mus0][voxkey]sidechaincompress=threshold=0.04:ratio=2:attack=20:release=400[musduck]`,
       `[3]volume=${SFX_BUS_DB}dB[sfxb]`,
     ].join(';')
     await execFileAsync('ffmpeg', [
@@ -236,16 +265,20 @@ export async function mixAudio(params: MixAudioParams): Promise<void> {
 }
 
 async function mixNoMusic(params: MixAudioParams): Promise<void> {
-  // 3-track mix: voiceover + ambient + SFX, no music layer
+  // 3-track mix: voiceover + ambient + SFX, no music layer. Voice + ambient are still reference gain-staged
+  // (VOICE_REF_LUFS) so ambient sits at a deterministic AMBIENT_DB under the voice, same as the music path.
   const inputs = [
     '-i', params.voiceoverPath,
     '-i', params.ambientPath,
     '-i', params.sfxPremixedPath,
   ]
+  const voiceGain = await refGain(params.voiceoverPath, 'voice')
+  const ambientGain = await refGain(params.ambientPath, 'ambient')
   const pre = [
-    ambientFilter(params.timings.silenceDrop),
+    ambientFilter(params.timings.silenceDrop, ambientGain),
     `[2]volume=${SFX_BUS_DB}dB[sfxb]`,
-    `[0][amb]amix=inputs=2:normalize=0[base]`,
+    `[0]volume=${voiceGain.toFixed(2)}dB[vox]`,
+    `[vox][amb]amix=inputs=2:normalize=0[base]`,
     `[base][sfxb]amix=inputs=2:normalize=0[premaster]`,
   ]
   const durationSec = params.timings.durationMs / 1000
@@ -253,12 +286,13 @@ async function mixNoMusic(params: MixAudioParams): Promise<void> {
 
   if (params.stemPaths) {
     const stemGraph = [
-      ambientFilter(params.timings.silenceDrop),
+      ambientFilter(params.timings.silenceDrop, ambientGain),
       `[2]volume=${SFX_BUS_DB}dB[sfxb]`,
+      `[0]volume=${voiceGain.toFixed(2)}dB[vox]`,
     ].join(';')
     await execFileAsync('ffmpeg', [
       ...inputs, '-filter_complex', stemGraph, '-y',
-      ...stemOutputArgs('0:a', durationSec, params.stemPaths.voice),
+      ...stemOutputArgs('[vox]', durationSec, params.stemPaths.voice),
       ...stemOutputArgs('[amb]', durationSec, params.stemPaths.ambient),
       ...stemOutputArgs('[sfxb]', durationSec, params.stemPaths.sfx),
     ])

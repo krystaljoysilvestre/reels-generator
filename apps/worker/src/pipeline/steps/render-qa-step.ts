@@ -4,9 +4,61 @@ import { join } from 'node:path'
 import { mkdir, writeFile, rm } from 'node:fs/promises'
 import { getDb, reels, assets, channels } from '@reels/db'
 import { downloadBuffer, buildInputHash } from '@reels/providers'
-import { TimingsSchema, PLATFORM_PRESETS } from '@reels/core'
+import { TimingsSchema, PLATFORM_PRESETS, AudioScriptSchema, AudioPacksSchema, musicIntensityToDb } from '@reels/core'
 import { runRenderQa } from '@reels/render/qa/render-qa'
 import { runStep, setReelStatus } from '../harness.js'
+
+// ── Bed-presence QA (Phase A, 2026-07-24) ─────────────────────────────────────────────────────────────
+// A bed the design INTENDED must be measurably present — otherwise thin/absent audio ships clean (runRenderQa
+// only checks LUFS/black/duration, never per-layer presence: the "QA blind spot"). Uses the persisted stems
+// (voice + music), so it's free and needs no re-render. Respects intent: run only when a bed was intended
+// (`music: null` — a calm register's deliberate choice — skips it). The threshold is INTENSITY-AWARE: a
+// 'subtle' bed legitimately sits ~19 dB under the voice, so a flat floor would false-fail restraint. It is
+// -bedDb (the true target) + a margin covering the sidechain duck + measurement slack.
+const BED_PRESENCE_MARGIN_DB = 8
+const STEM_SILENCE_LUFS = -60
+
+async function measureStemLufs(reelId: string, layer: 'voice' | 'music', tmp: string): Promise<number | null | 'absent'> {
+  let buf: Buffer
+  try {
+    buf = await downloadBuffer(`reels/${reelId}/stems/${layer}.m4a`)
+  } catch {
+    return 'absent'
+  }
+  const p = join(tmp, `stem_${layer}.m4a`)
+  await writeFile(p, buf)
+  try {
+    const { execFile } = await import('node:child_process')
+    const { promisify } = await import('node:util')
+    const exec = promisify(execFile)
+    const { stderr } = await exec('ffmpeg', ['-i', p, '-filter:a', 'loudnorm=print_format=json', '-f', 'null', '-'])
+    const m = stderr.match(/"input_i"\s*:\s*"(-?\d+(?:\.\d+)?)"/)
+    return m ? parseFloat(m[1]!) : null
+  } catch {
+    return null
+  }
+}
+
+// Returns a failure string if an intended bed is inaudible/absent, else null. bedDb = dB the bed sits under
+// the voice for this channel's intensity (see musicIntensityToDb).
+async function checkBedPresence(reelId: string, bedDb: number, tmp: string): Promise<string | null> {
+  const music = await measureStemLufs(reelId, 'music', tmp)
+  const voice = await measureStemLufs(reelId, 'voice', tmp)
+  // No stems at all (a reel mixed before stems existed) → can't judge; don't false-fail.
+  if (voice === 'absent') { console.warn(`[qa] ${reelId} no voice stem — skipping bed-presence check`); return null }
+  if (voice === null) return null // voice unmeasurable → can't judge
+  // Music stem absent or silent while a bed was intended → the bed was lost or never resolved.
+  if (music === 'absent' || music === null || music < STEM_SILENCE_LUFS) {
+    return `music bed intended but inaudible (music stem silent/absent)`
+  }
+  const delta = voice - music
+  const threshold = -bedDb + BED_PRESENCE_MARGIN_DB
+  if (delta > threshold) {
+    return `music bed intended but inaudible (voice−music = ${delta.toFixed(1)} dB, max ${threshold.toFixed(0)} dB for this intensity)`
+  }
+  console.log(`[qa] ${reelId} bed presence OK: voice−music = ${delta.toFixed(1)} dB (max ${threshold.toFixed(0)})`)
+  return null
+}
 
 export async function renderQaStep(reelId: string): Promise<void> {
   const db = getDb()
@@ -23,6 +75,10 @@ export async function renderQaStep(reelId: string): Promise<void> {
   const channel = await db.query.channels.findFirst({ where: eq(channels.id, reel.channelId) })
   const platformPreset = PLATFORM_PRESETS[(channel?.targetPlatform ?? 'all') as keyof typeof PLATFORM_PRESETS] ?? PLATFORM_PRESETS.all
   const maxDurationMs = Math.max(180_000, Math.round(platformPreset.maxSeconds * 1000 * 1.1))
+  // Bed-presence inputs: did the design intend a bed, and at what intensity does this channel place it?
+  const audioScript = reel.audioScript ? AudioScriptSchema.parse(reel.audioScript) : null
+  const musicIntended = audioScript?.music != null
+  const musicIntensity = channel ? AudioPacksSchema.parse(channel.audioPacks).musicIntensity : 'balanced'
   // The render key is constant per reel, so hashing renderUrl alone let QA SKIP a re-render (validating a
   // stale cut). Hash the render asset's createdAt too — it's bumped on every render → QA re-runs each time.
   const renderAsset = await db.query.assets.findFirst({
@@ -54,9 +110,19 @@ export async function renderQaStep(reelId: string): Promise<void> {
         maxDurationMs,
       })
 
-      if (!qa.passed) {
+      // Bed-presence invariant: an intended bed must be audible. Runs off the persisted stems (free); skips
+      // when `music: null` (respects a calm register's intent). Reported alongside runRenderQa's failures.
+      const bedFailures: string[] = []
+      if (musicIntended) {
+        const { bedDb } = musicIntensityToDb(musicIntensity)
+        const bedFail = await checkBedPresence(reelId, bedDb, tmp)
+        if (bedFail) bedFailures.push(bedFail)
+      }
+
+      const allFailures = [...qa.failures, ...bedFailures]
+      if (allFailures.length > 0) {
         // Route to fix queue — never to publish. Log failures as the step error.
-        throw new Error(`render_qa failed:\n${qa.failures.join('\n')}`)
+        throw new Error(`render_qa failed:\n${allFailures.join('\n')}`)
       }
 
       return {

@@ -38,6 +38,8 @@ Prioritize, in order:
 
 A technically dense soundscape is not a good one. A dramatic one is not automatically right. The most common and most damaging failure is **register mismatch** — one sonic world (usually the loudest one we have tuned) applied to a story that called for another. A calm documentary is not a horror reel. Matching the register to the story is your first duty, before any individual cue.
 
+**Presence is the register-conditioned default, not an add-on** (ratified 2026-07-24). Register sets the bed's *character, density, and dynamics* — never *whether sound exists*. A continuous bed in the story's register is the default; silence is a deliberate *local* beat (a held breath before a turn), never a global near-silence. A thin, bed-less mix — "I can barely hear it… no continuous background" — is a gain-staging defect, not restraint. This is the mirror image of the wall-to-wall failure; guard both ends.
+
 ## Responsibilities
 
 Own the sound-craft of:
@@ -77,6 +79,8 @@ Structure every full audio review the same way, so reviews stay comparable acros
 **Executive summary** — the reel's overall sonic effectiveness, a few sentences.
 
 **Register check** — does the sound match the story's genre *and* mode? This is the first and most common failure; lead with it, backed by what you heard.
+
+**Presence** — is the bed audible and the world continuous for this register, or is this voice-over-silence? Thinness (a bed too quiet or absent) is a defect exactly as wall-to-wall is — the mirror failure. Distinguish an intended *local* silence from a *global* near-silence that reads as empty.
 
 **Emotional curve** — is there contrast and breathing room, or is it wall-to-wall? Where does intensity build, release, and rest?
 
@@ -118,7 +122,7 @@ Your ear starts the loop; evidence ends it. Do not elevate a personal preference
 
 Adapt to genre **and** mode; each has its own audio language:
 
-* **Documentary / Evidence-Based / informational** — measured, credible, grounded. Sound serves comprehension and momentum; the peak, if any, lands on a revelation, not a scare. Restraint is correct here, not a failure.
+* **Documentary / Evidence-Based / informational** — measured, credible, grounded. Sound serves comprehension and momentum; the peak, if any, lands on a revelation, not a scare. Restraint is correct here, not a failure — but restraint means a *calm, present* bed, NOT silence: a measured documentary still runs a continuous, audible bed under the narration.
 * **Horror** — earned dread, dynamic silence, a scare that lands and lingers.
 * **Drama** — emotional restraint, intimacy, gentle progression, release.
 * **Comedy** — timing, lightness, clean transitions.

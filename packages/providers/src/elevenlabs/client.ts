@@ -6,11 +6,18 @@ import { withProviderLimit } from '../shared/limiter.js'
 import type { AlignedChar, SfxResult, TtsProvider, TtsResult } from './types.js'
 import type { VoiceSettings } from '@reels/core'
 
-const TTS_COST_CENTS_PER_1K_CHARS = 30  // ElevenLabs Starter ~$0.30/1k chars
-// ElevenLabs text-to-sound-effects bills 25 credits/sec when duration_seconds is set. On the same credit
-// basis as TTS (~$0.30/1k chars ≈ $5 / 30k credits ≈ 0.0167¢/credit) that's ~0.42¢/s; rounded up so the
-// per-reel spend never under-counts a longer cue (checked 2026-07). Cost now scales with clip length.
-const SFX_COST_CENTS_PER_SEC = 0.5
+// ── ElevenLabs cost basis (unified, Phase A 2026-07-24) ───────────────────────────────────────────────
+// ALL ElevenLabs rates below derive from ONE documented plan basis, so unit economics are honest and re-
+// derivable (constitution principle 7 — per-story cost accounting is a named foundation). We license on the
+// Creator plan (see the ElevenLabs music-licensing note): $22 / 121,000 credits = 0.01818¢/credit. The old
+// constants split bases — TTS/SFX quoted a Starter $5/30k basis while music is licensed on Creator — a ~10%
+// skew. 2026 ElevenLabs rates: TTS ~1 credit/char; SFX 40 credits/sec when duration_seconds is set (the path
+// we always take); Music 900 credits/min.
+const ELEVEN_CENTS_PER_CREDIT = 2200 / 121_000 // = 0.01818¢/credit
+// TTS: ~1 credit/char → 1000 chars ≈ 18.2¢; rounded up so a reel never under-counts.
+const TTS_COST_CENTS_PER_1K_CHARS = 20
+// SFX (duration specified): 40 credits/sec × 0.01818 ≈ 0.727¢/s; rounded up. Scales with clip length.
+const SFX_COST_CENTS_PER_SEC = 0.75
 // Default prompt adherence. Higher = the clip sounds more like the literal prompt (good for specific
 // one-shots); lower leaves room for richer, more organic texture (ambience). Per-cue override via param.
 const SFX_DEFAULT_PROMPT_INFLUENCE = 0.5
@@ -375,7 +382,13 @@ export async function generateSpeechClip(params: {
 // → audio/mpeg). Returns the raw MP3 buffer; the CALLER uploads to R2, because the
 // two consumers use different keys (channel signature track vs preset bed).
 
-const MUSIC_COST_CENTS_FLAT = 10  // rough per-generation estimate for cost tracking
+// Music: 900 credits/min → cost scales with clip length. The old flat 10¢ under-counted every reel over
+// ~40s (real ~16¢/60s, ~37¢/135s → 3.7× at 135s). Music credits are a deterministic function of length, so
+// this is effectively exact.
+const MUSIC_CREDITS_PER_MIN = 900
+function musicCostCents(lengthMs: number): number {
+  return Math.max(1, Math.ceil((lengthMs / 60_000) * MUSIC_CREDITS_PER_MIN * ELEVEN_CENTS_PER_CREDIT))
+}
 const MUSIC_MIN_MS = 10_000       // Eleven Music length bounds
 const MUSIC_MAX_MS = 300_000
 
@@ -413,7 +426,7 @@ export async function generateMusic(params: {
       throw new ProviderError('elevenlabs', `music generation failed (${res.status}): ${body.slice(0, 300)}`)
     }
     const audio = Buffer.from(await res.arrayBuffer())
-    return { audio, durationMs: musicLengthMs, costCents: MUSIC_COST_CENTS_FLAT }
+    return { audio, durationMs: musicLengthMs, costCents: musicCostCents(musicLengthMs) }
   } catch (err) {
     if (err instanceof ProviderError || err instanceof ProviderRateLimitError) throw err
     throw new ProviderError('elevenlabs', `music request failed: ${String(err)}`)

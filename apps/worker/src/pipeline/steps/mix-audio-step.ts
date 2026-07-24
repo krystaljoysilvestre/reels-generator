@@ -68,10 +68,11 @@ export async function mixAudioStep(reelId: string): Promise<void> {
 
   // v5: detected-impact alignment + ambient dip in silenceDrop. v6: sustained loop cues (endMs spans).
   // v7: iterative loudness convergence (crest-heavy jumpscare mixes drifted past ±0.5 LU in one pass).
-  // v8: foley (motion-synced SFX) merge + persisted stems. v9: SFX bus +6→+2 (background sits under the
-  // voice; only the payoff hit exceeds it). Mixer behavior changed, so cached mixes are stale even when
-  // the inputs hash the same — bump to force a re-mix.
-  const inputHash = buildInputHash('mix_audio.v9', {
+  // v8: foley (motion-synced SFX) merge + persisted stems. v9: SFX bus +6→+2. v10 (Phase A): reference
+  // gain-staging (voice/music/ambient normalized to VOICE_REF_LUFS before offsets → bed audibly present),
+  // SFX bus +2→+4, duck ratio 3→2, room-tone ambient fallback. Mixer behavior changed, so cached mixes are
+  // stale even when the inputs hash the same — bump to force a re-mix.
+  const inputHash = buildInputHash('mix_audio.v10', {
     // Hash the voiceover's row identity (createdAt), not its constant storage key — the key never changes
     // across re-synthesis, so hashing it would reuse a stale mix after a voice change.
     voiceoverAt: voiceover.createdAt,
@@ -107,21 +108,25 @@ export async function mixAudioStep(reelId: string): Promise<void> {
       const voiceoverPath = join(tmp, 'voiceover.mp3')
       await writeFile(voiceoverPath, voiceoverBuf)
 
-      // Ambient — use a silence file if none available
-      let ambientPath = join(tmp, 'ambient.mp3')
+      // Ambient — synthesize a low room-tone if no ambient asset exists. Was `anullsrc` (TRUE digital
+      // silence), which is a defect: voice-over-dead-air reads as empty/broken ("no continuous background").
+      // A dark pink-noise bed reads as "room", not silence. Level doesn't matter here — the mixer reference-
+      // normalizes ambient to AMBIENT_DB under the voice — so we only need a measurable, non-silent signal.
+      const ambientPath = join(tmp, 'ambient.mp3')
       if (ambient) {
         const buf = await downloadBuffer(ambient.storageKey)
         await writeFile(ambientPath, buf)
       } else {
-        // Create silence fallback
         const { execFile } = await import('node:child_process')
         const { promisify } = await import('node:util')
         const exec = promisify(execFile)
         await exec('ffmpeg', [
-          '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=mono',
+          '-f', 'lavfi', '-i', 'anoisesrc=color=pink:r=44100:amplitude=0.1',
+          '-af', 'lowpass=f=500,highpass=f=40',  // dark low rumble, not white hiss
           '-t', String(timings.durationMs / 1000),
           '-c:a', 'libmp3lame', '-y', ambientPath,  // ambientPath is .mp3 → mp3 encoder, not aac
         ])
+        console.log(`[mix] ${reelId} no ambient asset — synthesized room-tone fallback (mixer normalizes its level)`)
       }
 
       // Pre-mix SFX. sfxAssets is newest-first (allAssets is desc by createdAt), so take the FIRST asset
@@ -212,6 +217,18 @@ export async function mixAudioStep(reelId: string): Promise<void> {
           await writeFile(musicLocalPath, await downloadBuffer(picked.path))
           localMusicPack = [{ ...picked, path: musicLocalPath }]
         }
+      }
+
+      // Presence guard: if the design INTENDED a bed but none resolved (AI mode with no generated musicKey,
+      // or a preset channel with an empty pool), we still mix — never fail the reel — but surface the gap on
+      // the channel page instead of silently shipping voice-over-silence. An intended `music: null` (a calm
+      // register's deliberate choice) is respected: musicIntended is false there, so this stays quiet.
+      const musicIntended = audioScript.music != null
+      if (musicIntended && localMusicPack.length === 0 && !reel.musicUploadKey) {
+        console.warn(`[mix] WARN ${reelId} music intended (${audioScript.music?.type}) but no bed available (mode=${audioPacks.musicMode}, musicKey=${reel.musicKey ? 'set' : 'none'}) — mixing without a bed`)
+        await db.update(reels)
+          .set({ alertNote: `Sound: a music bed was intended but none was available (music mode: ${audioPacks.musicMode}).`, updatedAt: new Date() })
+          .where(eq(reels.id, reelId))
       }
 
       // Full mix — music loudness follows the channel's intensity setting (Sound step).
