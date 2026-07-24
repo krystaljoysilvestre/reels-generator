@@ -290,6 +290,23 @@ budget-exceeded fails fast (no wasted retries). Remaining items below are delibe
   return later as an "economy" toggle (cheaper, consistent) for cost-sensitive SaaS tiers.
 - **[future] Scored music** — arc-synced to `peakMoment` (rises/drops timed to the story beats), built
   on the per-reel `generate_music` foundation. The premium tier above today's flat per-reel bed.
+
+#### Sound direction (owned by the Sound Director coworker, added 2026-07-24)
+- **[NOW] De-bias `sound-designer.v1` off its horror/immersion overfit.** The sound designer reached its
+  18th revision by round-after-round horror tuning ("tension from frame one", sustained dread, a jumpscare
+  climax) and applies that dense, wall-to-wall, climax-hunting register to *every* genre. Result: the first
+  Evidence-Based documentary reel (Galloping Gertie / Tacoma Narrows) came out tense and wrong — a register
+  mismatch the founder flagged. Fix = **register-matched audio**: the sonic world is set by the story's genre
+  + mode + the channel's DNA, never a house default; a calm register is a valid, often correct choice.
+  Approach is judgment/de-biasing, NOT more prompt mandates (the overfit was *caused* by prescription — see
+  the Sound Director's Anti-Prescription Guard). Diagnosed + A/B-designed by the Sound Director via its
+  Evidence-Before-Taste workflow, shipped as an experiment through the Product Partner + Technical Advisor.
+- **[future] Channel Audio DNA** — steward a channel's longitudinal sonic identity (recognizable but not
+  repetitive) once channels have a back catalog; the Sound Director's spot-audit lever.
+- **[note] EBN i2v cost/quality lever** — for Evidence-Based (illustrative) reels, the i2v hero-beat clips
+  are the bulk of per-reel cost, slow the render, and risk warping flat illustration (i2v is trained on
+  photoreal motion). Consider allocating 0 video tiers for EBN (stills + Ken Burns only). Cost/render lever,
+  not strictly sound — tracked here alongside the EBN media work.
 - **[✅ DONE] Guided story creation + full-pipeline transparency.** Review-mode reels now land on a
   per-reel **Story Studio** (`/reel/[id]/story`): ask BYO-or-generate; a characterful, channel-themed
   loader (crimson for horror) while the story is written; review it; **regenerate-with-reason** (the

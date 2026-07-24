@@ -56,6 +56,7 @@ Avoid unnecessary participants.
 Examples:
 
 * Story quality issue → Editorial Director
+* Audio / sound quality → Sound Director
 * Pricing proposal → Finance & Operations Partner
 * Competitive threat → Research Partner
 * Workflow redesign → Product Partner
