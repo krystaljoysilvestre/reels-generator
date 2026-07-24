@@ -15,6 +15,10 @@ const execFileAsync = promisify(execFile)
 // The app's default watermark logo (R2 key) — burned onto every reel unless a channel overrides it.
 const DEFAULT_WATERMARK_KEY = 'app/watermark.png'
 
+// Persistent synthetic-media/illustration disclosure burned onto Evidence-Based Narrative reels — the
+// visuals are illustration, and the label makes that explicit to the viewer (specs/evidence-based-narrative.md).
+const EBN_DISCLOSURE_LABEL = 'Illustrated · based on documented sources'
+
 // Pick per-scene video effects from the scene's (AI-derived) mood + the channel genre. Pure mapping —
 // no API call, so it's free; effects are composited at render time. Kept tasteful: gentle life on every
 // still, and a hard flash + shake only on the sharpest shock beats of edgy genres.
@@ -98,6 +102,7 @@ export async function renderStep(reelId: string): Promise<void> {
     vignette: lutConfig.vignette,
     lut: lutConfig.lutPath ?? '',
     watermark: channel.watermarkKey ?? DEFAULT_WATERMARK_KEY,
+    disclosure: channel.storyMode === 'ebn' ? EBN_DISCLOSURE_LABEL : '', // in the fingerprint → EBN reels re-render if it changes
     platform: channel.targetPlatform ?? 'all',
     frame: `${platformPreset.width}x${platformPreset.height}`, // output dims (belt-and-suspenders to platform)
   })
@@ -222,6 +227,7 @@ export async function renderStep(reelId: string): Promise<void> {
           grain: lutConfig.grain,
           vignette: lutConfig.vignette,
           watermark,
+          ...(channel.storyMode === 'ebn' ? { disclosure: EBN_DISCLOSURE_LABEL } : {}),
           outputPath: visualPath,
           onProgress: (p) => console.log(`  Remotion render: ${Math.round(p * 100)}%`),
         })

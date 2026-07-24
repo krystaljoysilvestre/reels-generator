@@ -41,6 +41,7 @@ export interface RemotionRenderInput {
   grain: number
   vignette: number
   watermark?: { dataUri: string; opacity: number } | null // roaming channel logo overlay; null = none
+  disclosure?: string // persistent synthetic-media/illustration label (EBN reels); undefined = none
   outputPath: string
   onProgress?: (progress: number) => void
 }
@@ -204,6 +205,7 @@ export async function renderReelWithRemotion(input: RemotionRenderInput): Promis
     grain: input.grain,
     vignette: input.vignette,
     watermark: input.watermark ?? null,
+    ...(input.disclosure ? { disclosure: input.disclosure } : {}),
   }
 
   const bundleUrl = await getBundleUrl()

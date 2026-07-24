@@ -25,16 +25,8 @@ export async function autoCrossGate(stepName: string, reelId: string): Promise<v
 
   if (stepName === 'generate_story') {
     if (reel.status !== 'story_review') return // already crossed
-    // Slice-1 guard (matches approve-story): EBN reels must not auto-advance into the photoreal render
-    // path — the illustrative rendering profile is the next slice. Leave the story in review with a
-    // visible note instead of rendering it against the visual guardrail.
-    if (channel.storyMode === 'ebn') {
-      await db.update(reels)
-        .set({ alertNote: 'Evidence-Based story ready for review — illustrative rendering is coming in the next slice.', updatedAt: new Date() })
-        .where(eq(reels.id, reelId))
-      console.log(`[auto] ${reelId.slice(0, 8)} EBN story held at review (no render yet)`)
-      return
-    }
+    // (EBN reels render safely via the forced illustrative profile — Slice 2 — so they self-advance like
+    // any other auto-mode reel; the Slice-1 hold has been lifted.)
     // = approve-story: story_review → storyboard, build Story Bible → scene breakdown → image generation.
     await setReelStatus(reelId, 'storyboard')
     await enqueueStep({ reelId, stepName: 'analyze_story' })

@@ -48,6 +48,7 @@ export const ReelComposition: React.FC<ReelCompositionProps> = ({
   grain,
   vignette,
   watermark,
+  disclosure,
 }) => {
   const { width, height } = useVideoConfig()
 
@@ -86,6 +87,29 @@ export const ReelComposition: React.FC<ReelCompositionProps> = ({
 
       {/* Roaming channel watermark — topmost, full duration; hops position so it can't be cropped out */}
       {watermark ? <WatermarkOverlay dataUri={watermark.dataUri} opacity={watermark.opacity} /> : null}
+
+      {/* Synthetic-media / illustration disclosure — persistent, full-duration, top-center so it clears
+          the bottom caption band. Set for Evidence-Based Narrative reels (specs/evidence-based-narrative.md):
+          all EBN visuals are illustration, and the label makes that explicit to the viewer. */}
+      {disclosure ? (
+        <AbsoluteFill style={{ justifyContent: 'flex-start', alignItems: 'center', pointerEvents: 'none' }}>
+          <div
+            style={{
+              marginTop: height * 0.03,
+              padding: `${Math.round(height * 0.006)}px ${Math.round(width * 0.03)}px`,
+              borderRadius: Math.round(width * 0.012),
+              background: 'rgba(0,0,0,0.55)',
+              color: 'rgba(255,255,255,0.92)',
+              fontSize: Math.round(width * 0.026),
+              fontFamily: 'sans-serif',
+              letterSpacing: 0.3,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {disclosure}
+          </div>
+        </AbsoluteFill>
+      ) : null}
     </AbsoluteFill>
   )
 }

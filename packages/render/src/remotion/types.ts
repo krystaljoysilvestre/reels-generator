@@ -54,4 +54,5 @@ export interface ReelCompositionProps extends Record<string, unknown> {
   grain: number
   vignette: number
   watermark?: { dataUri: string; opacity: number } | null // roaming channel logo (see WatermarkOverlay); null = none
+  disclosure?: string // persistent synthetic-media/illustration label (set for EBN reels); undefined = none
 }

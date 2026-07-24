@@ -225,3 +225,15 @@ function fit(p: StylePreset, genre: string): number {
 export function findStylePreset(id: string): StylePreset | undefined {
   return STYLE_PRESETS.find((p) => p.id === id)
 }
+
+// EVIDENCE-BASED NARRATIVE rendering profile. EBN reels are FORCED to render in this look regardless of
+// the channel's own stylePreset — the visual guardrail (specs/evidence-based-narrative.md) forbids any
+// synthetic image that could be mistaken for authentic documentation, so a factual reel must never render
+// photoreal. This leads hard with the illustrated medium and repeats "NOT a photograph / no photorealism"
+// so the model can't drift realistic; "no legible text" reinforces the negative-prompt guard (a real
+// timeline/diagram with accurate labels is Tier B — a separate build the image path can't do). The
+// illustrative modes here were probe-validated to comply with the guardrail and render well
+// (apps/worker/scripts/probe-ebn-visuals.ts). One consistent documentary-illustration look per reel;
+// per-beat mode selection (court-sketch vs infographic) is a later refinement.
+export const EBN_RENDERING_PROFILE =
+  'clean editorial conceptual illustration, hand-illustrated documentary style, flat muted color palette, simple bold shapes and clear composition, explainer/magazine artwork, obviously an illustration and clearly NOT a photograph, no photorealism, no legible text'

@@ -1,7 +1,7 @@
 import { eq, and, sql } from 'drizzle-orm'
 import { getDb, reels, scenes, assets, channels, stories } from '@reels/db'
 import { generateImage, generateImageFal, imageEngineForGenre, FLUX_IMAGE_ENGINE, buildInputHash, ContentFilterError, llmCall, downloadBuffer, uploadBuffer, sourcePlaceImage, SCENE_IMAGE_MODEL, SCENE_IMAGE_QUALITY, type ImageEngine } from '@reels/providers'
-import { assembleImagePrompt, assembleNegativePrompt, assembleReferencePrompt, castNationality, reelLightingDirective, sceneEntities, slug, PLATFORM_PRESETS, StoryBibleSchema } from '@reels/core'
+import { assembleImagePrompt, assembleNegativePrompt, assembleReferencePrompt, castNationality, reelLightingDirective, sceneEntities, slug, PLATFORM_PRESETS, StoryBibleSchema, EBN_RENDERING_PROFILE } from '@reels/core'
 import { z } from 'zod'
 import { buildRephrasePrompt, REPHRASE_V1_VERSION, buildImageQAPrompt, IMAGE_QA_V1_VERSION, ImageQASchema, buildFilterSafePrompt, FILTER_SAFE_V1_VERSION, FilterSafeSchema, buildPlaceSourceDecidePrompt, buildPlaceVerifyPrompt, PlaceSourceDecisionSchema, PlaceVerifySchema, PLACE_SOURCE_V1_VERSION } from '../../prompts-bridge.js'
 import { runStep } from '../harness.js'
@@ -182,6 +182,20 @@ export async function generateImages(reelId: string): Promise<void> {
   const region = (channel.worldBible as { region?: string } | null)?.region
   const cast = castNationality(channel.languages, region)
 
+  // EVIDENCE-BASED NARRATIVE: force the illustrative rendering profile, overriding whatever look the
+  // channel was created with. This is the visual guardrail made structural — an EBN reel can NOT render
+  // photoreal, so no synthetic image can be mistaken for authentic documentation. Applies to every scene
+  // image AND every reference plate below. (specs/evidence-based-narrative.md.)
+  const effectiveStyle = channel.storyMode === 'ebn' ? EBN_RENDERING_PROFILE : channel.stylePreset
+  // Defense-in-depth: fail closed unless an EBN reel's resolved style AFFIRMATIVELY commands illustration
+  // (leads illustrative AND explicitly rejects photo). Checking for the affirmation — not for photoreal
+  // keywords — is robust to the profile's own negations ("clearly NOT a photograph") while still catching
+  // both a forcing bypass (a photoreal channel style has no such affirmation) and a future mis-edit of
+  // EBN_RENDERING_PROFILE to something photoreal, before it can ship a guardrail-violating render.
+  if (channel.storyMode === 'ebn' && !(/illustrat/i.test(effectiveStyle) && /(not|never|no)\s+(a\s+)?photo/i.test(effectiveStyle))) {
+    throw new Error(`[generate_images] EBN reel ${reelId.slice(0, 8)} resolved to a non-illustrative style — the visual guardrail requires illustration. Style: ${effectiveStyle.slice(0, 80)}`)
+  }
+
   // Lazy reference plates: mint ONE plate per entity the SCENES actually reference (and that lacks one),
   // then persist. Done HERE — not in analyze_story — so we never pay for plates on entities the story
   // doesn't use (channel-canon noise), and never render anything before the operator approves the cast at
@@ -211,7 +225,7 @@ export async function generateImages(reelId: string): Promise<void> {
           // The supernatural threat mints on the grittier Flux engine for horror — Gemini beautifies faces,
           // sanding the dread off the scare. Every other entity uses the channel's normal engine.
           const plateEngine = channel.genreCategory === 'horror' && entity.role === 'threat' ? FLUX_IMAGE_ENGINE : imageEngine
-          const res = await renderImage(plateEngine, { prompt: assembleReferencePrompt(entity, channel.stylePreset, lighting, cast), negativePrompt: refNeg, reelId, storageKey: `reels/${reelId}/refs/${slug(entity.id)}.webp`, aspect })
+          const res = await renderImage(plateEngine, { prompt: assembleReferencePrompt(entity, effectiveStyle, lighting, cast), negativePrompt: refNeg, reelId, storageKey: `reels/${reelId}/refs/${slug(entity.id)}.webp`, aspect })
           entity.referenceImageKey = res.asset.storageKey
           plateCost += res.costCents
         } catch (err) {
@@ -285,7 +299,7 @@ export async function generateImages(reelId: string): Promise<void> {
     const expansion = storyBible
       ? { bible: storyBible, primaryEntity: refPrimary, supportingEntities: refSupporting }
       : undefined
-    const finalPrompt = assembleImagePrompt(scene.visualPrompt!, channel.stylePreset, expansion, lighting, cast)
+    const finalPrompt = assembleImagePrompt(scene.visualPrompt!, effectiveStyle, expansion, lighting, cast)
     const negativePrompt = assembleNegativePrompt({ genreCategory: channel.genreCategory })
 
     const inputHash = buildInputHash('generate_images.v1', {
@@ -325,7 +339,7 @@ export async function generateImages(reelId: string): Promise<void> {
             sceneIdx: scene.idx,
             aspect,
             mood: scene.mood,
-            stylePreset: channel.stylePreset,
+            stylePreset: effectiveStyle,
             genreCategory: channel.genreCategory,
             referenceImageKeys,
             engine: sceneEngine,
