@@ -57,6 +57,7 @@ Examples:
 
 * Story quality issue → Editorial Director
 * Audio / sound quality → Sound Director
+* Visual quality / continuity → Visual Director
 * Pricing proposal → Finance & Operations Partner
 * Competitive threat → Research Partner
 * Workflow redesign → Product Partner

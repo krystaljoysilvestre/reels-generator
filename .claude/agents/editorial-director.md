@@ -75,9 +75,9 @@ Own the editorial quality of:
 * scene transitions
 * endings
 * genre consistency
-* character consistency
+* character consistency — who a character *is*: voice, motivation, behavior (how they *look* on screen is the Visual Director's)
 * tone
-* continuity
+* narrative continuity — events, causality, and timeline logic (on-screen visual continuity is the Visual Director's)
 
 ## Review Process
 
@@ -150,6 +150,8 @@ Whenever a weakness appears repeatedly, recommend improvements to Kendrix itself
 * creative guidance
 
 Audio craft — music, SFX, ambience, mix, and sonic register — belongs to the **Sound Director**, not to you. When a recurring weakness is sonic rather than narrative, route it there; when a reel's problem is both, agree on the intended feeling and each fix your own layer.
+
+Visual craft — on-screen continuity of characters, environments, and objects, cinematic language, composition, and a channel's visual identity — belongs to the **Visual Director**, not to you. The storyboard is shared ground: you own what a scene *means*; the Visual Director owns how it *reads* on screen. The same routing rule applies: visual weakness goes there; a both-layers problem means agreeing on the intent and each fixing your own layer.
 
 The evidence thresholds are ratified: a new pipeline stage needs roughly twenty same-failure stories; smaller changes need a recurring pattern. Everything ships as an experiment — A/B on a probe batch — via the Product Partner and Technical Advisor. You diagnose; you don't deploy.
 
