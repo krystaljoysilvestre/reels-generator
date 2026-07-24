@@ -3,7 +3,7 @@ import type { z } from 'zod'
 import { getDb, reels, stories, scenes, channels } from '@reels/db'
 import { llmCall, buildInputHash } from '@reels/providers'
 import { ScenesOutputSchema, WorldBibleSchema, StoryBibleSchema, EMPTY_STORY_BIBLE, resolveEntities, reviewSceneBreakdown, MOTION_BUDGET, motionBudgetForSeconds, estimateNarrationSec, retileToNarration, cameraMovePrompt, animatorMotionPrompt, slug, planChapters, legsForChapter, CHAPTER_THRESHOLD_SEC, PLATFORM_PRESETS, type StoryChapter, type StoryBible } from '@reels/core'
-import { buildScenesPrompt, SCENES_V1_VERSION, buildPeakExtractPrompt, PEAK_EXTRACT_V1_VERSION, PeakExtractSchema } from '../../prompts-bridge.js'
+import { buildScenesPrompt, SCENES_V1_VERSION, buildPeakExtractPrompt, PEAK_EXTRACT_V1_VERSION, PeakExtractSchema, resolveMediaGenre } from '../../prompts-bridge.js'
 import { runStep } from '../harness.js'
 
 // The breakdown LLM returns the schema's INPUT shape (defaulted fields are still optional pre-parse); this
@@ -177,7 +177,9 @@ export async function breakdownScenes(reelId: string): Promise<void> {
           era: worldBible.era,
           regionDescriptor: worldBible.region,
           nicheDescription: channel.nicheDescription ?? '',
-          genreCategory: channel.genreCategory ?? undefined, // LLM-derived bucket; builder keyword-classifies if absent
+          // Media/register genre: EBN → informational (a documentary register), not the empty `general`
+          // bucket. Identical to the old resolution for standard channels. (resolveMediaGenre)
+          genreCategory: resolveMediaGenre({ storyMode: channel.storyMode, genreCategory: channel.genreCategory, niche: channel.nicheDescription }),
           aspect: platformPreset.aspect,
           narration: chapter.text,
           minScenes,

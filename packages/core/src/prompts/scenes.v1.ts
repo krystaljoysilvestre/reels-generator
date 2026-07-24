@@ -99,6 +99,18 @@ export function asGenreModule(v: string | null | undefined): GenreModule | null 
   return (GENRE_MODULE_VALUES as readonly string[]).includes(v ?? '') ? (v as GenreModule) : null
 }
 
+// The genre the MEDIA/register layer (scene modules, sound designer, colour grade) should use — a distinct
+// axis from the fiction writer's genre. An Evidence-Based Narrative channel is a documentary register, so
+// it resolves to `informational` (the closest built calm-register module — measured, neutral light, peak on
+// the revelation) instead of falling into the empty `general` bucket, which gave EBN reels no register
+// guidance at all and let the horror-tuned defaults take over. Until EBN earns its own module this is the
+// right home. Standard channels are unaffected: the result is identical to the existing
+// `asGenreModule(genreCategory) ?? classifyGenre(niche)` resolution.
+export function resolveMediaGenre(opts: { storyMode?: string | null | undefined; genreCategory?: string | null | undefined; niche?: string | null | undefined }): GenreModule {
+  if (opts.storyMode === 'ebn') return 'informational'
+  return asGenreModule(opts.genreCategory) ?? (opts.niche ? classifyGenre(opts.niche) : 'general')
+}
+
 // One genre MODULE is appended to the core (only the matched one is sent).
 const GENRE_MODULES: Record<GenreModule, string> = {
   horror: `GENRE — HORROR / THRILLER / PARANORMAL: build DREAD, and let it ESCALATE — early/mundane beats stay mostly NORMAL with only a faint wrongness (don't drench a calm setup shot in full horror; save the darkness for when the story turns), so the scare has contrast to land against.

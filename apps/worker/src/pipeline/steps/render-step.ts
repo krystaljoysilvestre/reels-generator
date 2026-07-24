@@ -8,6 +8,7 @@ import { getDb, reels, scenes, assets, channels } from '@reels/db'
 import { downloadBuffer, uploadBuffer, buildInputHash } from '@reels/providers'
 import { TimingsSchema, LutConfigSchema, CaptionStyleSchema, PLATFORM_PRESETS, PostMetaSchema, effectsFromSelection, parseMotion } from '@reels/core'
 import { renderReelWithRemotion, renderThumbnailStill } from '@reels/render/remotion/render-remotion'
+import { resolveMediaGenre } from '@reels/core/prompts/scenes.v1'
 import { runStep, setReelStatus } from '../harness.js'
 
 const execFileAsync = promisify(execFile)
@@ -51,6 +52,9 @@ export async function renderStep(reelId: string): Promise<void> {
   const timings = TimingsSchema.parse(reel.timings)
   const channel = await db.query.channels.findFirst({ where: eq(channels.id, reel.channelId) })
   if (!channel) throw new Error('Channel not found')
+  // Media/register genre for the grade: EBN → informational, so a documentary isn't graded like a
+  // catastrophe. Mood (now register-appropriate from the fixed breakdown) still drives most of it. (resolveMediaGenre)
+  const mediaGenre = resolveMediaGenre({ storyMode: channel.storyMode, genreCategory: channel.genreCategory, niche: channel.nicheDescription })
   const lutConfig = LutConfigSchema.parse(channel.lutConfig)
   const captionStyle = CaptionStyleSchema.parse(channel.captionStyle)
   const platformPreset = PLATFORM_PRESETS[(channel.targetPlatform ?? 'all') as keyof typeof PLATFORM_PRESETS] ?? PLATFORM_PRESETS.all
@@ -195,7 +199,7 @@ export async function renderStep(reelId: string): Promise<void> {
             // Operator's explicit per-reel selection wins; null → auto-plan from mood + genre.
             effects: Array.isArray(reel.videoEffects)
               ? effectsFromSelection(reel.videoEffects as string[], scene.tier as 'still' | 'video')
-              : planSceneEffects(scene.mood, scene.tier as 'still' | 'video', channel.genreCategory ?? 'general'),
+              : planSceneEffects(scene.mood, scene.tier as 'still' | 'video', mediaGenre),
           })
         }
 

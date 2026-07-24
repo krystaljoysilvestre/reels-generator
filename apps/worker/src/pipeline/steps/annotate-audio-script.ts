@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm'
 import { getDb, reels, stories, scenes } from '@reels/db'
 import { llmCall, listVoices, buildInputHash } from '@reels/providers'
 import { AudioScriptSchema, AudioPacksSchema, OperatorSfxSchema, cueVolumeDb, resolveMusicMood, MusicMoodSchema, isVocalSfxPrompt, isHarshSustainedTexture, buildOpeningDreadCue, pickDreadEndAnchor, choreographClimax, type AudioScript, type OperatorCue } from '@reels/core'
-import { buildSoundDesignerPrompt, SOUND_DESIGNER_V1_VERSION, SoundDesignSchema, type DesignerScene } from '../../prompts-bridge.js'
+import { buildSoundDesignerPrompt, SOUND_DESIGNER_V1_VERSION, SoundDesignSchema, resolveMediaGenre, type DesignerScene } from '../../prompts-bridge.js'
 import type { DesignerVoice } from '@reels/core/prompts/sound-designer.v1'
 import { runStep } from '../harness.js'
 import { countOccurrences, validateAnchorUniqueness } from '../anchors.js'
@@ -41,7 +41,9 @@ export async function annotateAudioScript(reelId: string): Promise<void> {
 
   const { channels } = await import('@reels/db')
   const channel = await db.query.channels.findFirst({ where: eq(channels.id, reel.channelId) })
-  const channelGenre = channel?.genreCategory
+  // Media/register genre for the sound designer: EBN → informational (CURIOSITY context — the climax lands
+  // on the revelation, not a scare), instead of falling to the horror-leaning default. (resolveMediaGenre)
+  const channelGenre = resolveMediaGenre({ storyMode: channel?.storyMode, genreCategory: channel?.genreCategory, niche: channel?.nicheDescription })
 
   // Scene breakdown feeds the designer: which beats are HERO scares/reveals (→ jumpscare stings), plus
   // each scene's mood + location + opening words (→ scene-aware, appropriately-placed cues).
