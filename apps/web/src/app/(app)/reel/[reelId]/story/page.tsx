@@ -22,6 +22,8 @@ function extractCritic(stepOutput: unknown, shownBody: string): CriticSummary | 
     plan?: { whyThisStory?: string; elements?: Record<string, string | undefined> | null } | null
     gate?: { status?: string; verdicts?: Array<{ pass?: boolean; reason?: string }>; retried?: boolean }
     finishingQA?: { status?: string; issues?: Array<{ axis?: string; problem?: string }>; summary?: string }
+    // Evidence-Based Narrative: the Fact-Fidelity Checker verdict (factual axes, not craft).
+    ebn?: { fidelity?: { status?: string; issues?: Array<{ axis?: string; offending?: string; detail?: string }>; summary?: string } }
   } | null
   if (!out) return null
   if (out.winner?.narration !== shownBody) return null // stale round or BYO story — don't mislabel it
@@ -33,6 +35,20 @@ function extractCritic(stepOutput: unknown, shownBody: string): CriticSummary | 
           .map((i) => ({ axis: (i.axis ?? '').replace(/_/g, ' '), problem: i.problem ?? '' }))
           .filter((i) => i.problem)
       : []
+
+  // EBN Fact-Fidelity flags — surfaced in the SAME punch-list so the operator vets faithfulness before
+  // approving. Labeled "fidelity" so factual flags read distinctly from craft ones; the offending quote
+  // is folded into the problem line.
+  const ebnIssues =
+    out.ebn?.fidelity?.status === 'ok'
+      ? (out.ebn.fidelity.issues ?? [])
+          .map((i) => ({
+            axis: `fidelity · ${(i.axis ?? '').replace(/_/g, ' ')}`,
+            problem: [i.detail?.trim(), i.offending?.trim() ? `“${i.offending.trim()}”` : ''].filter(Boolean).join(' — '),
+          }))
+          .filter((i) => i.problem)
+      : []
+  qaIssues.push(...ebnIssues)
 
   if (out.v === 3) {
     const why = out.plan?.whyThisStory?.trim() ?? ''

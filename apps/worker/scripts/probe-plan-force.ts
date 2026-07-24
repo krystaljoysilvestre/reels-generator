@@ -475,20 +475,39 @@ The narration below has the RIGHT story, beats, and agency — but polish its FL
   }
   const results: RunResult[] = []
 
+  // Mirror production's step-level resilience: production runs each pipeline step under BullMQ, which
+  // re-runs the whole step up to 3× on a ProviderError (a transient schema-validation failure — e.g. the
+  // anthropic writer emitting quote-heavy Taglish JSON that fails the single in-client repair — then
+  // succeeds on retry). The probe had NO such retry, so one flaky call aborted the entire run and shrank
+  // the paired sample (2026-07-23 n=6 lost 3 runs this way). Retry each run's LLM chain once so the probe
+  // is as resilient as production, not more brittle. Not a mechanism change — it only stops a transient
+  // provider hiccup from discarding an otherwise-valid paired run.
+  const RUN_ATTEMPTS = 2
   for (let i = 0; i < N; i++) {
     const before = totalCost
     try {
-      const fl = await forceLoop(i)
+      let fl: Awaited<ReturnType<typeof forceLoop>> | undefined
+      let control: RunResult['control']
+      let forcedArm: RunResult['forcedArm']
+      for (let attempt = 1; attempt <= RUN_ATTEMPTS; attempt++) {
+        try {
+          fl = await forceLoop(i)
+          if (!JUDGE_ONLY) {
+            control = await chainAndGate(fl.original)
+            forcedArm = fl.replans > 0 ? await chainAndGate(fl.forced) : undefined
+          }
+          break
+        } catch (err) {
+          if (attempt === RUN_ATTEMPTS) throw err
+          console.log(`  ↻ run ${i + 1} attempt ${attempt} hit a transient provider error, retrying: ${String(err).slice(0, 90)}`)
+          control = undefined
+          forcedArm = undefined
+        }
+      }
+      if (!fl) throw new Error('unreachable')
       // Cross-run variety is measured against what the planner FIRST reached for.
       recentEls.push(fl.original.elements)
       if (fl.original.logline) recentLoglines.push(fl.original.logline)
-
-      let control: RunResult['control']
-      let forcedArm: RunResult['forcedArm']
-      if (!JUDGE_ONLY) {
-        control = await chainAndGate(fl.original)
-        if (fl.replans > 0) forcedArm = await chainAndGate(fl.forced)
-      }
       results.push({ i, replans: fl.replans, converged: fl.converged, original: fl.original, forced: fl.forced, verdicts: fl.verdicts, control, forcedArm, cost: totalCost - before })
 
       // Per-run detail

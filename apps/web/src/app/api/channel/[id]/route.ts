@@ -37,6 +37,9 @@ const UpdateSchema = z
     narrativeStyle: z.union([z.literal(''), z.enum(STYLE_VALUES)]),
     narrativeVoice: z.union([z.literal(''), z.enum(VOICE_VALUES)]),
     styleInfluence: z.enum(['light', 'medium', 'full']),
+    // Story MODE (fiction studio vs Evidence-Based Narrative factual path) + its specialization.
+    storyMode: z.enum(['standard', 'ebn']),
+    ebnSpecialization: z.enum(['historical_events']),
     // Auto-produce cadence (the consistency engine). Lives in the postingRules jsonb, merged below.
     autoProduce: z.object({
       enabled: z.boolean(),

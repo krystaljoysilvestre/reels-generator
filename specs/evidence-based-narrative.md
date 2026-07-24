@@ -1,6 +1,6 @@
 # Spec: Evidence-Based Narrative (EBN) — the evidence-constrained storytelling foundation
 
-Status: **RFC — review round 1 incorporated; direction approved, not yet built.** No pipeline code until final review. · Owner: PM · Eng: senior
+Status: **RFC — review round 1 incorporated; direction approved. Fidelity-chain slice BUILT + validated as a harness (not yet wired into the live pipeline).** The 4-stage chain (Extractor → Narrative Claims → cited Writer → Fact-Fidelity Checker) ships as core prompt modules (commit 3553d6e) with a full-chain harness (`apps/worker/scripts/probe-ebn.ts`); its success test reproduces (2026-07-23, live: extractor 0 invented / 0 mis-stanced, clean narration passes, all 6 injected fictions detected, citations resolve). No pipeline code / visuals / publishing until final review. · Owner: PM · Eng: senior
 
 > This is the architecture artifact required by the evidence-first workflow (document → RFC → review → only then code). It is deliberately a foundation, not a "True Crime engine." Review round 1 (owner, 2026-07-21) is folded in: Evidence Acquisition rename, fact IDs, DIRECT/DERIVED facts, the Narrative Claims layer, split chronology permissions, citability, Bible versioning, specialization-as-config, the tightened visual principle, and a narrowed scope boundary.
 
@@ -8,7 +8,9 @@ Status: **RFC — review round 1 incorporated; direction approved, not yet built
 
 The true-crime probe (2026-07-21) exposed a real gap: the pipeline has **no factual mode**. "True crime" has no genre module, so `classifyGenre` routed it to `horror` — and the planner, wearing the horror identity, selected supernatural creepypasta (an impossible disappearance; a voice-loop trapping a driver). The gate caught the drift; generation produced the wrong thing entirely. The lesson isn't "add a True Crime genre" — it's that some stories are governed by **faithfulness to real evidence**, and the engine has no seam for that.
 
-This RFC names that seam as a reusable foundation and makes True Crime its first application. It **graduates two existing designs** rather than inventing from scratch:
+> **SEQUENCING DECISION (2026-07-24, accepted — decision-log 2026-07-24-001).** EBN's first *published* specialization is **Historical Events / documentary** (reconstruction of specific, settled, public-record events), NOT True Crime. A three-coworker council found True Crime would give a confounded first retention read (its proven engines — host, real footage, photoreal — are all unavailable to v1 or guardrail-banned) and front-load every legal gate, whereas documentary is the register where illustrative retention is proven and EBN's architecture is a craft moat. **True Crime keeps its role below as the fidelity stress-test that shaped this chain, and becomes a later config-cost specialization** once first-party retention data + owner legal/sourcing discipline exist. The True Crime section that follows remains the valid spec for that specialization when it comes — only its sequencing changed.
+
+This RFC names that seam as a reusable foundation. True Crime was its first *stress-test* (it shaped the fidelity chain); Historical Events / documentary is its first *published* application (per the sequencing decision above). It **graduates two existing designs** rather than inventing from scratch:
 
 - **[Evidence Bible](hypotheses/evidence-bible.md)** (hypothesis) — the owner of factual truth. Its graduation bar was "a product actually needs it." True Crime is that product; the Evidence Bible graduates here.
 - **[Story Modes](specs/story-modes.md)** — the mode-as-contract abstraction, including the `knowledgeRequirement: dossier` clause and the Evidence Bible seam. EBN is the realization of Story Modes' **Factual branch**.
@@ -232,6 +234,8 @@ Prove the fidelity chain before touching visuals or publishing:
 4. **Fact-Fidelity Checker**: lookup + the seven questions against the citation map.
 
 Success test: does the FFC catch *injected* fiction — an uncited sentence, an upgraded certainty, invented dialogue/motive, a distorted actual chronology, a dropped `Critical` fact? If it reliably does (and the writer, given a well-formed Bible + claims, stays faithful), the chain is proven and visuals + disclosure + the specialization-config layer are the next slice. No imagery, no publishing in slice 1.
+
+> **The load-bearing risk is pre-cleared (PROBED 2026-07-23, `apps/worker/scripts/probe-ffc-causal.ts`, $0.39).** Before building the slice, the sharpest open risk — *can the FFC catch a faithful-sounding but WRONG causal paraphrase, the wrong-model failure that motivated this whole RFC?* — was isolated and tested. On a **synthetic** case (true cause defined only in the Bible, no training prior) the source-in-hand checker passed the faithful narration and caught the wrong-causal one 3/3, citing the actual causal fact; without the Bible it couldn't discriminate at all. So Stage-4's hardest job is demonstrably achievable, and notably it did **not** require the full citation map for the causal-fidelity check (the map still earns its place for the "was anything *added*" / uncited-sentence check and debuggability). This clears the *technical* fidelity risk; the owner-owned decisions below (legal go/no-go, sourcing discipline, and the illustrative-aesthetic retention question) remain the gate on building and publishing.
 
 ## Strongest known objection
 

@@ -103,6 +103,15 @@ export const channels = pgTable('channels', {
   // AND which genre module the scene-prompt builder loads. Defaults to 'general' so pre-existing
   // channels stay neutral; consumers keyword-classify (classifyGenre) as a secondary fallback.
   genreCategory: text('genre_category').notNull().default('general'),
+  // Story MODE — the generation discipline, a separate axis from genreCategory (subject). See
+  // specs/story-modes.md and specs/evidence-based-narrative.md. 'standard' = the fiction studio chain
+  // (Planner→Writer→Editor→Naturalizer→Gate). 'ebn' = Evidence-Based Narrative: a dossier is extracted
+  // into an immutable Evidence Bible, and the story is generated strictly from it (Extractor→Claims→
+  // cited Writer→Fact-Fidelity Checker). Defaults to 'standard' so every existing channel is untouched.
+  storyMode: text('story_mode').notNull().default('standard'),
+  // EBN specialization (when storyMode='ebn'): the narrative-permissions/rubric/rendering bundle.
+  // Decision-log 2026-07-24-001: EBN leads with 'historical_events' (documentary), not true crime.
+  ebnSpecialization: text('ebn_specialization').default('historical_events'),
   // PROSE dimensions (story-writer-v2): the storytelling TRADITION + the narrator's written SOUND,
   // layered on genre by the Planner/Writer. Per-channel, operator-selectable. NOT the TTS/audio voice
   // (voiceId/voiceMode/voicePool/voiceSearchKeyword) and NOT the visual look (stylePreset/lutConfig).
@@ -211,6 +220,15 @@ export const reels = pgTable(
     // Optional operator topic seed for THIS reel's story ("make one about the aswang sa palengke").
     // Read by generate_story → planner; null = the planner explores freely. Never mutated after creation.
     seedIdea: text('seed_idea'),
+    // EVIDENCE-BASED NARRATIVE inputs (only used when the channel's storyMode='ebn'; null otherwise).
+    // dossier = the human-curated raw source material (court records, transcripts, archives) the operator
+    // supplies for THIS case; the Extractor freezes it into the Evidence Bible. Never mutated after the
+    // Bible is built. See specs/evidence-based-narrative.md.
+    dossier: text('dossier'),
+    // The frozen, versioned Evidence Bible (EvidenceBible: { version, facts[] }) extracted from the dossier.
+    // Immutable once written — nothing downstream acquires facts; the Planner/Writer only select from it.
+    // Written by the EBN branch of generate_story; mirrors storyBible's frozen-jsonb-on-reel pattern.
+    evidenceBible: jsonb('evidence_bible'),
     // Post metadata (PostMeta) — platform title, hook, caption, hashtags for this reel, written by the
     // generate_post_meta step (regenerates when the story changes) and operator-editable. Consumed by
     // the export post-package. Null = not yet generated (export falls back to a lazy generation).

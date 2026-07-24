@@ -531,6 +531,38 @@ dna/START-HERE.md, CLAUDE.md
 
 ---
 
+### 2026-07-24-001
+
+Status: Accepted
+
+Title: EBN Leads With Historical Events / Documentary, Not True Crime
+
+Decision
+
+Evidence-Based Narrative's first *published* specialization is Historical Events / documentary reconstruction of specific, settled, public-record events — not True Crime. True Crime remains the fidelity stress-test that shaped the chain and becomes a later, config-cost specialization once first-party retention data and the owner-owned legal/sourcing discipline both exist.
+
+Why
+
+A three-coworker council (Product, Editorial, Marketing) reached this independently, via three lenses. Build cost is identical across specializations (a specialization is a config bundle), so the choice is one of experiment quality and risk. True Crime gives a *confounded* first retention read: its three proven retention engines — a charismatic host, real archival footage, and photoreal reconstruction — are all unavailable to EBN v1 or banned by the visual guardrail, so a poor result could not distinguish product failure from a hobbled format. It also front-loads every owner-owned legal gate. Documentary/history gives a *clean, interpretable* read: illustrative retention is proven in exactly this register, the discriminator is motion/pacing/craft (not photorealism), and EBN's architecture (causality via the Narrative Claims graph, verified weight via the Evidence Bible) *enforces* what the register's payoff needs — the constraints are a moat here and a tax in true crime. The roadmap already names Documentary as a Customer-Zero channel; True-Crime-first was the outlier. All supporting evidence is rank-4 (competitor) with zero first-party data yet.
+
+Alternatives Considered
+
+Keep True Crime first (the RFC's "most demanding first" framing). Rejected as the first *product/retention* proof — True Crime already served its purpose as the *fidelity* stress-test (the causal-paraphrase probe cleared exactly that hardest case), and leading with it would contaminate the one question Phase 1 exists to answer while front-loading legal risk.
+
+Expected Impact
+
+A cleaner first read on the "Illustrative Rendering Profile Holds Retention" assumption; lower legal exposure through Phase 0–1; Customer Zero becomes a proof-channel for the ideal-customer segment (history/documentary/faceless creators).
+
+Review Trigger
+
+A blind paired read (rich attributed true-crime dossier vs. history dossier, both under v1 permissions) — or first-party data — shows evidence-constrained true crime retaining within striking distance of history. Then lead with / add True Crime.
+
+Related Documents
+
+specs/evidence-based-narrative.md, dna/company/roadmap.md (Phase 1 Customer Zero), dna/company/assumptions.md (Illustrative Rendering Profile Holds Retention), dna/company/marketing.md, dna/company/ideal-customer.md
+
+---
+
 ## Relationship to the Decision Framework
 
 The Decision Framework explains how decisions are made.

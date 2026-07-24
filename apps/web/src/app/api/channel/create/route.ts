@@ -32,6 +32,11 @@ const InputSchema = z.object({
   narrativeStyle: z.enum(STYLE_VALUES).optional(),
   narrativeVoice: z.enum(VOICE_VALUES).optional(),
   styleInfluence: z.enum(['light', 'medium', 'full']).optional(),
+  // Story MODE (a separate axis from genre). 'ebn' = the Evidence-Based Narrative factual path
+  // (dossier → Evidence Bible → cited story). Defaults to the fiction studio. Per decision-log
+  // 2026-07-24-001, EBN leads with the 'historical_events' specialization.
+  storyMode: z.enum(['standard', 'ebn']).default('standard'),
+  ebnSpecialization: z.enum(['historical_events']).default('historical_events'),
   voiceMode: VoiceModeSchema,
   voicePool: z.array(ChannelVoiceSchema).max(8), // empty allowed for per_story (chosen at render)
   sampleScript: z.string().trim().max(20000).nullish(), // Step-2 narration → first reference story.
@@ -113,6 +118,9 @@ export async function POST(req: NextRequest) {
     worldBible: c.worldBible,
     // Prefer the LLM-derived bucket; fall back to keyword classification so the column is never 'general' by accident.
     genreCategory: c.genreCategory ?? classifyGenre(c.nicheDescription),
+    // Story mode (fiction studio vs Evidence-Based Narrative). Specialization only meaningful when ebn.
+    storyMode: c.storyMode,
+    ebnSpecialization: c.ebnSpecialization,
     // Prose dimensions: keep narrativeStyle only if it's actually valid for the resolved genre
     // (resolveStyle → null on mismatch); '' otherwise. Voice is genre-agnostic. Influence default 'medium'.
     narrativeStyle:

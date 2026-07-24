@@ -183,6 +183,28 @@ Creators persistently describe and compare Kendrix as an AI video generator, on 
 
 ---
 
+#### An Illustrative Rendering Profile Holds Retention
+
+An all-illustrative Evidence-Based-Narrative visual profile — no photoreal reconstructions; maps, timelines, motion graphics, court-style illustration, symbolic imagery, and clearly-labeled reenactment — holds audience retention for factual narrative video.
+
+Status
+
+Active
+
+Roadmap Phase
+
+0–1
+
+Evidence Needed
+
+Once Customer Zero publishes EBN content, its retention curves clear the illustrative explainer/history benchmark. Market evidence (2026-07-24 research) is consistent that the retention discriminator is motion/pacing/narrative craft, not photorealism — the top of factual YouTube is illustrative-only and faceless (Kurzgesagt, the Vox motion-graphics style, OverSimplified, Fall of Civilizations) — but that is competitor evidence, not first-party proof.
+
+Invalidation Signal
+
+Illustrative EBN outputs show a hard early-retention cliff that host-led or real-footage factual comparables don't, and it persists after motion/pacing/hook interventions — implying the guardrail, not the craft, caps the format. Sharpest for true-crime short-form specifically, where the proven retention engines (a charismatic host, or real archival footage) are unavailable to EBN v1 and banned photoreal AI reconstruction is currently winning virality.
+
+---
+
 ### Business
 
 #### Individual Creators First

@@ -79,7 +79,7 @@ export {
   TRUE_CRIME_PERMISSIONS,
   type EbnPermissions,
 } from '@reels/core/prompts/story-ebn-writer.v1'
-export { buildEbnFidelityPrompt, STORY_EBN_FIDELITY_V1_VERSION, EbnFidelitySchema } from '@reels/core/prompts/story-ebn-fidelity.v1'
+export { buildEbnFidelityPrompt, STORY_EBN_FIDELITY_V1_VERSION, EbnFidelitySchema, type EbnFidelityVerdict } from '@reels/core/prompts/story-ebn-fidelity.v1'
 export { buildSoundDesignerPrompt, SOUND_DESIGNER_V1_VERSION, SoundDesignSchema, type DesignerScene } from '@reels/core/prompts/sound-designer.v1'
 export { buildScenesPrompt, SCENES_V1_VERSION } from '@reels/core/prompts/scenes.v1'
 export { buildStoryAnalyzerPrompt, STORY_ANALYZER_V1_VERSION } from '@reels/core/prompts/story-analyzer.v1'

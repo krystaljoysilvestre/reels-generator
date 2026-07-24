@@ -72,7 +72,7 @@ Universal Writer fix — judge-and-force at the plan level (agency/causality), t
 
 Priority 2
 
-Factual grounding — the Evidence Bible (hypothesis in review), so factual genres stop shipping confident falsehoods.
+Factual grounding — the Evidence-Based Narrative slice (Evidence Bible → Narrative Claims → citation-map Writer → Fact-Fidelity Checker), so factual genres stop shipping confident falsehoods. The load-bearing risk (catch a wrong causal paraphrase, not just a scalar?) was probe-cleared 2026-07-23. The 4-stage fidelity chain is BUILT (core modules + harness) and its success test reproduces on live credits: extractor faithful, clean narration passes, all injected fictions detected. Sequencing decided 2026-07-24 (decision-log 2026-07-24-001): EBN leads with **Historical Events / documentary**, not True Crime. **Slice 1 (the factual text path) is now BUILT + wired into production and verified E2E** (2026-07-24, uncommitted): an opt-in `storyMode='ebn'` channel ingests a curated dossier → frozen Evidence Bible on the reel → Narrative Claims → cited Writer → Fact-Fidelity Checker → lands at story_review with the FFC verdict surfaced; fiction path provably untouched; migration 0044; multi-tenancy 7/7. Remaining: Slice 2 = the illustrative rendering profile (Tier A, cheap) + disclosure; Tier B (data-driven maps/timelines) deferred; plus the owner-owned legal & sourcing decisions.
 
 Priority 3
 
@@ -133,8 +133,8 @@ Each experiment tests a named assumption in company/assumptions.md. Both current
 
 | Experiment | Hypothesis | Expected Metric Impact | Status |
 | ---------- | ---------- | ---------------------- | ------ |
-| Judge-and-force at the plan level | Structural agency failures are fixed by forced re-planning, not line rewrites | Editorial pass rate ↑ | Line-level prototype validated the mechanism; plan-level next |
-| Prescribe variation, not shortness | The sentence-rhythm monoculture is self-inflicted by "short lines" prompts | Story quality review ↑ | Demo validated; probe batch pending |
+| Judge-and-force at the plan level | Structural agency failures are fixed by forced re-planning, not line rewrites | Editorial pass rate ↑ | Plan-level mechanism shows a clean n=3 signal (2026-07-23: 3/3 paired runs control-FAIL→forced-PASS, doctor converged in 1 repair, non-cosmetic evidence). Built opt-in in production (STORY_PLAN_GATE, default off, fail-safe). Open: owner blind agency read; full n=6 deferred as marginal spend — mechanism already clear |
+| Prescribe variation, not shortness | The sentence-rhythm monoculture is self-inflicted by "short lines" prompts | Story quality review ↑ | Shipped to main (PR #14, 2026-07-20) with a rhythm-variety gate criterion; children's-validated only — cross-genre regression sweep (drama/horror/reddit) is the open work |
 
 ---
 

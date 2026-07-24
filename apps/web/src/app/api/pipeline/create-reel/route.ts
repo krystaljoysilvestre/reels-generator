@@ -12,10 +12,11 @@ export async function POST(req: NextRequest) {
   if (gate instanceof NextResponse) return gate
   const user = gate
 
-  const { channelId, generationMode, seed } = (await req.json().catch(() => ({}))) as {
+  const { channelId, generationMode, seed, dossier } = (await req.json().catch(() => ({}))) as {
     channelId?: string
     generationMode?: string
     seed?: string
+    dossier?: string // Evidence-Based Narrative: the curated source material for this case (EBN channels only)
   }
   if (!channelId) return NextResponse.json({ error: 'channelId is required' }, { status: 400 })
 
@@ -23,6 +24,14 @@ export async function POST(req: NextRequest) {
   const channel = await db.query.channels.findFirst({ where: eq(channels.id, channelId) })
   if (!channel) return NextResponse.json({ error: 'Channel not found' }, { status: 404 })
   if (!(await userOwnsChannel(user, channelId))) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  // Evidence-Based Narrative channels are dossier-first: the story is generated strictly from curated
+  // source material, so a reel without one has no evidence to work from (the generator fails closed
+  // anyway — reject here for a clear, immediate error). 20k mirrors the provide-story ceiling.
+  const cleanDossier = typeof dossier === 'string' ? dossier.trim().slice(0, 20000) : ''
+  if (channel.storyMode === 'ebn' && !cleanDossier) {
+    return NextResponse.json({ error: 'This is an Evidence-Based channel — a source dossier is required to create a reel.' }, { status: 400 })
+  }
 
   // Per-user budget/quota (multi-tenant cost safety). Admins are unlimited.
   if (user.role !== 'admin') {
@@ -64,6 +73,8 @@ export async function POST(req: NextRequest) {
     language,
     // Optional topic request ("make one about …") — the story planner honors it for this reel only.
     ...(typeof seed === 'string' && seed.trim() ? { seedIdea: seed.trim().slice(0, 500) } : {}),
+    // EBN: freeze the curated dossier on the reel; the extractor turns it into the Evidence Bible.
+    ...(cleanDossier ? { dossier: cleanDossier } : {}),
   }).returning()
 
   // Kick off the pipeline: generate_story runs, then the chain STOPS at the story_review gate

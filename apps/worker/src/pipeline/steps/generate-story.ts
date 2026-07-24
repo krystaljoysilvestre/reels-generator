@@ -45,6 +45,22 @@ import {
   STORY_FINISHING_JUDGE_V1_VERSION,
   FinishingJudgeSchema,
   type FinishingIssue,
+  // Evidence-Based Narrative (EBN) — the factual path (specs/evidence-based-narrative.md).
+  buildEbnExtractorPrompt,
+  STORY_EBN_EXTRACTOR_V1_VERSION,
+  EvidenceBibleSchema,
+  type EbnFact,
+  buildEbnPlannerPrompt,
+  STORY_EBN_PLANNER_V1_VERSION,
+  EbnClaimsSchema,
+  buildEbnWriterPrompt,
+  STORY_EBN_WRITER_V1_VERSION,
+  EbnWriterSchema,
+  TRUE_CRIME_PERMISSIONS,
+  buildEbnFidelityPrompt,
+  STORY_EBN_FIDELITY_V1_VERSION,
+  EbnFidelitySchema,
+  type EbnFidelityVerdict,
 } from '../../prompts-bridge.js'
 import {
   selectFewShot,
@@ -126,6 +142,19 @@ interface StudioOutput {
   finishingQA?:
     | { status: 'ok'; version: string; issues: FinishingIssue[]; summary: string }
     | { status: 'failed'; error: string }
+  // Evidence-Based Narrative audit (only present on the EBN factual path). The Evidence Bible itself is
+  // persisted on the reel (reels.evidenceBible); this carries the per-story citation map + Fact-Fidelity
+  // Checker verdict. `fidelity` is fail-safe like the fiction gate: 'failed' still ships the story to
+  // review (the human sees the flags), never silently swallowed.
+  ebn?: {
+    version: string
+    evidenceBibleVersion: number
+    factCount: number
+    citationMap: Array<{ text: string; claimId: string; factIds: string[] }>
+    fidelity:
+      | { status: 'ok'; version: string; issues: EbnFidelityVerdict['issues']; summary: string }
+      | { status: 'failed'; error: string }
+  }
   peakResolution: 'stage' | 'writer_restored' | 'dropped'
 }
 
@@ -175,8 +204,10 @@ export async function generateStory(reelId: string, channelId: string, language:
   if (!channel) throw new Error(`Channel not found: ${channelId}`)
 
   // The operator's per-reel topic request ("make one about …"), set at reel creation. Optional.
-  const reelRow = await db.query.reels.findFirst({ where: eq(reels.id, reelId), columns: { seedIdea: true } })
+  // dossier: the curated source material for EBN (factual) channels; undefined otherwise.
+  const reelRow = await db.query.reels.findFirst({ where: eq(reels.id, reelId), columns: { seedIdea: true, dossier: true } })
   const operatorSeed = reelRow?.seedIdea?.trim() || undefined
+  const dossier = reelRow?.dossier?.trim() || undefined
 
   // ── Few-shot pool ────────────────────────────────────────────────────────
   const refStories = await db.query.stories.findMany({
@@ -299,7 +330,10 @@ export async function generateStory(reelId: string, channelId: string, language:
       narrativeStyle: channel.narrativeStyle,
       narrativeVoice: channel.narrativeVoice,
       styleInfluence: channel.styleInfluence,
+      storyMode: channel.storyMode,
+      ebnSpecialization: channel.ebnSpecialization,
     },
+    dossier,
     basePromptVars,
     worldBible,
     targetSeconds,
@@ -379,7 +413,14 @@ interface StudioArgs {
     narrativeStyle: string | null
     narrativeVoice: string | null
     styleInfluence: string | null
+    // Story MODE (a separate axis from genre). 'ebn' routes to the Evidence-Based Narrative factual
+    // path; anything else (default 'standard') runs the untouched fiction studio chain.
+    storyMode: string | null
+    ebnSpecialization: string | null
   }
+  // The curated dossier for THIS reel (EBN only) — the raw source the Extractor freezes into the
+  // Evidence Bible. undefined for standard channels (and required for EBN — the branch fails closed).
+  dossier: string | undefined
   basePromptVars: {
     channelName: string
     nicheDescription: string
@@ -409,6 +450,12 @@ interface StudioArgs {
 }
 
 async function runStudio(a: StudioArgs) {
+  // EBN factual path (opt-in per channel). Delegates to the evidence-constrained chain and returns the
+  // SAME StudioOutput/StoryOutput shape, so the dispatcher, persistStory, and story_review gate are all
+  // untouched. Standard channels fall straight through to the fiction studio below — provably unchanged
+  // (their inputHash never sees an EBN version).
+  if (a.channel.storyMode === 'ebn') return runEbnStudio(a)
+
   const v = a.basePromptVars
   const genreCategory = a.channel.genreCategory ?? undefined
   const tasteRubric = a.channel.tasteRubric?.trim() || defaultTasteRubric(genreCategory, a.channel.nicheDescription)
@@ -814,6 +861,172 @@ async function runStudio(a: StudioArgs) {
       gate,
       ...(finishingQA ? { finishingQA } : {}),
       peakResolution,
+    }
+    return { output, costCents: cost.total }
+  })
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// EVIDENCE-BASED NARRATIVE MODE — dossier → Extractor → (frozen) Evidence Bible → Narrative Claims →
+// cited Writer → Fact-Fidelity Checker. The story is generated STRICTLY from the curated dossier; no
+// stage invents facts (specs/evidence-based-narrative.md). Returns the SAME StudioOutput contract as the
+// fiction chain, so everything after generate_story (persistStory, story_review) is identical.
+// Extraction is fail-CLOSED (no evidence ⇒ no story); the Fact-Fidelity Checker is fail-SAFE detection
+// (its flags surface at story_review for the human — matching the advisory-gate philosophy).
+// ────────────────────────────────────────────────────────────────────────────
+const GENERATE_STORY_EBN_VERSION = 'generate-story-ebn.v1'
+
+async function runEbnStudio(a: StudioArgs) {
+  const db = getDb()
+  const language = a.language
+  const specialization = a.channel.ebnSpecialization?.trim() || 'historical_events'
+  const dossier = a.dossier?.trim()
+
+  // The dossier is the ONLY source of facts. No dossier ⇒ fail CLOSED (never fall through to fiction):
+  // an evidence-based story with no evidence must not be produced. Thrown before any paid call.
+  if (!dossier) {
+    throw new Error('EBN channel requires a curated dossier for this reel; none was supplied (fail-closed: no evidence, no story).')
+  }
+
+  // One hash for the whole EBN round: the dossier text + the four EBN stage versions + specialization +
+  // language. A frozen dossier re-runs idempotently; a standard channel never sees these keys (its hash
+  // is computed in runStudio and is provably unchanged by this branch).
+  const inputHash = buildInputHash(GENERATE_STORY_EBN_VERSION, {
+    extractorVersion: STORY_EBN_EXTRACTOR_V1_VERSION,
+    plannerVersion: STORY_EBN_PLANNER_V1_VERSION,
+    writerVersion: STORY_EBN_WRITER_V1_VERSION,
+    fidelityVersion: STORY_EBN_FIDELITY_V1_VERSION,
+    dossier,
+    specialization,
+    language,
+    targetWords: a.basePromptVars.targetWords,
+  })
+
+  return runStep<StudioOutput>({ reelId: a.reelId, stepName: 'generate_story', inputHash }, async (cost) => {
+    // ── 1. Extract → the frozen Evidence Bible (fail-CLOSED) ──────────────────
+    const ex = buildEbnExtractorPrompt({ dossier, subject: a.channel.nicheDescription })
+    const exRes = await llmCall({
+      templateVersion: STORY_EBN_EXTRACTOR_V1_VERSION,
+      schema: EvidenceBibleSchema,
+      system: ex.system,
+      messages: [{ role: 'user', content: ex.userMessage }],
+      provider: 'anthropic',
+      maxTokens: 3000,
+    })
+    cost.add(exRes.costCents)
+    const facts = exRes.data.facts
+    if (facts.length === 0) {
+      throw new Error('EBN extractor produced an empty Evidence Bible from the dossier; blocking (fail-closed).')
+    }
+    // Persist the frozen, versioned Bible on the reel BEFORE consuming it (the immutability contract:
+    // nothing downstream acquires facts — the Planner/Writer only select from what is frozen here).
+    const evidenceBibleVersion = 1
+    await db.update(reels).set({ evidenceBible: { version: evidenceBibleVersion, facts }, updatedAt: new Date() }).where(eq(reels.id, a.reelId))
+
+    const bibleForModel = facts.map((f) => ({
+      id: f.id, stance: f.stance, weight: f.weight,
+      ...(f.attributed_to ? { attributed_to: f.attributed_to } : {}), value: f.value,
+    }))
+    const criticalIds = facts.filter((f) => f.weight === 'Critical').map((f) => f.id)
+    const factById = new Map(facts.map((f) => [f.id, f]))
+
+    // ── 2. Planner → Narrative Claims (ordering only; every claim cites fact ids) ──
+    const targetNote = `a ~${a.basePromptVars.targetWords}-word ${specialization.replace(/_/g, ' ')} recap`
+    const pl = buildEbnPlannerPrompt({ facts: bibleForModel, criticalIds, targetNote })
+    const claimsRes = await llmCall({
+      templateVersion: STORY_EBN_PLANNER_V1_VERSION,
+      schema: EbnClaimsSchema,
+      system: pl.system,
+      messages: [{ role: 'user', content: pl.userMessage }],
+      provider: 'anthropic',
+      maxTokens: 2000,
+    })
+    cost.add(claimsRes.costCents)
+    const claims = claimsRes.data.claims
+
+    // ── 3. Writer → cited prose (the citation map) + framing fields ──────────
+    const claimsWithFacts = claims.map((c) => ({
+      id: c.id,
+      order: c.order,
+      purpose: c.purpose,
+      facts: c.evidence
+        .map((id) => factById.get(id))
+        .filter((f): f is EbnFact => !!f)
+        .map((f) => ({ id: f.id, stance: f.stance, attributed_to: f.attributed_to, value: f.value })),
+    }))
+    const wr = buildEbnWriterPrompt({ claims: claimsWithFacts, permissions: TRUE_CRIME_PERMISSIONS })
+    const writerRes = await llmCall({
+      templateVersion: STORY_EBN_WRITER_V1_VERSION,
+      schema: EbnWriterSchema,
+      system: wr.system,
+      messages: [{ role: 'user', content: wr.userMessage }],
+      provider: 'anthropic',
+      maxTokens: a.storyMaxTokens,
+    })
+    cost.add(writerRes.costCents)
+    const citationMap = writerRes.data.narrative.flatMap((g) =>
+      g.sentences.map((s) => ({ text: s.text, claimId: g.claimId, factIds: s.factIds })),
+    )
+    const narration = citationMap.map((s) => s.text).join(' ')
+
+    // ── 4. Fact-Fidelity Checker (fail-SAFE — detection; the human approves at review) ──
+    let fidelity: NonNullable<StudioOutput['ebn']>['fidelity']
+    try {
+      const fp = buildEbnFidelityPrompt({ facts: bibleForModel, criticalIds, narration })
+      const fRes = await llmCall({
+        templateVersion: STORY_EBN_FIDELITY_V1_VERSION,
+        schema: EbnFidelitySchema,
+        system: fp.system,
+        messages: [{ role: 'user', content: fp.userMessage }],
+        provider: 'anthropic',
+        maxTokens: 2000,
+      })
+      cost.add(fRes.costCents)
+      fidelity = { status: 'ok', version: STORY_EBN_FIDELITY_V1_VERSION, issues: fRes.data.issues, summary: fRes.data.summary ?? '' }
+    } catch (err) {
+      console.warn(`[generate_story:ebn] fact-fidelity check failed, surfacing story for human review anyway: ${String(err)}`)
+      fidelity = { status: 'failed', error: String(err) }
+    }
+
+    // ── 5. Shape a StoryOutput winner (the downstream contract) ──────────────
+    const peakMoment = resolvePeak(narration, [writerRes.data.peakSentence])
+    const winner: StoryOutput = {
+      title: writerRes.data.title,
+      language,
+      narration,
+      logline: writerRes.data.logline,
+      subgenreTags: [specialization],
+      peakMoment,
+      newCanon: [], // EBN reconstructs real, sourced entities; it declares no invented canon.
+    }
+
+    // Map the FFC verdict into the existing `gate` slot so the review UI's critic summary reads sensibly;
+    // the full issue list rides in `ebn`. A clean FFC (zero issues) is a pass.
+    const ffcClean = fidelity.status === 'ok' && fidelity.issues.length === 0
+    const gate: StudioOutput['gate'] =
+      fidelity.status === 'ok'
+        ? {
+            status: 'ok',
+            version: STORY_EBN_FIDELITY_V1_VERSION,
+            verdicts: [{ pass: ffcClean, reason: fidelity.summary || (ffcClean ? 'Faithful to the Evidence Bible.' : `${fidelity.issues.length} fidelity issue(s) flagged.`) }],
+            retried: false,
+          }
+        : { status: 'failed', error: fidelity.error }
+
+    const output: StudioOutput = {
+      v: 3,
+      mode: 'studio',
+      angleId: `ebn:${specialization}`,
+      prose: { style: '', voice: '', influence: 'medium' },
+      plannerStatus: 'ok',
+      plan: null,
+      winner,
+      writerRaw: winner,
+      editor: { status: 'ok' },
+      naturalizer: { status: 'ok' },
+      gate,
+      ebn: { version: GENERATE_STORY_EBN_VERSION, evidenceBibleVersion, factCount: facts.length, citationMap, fidelity },
+      peakResolution: peakMoment === '' ? 'dropped' : 'stage',
     }
     return { output, costCents: cost.total }
   })
