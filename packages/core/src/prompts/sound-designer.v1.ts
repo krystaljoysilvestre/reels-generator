@@ -117,10 +117,34 @@ function genreContext(genre?: string): string {
   }
 }
 
+// DE-BIAS option (opt-in, default off). The prompt above was tuned across 18 revisions toward horror and
+// copies its horror-flavored example onto calm stories (Sound Director diagnosis, 2026-07-24). When
+// `debias` is on, we (1) append a REGISTER-FIRST override that supersedes the tense-register rules for
+// calm/measured registers (silence, a still or absent bed, sparse cues, a quiet fact-landing peak are all
+// valid, not failures), and (2) replace the horror-flavored JSON example with a register-neutral one the
+// model can't copy literals from. SUBTRACTIVE + judgment-shaped, not another mandate — per the
+// Anti-Prescription Guard. Ported verbatim from the free-gate probe (probe-sound-debias.ts), which showed
+// it clears calm-register artifacts to zero while preserving horror.
+const DEBIAS_REGISTER_OVERRIDE = `
+
+REGISTER FIRST — READ BEFORE DESIGNING (this supersedes any rule above that conflicts with it):
+SILENTLY decide (do NOT write it out — output only the JSON, no preface) THIS story's register — e.g. measured/documentary, warm, playful, tense/horror — and what sonic treatment would be WRONG for it, then design to that register.
+The rules above about tension "from the very first second", a landing climax being "non-negotiable", and silence being a "failure" describe a TENSE register (horror and the like). For a MEASURED, CALM, or FACTUAL register they are WRONG. In a calm register the following are CORRECT, not failures: a quiet or near-silent opening; a still bed, a sparse bed, or NO music at all; few cues; an unhurried peak that lands on a FACT or a realization rather than a boom or a scare; and empty layers. Never impose intensity, dread, a heartbeat/boom/whoosh, or a jumpscare climax on a story whose register does not call for it. The example is illustrative ONLY — never copy its literal values (moods, prompts, packTags); derive everything from THIS story's world and register.`
+const DEBIAS_NEUTRAL_EXAMPLE = `{
+  "ambient": { "packTags": ["<the real ambience of THIS place, or [] if the register wants quiet>"], "evolution": null },
+  "music": null,
+  "sfx": [
+    { "anchor": "<a concrete action or place in the narration>", "offsetMs": 0, "prompt": "<the plain, non-vocal sound that action/place actually makes>", "volumeDb": -8, "targetDurationSec": 2, "impactAtEnd": false }
+  ],
+  "voices": [],
+  "silenceDrop": null
+}`
+
 export function buildSoundDesignerPrompt(
   narration: string,
   scenes: DesignerScene[],
   genre?: string,
+  opts?: { debias?: boolean },
 ): { system: string; userMessage: string } {
   const horror = genre === 'horror'
 
@@ -186,6 +210,14 @@ Design the full soundscape: a bed felt from the first second, sustained tension 
   "silenceDrop": { "anchor": "exact substring", "durationMs": 900 }
 }
 Populated fields MUST use exactly these keys. Use null for silenceDrop/music if genuinely unused, and [] for voices if the story has no vocal pivot.`
+
+  if (opts?.debias) {
+    // Append the register-first override; swap the horror-flavored example for a neutral shape guide (keep
+    // everything up to "OUTPUT JSON only:", then the neutral example + a restraint-licensing closing line).
+    const head = userMessage.split('OUTPUT JSON only:')[0]
+    const debiasedUser = `${head}OUTPUT JSON only (the example is a SHAPE guide — never copy its literal values):\n${DEBIAS_NEUTRAL_EXAMPLE}\nUse exactly these keys. EVERY field is optional: use null for music/silenceDrop and [] for sfx/voices whenever the story's register doesn't call for them. A calm piece may legitimately have a spare or near-empty design — that is a valid answer, not an under-filled one.`
+    return { system: system + DEBIAS_REGISTER_OVERRIDE, userMessage: debiasedUser }
+  }
 
   return { system, userMessage }
 }

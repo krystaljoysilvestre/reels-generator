@@ -56,7 +56,12 @@ export async function annotateAudioScript(reelId: string): Promise<void> {
     location: s.location ?? '',
     narrationText: s.narrationText,
   }))
-  const { system, userMessage } = buildSoundDesignerPrompt(story.body, designerScenes, channelGenre)
+  // Sound de-bias (opt-in, default off). When on, the sound designer drops its horror-flavored example +
+  // gains a register-first override so calm registers stop getting horror-grade sound. Under an A/B via
+  // SOUND_DEBIAS=1 until the paid blind ear-test clears; off = byte-identical to today (only enters the
+  // inputHash when on, so unopted reels never re-run).
+  const debias = process.env.SOUND_DEBIAS === '1'
+  const { system, userMessage } = buildSoundDesignerPrompt(story.body, designerScenes, channelGenre, { debias })
 
   // Manual per-scene cues (operator "Add a sound") win on anchor collisions and are preserved verbatim.
   const manualCues = OperatorSfxSchema.parse(reel.operatorSfx ?? []).filter((c) => c.source === 'manual')
@@ -65,6 +70,7 @@ export async function annotateAudioScript(reelId: string): Promise<void> {
     narration: story.body,
     scenes: designerScenes.map((s) => `${s.idx}:${s.isHero ? 'H' : ''}:${s.mood.join(',')}`).join('|'),
     genre: channelGenre ?? '',
+    ...(debias ? { debias: true } : {}),
     manualSig,
   })
 
