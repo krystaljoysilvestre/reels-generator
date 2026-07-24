@@ -373,13 +373,16 @@ export function peakFracForType(type: MusicTrack['type']): number {
 export const MusicIntensitySchema = z.enum(['subtle', 'balanced', 'bold'])
 export type MusicIntensity = z.infer<typeof MusicIntensitySchema>
 
-// Bed/peak loudness (dB, relative to the -14 LUFS final) for each intensity.
-// 'balanced' matches mix-audio's historical defaults (-22 / -12).
+// Bed/peak loudness — dB UNDER the reference voice (mix-audio.ts reference gain-staging, Phase A 2026-07-24).
+// Was "relative to the -14 final" but applied to each provider's arbitrary bed loudness, so the bed actually
+// landed ~22-27 dB under the voice (below the WCAG 20 dB floor → inaudible). These are now the TRUE voice-
+// relative ratio: pro practice is ~9-15 dB under for present-but-secondary, ~18-20 for a deliberately calm
+// bed. STARTING VALUES for the blind ear test — the founder's ear is the ratifier; move them here.
 export function musicIntensityToDb(intensity: MusicIntensity): { bedDb: number; peakDb: number } {
   switch (intensity) {
-    case 'subtle': return { bedDb: -26, peakDb: -16 }
-    case 'bold': return { bedDb: -18, peakDb: -8 }
-    default: return { bedDb: -22, peakDb: -12 }
+    case 'subtle': return { bedDb: -19, peakDb: -11 } // calm registers (EBN documentary): present but restrained
+    case 'bold': return { bedDb: -11, peakDb: -4 }    // energetic: bed forward, top of "present"
+    default: return { bedDb: -15, peakDb: -7 }        // balanced: present-but-secondary
   }
 }
 

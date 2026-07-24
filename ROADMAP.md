@@ -291,18 +291,40 @@ budget-exceeded fails fast (no wasted retries). Remaining items below are delibe
 - **[future] Scored music** — arc-synced to `peakMoment` (rises/drops timed to the story beats), built
   on the per-reel `generate_music` foundation. The premium tier above today's flat per-reel bed.
 
-#### Sound direction (owned by the Sound Director coworker, added 2026-07-24)
-- **[NOW] De-bias `sound-designer.v1` off its horror/immersion overfit.** The sound designer reached its
-  18th revision by round-after-round horror tuning ("tension from frame one", sustained dread, a jumpscare
-  climax) and applies that dense, wall-to-wall, climax-hunting register to *every* genre. Result: the first
-  Evidence-Based documentary reel (Galloping Gertie / Tacoma Narrows) came out tense and wrong — a register
-  mismatch the founder flagged. Fix = **register-matched audio**: the sonic world is set by the story's genre
-  + mode + the channel's DNA, never a house default; a calm register is a valid, often correct choice.
-  Approach is judgment/de-biasing, NOT more prompt mandates (the overfit was *caused* by prescription — see
-  the Sound Director's Anti-Prescription Guard). Diagnosed + A/B-designed by the Sound Director via its
-  Evidence-Before-Taste workflow, shipped as an experiment through the Product Partner + Technical Advisor.
-- **[future] Channel Audio DNA** — steward a channel's longitudinal sonic identity (recognizable but not
-  repetitive) once channels have a back catalog; the Sound Director's spot-audit lever.
+#### Sound (owned by the Sound Director coworker; A/B/C taxonomy ratified 2026-07-24)
+The founder's reframe: the reels-sound-thin fix is audio *engineering*; the competitive advantage is *sound
+direction* — the creative reasoning before a single sound is generated. **An AI Sound Director, not a better
+mixer.** Three phases, each gating its taste-touching parts on a blind ear test before they ship:
+
+- **[NOW] Phase A — Audio Engineering** (branch `feat/sound-presence-phase-a`). Fixes the founder's "I can
+  barely hear it… no continuous background music and sound effects." **Reference gain-staging** (voice/music/
+  ambient normalized to a reference so the bed is a true, audible ratio under the voice — it was ~22–27 dB
+  under, below the WCAG floor); a **guaranteed continuous bed** (kill the two voice-over-silence paths; a
+  room-tone ambient fallback instead of digital silence); a **QA bed-presence invariant** (an intended bed
+  must be measurably audible — intensity-aware so a deliberately calm register isn't false-failed); duck-floor
+  + SFX-bus re-level; plus the principle-7 cost-accounting fixes (music cost scales with length; SFX/TTS/music
+  on one plan basis) and the annotate `maxTokens` reliability fix. Near-zero marginal cost (re-leveling, not
+  more generation); validated by re-balancing the persisted stems + a blind before/after ear test.
+- **[NEXT] Phase B — Sound Direction** (candidate architecture: [hypotheses/audio-direction.md](hypotheses/audio-direction.md)).
+  An **Audio Direction** — the canonical creative intent for a reel's sound (per-scene emotion, listener
+  perspective, environment, intentional silence, peaks/releases, motifs, cross-scene continuity) — that music,
+  ambience, foley, SFX, and any *future* provider all derive from. **Never "better prompts"**: the Direction is
+  a provider-independent artifact, not prompt tuning. Built by deepening `annotate_audio_script` (Direct →
+  Design, no new stage) with a mandatory **direction-fidelity check** (downstream stages satisfice plans — the
+  judge-and-force lesson). The register work folds in here: de-bias `sound-designer.v1` off its 18-revision
+  horror overfit (the first EBN documentary reel came out tense and wrong — register is set by genre + mode +
+  channel DNA, never a house default; a calm register is often correct), de-monoculture the all-dark mood
+  vocabulary, strip "tension/taut" from the universal music prompt, register-gate the forced-movement remap.
+  Judgment/de-biasing, NOT more mandates (prescription *caused* the overfit — Anti-Prescription Guard). Gate:
+  cross-register blind ear A/B. Diagnosed + A/B-designed by the Sound Director via Evidence-Before-Taste,
+  shipped through the Product Partner + Technical Advisor.
+- **[future] Phase C — Channel Audio Identity, as the Audio Bible.** The channel-level twin of the Audio
+  Direction (signature motifs, ambience palette, instrumentation, recurring transitions, pacing, loudness
+  philosophy, silence habits, forbidden sounds, callbacks) that every reel's Direction inherits from —
+  completing the Bible family (Story = fiction, Evidence = fact, Audio = sonic identity). North star: **a viewer
+  recognizes the channel without seeing its logo.** Mechanism levers unused today: ElevenLabs `seed`,
+  `music_v2`, `composition_plan`; a seeded signature bed reused across a channel (identity + cost win, cost
+  attributed once). The Sound Director's spot-audit lever once channels have a back catalog.
 - **[note] EBN i2v cost/quality lever** — for Evidence-Based (illustrative) reels, the i2v hero-beat clips
   are the bulk of per-reel cost, slow the render, and risk warping flat illustration (i2v is trained on
   photoreal motion). Consider allocating 0 video tiers for EBN (stills + Ken Burns only). Cost/render lever,

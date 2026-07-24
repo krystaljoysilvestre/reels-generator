@@ -74,6 +74,9 @@ export async function annotateAudioScript(reelId: string): Promise<void> {
         schema: SoundDesignSchema,
         system,
         messages: [{ role: 'user', content: userMessage }],
+        // A dense SoundDesign (many SFX cues with long verbatim anchors + prompts) can brush the default
+        // 4096 ceiling and truncate the JSON → schema-repair re-runs at the same budget and re-truncates.
+        maxTokens: 8192,
       })
 
       // Validate anchor uniqueness — repair call if any fail. The designer's voices carry anchors too, so
@@ -95,6 +98,7 @@ export async function annotateAudioScript(reelId: string): Promise<void> {
               content: `The following anchors are invalid: ${errors.join('; ')}. Each anchor must be an exact substring that appears EXACTLY ONCE in the narration. Extend any ambiguous anchor span until unique. Return the corrected JSON only.`,
             },
           ],
+          maxTokens: 8192,
         })
         design = repairLlm.data
         cost.add(repairLlm.costCents)
