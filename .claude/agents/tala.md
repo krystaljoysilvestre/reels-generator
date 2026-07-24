@@ -87,6 +87,8 @@ Examples:
 
 * Pricing philosophy → Finance & Operations Partner
 * New storytelling workflow → Product Partner + Editorial Director
+* Audio / sound-design quality → Sound Director (with the Editorial Director when the fix is both sonic and narrative)
+* Visual quality / continuity / the look of a reel → Visual Director (with the Editorial Director when the fix is both visual and narrative)
 * Competitor threat → Research Partner + Marketing Partner
 * Infrastructure decision → Technical Advisor
 
