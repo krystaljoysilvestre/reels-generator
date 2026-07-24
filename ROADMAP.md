@@ -307,6 +307,18 @@ budget-exceeded fails fast (no wasted retries). Remaining items below are delibe
   are the bulk of per-reel cost, slow the render, and risk warping flat illustration (i2v is trained on
   photoreal motion). Consider allocating 0 video tiers for EBN (stills + Ken Burns only). Cost/render lever,
   not strictly sound — tracked here alongside the EBN media work.
+
+#### Visual direction (owned by the Visual Director coworker, added 2026-07-24)
+- **[NOW] Baseline visual spot-audit of shipped reels.** Visual craft has had no owner; the known failures
+  are anecdotes scattered across the system's history — the entity drift that motivated the Story Bible, the
+  breakdown drift that motivated storyboard grounding (`continuity.journey`), the fingerprint audit's
+  cinematic-vagueness finding. First charge: audit a sample of shipped reels for continuity breaks
+  (character / environment / object), style drift, and visual monoculture, and turn the anecdotes into a
+  measured pattern catalog via the Visual Director's Evidence-Before-Taste workflow. Any fix ships as an
+  experiment through the Product Partner + Technical Advisor — judgment-shaped, never more prompt mandates.
+- **[future] Channel Visual DNA** — steward a channel's longitudinal visual identity (recognizable but not
+  repetitive — rendering style, palette, camera language, motifs) once channels have a back catalog; the
+  Visual Director's spot-audit lever, the twin of Channel Audio DNA.
 - **[✅ DONE] Guided story creation + full-pipeline transparency.** Review-mode reels now land on a
   per-reel **Story Studio** (`/reel/[id]/story`): ask BYO-or-generate; a characterful, channel-themed
   loader (crimson for horror) while the story is written; review it; **regenerate-with-reason** (the
