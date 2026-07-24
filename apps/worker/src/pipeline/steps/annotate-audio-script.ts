@@ -30,6 +30,14 @@ async function realizeDesignerVoices(voices: DesignerVoice[], narration: string,
 // annotate_audio_script — step 2 (docs/02 §4)
 // Validates anchor uniqueness after generation (see ../anchors.ts).
 
+// Calm/measured registers where a still, sustained bed is appropriate — so the low_drone → drone_swell
+// movement remap below is SKIPPED for them (a documentary may want a still bed; and low_drone now evolves via
+// music-prompt.ts, so it's no longer the flat tone the owner rejected in a tense context). Conservative:
+// 'informational' (EBN/documentary) is the clearly-calm case; expand after the cross-register blind ear test.
+function isCalmRegister(genre: string | undefined): boolean {
+  return genre === 'informational'
+}
+
 export async function annotateAudioScript(reelId: string): Promise<void> {
   const db = getDb()
 
@@ -56,12 +64,10 @@ export async function annotateAudioScript(reelId: string): Promise<void> {
     location: s.location ?? '',
     narrationText: s.narrationText,
   }))
-  // Sound de-bias (opt-in, default off). When on, the sound designer drops its horror-flavored example +
-  // gains a register-first override so calm registers stop getting horror-grade sound. Under an A/B via
-  // SOUND_DEBIAS=1 until the paid blind ear-test clears; off = byte-identical to today (only enters the
-  // inputHash when on, so unopted reels never re-run).
-  const debias = process.env.SOUND_DEBIAS === '1'
-  const { system, userMessage } = buildSoundDesignerPrompt(story.body, designerScenes, channelGenre, { debias })
+  // Register-first sound design is the DEFAULT now (Phase B, sound-designer.v1.19): the designer silently
+  // decides the story's register, so calm/measured registers stop getting horror-grade sound while horror is
+  // preserved. The opt-in SOUND_DEBIAS flag is gone — it's unconditional.
+  const { system, userMessage } = buildSoundDesignerPrompt(story.body, designerScenes, channelGenre)
 
   // Manual per-scene cues (operator "Add a sound") win on anchor collisions and are preserved verbatim.
   const manualCues = OperatorSfxSchema.parse(reel.operatorSfx ?? []).filter((c) => c.source === 'manual')
@@ -70,7 +76,6 @@ export async function annotateAudioScript(reelId: string): Promise<void> {
     narration: story.body,
     scenes: designerScenes.map((s) => `${s.idx}:${s.isHero ? 'H' : ''}:${s.mood.join(',')}`).join('|'),
     genre: channelGenre ?? '',
-    ...(debias ? { debias: true } : {}),
     manualSig,
   })
 
@@ -82,6 +87,9 @@ export async function annotateAudioScript(reelId: string): Promise<void> {
         schema: SoundDesignSchema,
         system,
         messages: [{ role: 'user', content: userMessage }],
+        // A dense SoundDesign (many SFX cues + long verbatim anchors) can brush the default 4096 ceiling and
+        // truncate the JSON → schema-repair re-runs at the same budget and re-truncates.
+        maxTokens: 8192,
       })
 
       // Validate anchor uniqueness — repair call if any fail. The designer's voices carry anchors too, so
@@ -103,6 +111,7 @@ export async function annotateAudioScript(reelId: string): Promise<void> {
               content: `The following anchors are invalid: ${errors.join('; ')}. Each anchor must be an exact substring that appears EXACTLY ONCE in the narration. Extend any ambiguous anchor span until unique. Return the corrected JSON only.`,
             },
           ],
+          maxTokens: 8192,
         })
         design = repairLlm.data
         cost.add(repairLlm.costCents)
@@ -112,12 +121,16 @@ export async function annotateAudioScript(reelId: string): Promise<void> {
       // Drop any vocal SFX the designer slipped in (belt-and-suspenders behind the prompt ban — voices are
       // the ONLY intended human sound). Manual anchors win, so a smart voice on a manual anchor is dropped.
       const manualAnchors = new Set(manualCues.map((c) => c.anchor))
-      // Owner-set deterministic rule (2026-07-06, after rejecting the drone on three listening passes):
-      // narrated reels never take a static low_drone bed — the LLM kept choosing it for eerie/sparse moods
-      // despite explicit prompt guidance ("never low_drone" in v1.7), so it's enforced here. drone_swell
-      // keeps the chosen moods but MOVES. (low_drone stays valid for preset/uploaded beds.)
+      // Owner-set deterministic rule (2026-07-06, after rejecting the drone on three listening passes IN A
+      // TENSE CONTEXT): remap a static low_drone → drone_swell so the bed MOVES instead of sitting flat.
+      // Phase B register-gates it: a CALM/measured register (informational/documentary) may legitimately want
+      // a still, sustained bed — and low_drone now evolves anyway (music-prompt.ts), so it's not the flat tone
+      // that was rejected. Skip the remap for calm; keep it for tense/narrative. (low_drone also stays valid
+      // for preset/uploaded beds.) Pre-registered blind-test item — do not generalize the tense-context call.
       const music =
-        design.music?.type === 'low_drone' ? { ...design.music, type: 'drone_swell' as const } : design.music
+        design.music?.type === 'low_drone' && !isCalmRegister(channelGenre)
+          ? { ...design.music, type: 'drone_swell' as const }
+          : design.music
 
       const audioScript = AudioScriptSchema.parse({
         ambient: design.ambient,
@@ -186,13 +199,12 @@ export async function annotateAudioScript(reelId: string): Promise<void> {
         audioPacks.musicMood,
         audioPacks.audioMood,
       )
-      // Owner-set deterministic rule (2026-07-06, after rejecting the drone on three listening passes):
-      // an AI-composed bed for a narrated reel is never a static low_drone — it reads as one flat
-      // unchanging tone under the whole story. drone_swell keeps the preset's moods but MOVES. This is
-      // the ACTUAL type decision point (the preset always wins here, so prompt-side guidance couldn't
-      // reach it). Preset/uploaded beds are untouched below.
+      // Owner-set deterministic rule (2026-07-06, rejecting the drone in a TENSE context): an AI-composed bed
+      // for a narrated reel remaps a static low_drone → drone_swell so it MOVES instead of reading as one flat
+      // tone. This is the ACTUAL type decision point (the preset always wins here). Phase B register-gates it:
+      // a calm/measured register keeps its still low_drone (see isCalmRegister + the design-path remap above).
       audioScript.music = {
-        type: type === 'low_drone' ? 'drone_swell' : type,
+        type: type === 'low_drone' && !isCalmRegister(channelGenre) ? 'drone_swell' : type,
         startAnchor: audioScript.music?.startAnchor ?? '',
         peakAnchor: audioScript.music?.peakAnchor ?? '',
         moodTags,

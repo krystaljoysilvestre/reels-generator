@@ -20,9 +20,12 @@ export const MUSIC_CONSTRAINT =
 // intended movement) and the story's emotional peak position, so a low_drone still drifts and mounts
 // instead of sitting dead, while a riser_sting genuinely builds. Genre-neutral ("emotional peak"), so
 // warmth builds as naturally as dread.
-// Every arc opens with IMMEDIATE presence — the intensity must be felt within the first second (owner
-// direction 2026-07-06: a sparse/near-silent intro reads as "no music" and loses the viewer before the
-// story starts). The build is in texture and tightness, not in fading up from nothing.
+// Every arc opens with IMMEDIATE presence — the bed's CHARACTER must be felt within the first second (owner
+// direction 2026-07-06: a sparse/near-silent intro reads as "no music" and loses the viewer before the story
+// starts). Phase B (2026-07-24): presence is universal; its FLAVOR is the register's. The old mistake was
+// "immediate presence = immediate tension"; the rule is "immediate presence = immediate CHARACTER" — the
+// opening establishes the mood (calm, warm, driving, tense) from second one, not fades up from nothing. The
+// build is in texture and development, not in ramping from silence.
 //
 // `loops` = the video outruns the provider's max generation (300s) and the mixer will aloop this bed
 // to cover the tail. That's a hard execution constraint, not taste: a bed with a terminal peak resets
@@ -30,18 +33,18 @@ export const MUSIC_CONSTRAINT =
 // opening) and leaves the video-level build to the mixer's volume envelope, which still swells toward
 // the actual climax.
 function musicArc(musicType: string | undefined, peakFrac: number, loops: boolean): string {
-  const openPresent = ' It must be clearly present and set the tension from the VERY FIRST SECOND — no slow fade-in from silence, no sparse empty intro.'
+  const openPresent = ' It must be clearly present and establish its character from the VERY FIRST SECOND — no slow fade-in from silence, no sparse empty intro.'
   if (loops) {
     return `${openPresent} This piece will LOOP under a longer video, so keep its evolution cyclical: the texture breathes, shifts and returns toward where it opened, with no terminal climax and no fade-out — the end must flow back into the beginning without a noticeable seam.`
   }
   const pct = Math.round(Math.min(0.95, Math.max(0.3, peakFrac)) * 100)
   switch (musicType) {
     case 'riser_sting':
-      return `${openPresent} Shape it as a continuous build: taut from the open, layering in and tightening, mounting toward an emotional peak around ${pct}% of the way through, then pull back.`
+      return `${openPresent} Shape it as a continuous build: energized from the open, layering in and intensifying, growing toward an emotional peak around ${pct}% of the way through, then pull back.`
     case 'drone_swell':
       return `${openPresent} Let it move in swells — rising and receding like breath, always audible, cresting toward an emotional peak around ${pct}% of the way through.`
     case 'low_drone':
-      return `${openPresent} Keep it low and uneasy but continuously evolving — the texture shifting, tension mounting toward around ${pct}% of the way through; never a single unchanging tone.`
+      return `${openPresent} Keep it low and sustained but continuously evolving — the texture shifting and developing toward around ${pct}% of the way through; never a single unchanging tone.`
     default:
       return `${openPresent} Let it develop and build toward an emotional peak around ${pct}% of the way through, then settle.`
   }

@@ -67,7 +67,12 @@ import { AmbientSchema, MusicCueSchema, SfxCueSchema, SilenceDropSchema } from '
 // more traumatic jumpscare (climax +6→+9, bone-rattling). Bumped so annotate re-applies both.
 // v1.18 = shorten the climax prompt (the v1.17 traumatic prompt was 482 chars — over ElevenLabs' SFX ~450
 // cap — and 400'd, failing the reel; provider now also caps defensively). Same intent, concise.
-export const SOUND_DESIGNER_V1_VERSION = 'sound-designer.v1.18'
+// v1.19 = register-first is now the DEFAULT (Phase B 2026-07-24), not the opt-in SOUND_DEBIAS patch: every
+// design silently decides the story's register first, so the 18 revisions of horror tuning apply ONLY to a
+// tense register. Presence-tilted: a calm register's default is a still, PRESENT bed (music: null is valid
+// but rare/justified — the founder's "leans calm" was really "no register range"). Probe-validated shape
+// (calm artifacts 3→0, horror preserved); the opt-in flag is removed.
+export const SOUND_DESIGNER_V1_VERSION = 'sound-designer.v1.19'
 
 // A non-narrator voice the designer chose to place. Rare + deliberate — resolved to a catalog voice and
 // synthesized as a speech cue downstream. NOT for incidental human noise (that's banned entirely).
@@ -117,22 +122,23 @@ function genreContext(genre?: string): string {
   }
 }
 
-// DE-BIAS option (opt-in, default off). The prompt above was tuned across 18 revisions toward horror and
-// copies its horror-flavored example onto calm stories (Sound Director diagnosis, 2026-07-24). When
-// `debias` is on, we (1) append a REGISTER-FIRST override that supersedes the tense-register rules for
-// calm/measured registers (silence, a still or absent bed, sparse cues, a quiet fact-landing peak are all
-// valid, not failures), and (2) replace the horror-flavored JSON example with a register-neutral one the
-// model can't copy literals from. SUBTRACTIVE + judgment-shaped, not another mandate — per the
-// Anti-Prescription Guard. Ported verbatim from the free-gate probe (probe-sound-debias.ts), which showed
-// it clears calm-register artifacts to zero while preserving horror.
+// REGISTER-FIRST — the DEFAULT since Phase B (was the opt-in SOUND_DEBIAS patch). The prompt above was tuned
+// across 18 revisions toward horror and copied its horror-flavored example onto calm stories (Sound Director
+// diagnosis, 2026-07-24). So EVERY design now (1) gets a REGISTER-FIRST override that supersedes the
+// tense-register rules for calm/measured registers (a still PRESENT bed, sparse cues, a quiet fact-landing
+// peak are correct there), and (2) uses a register-neutral JSON example the model can't copy literals from.
+// SUBTRACTIVE + judgment-shaped, not another mandate — per the Anti-Prescription Guard. Probe-validated
+// (probe-sound-debias.ts: clears calm-register artifacts to zero while preserving horror). Presence-tilt
+// (Phase B, the founder's "leans calm" steer): the calm branch defaults to a PRESENT bed, not silence —
+// music: null is valid but rare. "Calm" is a register, not an absence.
 const DEBIAS_REGISTER_OVERRIDE = `
 
 REGISTER FIRST — READ BEFORE DESIGNING (this supersedes any rule above that conflicts with it):
 SILENTLY decide (do NOT write it out — output only the JSON, no preface) THIS story's register — e.g. measured/documentary, warm, playful, tense/horror — and what sonic treatment would be WRONG for it, then design to that register.
-The rules above about tension "from the very first second", a landing climax being "non-negotiable", and silence being a "failure" describe a TENSE register (horror and the like). For a MEASURED, CALM, or FACTUAL register they are WRONG. In a calm register the following are CORRECT, not failures: a quiet or near-silent opening; a still bed, a sparse bed, or NO music at all; few cues; an unhurried peak that lands on a FACT or a realization rather than a boom or a scare; and empty layers. Never impose intensity, dread, a heartbeat/boom/whoosh, or a jumpscare climax on a story whose register does not call for it. The example is illustrative ONLY — never copy its literal values (moods, prompts, packTags); derive everything from THIS story's world and register.`
+The rules above about tension "from the very first second", a landing climax being "non-negotiable", and silence being a "failure" describe a TENSE register (horror and the like). For a MEASURED, CALM, or FACTUAL register they are WRONG. In a calm register the following are CORRECT, not failures: a quiet opening; a still, sustained, PRESENT bed (measured, not tense); a sparse cue layer; an unhurried peak that lands on a FACT or realization rather than a boom or scare. But CALM IS NOT SILENT: a calm register still runs a continuous, present bed UNDER the narration by default — music is present even here, just measured, not absent. \`music: null\` or a near-empty design is valid only RARELY, when the story is genuinely built on a single diegetic sound or true silence — never as a shortcut or under-filling. Never impose intensity, dread, a heartbeat/boom/whoosh, or a jumpscare climax on a story whose register does not call for it. The example is illustrative ONLY — never copy its literal values (moods, prompts, packTags); derive everything from THIS story's world and register.`
 const DEBIAS_NEUTRAL_EXAMPLE = `{
   "ambient": { "packTags": ["<the real ambience of THIS place, or [] if the register wants quiet>"], "evolution": null },
-  "music": null,
+  "music": { "type": "low_drone | drone_swell | riser_sting", "startAnchor": "<the opening line>", "peakAnchor": "<the emotional peak line>", "moodTags": ["<THIS register's mood — e.g. measured, warm, hopeful, driving, or dread — never defaulted to dread>"] },
   "sfx": [
     { "anchor": "<a concrete action or place in the narration>", "offsetMs": 0, "prompt": "<the plain, non-vocal sound that action/place actually makes>", "volumeDb": -8, "targetDurationSec": 2, "impactAtEnd": false }
   ],
@@ -144,7 +150,6 @@ export function buildSoundDesignerPrompt(
   narration: string,
   scenes: DesignerScene[],
   genre?: string,
-  opts?: { debias?: boolean },
 ): { system: string; userMessage: string } {
   const horror = genre === 'horror'
 
@@ -211,13 +216,10 @@ Design the full soundscape: a bed felt from the first second, sustained tension 
 }
 Populated fields MUST use exactly these keys. Use null for silenceDrop/music if genuinely unused, and [] for voices if the story has no vocal pivot.`
 
-  if (opts?.debias) {
-    // Append the register-first override; swap the horror-flavored example for a neutral shape guide (keep
-    // everything up to "OUTPUT JSON only:", then the neutral example + a restraint-licensing closing line).
-    const head = userMessage.split('OUTPUT JSON only:')[0]
-    const debiasedUser = `${head}OUTPUT JSON only (the example is a SHAPE guide — never copy its literal values):\n${DEBIAS_NEUTRAL_EXAMPLE}\nUse exactly these keys. EVERY field is optional: use null for music/silenceDrop and [] for sfx/voices whenever the story's register doesn't call for them. A calm piece may legitimately have a spare or near-empty design — that is a valid answer, not an under-filled one.`
-    return { system: system + DEBIAS_REGISTER_OVERRIDE, userMessage: debiasedUser }
-  }
-
-  return { system, userMessage }
+  // Register-first is unconditional (Phase B): append the override; swap the horror-flavored example for a
+  // neutral shape guide (keep everything up to "OUTPUT JSON only:", then the neutral example + a closing line
+  // that keeps a calm register PRESENT, not empty).
+  const head = userMessage.split('OUTPUT JSON only:')[0]
+  const registerUser = `${head}OUTPUT JSON only (the example is a SHAPE guide — never copy its literal values):\n${DEBIAS_NEUTRAL_EXAMPLE}\nUse exactly these keys. Fit the design to the story's register: a tense register fills the layers and lands a climax; a calm register is spare and unhurried but still PRESENT — a measured, continuous bed under the narration is the default, not silence. music: null or a near-empty design is valid only when the story truly calls for it, never as under-filling. Use null for silenceDrop and [] for voices whenever the story doesn't call for them.`
+  return { system: system + DEBIAS_REGISTER_OVERRIDE, userMessage: registerUser }
 }

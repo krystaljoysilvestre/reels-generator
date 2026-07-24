@@ -22,13 +22,13 @@ describe('buildSoundDesignerPrompt', () => {
   })
 
   it('teaches the SUSTAINED layer (endAnchor loops: heartbeat under a walk, corridor tone under a scene)', () => {
-    const { system, userMessage } = buildSoundDesignerPrompt('x', SCENES, 'horror')
+    const { system } = buildSoundDesignerPrompt('x', SCENES, 'horror')
     expect(system).toMatch(/SUSTAINED/i)
     expect(system).toMatch(/endAnchor/)
     expect(system).toMatch(/heartbeat/i)
     expect(system).toMatch(/seamless loop/i)
-    // The JSON example models a sustained cue.
-    expect(userMessage).toMatch(/"endAnchor":/)
+    // (The user-message JSON example is now the register-NEUTRAL shape guide — Phase B — so it no longer
+    // models a sustained cue; the sustained-layer teaching lives in the system prompt, asserted above.)
   })
 
   it('demands FULL presence from frame one — no ease-in/build-up, a sustained opening tension texture', () => {
@@ -165,7 +165,10 @@ describe('buildSoundDesignerPrompt', () => {
     // The de-harsh fix: power is weight; harsh high-frequency screeches are banned.
     expect(horror).toMatch(/power is WEIGHT/i)
     expect(horror).toMatch(/NEVER a thin, harsh, high-pitched screech|metallic shriek/i)
-    expect(info).not.toMatch(/JUMPSCARE/i)
+    // Info never DEMANDS a jumpscare. (The register-first override, now default on every prompt, mentions
+    // "jumpscare" only to FORBID it for non-tense registers — a prohibition, not a demand — so we assert on
+    // the horror-only demand phrasing, not the bare word.)
+    expect(info).not.toMatch(/climax is a JUMPSCARE/i)
   })
 
   it('forbids a sagging ending — aftermath to the last word, closing sting allowed', () => {
@@ -175,19 +178,32 @@ describe('buildSoundDesignerPrompt', () => {
     expect(system).toMatch(/never let the last scene play out over dead, empty air/i)
   })
 
-  it('makes the climax payoff mandatory and audible (not left in silence)', () => {
-    const { system, userMessage } = buildSoundDesignerPrompt('x', SCENES, 'horror')
+  it('makes the climax payoff mandatory and audible (not left in silence) — for a tense register', () => {
+    const { system } = buildSoundDesignerPrompt('x', SCENES, 'horror')
     expect(system).toMatch(/CLIMAX MUST MAKE A SOUND|must make a sound/i)
     expect(system).toMatch(/non-negotiable/i)
-    // The system rule pushes impactAtEnd for the climax...
+    // The system rule pushes impactAtEnd for the climax. (The register-first override, default now, scopes
+    // "climax non-negotiable" to a TENSE register; a calm register lands the peak on a fact, not a hit.)
     expect(system).toMatch(/impactAtEnd=true/)
-    // ...and the JSON example (in the user message) models a built-up, loud climax cue.
-    expect(userMessage).toMatch(/"impactAtEnd":\s*true/)
   })
 
   it('uses no forced-quota language (unbiased-design)', () => {
     const { system } = buildSoundDesignerPrompt('x', SCENES, 'horror')
     expect(system).not.toMatch(/place \d+|on every (hero|scene|twist)|a sting on each/i)
+  })
+
+  it('applies register-first by DEFAULT (Phase B): override present, example neutral, calm stays PRESENT', () => {
+    // Register-first is unconditional now — every prompt (even horror) gets the override that scopes the tense
+    // mandates to a tense register, and a register-neutral JSON example (no horror literals to copy).
+    const { system, userMessage } = buildSoundDesignerPrompt('x', SCENES, 'horror')
+    expect(system).toMatch(/REGISTER FIRST/)
+    expect(system).toMatch(/SILENTLY decide/i)
+    // The founder's "leans calm" steer: calm is a register, not an absence.
+    expect(system).toMatch(/CALM IS NOT SILENT/i)
+    // The user message uses the neutral shape guide (not the old horror "province_night" example) and keeps
+    // a calm register present.
+    expect(userMessage).not.toMatch(/province_night/)
+    expect(userMessage).toMatch(/still PRESENT/i)
   })
 })
 
