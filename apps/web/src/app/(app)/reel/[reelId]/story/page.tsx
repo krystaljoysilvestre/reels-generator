@@ -104,6 +104,23 @@ export default async function ReelStoryPage({ params }: { params: Promise<{ reel
     : null
   const critic = reel.story ? extractCritic(storyStep?.output, reel.story.body) : null
 
+  // Standalone fact gate (channels.factCheck): its advisory Fact-Fidelity punch-list lives on the reel
+  // (not the generate_story step output, since fact_check is a separate step), so merge it into the SAME
+  // review punch-list here — labeled "fidelity" like the EBN flags so factual issues read distinctly.
+  const factReport = reel.factCheckReport as { status?: string; issues?: Array<{ axis?: string; offending?: string; detail?: string }> } | null
+  const factIssues =
+    factReport?.status === 'ok'
+      ? (factReport.issues ?? [])
+          .map((i) => ({
+            axis: `fidelity · ${(i.axis ?? '').replace(/_/g, ' ')}`,
+            problem: [i.detail?.trim(), i.offending?.trim() ? `“${i.offending.trim()}”` : ''].filter(Boolean).join(' — '),
+          }))
+          .filter((i) => i.problem)
+      : []
+  const criticWithFacts: CriticSummary | null = factIssues.length
+    ? { rationale: critic?.rationale ?? '', runnersUp: critic?.runnersUp ?? [], elements: critic?.elements ?? [], qaIssues: [...(critic?.qaIssues ?? []), ...factIssues] }
+    : critic
+
   return (
     <StoryStudio
       reelId={reel.id}
@@ -126,7 +143,7 @@ export default async function ReelStoryPage({ params }: { params: Promise<{ reel
             }
           : null
       }
-      critic={critic}
+      critic={criticWithFacts}
     />
   )
 }

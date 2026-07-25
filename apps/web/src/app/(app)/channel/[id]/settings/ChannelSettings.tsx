@@ -49,6 +49,7 @@ interface Initial {
   styleImageKey: string | null
   genreCategory: string
   presentation: '' | 'voiceover' | 'hosted' // how narration reaches the audience (analyzer context)
+  factCheck: boolean // standalone fact-gate opt-in (advisory fidelity punch-list at story review)
   narrativeStyle: string
   narrativeVoice: string
   styleInfluence: string
@@ -92,6 +93,7 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
   // Presentation — how the audience receives the narration; a bias the analyzer reasons from (each story
   // still decides for itself). A separate axis from genre; see hypotheses/voiceover-perspective.md.
   const [presentation, setPresentation] = useState<'' | 'voiceover' | 'hosted'>(initial.presentation)
+  const [factCheck, setFactCheck] = useState<boolean>(initial.factCheck)
   // PROSE dimensions (story-styles / story-voices) — editable post-creation.
   const [narrativeStyle, setNarrativeStyle] = useState(initial.narrativeStyle)
   const [narrativeVoice, setNarrativeVoice] = useState(initial.narrativeVoice)
@@ -144,6 +146,7 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
       autoProduce,
       genreCategory,
       presentation,
+      factCheck,
       musicMood,
       tasteRubric: tasteRubric.trim() || null,
       narrativeStyle,
@@ -404,6 +407,13 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
                 onChange={(v) => setPresentation(v as '' | 'voiceover' | 'hosted')}
                 options={PRESENTATION_OPTIONS}
               />
+            </label>
+            <label className="flex flex-col gap-1.5 text-xs font-medium text-muted">
+              Fact-check scripts
+              <span className="flex items-center gap-2 rounded-lg border border-border-strong px-3 py-2">
+                <input type="checkbox" checked={factCheck} onChange={(e) => setFactCheck(e.target.checked)} />
+                <span className="text-xs text-muted">Check each script against its sources — flags shown at review (advisory)</span>
+              </span>
             </label>
             {stylesForGenre(asGenreModule(genreCategory) ?? 'general').length > 0 && (
               <label className="flex flex-col gap-1.5 text-xs font-medium text-muted">

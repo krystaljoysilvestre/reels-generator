@@ -42,6 +42,8 @@ const UpdateSchema = z
     ebnSpecialization: z.enum(['historical_events']),
     // Presentation identity — how narration reaches the audience (analyzer context; '' = no lean).
     presentation: z.enum(['', 'voiceover', 'hosted']),
+    // Standalone fact gate opt-in — fact-check this channel's scripts against per-reel sources (advisory).
+    factCheck: z.boolean(),
     // Auto-produce cadence (the consistency engine). Lives in the postingRules jsonb, merged below.
     autoProduce: z.object({
       enabled: z.boolean(),

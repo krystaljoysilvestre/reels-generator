@@ -4,7 +4,7 @@
 // (The worker keeps the CONSUMER side — makeWorker — in apps/worker.)
 
 import { Queue } from 'bullmq'
-import { getDb, scenes } from '@reels/db'
+import { getDb, scenes, reels, channels } from '@reels/db'
 import { and, eq } from 'drizzle-orm'
 
 // BullMQ bundles its own ioredis; pass the URL string (not a Redis instance) to avoid the
@@ -86,7 +86,9 @@ export async function enqueueStep(data: PipelineJobData): Promise<void> {
 
 // Step → next step to auto-enqueue, or null to STOP (a human gate or terminal-before-human).
 export const PIPELINE_CHAIN: Record<string, string | null> = {
-  generate_story: null,                  // → story_review (human approves)
+  generate_story: null,                  // → story_review (human approves) — unless the channel opts into
+                                         //   the fact gate, which resolveNextStep detours through first
+  fact_check: null,                      // → story_review (with the advisory fidelity punch-list ready)
   analyze_story: 'generate_post_meta',   // after story approval: build the Story Bible…
   generate_post_meta: 'breakdown_scenes', // …package the post (title/hook/caption/hashtags), then break down
   breakdown_scenes: 'generate_images',
@@ -111,6 +113,17 @@ export async function resolveNextStep(stepName: string, reelId: string): Promise
       columns: { id: true },
     })
     return hasVideo ? 'animate_scenes' : 'generate_music'
+  }
+  // Opt-in fact gate: after the story is written, detour through fact_check ONLY when the channel opted in
+  // AND the reel carries source material. Otherwise generate_story stops at story_review as usual. The
+  // reel is already at story_review by now; fact_check just enriches it with the advisory punch-list.
+  if (stepName === 'generate_story') {
+    const reel = await getDb().query.reels.findFirst({ where: eq(reels.id, reelId), columns: { channelId: true, dossier: true } })
+    if (reel?.dossier?.trim()) {
+      const channel = await getDb().query.channels.findFirst({ where: eq(channels.id, reel.channelId), columns: { factCheck: true } })
+      if (channel?.factCheck) return 'fact_check'
+    }
+    return null
   }
   return PIPELINE_CHAIN[stepName] ?? null
 }

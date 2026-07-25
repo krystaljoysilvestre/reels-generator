@@ -118,6 +118,12 @@ export const channels = pgTable('channels', {
   // toward an embodied teller. Owner-set CONTEXT the analyzer reasons from (a bias, not a command — the
   // narration's own text decides via the participant test). See hypotheses/voiceover-perspective.md.
   presentation: text('presentation').notNull().default(''),
+  // Standalone fact gate (opt-in, ANY channel — decoupled from storyMode='ebn'). When true, an opted-in
+  // reel that carries source material (reels.dossier) runs the Evidence Extractor + Fact-Fidelity Checker
+  // after generate_story, and the ADVISORY fidelity punch-list (reels.factCheckReport) is surfaced at the
+  // story_review gate — it never auto-blocks. Lets a standard Taglish/photoreal/persona news channel
+  // fact-check its scripts without inheriting EBN's illustrative rendering + formal-English writer.
+  factCheck: boolean('fact_check').notNull().default(false),
   // PROSE dimensions (story-writer-v2): the storytelling TRADITION + the narrator's written SOUND,
   // layered on genre by the Planner/Writer. Per-channel, operator-selectable. NOT the TTS/audio voice
   // (voiceId/voiceMode/voicePool/voiceSearchKeyword) and NOT the visual look (stylePreset/lutConfig).
@@ -226,15 +232,19 @@ export const reels = pgTable(
     // Optional operator topic seed for THIS reel's story ("make one about the aswang sa palengke").
     // Read by generate_story → planner; null = the planner explores freely. Never mutated after creation.
     seedIdea: text('seed_idea'),
-    // EVIDENCE-BASED NARRATIVE inputs (only used when the channel's storyMode='ebn'; null otherwise).
-    // dossier = the human-curated raw source material (court records, transcripts, archives) the operator
-    // supplies for THIS case; the Extractor freezes it into the Evidence Bible. Never mutated after the
-    // Bible is built. See specs/evidence-based-narrative.md.
+    // Curated raw SOURCE material for THIS reel (court records, transcripts, archives, article excerpts).
+    // Used by BOTH the EBN path (storyMode='ebn': the Extractor freezes it into the Evidence Bible before
+    // the story is written) AND the standalone fact gate (channels.factCheck: the story is written freely,
+    // then checked against these sources after the fact). Never mutated once set.
     dossier: text('dossier'),
     // The frozen, versioned Evidence Bible (EvidenceBible: { version, facts[] }) extracted from the dossier.
     // Immutable once written — nothing downstream acquires facts; the Planner/Writer only select from it.
     // Written by the EBN branch of generate_story; mirrors storyBible's frozen-jsonb-on-reel pattern.
     evidenceBible: jsonb('evidence_bible'),
+    // Standalone fact-gate report (channels.factCheck): { facts, issues[], summary, checkedAt } — the
+    // ADVISORY Fact-Fidelity punch-list from the fact_check step, surfaced at story_review. Null = not
+    // fact-checked (channel opted out, or no source material supplied). Never gates; the human decides.
+    factCheckReport: jsonb('fact_check_report'),
     // Post metadata (PostMeta) — platform title, hook, caption, hashtags for this reel, written by the
     // generate_post_meta step (regenerates when the story changes) and operator-editable. Consumed by
     // the export post-package. Null = not yet generated (export falls back to a lazy generation).
