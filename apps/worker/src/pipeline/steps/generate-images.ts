@@ -250,7 +250,14 @@ export async function generateImages(reelId: string): Promise<void> {
     const refs = [...(s.primaryEntity ? [s.primaryEntity] : []), ...(s.supportingEntities ?? [])]
     return refs.some((r) => characterIds.has(slug(r))) || PERSON_NOUN.test(s.visualPrompt ?? '')
   }
-  const isQATarget = (s: (typeof pending)[number]) => s.tier === 'video' || (peak !== '' && s.narrationText.includes(peak)) || featuresPerson(s)
+  // VOICEOVER reels: person-presence is the wrong risk signal — the load-bearing frames are the ones whose
+  // narration carries a quantity/comparison (the model's weak spot: muddled comparisons, garbled data-viz),
+  // and they're usually people-free, so they'd escape QA entirely. Target them by claim load instead
+  // (digits + EN/Tagalog quantity/comparative words). See hypotheses/voiceover-perspective.md.
+  const isVoiceover = storyBible?.continuity.narratorPerspective === 'voiceover'
+  const CLAIM_LOAD = /\d|%|percent|porsyento|bilyon|milyon|libo|thousand|million|billion|\bkada\b|\bper\b|versus|\bvs\.?\b|kumpara|compared|higit|mas\s+(?:mataas|mababa|malaki|maliit|mahal|mura)|more than|less than|up to|hanggang/i
+  const carriesClaim = (s: (typeof pending)[number]) => CLAIM_LOAD.test(s.narrationText)
+  const isQATarget = (s: (typeof pending)[number]) => s.tier === 'video' || (peak !== '' && s.narrationText.includes(peak)) || featuresPerson(s) || (isVoiceover && carriesClaim(s))
 
   const processScene = async (scene: (typeof pending)[number]) => {
     // FIRST-PERSON NARRATOR VISIBILITY — decide the narrator's splice HERE, deterministically, from whether

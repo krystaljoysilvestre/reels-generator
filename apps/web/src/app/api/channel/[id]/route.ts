@@ -40,6 +40,8 @@ const UpdateSchema = z
     // Story MODE (fiction studio vs Evidence-Based Narrative factual path) + its specialization.
     storyMode: z.enum(['standard', 'ebn']),
     ebnSpecialization: z.enum(['historical_events']),
+    // Presentation identity — how narration reaches the audience (analyzer context; '' = no lean).
+    presentation: z.enum(['', 'voiceover', 'hosted']),
     // Auto-produce cadence (the consistency engine). Lives in the postingRules jsonb, merged below.
     autoProduce: z.object({
       enabled: z.boolean(),

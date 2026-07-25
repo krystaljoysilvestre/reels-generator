@@ -1,0 +1,38 @@
+# Depictive-Ethics Floor — real parties are never staged
+
+Status: **PROPOSED — awaiting founder ratification (floors-are-law), 2026-07-25.** Drafted by the visual-director from the 2026-07-24 production failure; owner fast-tracked the *track* (ship separately from, and likely ahead of, [hypotheses/voiceover-perspective.md](../hypotheses/voiceover-perspective.md)); the *wording* below needs founder sign-off before implementation. Hard safety constraint, not taste — ships firmly worded, no A/B; only its QA teeth (warning→error promotion) follow evidence.
+
+## The failure this prevents (2026-07-24, production)
+
+A standard-mode factual reel's auto-breakdown produced *"Close-up of DTI officials shaking hands with an enthusiastic narrator. Flags of the Philippines and the US…"* — rendered photoreal, a **fabricated press photo of real officials at an event that never happened**. No layer prevented it: EBN's illustrative floor reaches only `storyMode='ebn'`; [real-places](../hypotheses/real-places.md)' three-tier people stance governs reference *sourcing*, not generated *depiction*; image-QA checks brief-match, not ethics; and the scene only entered QA at all because "hands" happened to match the person-noun heuristic.
+
+## The floor (scene-prompt core rules wording)
+
+> **REAL PARTIES ARE NEVER STAGED (every genre):** when the narration names an identifiable real living person (an official, executive, athlete, celebrity, or private individual) or a named real organization's people or events (its officials, spokespeople, meetings, signings, ceremonies, announcements), NEVER write a shot that depicts that party as if photographed at an event — no staged handshakes, podium moments, boardrooms, raids, or ceremonies attributed to the named party. Rendered photoreal, such a frame is a fabricated press photo: a false record of real people at an event that never happened. Depict the beat's SUBSTANCE through representative, anonymous, or conceptual imagery instead: the real place or object itself, documents and maps as physical things, unbranded working hands, a distant non-identifiable figure, symbolic staging (two flags on an empty table, a signed page, an empty podium). Write the imagePrompt positively — describe the anonymous staging you want ("a distant silhouetted figure walking a fence line at dusk", "two hands exchanging a folder across a desk"), never "no faces" or "unidentifiable" (see DESCRIBE PRESENCE, NOT ABSENCE). This rule triggers on IDENTITY, not on people: ordinary unnamed people (a vendor, a nurse, a crowd) stay people, and fictional characters are untouched — the trigger is a real name, a real office or title, real insignia, or context that points at one specific real party. Under an explicitly illustrative, never-photoreal rendering profile, reconstruction is governed by that profile's own contract — but no render, in any style, is ever presented as an authentic photograph of a real event.
+
+Companion **image-qa checklist clause** (same floor, pixel side):
+
+> **- REAL-PARTY FABRICATION:** if the brief names a real organization, office, or public figure, FAIL a frame that reads as a press or event photograph of identifiable people acting as that party (a recognizable face plus insignia, flags, podium, handshake, or ceremony staging). Representative staging — silhouettes, hands, distant or non-identifiable figures, empty symbolic setups — passes.
+
+## Where it lives (implementation inventory)
+
+1. **[scenes.v1.ts](../packages/core/src/prompts/scenes.v1.ts) core rules block** — beside FILTER-SAFE PHRASING (:227) and CAST CONTROL (:229), ahead of SAFETY (:239). Every-genre constraint on how the director writes briefs; never a genre module (sports recaps, commentary, and fiction naming a real politician all need it equally).
+2. **[image-qa.v1.ts](../packages/core/src/prompts/image-qa.v1.ts) checklist** (:26-34) — new check after CAST (:31). The only layer that sees pixels; catches the render that fabricates anyway.
+3. **[generate-images.ts:248](../apps/worker/src/pipeline/steps/generate-images.ts#L248)** — extend `PERSON_NOUN` with real-party role nouns (`official|officer|minister|senator|president|mayor|executive|spokesperson|delegate|politician`) so such scenes always land in `isQATarget`. The 2026-07-24 scene only qualified by luck ("hands"). Marginal vision-QA spend, bounded to real-party scenes; fabricated press photos are a publish-blocking harm class.
+4. **[scene-qa.ts](../packages/core/src/assembly/scene-qa.ts)** — deterministic, free, pre-spend *warning*-tier heuristic: flag imagePrompts combining an org-acronym/role-noun with event-staging verbs. Promote to error (LLM repair round) only after precision proves out on accumulated warnings — teeth follow evidence; the floor itself does not wait.
+5. **[story-analyzer.v1.ts:57](../packages/core/src/prompts/story-analyzer.v1.ts#L57)** (secondary) — one sentence in the PEOPLE committed-look rule: a named real living public figure is never minted with an invented committed likeness; extract role-representative instead. Entity descriptions splice VERBATIM into image prompts, so a fabricated committed likeness upstream defeats the scene-level rule downstream.
+
+Rejected placement: a render-time negative-prompt append — negation is the weakest lever (same reasoning as DESCRIBE PRESENCE, NOT ABSENCE); the fix is to never write the brief.
+
+## Boundaries
+
+- **vs the EBN illustrative floor** ([generate-images.ts:185-196](../apps/worker/src/pipeline/steps/generate-images.ts#L185)): EBN's floor is **mode-welded and medium-shaped** (whole reel forced non-photoreal + burned disclosure). This floor is **mode-agnostic and content-triggered** — it governs which depictions may be staged as photographed on any channel whose output *can* be photoreal. They compose, never substitute; neither exempts the other.
+- **vs [real-places](../hypotheses/real-places.md) three-tier people stance:** the tiers govern reference **SOURCING** (may a real photo enter conditioning); this floor governs generated **DEPICTION** (what the output may claim), regardless of source. Independent and both required — the DTI shot violated depiction with zero sourced references involved. Where they touch (long-dead figures), this floor defers to the CARE tier so both documents draw one line.
+
+## Edge cases
+
+**Ruled IN:** living public figures identified by name/title/unambiguous context (and private individuals, a fortiori) · named orgs' staged events (signings, pressers, raids, ceremonies) · **recently deceased** people at fabricated events (the false-record harm survives death) · "fictional" characters constructed to be identifiable as a real person (near-name + real office + real insignia = identity by construction) · composites placing a real person somewhere they were not.
+
+**Ruled OUT:** anonymous crowds and generic role-figures with no identity assertion (this *is* the prescribed representative imagery) · long-dead/historical figures in reconstruction framing (real-places CARE tier governs; still never presented as an authentic photo) · officials in an *affirmed* never-photoreal illustrative profile (EBN's contract + disclosure govern) · coincidental resemblance (trigger is identity *assertion* — name/office/insignia/context — never pixel similarity) · real places/buildings as establishing context (real-places territory; showing the agency's building ≠ staging its officials) · genuine licensed archival footage/photos (not generated; sourcing/licensing path governs).
+
+**The one-line judgment test:** *could a reasonable viewer mistake this frame for an authentic photographic record of a specific real person or event?* Yes → the floor governs. No → it doesn't.

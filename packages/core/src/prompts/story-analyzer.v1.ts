@@ -9,7 +9,7 @@
 import { StoryBibleSchema } from '../types/story-bible.js'
 import type { BibleEntity } from '../types/story-bible.js'
 
-export const STORY_ANALYZER_V1_VERSION = 'story-analyzer.v1.18'
+export const STORY_ANALYZER_V1_VERSION = 'story-analyzer.v1.19'
 
 // The analyzer emits a full StoryBible; the caller validates with this schema.
 export { StoryBibleSchema }
@@ -20,6 +20,20 @@ export interface StoryAnalyzerVars {
   nicheDescription: string
   era: string
   regionDescriptor: string
+  // Owner-set channel presentation identity ('voiceover' | 'hosted' | '' = no hint). Rendered as CONTEXT
+  // the analyzer reasons from — a bias, never a command; the narration's own text decides via the
+  // participant test. See hypotheses/voiceover-perspective.md.
+  presentation?: string
+}
+
+// The channel's presentation identity as analyzer CONTEXT. A bias, not a command — the participant test
+// on the narration's own text always decides. '' / unknown values render nothing.
+function presentationLine(presentation?: string): string {
+  if (presentation === 'voiceover')
+    return `\nCHANNEL PRESENTATION (owner-set context — a bias, not a command; the narration's own text decides via the participant test): this channel's narration is voiceover commentary — a narrator who never appears on screen; no host, no presenter.`
+  if (presentation === 'hosted')
+    return `\nCHANNEL PRESENTATION (owner-set context — a bias, not a command; the narration's own text decides via the participant test): this channel leans toward an embodied teller — but only the narration's own text decides whether this story's narrator lived its events.`
+  return ''
 }
 
 export function buildStoryAnalyzerPrompt(v: StoryAnalyzerVars): { system: string; userMessage: string } {
@@ -28,7 +42,7 @@ export function buildStoryAnalyzerPrompt(v: StoryAnalyzerVars): { system: string
 You are an information EXTRACTOR, not a creative writer. You describe only what the narration states or directly implies, in plain depictable terms. You never invent.
 
 CHANNEL NICHE: ${v.nicheDescription}
-Era: ${v.era}. Region look: ${v.regionDescriptor}.`
+Era: ${v.era}. Region look: ${v.regionDescriptor}.${presentationLine(v.presentation)}`
 
   const canonBlock = v.channelCanon.length
     ? `EXISTING CHANNEL CANON (recurring across this channel's reels — when THIS story features one of these, REUSE its id instead of minting a duplicate, and you may extend its description with story-specific facts):
@@ -52,7 +66,8 @@ ENTITIES — the recurring people, places, and objects that ANCHOR the story. Ru
   it never reappears, the answer is no — it is NOT an entity. Incidental props the narration mentions in
   passing (earphones, a phone's clock, a fridge light, a glass of water, a single text bubble) are NOT
   entities — they belong in the one scene's inline description, not the bible. When unsure, LEAVE IT OUT.
-- THE FIRST-PERSON NARRATOR IS ALWAYS AN ENTITY. If the narration is told in first person ("ako", "ko", "nakita ko", "I", "my"), you MUST extract the narrator as a "character" entity with a FULLY committed look (gender + wardrobe + hair + build), EVEN in a solo story where no one else appears and they are only ever seen as their own hands, a reflection, or a partial body. A first-person narrator IS shown — hands on a sink, a face in a mirror, a shoulder edging the frame — so without a locked appearance every such shot renders a DIFFERENT person. Set continuity.narratorEntityId to this entity's id, and list this id in the journey leg's "present" array for every leg the narrator is physically in (for the narrator, that is every leg).
+- THE PARTICIPANT TEST DECIDES EMBODIMENT, BEFORE ANY NARRATOR IS EXTRACTED. Ask: did the teller LIVE the events (a participant telling what happened to them — a diegetic narrator), or is the teller REPORTING, EXPLAINING, or ARGUING about events from outside them (news, documentary, explainer, essay, recap — a VOICEOVER)? Pronouns are evidence, participation is the verdict: first-person cues ("ako", "ko", "nakita ko", "I", "my", "natin", "sa atin") appear in BOTH kinds of narration, so they alone never decide. A VOICEOVER narrator is a voice above the story's world with NO body in it: do NOT extract a narrator entity for it, ever.
+- THE LIVED FIRST-PERSON NARRATOR IS ALWAYS AN ENTITY. If the narration is told in first person by a teller who LIVED the events, you MUST extract the narrator as a "character" entity with a FULLY committed look (gender + wardrobe + hair + build), EVEN in a solo story where no one else appears and they are only ever seen as their own hands, a reflection, or a partial body. A first-person narrator IS shown — hands on a sink, a face in a mirror, a shoulder edging the frame — so without a locked appearance every such shot renders a DIFFERENT person. Set continuity.narratorEntityId to this entity's id, and list this id in the journey leg's "present" array for every leg the narrator is physically in (for the narrator, that is every leg).
 - FACTS ONLY. Each "description" is a short, depictable noun phrase of OBSERVABLE traits — for a person: gender, apparent age, build, hair, and wardrobe (ALL of these — an under-described person renders as a random, often wrong, figure), plus one distinguishing detail; for a place: layout, key furniture, materials, colours, wear; for an object: count, state, condition. NO mood words, NO adjectives of feeling, NO interpretation (write "an old mirror, dark wood frame, cracked glass", never "a creepy mirror").
 - PEOPLE need a COMMITTED gender + wardrobe, derived from EVIDENCE — never from a default. Read GENDER from the narration's OWN cues (gendered words, honorifics, names, pronouns, role) and commit to what they indicate. Read WARDROBE from the story's setting and activity together with the channel's stated era and region (above): name what a person of that role, in that place and time, would actually wear — specifically, not a vague placeholder. Do not impose traits the evidence doesn't support; once the cues point one way, commit, so the figure stays consistent instead of drifting. Where appearance is left entirely unspecified, the "commit to ONE plausible look" rule below applies — pick a neutral, context-appropriate look, not a stereotype. GENDER IS NEVER DEFERRED: NEVER write "gender unspecified", "male or female", "depending on gender", or "a skirt or pants" — a hedged gender renders a DIFFERENT person every single shot (a boy in one, a girl in the next). Tagalog/Taglish first-person ("ako", "ko", "nakita ko") carries NO grammatical gender, so you will OFTEN have no explicit cue — in that case INFER gender from the surrounding cast and context (a schoolgirl's best friend + a female-coded story → female), and if it is STILL genuinely ambiguous, COMMIT to one plausible gender + one concrete uniform anyway. The renderer must never be left to choose the gender.
 - SAME-SETTING CAST SHARE A UNIFORM BASE, but stay DISTINCT people. Characters who belong to the same institution/group (the same school, the same workplace) wear the SAME uniform — identical garments and colours (two students at one school: the SAME white blouse + the SAME plaid skirt, not one in a skirt and one in pants). But they MUST read as visually DISTINCT individuals — differ in hair (length/style), build, height, and one identifying detail — so two classmates never render as the same person. Give recurring students a consistent context prop (a backpack) where natural. State each person's shared-base + distinct-detail explicitly in their description.
@@ -74,8 +89,8 @@ ENTITIES — the recurring people, places, and objects that ANCHOR the story. Ru
 - id: ENGLISH kebab-case (e.g. "rented-bedroom", "cracked-mirror", "grandmother"). TRANSLATE any Tagalog/other-language name to English for the id — never mint a Tagalog id ("salamin-ng-banyo" → "bathroom-mirror", "cr-sa-eskwela" → "school-restroom", "reloh-sa-telepono" → "phone-clock"). This matters because the scene breakdown often echoes the id as the shot's label, and the image model only understands English — a Tagalog id renders the wrong object or fails. kind: "character" | "location" | "object".
 
 CONTINUITY:
-- narratorPerspective: "first_person" if the narration is told as "I/ako/ko/nakita ko/akin"; otherwise "third_person".
-- narratorEntityId: for a first_person reel this is the id of the narrator character you extracted above (you ALWAYS extract one for first-person — see ENTITIES); it tells the storyboard the narrator is POV, not a separate full figure, and locks their look for hand/reflection shots. null ONLY for third_person.
+- narratorPerspective: apply the participant test (see ENTITIES) — "voiceover" when the teller reports, explains, or argues about events from outside the story's world (news, documentary, explainer, essay, recap; regardless of which pronouns appear); "first_person" when the narration is told as "I/ako/ko/nakita ko/akin" by a teller who LIVED the events; otherwise "third_person".
+- narratorEntityId: for a first_person reel this is the id of the narrator character you extracted above (you ALWAYS extract one for lived first-person — see ENTITIES); it tells the storyboard the narrator is POV, not a separate full figure, and locks their look for hand/reflection shots. null for third_person AND for voiceover (a voiceover narrator has no body and is never an entity).
 - timeline: optional short ordered time-of-day cues if the story makes them explicit (e.g. ["evening", "3 AM"]); else [].
 - journey: an ORDERED list tracing the narrator THROUGH the story — one leg per contiguous stretch where the PLACE and WHO-IS-PRESENT stay stable. This is the world-state the storyboard OBEYS, so it must be ACCURATE, not vague; walk the narration front-to-back and change legs whenever the narrator moves or someone joins/leaves. For each leg:
   • span: the VERBATIM narration substring this leg covers (copy-paste, no ellipsis); the legs together cover the narration in order.
@@ -85,7 +100,8 @@ CONTINUITY:
   • visible: the subset of present actually ON-camera. Usually equals present; make it NARROWER for POV / reflection / hidden beats (narrator present but off-camera; a threat seen only in a reflection). [] means "same as present".
   • occupancyState: "outside" | "approaching" | "inside" | "leaving" — the narrator's relation to this leg's place; omit if genuinely unclear.
   • isReflection: true only if the narrator sees this leg via a mirror / window / dark glass.
-  MOVEMENT IS CONTINUOUS — the narrator can't teleport: never go from INSIDE one place straight to INSIDE another without a leaving/transit leg between them.
+  UNDER VOICEOVER the journey is a SUBJECT-MATTER ITINERARY instead: one leg per contiguous stretch whose SETTING (the place or subject the content is about) stays stable; spans still tile the narration in order; "present" lists ONLY people the narration's content itself depicts (never the narrator — there is none on screen); leave occupancyState out and isReflection false; the itinerary may jump freely between places (an argument is not locomotion).
+  MOVEMENT IS CONTINUOUS (diegetic narrators only — a voiceover subject-matter itinerary may jump) — the narrator can't teleport: never go from INSIDE one place straight to INSIDE another without a leaving/transit leg between them.
 
 CONSTRAINTS:
 - directorNotes: only STORY-SPECIFIC visual rules that the genre wouldn't already imply. Leave empty if nothing specific. Do NOT restate generic genre conventions. When the story has a role:"threat" entity, ALWAYS include its labeled Contradiction entry plus its visibility/manifestation rules (see THE SUPERNATURAL THREAT).
@@ -106,7 +122,9 @@ OUTPUT (JSON only, matching this shape exactly):
     ]
   },
   "constraints": { "directorNotes": ["Contradiction — Reality A: the narrator stands alone at the sinks. Reality B: the mirror holds a second face beside hers. Conflict: reflection mismatch.", "the figure exists only in the mirror — the room itself, whenever shown, is empty; never fully lit, never shown whole"] }
-}`
+}
+
+For a VOICEOVER reel the same shape applies, with: NO narrator entity anywhere in "entities", "narratorPerspective": "voiceover", "narratorEntityId": null, and journey legs as the subject-matter itinerary — "present" lists only people the content itself depicts, "occupancyState" omitted, "isReflection" false.`
 
   return { system, userMessage }
 }

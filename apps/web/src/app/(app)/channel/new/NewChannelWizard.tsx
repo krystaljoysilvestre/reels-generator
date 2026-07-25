@@ -107,6 +107,7 @@ interface Derived {
   }
   voiceSearchKeyword: string
   genreCategory: GenreModule
+  presentation?: '' | 'voiceover' | 'hosted'
   narrativeStyle?: string
   narrativeVoice?: string
   audioMood: AudioMood
@@ -194,6 +195,7 @@ export function NewChannelWizard({
   // AI-derived genre bucket → picks the writer identity + scene-prompt genre module. '' until derived;
   // the create route keyword-classifies the niche as a fallback when this is empty.
   const [genreCategory, setGenreCategory] = useState<'' | GenreModule>('')
+  const [presentation, setPresentation] = useState<'' | 'voiceover' | 'hosted'>('')
   // PROSE dimensions (story-styles / story-voices) — derived as a default, operator-overridable.
   // NOT the visual `style`/`stylePreset` or the TTS voice. '' = pure genre / identity-default voice.
   const [narrativeStyle, setNarrativeStyle] = useState('')
@@ -304,6 +306,7 @@ export function NewChannelWizard({
         if (Array.isArray(d.recommended)) setRecommended(d.recommended)
         if (typeof d.voiceSearchKeyword === 'string') setVoiceSearchKeyword(d.voiceSearchKeyword)
         { const g = asGenreModule(typeof d.genreCategory === 'string' ? d.genreCategory : null); if (g) setGenreCategory(g) }
+        if (d.presentation === '' || d.presentation === 'voiceover' || d.presentation === 'hosted') setPresentation(d.presentation)
         if (typeof d.narrativeStyle === 'string') setNarrativeStyle(d.narrativeStyle)
         if (typeof d.narrativeVoice === 'string') setNarrativeVoice(d.narrativeVoice)
         if (d.styleInfluence === 'light' || d.styleInfluence === 'medium' || d.styleInfluence === 'full') setStyleInfluence(d.styleInfluence)
@@ -342,7 +345,7 @@ export function NewChannelWizard({
     return {
       phase, name, committedName, description, niche, languages, targetPlatform, presetId,
       avatarKey, costCents, tone, style, region, era, locations, objects, vocab,
-      voiceMode, selectedVoices, recommended, voiceSearchKeyword, genreCategory, narrativeStyle, narrativeVoice, styleInfluence, tagline, derivedSig,
+      voiceMode, selectedVoices, recommended, voiceSearchKeyword, genreCategory, presentation, narrativeStyle, narrativeVoice, styleInfluence, tagline, derivedSig,
       targetSeconds, captionStyle, sampleScript, sampleIsAi, extraSampleScripts,
       audioMood, musicChoice, selectedPresetIds, presetPickedManually, uploadedMusic,
       styleProposals, selectedStyleIdx, uploadedStyleIdx, stylePreviews: previewKeys,
@@ -358,7 +361,7 @@ export function NewChannelWizard({
     } catch {
       /* storage full / unavailable — non-fatal */
     }
-  }, [hydrated, phase, name, committedName, description, niche, languages, targetPlatform, presetId, avatarKey, costCents, tone, targetSeconds, style, region, era, locations, objects, vocab, voiceMode, selectedVoices, recommended, voiceSearchKeyword, genreCategory, narrativeStyle, narrativeVoice, styleInfluence, tagline, derivedSig, captionStyle, sampleScript, sampleIsAi, extraSampleScripts, audioMood, musicChoice, selectedPresetIds, presetPickedManually, uploadedMusic, styleProposals, selectedStyleIdx, uploadedStyleIdx, stylePreviews, draftChannelId])
+  }, [hydrated, phase, name, committedName, description, niche, languages, targetPlatform, presetId, avatarKey, costCents, tone, targetSeconds, style, region, era, locations, objects, vocab, voiceMode, selectedVoices, recommended, voiceSearchKeyword, genreCategory, presentation, narrativeStyle, narrativeVoice, styleInfluence, tagline, derivedSig, captionStyle, sampleScript, sampleIsAi, extraSampleScripts, audioMood, musicChoice, selectedPresetIds, presetPickedManually, uploadedMusic, styleProposals, selectedStyleIdx, uploadedStyleIdx, stylePreviews, draftChannelId])
 
   // ── Unsaved-progress guard ──────────────────────────────────────────────────
   // The draft autosaves, but leaving mid-flow still deserves a heads-up so the operator
@@ -789,6 +792,7 @@ export function NewChannelWizard({
       setVocab(Object.entries(d.worldBible.vocabulary ?? {}).map(([term, value]) => ({ term, value })))
       setVoiceSearchKeyword(d.voiceSearchKeyword ?? '')
       setGenreCategory(d.genreCategory ?? '')
+      setPresentation(d.presentation === 'voiceover' || d.presentation === 'hosted' ? d.presentation : '')
       setNarrativeStyle(d.narrativeStyle ?? '')
       setNarrativeVoice(d.narrativeVoice ?? '')
       setTagline(d.tagline ?? '')
@@ -992,6 +996,7 @@ export function NewChannelWizard({
           toneConfig: tone,
           voiceSearchKeyword,
           ...(genreCategory ? { genreCategory } : {}), // omit when not derived → create route keyword-classifies
+          ...(presentation ? { presentation } : {}), // omit when no lean → create route defaults to ''
           ...(narrativeStyle ? { narrativeStyle } : {}),
           ...(narrativeVoice ? { narrativeVoice } : {}),
           styleInfluence,

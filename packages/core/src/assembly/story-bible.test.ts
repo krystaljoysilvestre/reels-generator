@@ -113,3 +113,18 @@ describe('resolveEntities', () => {
     expect(r.resolved.map((e) => e.id)).toEqual(['bedroom'])
   })
 })
+
+describe('StoryBibleSchema — voiceover perspective', () => {
+  it('accepts a voiceover perspective with a null narratorEntityId', () => {
+    const b = StoryBibleSchema.parse({
+      entities: [],
+      continuity: { narratorPerspective: 'voiceover', narratorEntityId: null, timeline: [], journey: [] },
+    })
+    expect(b.continuity.narratorPerspective).toBe('voiceover')
+    expect(b.continuity.narratorEntityId).toBeNull()
+  })
+
+  it('still defaults to third_person when perspective is absent', () => {
+    expect(StoryBibleSchema.parse({}).continuity.narratorPerspective).toBe('third_person')
+  })
+})

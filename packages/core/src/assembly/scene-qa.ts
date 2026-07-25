@@ -41,6 +41,10 @@ export interface SceneQAInput {
   bibleEntities?: BibleEntity[]
   narratorEntityId?: string | null
   journey?: JourneyLeg[]
+  // Reel-wide embodiment (from the bible). 'voiceover' arms the no-host/no-POV check below — a voiceover
+  // reel's narrator has no body, so any narrator/host/POV framing is a structural error worth a repair
+  // round. Absent → no perspective-specific check (legacy callers unchanged).
+  narratorPerspective?: 'first_person' | 'third_person' | 'voiceover' | undefined
   // Video-tier cap for THIS set of scenes (a chapter gets its per-chapter allocation; a whole short reel
   // gets the flat budget). Absent → MOTION_BUDGET, so legacy callers are unchanged.
   maxVideoTiers?: number
@@ -160,6 +164,13 @@ const ACTION_VERB_RE = /\b(reach|turn|step|grip|lean|wip|look|gaz|glanc|star|wal
 // re-rolls the beat as true POV (what she sees / her hands / her back), where she isn't drawn as a figure at
 // all. The [0,48]-char window keeps "the narrator's hand pushes …" (POV) from matching.
 const NARRATOR_FIGURE_RE = /\bthe narrator\b[^.]{0,48}\b(stands?|standing|stood|walk(?:s|ing)?|sits?|sitting|sat|faces?|facing|poses?|posing|full[- ]?body|full figure)\b/i
+// VOICEOVER embodiment cues — a voiceover reel's narrator has no body, so ANY narrator/host/presenter
+// mention or POV framing in an imagePrompt is a structural error (the 2026-07-24 fake-host failure class).
+// TEMPORARY DETERMINISTIC BACKSTOP (owner-flagged): lexical lists age poorly ("correspondent", "lecturer",
+// "guide" will slip through) — the durable detector is the depiction critic's judgment ("does this shot
+// visually introduce a narrator figure?"); this regex only catches the cheap obvious cases pre-spend.
+const VOICEOVER_HOST_RE = /\b(the\s+)?(narrator|host|presenter|reporter|newscaster|news\s+anchor)\b/i
+const VOICEOVER_POV_RE = /\bPOV\b|\bpoint[- ]of[- ]view\b|\bfirst[- ]person\b/i
 
 export function reviewSceneBreakdown(input: SceneQAInput): SceneQAResult {
   const errors: string[] = []
@@ -185,6 +196,25 @@ export function reviewSceneBreakdown(input: SceneQAInput): SceneQAResult {
         warnings.push(`The peak line is buried in a longer scene (peak is ${Math.round((peak.length / host.narrationText.trim().length) * 100)}% of the scene's text) — consider giving it its own shot.`)
       }
     }
+  }
+
+  // ── Voiceover embodiment (errors) ────────────────────────────────────────
+  // A voiceover reel's narrator is non-diegetic — no host, no POV, no narrator body ever on screen. Any
+  // such framing is exactly the fake-host failure class this check exists for; an error triggers the
+  // repair round, which re-boards the beat as subject b-roll. (Regexes are a temporary backstop — see
+  // VOICEOVER_HOST_RE; the depiction critic carries the durable judgment.)
+  if (input.narratorPerspective === 'voiceover') {
+    if (input.narratorEntityId) {
+      warnings.push(`Voiceover reel carries a narratorEntityId ("${input.narratorEntityId}") — the analyzer should never mint a narrator entity for a non-diegetic narrator (upstream bible inconsistency; scenes can't repair this).`)
+    }
+    scenes.forEach((s, i) => {
+      const text = `${s.imagePrompt} ${s.sceneIntent ?? ''}`
+      const host = VOICEOVER_HOST_RE.exec(text)?.[0]
+      const pov = VOICEOVER_POV_RE.exec(text)?.[0]
+      if (host || pov) {
+        errors.push(`Scene ${i + 1}: this is a VOICEOVER reel — the narrator is a voice above the story, never on screen, yet the shot ${host ? `names "${host.trim()}"` : `uses ${pov} framing`}. Re-board the beat to show the SUBJECT of its narration (the thing, place, comparison, or change the span claims) with no narrator, host, or POV framing.`)
+      }
+    })
   }
 
   // ── Tier discipline ──────────────────────────────────────────────────────

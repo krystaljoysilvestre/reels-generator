@@ -52,10 +52,12 @@ export async function analyzeStory(reelId: string): Promise<void> {
     nicheDescription: channel.nicheDescription ?? '',
     era: worldBible.era,
     regionDescriptor: worldBible.region,
+    presentation: channel.presentation, // owner-set embodiment hint (bias, not command)
   })
 
-  // channelCanon is in the hash so a channel-canon change re-derives the bible; narration covers story edits.
-  const inputHash = buildInputHash(STORY_ANALYZER_V1_VERSION, { narration: story.body, channelCanon })
+  // channelCanon is in the hash so a channel-canon change re-derives the bible; narration covers story
+  // edits; presentation is in it so changing the hint re-derives the bible (the hint steers perspective).
+  const inputHash = buildInputHash(STORY_ANALYZER_V1_VERSION, { narration: story.body, channelCanon, presentation: channel.presentation })
 
   const result = await runStep(
     { reelId, stepName: 'analyze_story', inputHash },

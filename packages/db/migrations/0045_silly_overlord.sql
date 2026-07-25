@@ -1,0 +1,1 @@
+ALTER TABLE "channels" ADD COLUMN "presentation" text DEFAULT '' NOT NULL;

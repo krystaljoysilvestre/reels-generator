@@ -49,6 +49,10 @@ export type BibleEntity = z.infer<typeof BibleEntitySchema>
 // and scene-QA validates against (see the scene-accuracy plan). One leg per contiguous stretch where the
 // (place, who-is-present) is stable. Extracted by the analyzer; IMMUTABLE after analysis — downstream
 // stages only READ it. Deliberately minimal (Phase 2A); richer cinematography fields are deferred.
+// Under a VOICEOVER perspective the journey is a SUBJECT-MATTER ITINERARY instead: one leg per contiguous
+// stretch of the argument's setting; spans still tile the narration; `present` lists only people the
+// content itself depicts (never the narrator); occupancy/movement-continuity don't apply (an argument may
+// jump between places freely — it's not locomotion), and isReflection stays false.
 export const JourneyLegSchema = z.object({
   span: z.string().min(1), // verbatim narration substring this leg covers (resolved to scenes by offset)
   // English place label. Covers TRANSIT spaces that aren't bible entities (a stage, a path, a hallway), so
@@ -73,9 +77,16 @@ export const StoryBibleSchema = z.object({
   continuity: z
     .object({
       // Authoritative reel-wide perspective (the scene LLM no longer re-detects it per run).
-      narratorPerspective: z.enum(['first_person', 'third_person']).default('third_person'),
+      // This is the EMBODIMENT/PRESENTATION axis, not grammatical person (the field name is historical):
+      // the three values are three visual grammars — camera-as-eyes (first_person), camera-as-observer
+      // (third_person), camera-as-illustrator ('voiceover' = a NON-DIEGETIC narrator: a voice above the
+      // story's world with no body in it — news, documentary, explainer, essay, recap). The analyzer
+      // decides via the participant test (did the teller LIVE the events, or report/argue about them?);
+      // pronouns are evidence, participation is the verdict. See hypotheses/voiceover-perspective.md.
+      narratorPerspective: z.enum(['first_person', 'third_person', 'voiceover']).default('third_person'),
       // Which entity id IS the narrator, if embodied. Drives perspective-aware expansion: in a
-      // first_person reel the assembler must NOT splice this entity as a full figure. null = none.
+      // first_person reel the assembler must NOT splice this entity as a full figure. null = none —
+      // always null for third_person AND voiceover (a voiceover narrator has no body, never an entity).
       narratorEntityId: z.string().nullable().default(null),
       // Optional ordered time-of-day cues, if the story makes them explicit.
       timeline: z.array(z.string()).default([]),

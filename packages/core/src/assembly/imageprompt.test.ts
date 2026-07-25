@@ -5,7 +5,7 @@ import { StoryBibleSchema, EMPTY_STORY_BIBLE, type StoryBible } from '../types/s
 const STYLE = 'grainy 16mm horror still, desaturated palette'
 const ACTION = 'she sits frozen on the edge of the bed, staring at the mirror'
 
-function bible(perspective: 'first_person' | 'third_person', narratorEntityId: string | null): StoryBible {
+function bible(perspective: 'first_person' | 'third_person' | 'voiceover', narratorEntityId: string | null): StoryBible {
   return StoryBibleSchema.parse({
     entities: [
       { id: 'ashley', kind: 'character', description: 'a young woman, long black hair, plain white shirt' },
@@ -54,6 +54,18 @@ describe('assembleImagePrompt — bible expansion', () => {
       supportingEntities: [],
     })
     expect(out).toContain('a young woman, long black hair, plain white shirt')
+  })
+
+  it('splices entities normally under a voiceover bible (no narrator entity exists to suppress)', () => {
+    // Voiceover = non-diegetic narrator: narratorEntityId is always null, so expansion behaves exactly
+    // like third_person — subject entities splice, nothing narrator-related fires.
+    const out = assembleImagePrompt('aerial view of the site at dusk', STYLE, {
+      bible: bible('voiceover', null),
+      primaryEntity: 'bedroom',
+      supportingEntities: ['cracked-mirror'],
+    })
+    expect(out).toContain('a small bedroom, cream walls, a bare bulb')
+    expect(out).toContain('an old mirror, dark stained wood frame, cracked glass')
   })
 
   it('drops unresolved references but still renders style + action', () => {
