@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { mkdir, writeFile, readFile, rm } from 'node:fs/promises'
 import { getDb, reels, scenes, assets, channels } from '@reels/db'
 import { generateVideo, buildInputHash, FalEngineSchema, downloadBuffer, llmCall } from '@reels/providers'
-import { TimingsSchema, PLATFORM_PRESETS } from '@reels/core'
+import { TimingsSchema, PLATFORM_PRESETS, budgetCapForSeconds } from '@reels/core'
 import { buildVideoQAPrompt, VIDEO_QA_V1_VERSION, VideoQASchema } from '../../prompts-bridge.js'
 import { spotFoleyForReel } from './foley-spot.js'
 import { runStep } from '../harness.js'
@@ -98,6 +98,15 @@ export async function animateScenes(reelId: string): Promise<void> {
 
   const engine = FalEngineSchema.parse({})
 
+  // GRACEFUL DEGRADATION (budget): animation is the priciest step, so rather than let a later clip trip the
+  // per-reel cap and STRAND the reel mid-render, skip any clip that wouldn't leave room for the remaining
+  // steps (music/mix/render/qa) — that scene stays a STILL (rendered with Ken Burns motion). The scaled cap
+  // (budgetCapForSeconds) makes this rare; this is the belt-and-suspenders so a tight reel finishes, degraded,
+  // instead of failing terminally. Keep in sync with FAL_VIDEO_COST_CENTS_PER_SEC (providers/fal/config).
+  const VIDEO_COST_CENTS_PER_SEC = 7
+  const DOWNSTREAM_RESERVE_CENTS = 50 // music + mix + render + render_qa headroom
+  const budgetCap = budgetCapForSeconds(channel?.targetSeconds)
+
   for (const scene of videoScenes) {
     // Get the image asset storage key
     const imageAsset = await db.query.assets.findFirst({
@@ -122,6 +131,18 @@ export async function animateScenes(reelId: string): Promise<void> {
     // stretched thin at render.
     const spanSec = spanSecByIdx.get(scene.idx) ?? 0
     const durationSec = spanSec > 5.5 ? 10 : 5
+
+    // Budget guard: if this clip wouldn't leave room for the remaining steps, demote the scene to a STILL
+    // and move on — a degraded-but-finished reel beats a stranded one. Refetch cost (earlier clips accrued).
+    if (!haveVariation.has(0)) {
+      const cur = (await db.query.reels.findFirst({ where: eq(reels.id, reelId), columns: { costCents: true } }))?.costCents ?? 0
+      const clipCost = durationSec * VIDEO_COST_CENTS_PER_SEC
+      if (cur + clipCost + DOWNSTREAM_RESERVE_CENTS > budgetCap) {
+        await db.update(scenes).set({ tier: 'still' }).where(eq(scenes.id, scene.id))
+        console.warn(`[animate_scenes] ${reelId.slice(0, 8)} scene ${scene.idx}: budget headroom exhausted (${cur}¢ + ${clipCost}¢ + ${DOWNSTREAM_RESERVE_CENTS}¢ reserve > ${budgetCap}¢ cap) → kept as a still (Ken Burns motion)`)
+        continue
+      }
+    }
 
     for (let v = 0; v < variationCount; v++) {
       if (haveVariation.has(v)) continue

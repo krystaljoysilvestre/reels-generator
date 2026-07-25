@@ -435,19 +435,32 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
         {/* Captions */}
         <section className="card space-y-3 p-5">
           <SectionLabel>Captions</SectionLabel>
-          <CaptionPreview key={captionStyle.preset} style={captionStyle} safeZonePct={PLATFORM_PRESETS[targetPlatform].safeZoneBottomPct} />
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {CAPTION_ORDER.map((p) => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => setCaptionStyle(resolveCaptionStyle(p, { highlightColor: captionStyle.highlightColor, color: captionStyle.color }))}
-                className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${captionStyle.preset === p ? 'border-accent bg-accent-soft text-accent ring-1 ring-accent' : 'border-border-strong text-muted hover:bg-subtle'}`}
-              >
-                {cap(p)}
-              </button>
-            ))}
-          </div>
+          <label className="flex items-center gap-2 text-sm font-medium text-muted">
+            <input
+              type="checkbox"
+              checked={captionStyle.enabled !== false}
+              onChange={(e) => setCaptionStyle({ ...captionStyle, enabled: e.target.checked })}
+            />
+            Burn captions onto the video
+            <span className="text-xs text-faint">— off = clean visuals + narration only (no on-screen text)</span>
+          </label>
+          {captionStyle.enabled !== false && (
+            <>
+              <CaptionPreview key={captionStyle.preset} style={captionStyle} safeZonePct={PLATFORM_PRESETS[targetPlatform].safeZoneBottomPct} />
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {CAPTION_ORDER.map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setCaptionStyle(resolveCaptionStyle(p, { highlightColor: captionStyle.highlightColor, color: captionStyle.color }))}
+                    className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${captionStyle.preset === p ? 'border-accent bg-accent-soft text-accent ring-1 ring-accent' : 'border-border-strong text-muted hover:bg-subtle'}`}
+                  >
+                    {cap(p)}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </section>
 
         {/* Visual style — preset gallery + opt-in custom generation */}

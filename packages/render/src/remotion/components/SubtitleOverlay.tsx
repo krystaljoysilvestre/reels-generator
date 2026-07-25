@@ -49,6 +49,9 @@ export const SubtitleOverlay: React.FC<SubtitleOverlayProps> = ({ subtitles, cap
   const { fps, width, height } = useVideoConfig()
   const currentMs = (frame / fps) * 1000
 
+  // Captions-off is a first-class channel choice: when disabled, burn nothing (clean visuals + narration).
+  if (style.enabled === false) return null
+
   const active = subtitles.find((s) => currentMs >= s.startMs && currentMs < s.endMs)
   if (!active) return null
 

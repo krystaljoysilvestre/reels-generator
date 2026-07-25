@@ -148,6 +148,12 @@ export const CaptionShadowSchema = z.enum(['none', 'soft', 'hard', 'glow'])
 export type CaptionShadow = z.infer<typeof CaptionShadowSchema>
 
 export const CaptionStyleSchema = z.object({
+  // First-class captions-off toggle: false burns NO subtitles (the renderer skips the overlay). Some
+  // formats/channels want clean visuals + narration only — previously this required emptying
+  // timings.subtitles by hand (see the News Today PH production). Optional so absent/undefined = ON (every
+  // existing channel + preset keeps captions); only an explicit false disables. In the captionStyle jsonb,
+  // so no schema migration. See ROADMAP finding.
+  enabled: z.boolean().optional(),
   preset: CaptionPresetSchema.default('clean'),
   mode: z.enum(['block', 'word']).default('word'), // word = per-word treatment/animation
   animation: CaptionAnimationSchema.default('fade'),
