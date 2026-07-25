@@ -290,3 +290,27 @@ describe('reviewSceneBreakdown — voiceover embodiment', () => {
     expect(r.errors.some((e) => e.includes('VOICEOVER'))).toBe(false)
   })
 })
+
+describe('reviewSceneBreakdown — depictive-ethics floor (real-party staging, warning-tier)', () => {
+  const N = 'The trade agency announced the deal. Officials met to sign it. Critics questioned the plan.'
+  const base = (scenes: SceneQAScene[]) => reviewSceneBreakdown({ narration: N, peakMoment: '', minScenes: 3, maxScenes: 6, scenes })
+
+  it('warns (not errors) when a role noun is paired with event staging', () => {
+    const r = base([
+      scene({ narrationText: 'The trade agency announced the deal.', imagePrompt: 'a DTI official and a partner shaking hands at a podium in front of two national flags' }),
+      scene({ narrationText: ' Officials met to sign it.', imagePrompt: 'a signed document on a bare desk beside two flags, no people' }),
+      scene({ narrationText: ' Critics questioned the plan.', imagePrompt: 'a weathered protest placard leaning against a concrete wall at dusk' }),
+    ])
+    expect(r.errors).toEqual([])
+    expect(r.warnings.some((w) => w.includes('depictive-ethics floor'))).toBe(true)
+  })
+
+  it('does NOT warn on representative/anonymous staging (no staging verb, or no real-party cue)', () => {
+    const r = base([
+      scene({ narrationText: 'The trade agency announced the deal.', imagePrompt: 'a raw mineral ore chunk transitioning to a polished silicon wafer on a dark reflective surface' }),
+      scene({ narrationText: ' Officials met to sign it.', imagePrompt: 'a single signed page under a desk lamp, a fountain pen resting across it' }),
+      scene({ narrationText: ' Critics questioned the plan.', imagePrompt: 'cooling towers venting vapor beside transmission pylons at dusk' }),
+    ])
+    expect(r.warnings.some((w) => w.includes('depictive-ethics floor'))).toBe(false)
+  })
+})

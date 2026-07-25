@@ -171,6 +171,13 @@ const NARRATOR_FIGURE_RE = /\bthe narrator\b[^.]{0,48}\b(stands?|standing|stood|
 // visually introduce a narrator figure?"); this regex only catches the cheap obvious cases pre-spend.
 const VOICEOVER_HOST_RE = /\b(the\s+)?(narrator|host|presenter|reporter|newscaster|news\s+anchor)\b/i
 const VOICEOVER_POV_RE = /\bPOV\b|\bpoint[- ]of[- ]view\b|\bfirst[- ]person\b/i
+// Depictive-ethics floor backstop (WARNING-tier; the durable detector is the image-QA vision check).
+// A real-party CUE — a role noun, OR an ALL-CAPS 2–5-letter org acronym (BCDA, DTI, …; the [A-Z]{2,5}
+// shape avoids matching lowercased common words) — paired with EVENT-STAGING is a likely fabricated
+// press photo of real people. Requiring BOTH cues keeps false positives low.
+const REAL_PARTY_ROLE_RE = /\b(official|officer|minister|senator|congress(?:man|woman)?|mayor|governor|president|executive|spokesperson|spokesman|delegate|politician|representative)s?\b/i
+const ORG_ACRONYM_RE = /\b[A-Z]{2,5}\b/
+const EVENT_STAGING_RE = /\b(shak\w* hands|handshake|at (?:a|the) podium|press (?:conference|briefing)|signing|ceremon\w+|ribbon[- ]?cut\w*|address\w+ (?:the|a) (?:crowd|room|audience|attendees)|gestur\w+ (?:at|toward)|oath|inaugurat\w+)/i
 
 export function reviewSceneBreakdown(input: SceneQAInput): SceneQAResult {
   const errors: string[] = []
@@ -264,6 +271,15 @@ export function reviewSceneBreakdown(input: SceneQAInput): SceneQAResult {
     }
     if (SETTING_FIRST_OPENERS.some((o) => prompt.startsWith(o))) {
       warnings.push(`Scene ${n} image prompt may lead with the setting, not the subject (VISUAL PRIORITY) — open on the specific thing the line is about.`)
+    }
+    // Depictive-ethics floor (deterministic, WARNING-first): a shot that pairs a real-party cue (a role
+    // noun or an ALL-CAPS org acronym) with event-staging (handshake/podium/ceremony/…) is likely a
+    // fabricated press photo of real people. Warned here + caught firmly by image-QA's REAL-PARTY
+    // FABRICATION vision check; promote to an error only once this heuristic's precision is proven.
+    const partyCue = REAL_PARTY_ROLE_RE.exec(s.imagePrompt)?.[0] ?? ORG_ACRONYM_RE.exec(s.imagePrompt)?.[0]
+    const stagingCue = EVENT_STAGING_RE.exec(s.imagePrompt)?.[0]
+    if (partyCue && stagingCue) {
+      warnings.push(`Scene ${n} may stage a real party as an event photo (depictive-ethics floor): "${partyCue.trim()}" + "${stagingCue.trim()}". Prefer representative/anonymous/conceptual imagery (documents, the real place, distant/silhouetted or unbranded figures, symbolic staging).`)
     }
   })
 

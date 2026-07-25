@@ -1,6 +1,6 @@
 # Depictive-Ethics Floor — real parties are never staged
 
-Status: **PROPOSED — awaiting founder ratification (floors-are-law), 2026-07-25.** Drafted by the visual-director from the 2026-07-24 production failure; owner fast-tracked the *track* (ship separately from, and likely ahead of, [hypotheses/voiceover-perspective.md](../hypotheses/voiceover-perspective.md)); the *wording* below needs founder sign-off before implementation. Hard safety constraint, not taste — ships firmly worded, no A/B; only its QA teeth (warning→error promotion) follow evidence.
+Status: **RATIFIED (floors-are-law) + IMPLEMENTED in the working tree, 2026-07-25.** Founder ratified the wording, the 5 placement points, boundaries, and edge cases as drafted; the deterministic `scene-qa` check ships **warning-first** (promote to a blocking error once its precision is proven on real boards); implementation stacked on the Phase-1 branch (`feat/voiceover-perspective-depiction-gate`, it shares files). Hard safety constraint, not taste — firmly worded, no A/B. Live evidence at ratification: the 2026-07-25 controls lap's pre-gate Pax board staged DTI/BCDA/Kalikasan officials as figures (the depiction gate happened to rewrite them, but only because they were also wallpaper — this floor is the independent guarantee).
 
 ## The failure this prevents (2026-07-24, production)
 

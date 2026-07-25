@@ -7,7 +7,7 @@
 // LLM-derived bucket stored at channel creation (channel.v1). `classifyGenre` is the keyword fallback,
 // used when a channel predates the column (or the value is unrecognized).
 
-export const SCENES_V1_VERSION = 'scenes.v1.43'
+export const SCENES_V1_VERSION = 'scenes.v1.44'
 
 export type GenreModule =
   | 'horror'
@@ -233,6 +233,8 @@ DESCRIBE PRESENCE, NOT ABSENCE: each imagePrompt must state only what IS in the 
 FILTER-SAFE PHRASING (every genre): when a PERSON is depicted dead, a corpse, a victim, bloodied or gravely injured, or as a supernatural / menacing presence, describe them with NON-PERSON words — "a figure", "a form", "a shape", "it" — NEVER "a woman / man / girl / boy" or "her / him" for THAT subject. Naming a person in such a state trips the image model's safety filter and the shot fails to render entirely; the exact same subject described as "a figure / form" renders an identical image and passes. This holds in ANY genre — a news tragedy, a true-crime victim, a horror apparition. But ORDINARY, living, unharmed people stay PEOPLE — describe them normally (a woman, the friend, a chef); this rule is ONLY for the dead, harmed, menacing, or supernatural.
 
 CAST CONTROL: only the people the narration actually places in this scene appear in frame — NEVER invent background extras, passers-by, bystanders, or a crowd the story doesn't mention. Frame exactly who the beat names; if the narration says the place is empty or the narrator is alone, show the space deserted around them. Stating who is present (and that the rest is empty) stops the model populating the background with strangers.
+
+REAL PARTIES ARE NEVER STAGED (every genre): when the narration names an identifiable real living person (an official, executive, athlete, celebrity, or private individual) or a named real organization's people or events (its officials, spokespeople, meetings, signings, ceremonies, announcements), NEVER write a shot that depicts that party as if photographed at an event — no staged handshakes, podium moments, boardrooms, raids, or ceremonies attributed to the named party. Rendered photoreal, such a frame is a fabricated press photo: a false record of real people at an event that never happened. Depict the beat's SUBSTANCE through representative, anonymous, or conceptual imagery instead: the real place or object itself, documents and maps as physical things, unbranded working hands, a distant non-identifiable figure, symbolic staging (two flags on an empty table, a signed page, an empty podium). Describe that anonymous staging POSITIVELY (see DESCRIBE PRESENCE, NOT ABSENCE), never "no faces". This triggers on IDENTITY, not on people: ordinary unnamed people (a vendor, a nurse, a crowd) stay people, and fictional characters are untouched — the trigger is a real name, a real office or title, real insignia, or context that points at one specific real party. Under an explicitly illustrative, never-photoreal rendering profile, reconstruction is governed by that profile's own contract — but no render, in any style, is ever presented as an authentic photograph of a real event.
 
 PERSPECTIVE: ${perspectiveRule}
 

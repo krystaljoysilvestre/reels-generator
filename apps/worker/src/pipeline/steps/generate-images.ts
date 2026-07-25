@@ -245,7 +245,10 @@ export async function generateImages(reelId: string): Promise<void> {
   // names a person in its prose.
   const peak = story?.twistAnchor?.trim() ?? ''
   const characterIds = new Set((storyBible?.entities ?? []).filter((e) => e.kind === 'character').map((e) => slug(e.id)))
-  const PERSON_NOUN = /\b(boy|man|men|woman|women|girl|child|children|kid|figure|hand|hands|person|people|bystander|stranger|guard|nurse|doctor|teacher|classmate|friend)\b/i
+  // Person nouns + real-party ROLE nouns (depictive-ethics floor): a scene naming an official/executive/
+  // politician must always reach image-QA (the REAL-PARTY FABRICATION check), not depend on luck — the
+  // 2026-07-24 DTI-handshake scene only got QA'd because it happened to say "hands".
+  const PERSON_NOUN = /\b(boy|man|men|woman|women|girl|child|children|kid|figure|hand|hands|person|people|bystander|stranger|guard|nurse|doctor|teacher|classmate|friend|official|officer|minister|senator|president|mayor|governor|executive|spokesperson|spokesman|delegate|politician|representative)\b/i
   const featuresPerson = (s: (typeof pending)[number]) => {
     const refs = [...(s.primaryEntity ? [s.primaryEntity] : []), ...(s.supportingEntities ?? [])]
     return refs.some((r) => characterIds.has(slug(r))) || PERSON_NOUN.test(s.visualPrompt ?? '')
