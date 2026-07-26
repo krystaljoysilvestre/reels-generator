@@ -60,6 +60,10 @@ The Audio *Direction* describes one reel. Its channel-level twin is the **Audio 
 
 The north star (founder): **a viewer eventually recognizes a channel without seeing its logo.** This is the concrete artifact that the vaguer "Channel Audio DNA" becomes.
 
+**SPIKED & PARKED (2026-07-24).** A cheap falsifiable spike (`apps/worker/scripts/spike-channel-identity.ts`, ~24¢) tested whether any available lever produces recognizable-but-not-repetitive channel identity — one synthetic history-channel × three story moods: **baseline** (today's bespoke bed per reel from a shared palette prompt) vs **signature** (one palette bed reused for every reel). Founder's ear verdict → **parked**: the identity gap/gain wasn't audible enough to justify an Audio Bible build; Phase B's register range was the right depth. The hypothesis tier working as designed — a 24¢ test stopped an abstraction-first build. Evidence: the 4 spike clips (`~/Desktop/phase-c-identity/`).
+- **Mechanism finding (durable):** the `seed` identity lever the research floated is **unavailable on our path** — ElevenLabs `/v1/music` returns `422 "seed cannot be used with prompt"` (seed is a `composition_plan`-only feature; the optional `seed` param now on `generateMusic` is therefore inert on the prompt path). Any future attempt must lean on the stable palette + signature-bed reuse, or adopt `composition_plan` — never a per-channel seed on the prompt path.
+- **Revisit bar:** not another synthetic spike but a **real cohesion failure across a channel's actual back-catalogue** (once a channel has one) — a viewer or the founder noticing its reels don't sound like the same channel. Until then, Channel Audio Identity stays a hypothesis.
+
 ## The mature-blueprint horizon (evolutionary — explicitly NOT Phase B requirements)
 
 Named now only because a flat cue list cannot be retrofitted to hold them; built strictly as evidence demands: foreground/midground/background sound layers · audio camera distance (close/medium/wide) · scene-transition design · callbacks · dynamic-range targets (compressed vs. cinematic) · intentional contrast (quiet → impact over constant intensity).

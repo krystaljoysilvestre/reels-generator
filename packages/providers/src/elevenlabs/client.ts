@@ -402,6 +402,10 @@ export async function generateMusic(params: {
   prompt: string
   lengthMs: number
   forceInstrumental?: boolean  // default true — these are background beds, vocals would fight narration
+  // NOTE (Phase C spike, 2026-07-24): a `seed` param is NOT accepted here — ElevenLabs `/v1/music` returns
+  // 422 "seed cannot be used with prompt". Seed is a `composition_plan` (structured) feature only, so the
+  // per-channel-seed identity lever is unavailable on the prompt path; channel identity must come from the
+  // stable palette prompt and/or reusing a signature bed. See scripts/spike-channel-identity.ts.
 }): Promise<MusicResult> {
   const apiKey = process.env['ELEVENLABS_API_KEY']
   if (!apiKey) throw new Error('ELEVENLABS_API_KEY is not set')
