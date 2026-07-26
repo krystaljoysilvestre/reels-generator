@@ -118,11 +118,12 @@ export const channels = pgTable('channels', {
   // toward an embodied teller. Owner-set CONTEXT the analyzer reasons from (a bias, not a command — the
   // narration's own text decides via the participant test). See hypotheses/voiceover-perspective.md.
   presentation: text('presentation').notNull().default(''),
-  // Standalone fact gate (opt-in, ANY channel — decoupled from storyMode='ebn'). When true, an opted-in
-  // reel that carries source material (reels.dossier) runs the Evidence Extractor + Fact-Fidelity Checker
-  // after generate_story, and the ADVISORY fidelity punch-list (reels.factCheckReport) is surfaced at the
-  // story_review gate — it never auto-blocks. Lets a standard Taglish/photoreal/persona news channel
-  // fact-check its scripts without inheriting EBN's illustrative rendering + formal-English writer.
+  // Fact gate (opt-in, ANY channel — decoupled from storyMode='ebn'). When true, an opted-in reel that
+  // carries source material (reels.dossier) runs the Evidence Extractor + Fact-Fidelity Checker INLINE at
+  // the end of generate_story (like the plan gate / finishingQA), and the ADVISORY fidelity punch-list
+  // rides that step's output to the story_review gate — it never auto-blocks. Lets a standard
+  // Taglish/photoreal/persona news channel fact-check its scripts without inheriting EBN's illustrative
+  // rendering + formal-English writer.
   factCheck: boolean('fact_check').notNull().default(false),
   // PROSE dimensions (story-writer-v2): the storytelling TRADITION + the narrator's written SOUND,
   // layered on genre by the Planner/Writer. Per-channel, operator-selectable. NOT the TTS/audio voice
@@ -241,10 +242,6 @@ export const reels = pgTable(
     // Immutable once written — nothing downstream acquires facts; the Planner/Writer only select from it.
     // Written by the EBN branch of generate_story; mirrors storyBible's frozen-jsonb-on-reel pattern.
     evidenceBible: jsonb('evidence_bible'),
-    // Standalone fact-gate report (channels.factCheck): { facts, issues[], summary, checkedAt } — the
-    // ADVISORY Fact-Fidelity punch-list from the fact_check step, surfaced at story_review. Null = not
-    // fact-checked (channel opted out, or no source material supplied). Never gates; the human decides.
-    factCheckReport: jsonb('fact_check_report'),
     // Post metadata (PostMeta) — platform title, hook, caption, hashtags for this reel, written by the
     // generate_post_meta step (regenerates when the story changes) and operator-editable. Consumed by
     // the export post-package. Null = not yet generated (export falls back to a lazy generation).

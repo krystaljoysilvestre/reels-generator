@@ -12,7 +12,6 @@ import { isTerminalError } from './error-policy.js'
 import { autoCrossGate } from './auto-gate.js'
 import {
   generateStory,
-  factCheckStep,
   annotateAudioScript,
   analyzeStory,
   generatePostMeta,
@@ -58,9 +57,6 @@ export async function dispatchPipelineJob(job: Job<PipelineJobData>): Promise<vo
         // burns all 3 retries before the reel is marked failed.
         if (!channelId) throw new Error(`generate_story requires channelId in job data (reelId=${reelId})`)
         await generateStory(reelId, channelId, language)
-        break
-      case 'fact_check':
-        await factCheckStep(reelId)
         break
       case 'annotate_audio_script':
         await annotateAudioScript(reelId)

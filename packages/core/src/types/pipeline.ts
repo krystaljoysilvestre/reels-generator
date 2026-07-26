@@ -4,7 +4,6 @@ import { z } from 'zod'
 // Dashboard derives n/N from this array — no hardcoded counts elsewhere.
 export const PIPELINE_STEPS = [
   'generate_story',
-  'fact_check',            // opt-in (channels.factCheck): advisory Fact-Fidelity punch-list before story_review
   'review_story',
   'annotate_audio_script',
   'analyze_story',
@@ -24,7 +23,7 @@ export const PIPELINE_STEPS = [
 
 export type PipelineStepName = (typeof PIPELINE_STEPS)[number]
 
-export const PIPELINE_STEP_COUNT = PIPELINE_STEPS.length // 17 (incl. opt-in fact_check)
+export const PIPELINE_STEP_COUNT = PIPELINE_STEPS.length // 16
 
 // Fan-out steps (generate_images, animate_scenes) write ONE pipeline_steps row PER sub-unit, named
 // `<step>:scene<idx>` (images) / `<step>:s<idx>v<v>` (animation variations), so their rows no longer

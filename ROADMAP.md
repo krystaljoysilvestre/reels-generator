@@ -226,12 +226,18 @@ the owner (design first, then implementation). Full evidence in the session summ
    [specs/depictive-ethics-floor.md](specs/depictive-ethics-floor.md)** (visual-director, 2026-07-25):
    floor wording + 5-point placement inventory + boundaries + edge cases. Awaiting founder
    ratification (floors-are-law), then implementation.
-3. **Standalone fact gate** — the EBN Extractor + Fact-Fidelity Checker are excellent but only
-   reachable via `storyMode='ebn'`, which also forces illustrative visuals + burned disclosure + a
-   writer that ignores language/persona/length. Decouple "check my script against sources" into an
-   opt-in step any channel can use (production run proved it works standalone: caught a missing
-   Critical fact + forced attribution). Must define which visual floors travel with it (→ #2).
-   Sequenced after #1/#2; amends specs/evidence-based-narrative.md.
+3. **Fact gate** — the EBN Extractor + Fact-Fidelity Checker are excellent but only reachable via
+   `storyMode='ebn'`, which also forces illustrative visuals + burned disclosure + a writer that
+   ignores language/persona/length. Decoupled: "check my script against sources" is now opt-in for
+   ANY channel (production run proved it works standalone: caught a missing Critical fact + forced
+   attribution). **BUILT 2026-07-25** — `channels.factCheck` + per-reel `dossier` → the checker runs
+   **INLINE at the end of `generate_story`** (like the plan gate / finishingQA), advisory verdict rides
+   the step output to the story-review punch-list; never blocks. *Design note:* first built as a separate
+   `fact_check` pipeline step and **reverted on owner review** — a step cost five wiring points
+   (PIPELINE_STEPS, PIPELINE_CHAIN, a resolveNextStep branch, a dispatcher case, autoCrossGate) plus a
+   reel column, for an advisory check the step-inline precedents already covered. Pipeline shape is
+   byte-identical to before. Known gap (pre-existing, both designs): BYO scripts bypass `generate_story`,
+   so they're never auto-checked.
 4. **Budget cap** — folded into item 7 above (fresh evidence there).
 5. **Render visual-fingerprint gap** — `render-step.ts` hashes `captionStyle` but NOT subtitle
    *content*; caption text changes could reuse a stale cached visual. Tiny correctness fix, do anytime.

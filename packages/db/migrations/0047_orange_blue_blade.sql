@@ -1,0 +1,1 @@
+ALTER TABLE "reels" DROP COLUMN IF EXISTS "fact_check_report";

@@ -1,7 +1,6 @@
 // Pipeline step exports — import by name in BullMQ job processors
 
 export { generateStory } from './steps/generate-story.js'
-export { factCheckStep } from './steps/fact-check.js'
 export { approveStory, rejectStory } from './steps/review-story.js'
 export { annotateAudioScript } from './steps/annotate-audio-script.js'
 export { analyzeStory } from './steps/analyze-story.js'

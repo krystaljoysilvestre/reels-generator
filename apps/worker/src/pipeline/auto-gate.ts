@@ -7,9 +7,7 @@ import { setReelStatus } from './harness.js'
 
 // The three steps where the pipeline normally STOPS for human review (resolveNextStep returns null):
 // generate_story → story_review, generate_images → storyboard, render_qa → spot_check.
-// fact_check crosses the SAME story gate as generate_story (it runs just after, when the channel opts in),
-// so an auto-mode reel advances once the advisory punch-list is ready — not before.
-const GATE_STEPS = new Set(['generate_story', 'fact_check', 'generate_images', 'render_qa'])
+const GATE_STEPS = new Set(['generate_story', 'generate_images', 'render_qa'])
 
 // In 'auto' generation mode, cross a human gate automatically — mirroring the approve-story /
 // trigger-render / approve-spot-check routes — so the reel runs end-to-end to a finished render with no
@@ -25,13 +23,11 @@ export async function autoCrossGate(stepName: string, reelId: string): Promise<v
   const channel = await db.query.channels.findFirst({ where: eq(channels.id, reel.channelId) })
   if (channel?.generationMode !== 'auto') return // only auto-mode channels self-advance
 
-  if (stepName === 'generate_story' || stepName === 'fact_check') {
+  if (stepName === 'generate_story') {
     if (reel.status !== 'story_review') return // already crossed
     // (EBN reels render safely via the forced illustrative profile — Slice 2 — so they self-advance like
     // any other auto-mode reel; the Slice-1 hold has been lifted.)
     // = approve-story: story_review → storyboard, build Story Bible → scene breakdown → image generation.
-    // (fact_check is advisory — an auto-mode channel self-advances past the punch-list; a review-mode
-    // channel stops here with it ready. Either way the report is persisted on the reel.)
     await setReelStatus(reelId, 'storyboard')
     await enqueueStep({ reelId, stepName: 'analyze_story' })
     console.log(`[auto] ${reelId.slice(0, 8)} story → storyboard`)
