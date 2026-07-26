@@ -45,8 +45,6 @@ export async function POST(req: NextRequest) {
   const niche = (form.get('nicheDescription') as string | null)?.trim() || ''
   const toneParsed = ToneConfigSchema.safeParse(JSON.parse((form.get('toneConfig') as string) || '{}'))
   const toneJson = JSON.stringify(toneParsed.success ? toneParsed.data : {})
-  // Opt-in: keep a shared signature time-of-day/light level in the style DNA (e.g. an always-dusk look).
-  const preserveSignatureLighting = form.get('preserveSignatureLighting') === 'true'
 
   const prepared: Array<{ media: ImageMedia; b64: string; buf: Buffer }> = []
   for (const file of files) {
@@ -62,7 +60,7 @@ export async function POST(req: NextRequest) {
   const first = prepared[0]!
   const imageKey = `style-refs/${randomUUID()}.${EXT[first.media]}`
 
-  const { system, userMessage } = buildStyleRefPrompt({ nicheDescription: niche, toneJson, preserveSignatureLighting })
+  const { system, userMessage } = buildStyleRefPrompt({ nicheDescription: niche, toneJson })
   const content = [
     ...prepared.map((p) => ({
       type: 'image' as const,

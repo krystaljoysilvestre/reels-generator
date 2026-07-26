@@ -6,7 +6,7 @@
 
 import { z } from 'zod'
 
-export const STYLE_REF_V1_VERSION = 'style-ref.v1.1'
+export const STYLE_REF_V1_VERSION = 'style-ref.v1'
 
 export const StyleRefSchema = z.object({
   label: z.string(),       // SHORT recognizable medium name (1–2 words), e.g. "Anime", "Oil painting"
@@ -18,26 +18,9 @@ export type StyleRef = z.infer<typeof StyleRefSchema>
 export interface StyleRefVars {
   nicheDescription: string
   toneJson: string // JSON-stringified tone config — mood only
-  // Owner opt-in: KEEP a signature time-of-day/light level in the DNA when the references clearly share
-  // one that defines the channel's look (e.g. a news channel that is always deep-navy dusk). Default
-  // false = the standard transfer-to-any-scene behavior (the scene sets lighting). See ROADMAP finding.
-  preserveSignatureLighting?: boolean
 }
 
 export function buildStyleRefPrompt(v: StyleRefVars): { system: string; userMessage: string } {
-  // By default lighting is EXCLUDED so the style transfers to day AND night; when the operator opts to
-  // preserve a signature look, a shared time-of-day/light level is kept as part of the DNA instead.
-  const lightingRule = v.preserveSignatureLighting
-    ? `- Capture: medium/technique, color palette, texture, framing feel, mood, and lighting QUALITY
-  (contrast/softness). If the reference image(s) clearly SHARE a signature time-of-day or light level
-  that defines this channel's look (e.g. always golden-hour dusk, always deep-navy night), KEEP it as
-  part of the DNA — it is the brand. If they don't share one, omit time-of-day so the style still
-  transfers. START with the explicit medium (e.g. "flat cel-shaded anime illustration", "grainy 35mm
-  film photograph").`
-    : `- Capture: medium/technique, color palette, texture, framing feel, mood, and lighting QUALITY
-  (contrast/softness) — but NOT a time of day or light level (the scene sets day vs night), so the
-  style transfers to both. START with the explicit medium (e.g. "flat cel-shaded anime illustration",
-  "grainy 35mm film photograph", "inked comic-book panel", "loose watercolor illustration").`
   const system = `You are an art director. The operator uploaded reference image(s) that capture the
 visual style they want for their short-form video channel. Study the image(s) and distill their
 SHARED visual style into reusable DNA that an image model can apply to BRAND-NEW scenes.
@@ -45,7 +28,10 @@ SHARED visual style into reusable DNA that an image model can apply to BRAND-NEW
 Rules:
 - Describe only the STYLE, never the specific subjects/objects/people in the images — so it transfers
   to other scenes. (e.g. "grainy 1990s VHS look", not "a man holding a lamp".)
-${lightingRule}
+- Capture: medium/technique, color palette, texture, framing feel, mood, and lighting QUALITY
+  (contrast/softness) — but NOT a time of day or light level (the scene sets day vs night), so the
+  style transfers to both. START with the explicit medium (e.g. "flat cel-shaded anime illustration",
+  "grainy 35mm film photograph", "inked comic-book panel", "loose watercolor illustration").
 - If the look is NON-photographic, include "illustration, not a photograph" and avoid photographic
   words (35mm, photo, depth of field). If it IS photographic, photographic terms are fine.
 - Be faithful to what's actually in the image(s); use the niche/mood only to resolve ambiguity, not
