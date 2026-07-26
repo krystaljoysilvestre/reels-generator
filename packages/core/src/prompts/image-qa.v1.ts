@@ -9,7 +9,7 @@
 
 import { z } from 'zod'
 
-export const IMAGE_QA_V1_VERSION = 'image-qa.v1.1'
+export const IMAGE_QA_V1_VERSION = 'image-qa.v1.2'
 
 export const ImageQASchema = z.object({
   pass: z.boolean(), // does the image faithfully match the description's checkable intent?
@@ -29,6 +29,7 @@ Look at the image and decide whether it faithfully delivers the brief's KEY, che
 - NAMED OBJECT STATE: if the brief specifies an object's state (e.g. a door "closed" / "shut" / "flush", or "open"), the image must match it — a closed door must read as closed, not open or a black gap.
 - WHAT IS / ISN'T SHOWN: if the brief implies a presence WITHOUT showing it (shadow, sound, "just out of view"), no literal figure/body should be depicted; conversely a named subject must appear.
 - CAST: no people appear BEYOND those the brief describes — FAIL on an invented extra (a bystander, a second figure, a stray hand/arm) that the brief doesn't call for. If the brief says the narrator is alone, no other person may be in frame.
+- REAL-PARTY FABRICATION (depictive-ethics floor): if the brief names a real organization, office, or public figure, FAIL a frame that reads as a press or event photograph of identifiable people acting as that party — a recognizable face plus insignia, flags, a podium, a handshake, or ceremony staging. Representative staging passes: silhouettes, unbranded hands, distant or non-identifiable figures, empty symbolic setups.
 - NO CAMERA-FACING / STATIC POSE: a person must be caught mid-action with their gaze directed WITHIN the scene (at an object, at another person, into the dark) — FAIL a flat, front-on portrait of a person standing still and staring into the lens doing nothing (unless the brief explicitly calls for a direct-to-camera stare).
 - LIGHTING / TIME: day vs night and the named light source roughly match the brief (don't nitpick exact exposure).
 - READABLE SUBJECT: the key subject must be VISIBLE — discernible at a glance even in a dark/low-key shot. A moody, shadow-heavy frame is fine; FAIL only when the subject (or the frame as a whole) is so underexposed it reads as a near-black image where you genuinely can't make out the focal action.

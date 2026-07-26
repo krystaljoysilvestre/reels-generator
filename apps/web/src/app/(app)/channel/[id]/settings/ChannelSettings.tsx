@@ -16,7 +16,7 @@ import {
   resolveCaptionStyle,
 } from '@reels/core'
 import { asGenreModule } from '@reels/core/prompts/scenes.v1'
-import { GENRE_OPTIONS } from '@/lib/genre-labels'
+import { GENRE_OPTIONS, PRESENTATION_OPTIONS } from '@/lib/genre-labels'
 import { stylesForGenre } from '@reels/core/prompts/story-styles.v1'
 import { STORY_VOICES } from '@reels/core/prompts/story-voices.v1'
 import { CaptionPreview } from '@/components/CaptionPreview'
@@ -48,6 +48,7 @@ interface Initial {
   stylePreset: string
   styleImageKey: string | null
   genreCategory: string
+  presentation: '' | 'voiceover' | 'hosted' // how narration reaches the audience (analyzer context)
   narrativeStyle: string
   narrativeVoice: string
   styleInfluence: string
@@ -88,6 +89,9 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
   // Genre (the kind of story) — derived by AI at creation, correctable here. Changing it re-scopes
   // everything downstream (writer, registers, scene grammar, voice delivery, styles gallery).
   const [genreCategory, setGenreCategory] = useState(initial.genreCategory)
+  // Presentation — how the audience receives the narration; a bias the analyzer reasons from (each story
+  // still decides for itself). A separate axis from genre; see hypotheses/voiceover-perspective.md.
+  const [presentation, setPresentation] = useState<'' | 'voiceover' | 'hosted'>(initial.presentation)
   // PROSE dimensions (story-styles / story-voices) — editable post-creation.
   const [narrativeStyle, setNarrativeStyle] = useState(initial.narrativeStyle)
   const [narrativeVoice, setNarrativeVoice] = useState(initial.narrativeVoice)
@@ -139,6 +143,7 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
       generationMode,
       autoProduce,
       genreCategory,
+      presentation,
       musicMood,
       tasteRubric: tasteRubric.trim() || null,
       narrativeStyle,
@@ -390,6 +395,14 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
                   setNarrativeStyle('') // styles are scoped to the genre — a switch resets to pure genre
                 }}
                 options={GENRE_OPTIONS}
+              />
+            </label>
+            <label className="flex flex-col gap-1.5 text-xs font-medium text-muted">
+              On-screen narrator
+              <Dropdown
+                value={presentation}
+                onChange={(v) => setPresentation(v as '' | 'voiceover' | 'hosted')}
+                options={PRESENTATION_OPTIONS}
               />
             </label>
             {stylesForGenre(asGenreModule(genreCategory) ?? 'general').length > 0 && (

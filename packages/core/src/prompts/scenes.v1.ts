@@ -7,7 +7,7 @@
 // LLM-derived bucket stored at channel creation (channel.v1). `classifyGenre` is the keyword fallback,
 // used when a channel predates the column (or the value is unrecognized).
 
-export const SCENES_V1_VERSION = 'scenes.v1.42'
+export const SCENES_V1_VERSION = 'scenes.v1.44'
 
 export type GenreModule =
   | 'horror'
@@ -41,7 +41,7 @@ export interface ScenesPromptVars {
   // the image assembler splices their frozen descriptions (see specs/story-bible.md). '[]' = no bible
   // (fail-soft) → the director describes everything inline, as it did before this stage existed.
   bibleEntitiesJson: string
-  narratorPerspective?: 'first_person' | 'third_person' | undefined // authoritative (from the bible); undefined = detect from narration
+  narratorPerspective?: 'first_person' | 'third_person' | 'voiceover' | undefined // authoritative (from the bible); undefined = detect from narration. 'voiceover' = non-diegetic narrator (see hypotheses/voiceover-perspective.md)
   directorNotes?: string[] // story-wide visual constraints from the bible (genre-default rules NOT restated here)
   era: string
   regionDescriptor: string
@@ -151,12 +151,18 @@ Era: ${v.era}. Region look: ${v.regionDescriptor}.`
   // Perspective is authoritative from the Story Bible when known; otherwise the director detects it.
   const POV_RULE = 'FIRST-PERSON → POV: the camera IS the narrator\'s eyes; every shot is what THEY see (never the narrator as a separate full figure; their hands/feet/shoulder may edge the frame). Write POV as a CONCRETE COMPOSITION, never the bare word "POV" — image models render a described frame far better than the abstract instruction. Anchor the near foreground with something that belongs to the narrator (a hand, a forearm, the back of their head/shoulders) and place the subject in the space beyond it. A REFLECTION beat (a mirror, a window, dark glass) is the ONLY time the narrator\'s own face is on screen — YOU choose how to compose the reflection shot for this moment; just keep the narrator a reflection/back/partial, never a front-facing figure staring into the lens. The system locks the narrator\'s appearance on reflection beats automatically, so you never need to tag them — just write the shot. QUIET BEATS ARE STILL POV: when little happens (the narrator waiting, uneasy, thinking, "standing" somewhere), do NOT fall back to describing HER as a standing/facing figure ("the narrator stands facing forward") — that is the #1 POV failure and, since her look is only locked in reflections, it renders a DIFFERENT person each shot. Instead frame what she SEES (the empty space, the object of her unease, a telling detail) or her hands / the back of her head in the near foreground. The narrator is a full FIGURE only in a reflection.'
   const OBSERVER_RULE = 'THIRD-PERSON → observer framing: show the character(s).'
+  // Voiceover = a NON-DIEGETIC narrator (a voice above the story's world). Probe-validated wording
+  // (hypotheses/voiceover-perspective.md Phase 0). Judgment-framed with a goal + a named failure mode —
+  // never shot quotas (unbiased-design).
+  const VOICEOVER_RULE = `this reel is VOICEOVER — the narrator is a voice above the story's world, NOT a person in it. The narrator NEVER appears in any form: no POV framing, no narrator hands/shoulders/reflection, no host, no presenter, no reporter, and the word "narrator" never appears in an imagePrompt. Every shot answers "what is the narration claiming right now?" with something SEEN — the thing, the place, the comparison, the change — so a viewer with the sound OFF still follows the argument's objects. THE FAILURE MODE IS WALLPAPER: a shot that would board equally well under any other script on this topic teaches nothing — make each shot specific to its span's claim (its load-bearing noun, quantity, or comparison rendered as a physical, visible thing), never topic-level scenery. People appear ONLY when the narration's content itself places them (per CAST CONTROL), framed per the static-pose rules; environment, object, concept, and data-visualization shots are all valid; any beat may be people-free.`
   const perspectiveRule =
     v.narratorPerspective === 'first_person'
       ? `this reel is FIRST-PERSON. ${POV_RULE}`
       : v.narratorPerspective === 'third_person'
         ? `this reel is THIRD-PERSON. ${OBSERVER_RULE}`
-        : `detect the narration's voice and apply ONE perspective to the whole reel. FIRST-PERSON ("ako", "ko", "nakita ko", "I", "my") → ${POV_RULE} ${OBSERVER_RULE}`
+        : v.narratorPerspective === 'voiceover'
+          ? VOICEOVER_RULE
+          : `detect the narration's voice via the PARTICIPANT TEST, and apply ONE perspective to the whole reel. Did the teller LIVE the events (a participant telling what happened to them), or is the teller REPORTING/EXPLAINING/ARGUING about events from outside them (news, explainer, essay, recap)? Pronouns are evidence, participation is the verdict — first-person cues appear in both kinds of narration. REPORTING/EXPLAINING (voiceover) → ${VOICEOVER_RULE} LIVED FIRST-PERSON ("ako", "ko", "nakita ko", "I", "my") → ${POV_RULE} ${OBSERVER_RULE}`
 
   // Story-wide visual constraints from the bible (deviations from the genre default only).
   const notesBlock = v.directorNotes?.length
@@ -227,6 +233,8 @@ DESCRIBE PRESENCE, NOT ABSENCE: each imagePrompt must state only what IS in the 
 FILTER-SAFE PHRASING (every genre): when a PERSON is depicted dead, a corpse, a victim, bloodied or gravely injured, or as a supernatural / menacing presence, describe them with NON-PERSON words — "a figure", "a form", "a shape", "it" — NEVER "a woman / man / girl / boy" or "her / him" for THAT subject. Naming a person in such a state trips the image model's safety filter and the shot fails to render entirely; the exact same subject described as "a figure / form" renders an identical image and passes. This holds in ANY genre — a news tragedy, a true-crime victim, a horror apparition. But ORDINARY, living, unharmed people stay PEOPLE — describe them normally (a woman, the friend, a chef); this rule is ONLY for the dead, harmed, menacing, or supernatural.
 
 CAST CONTROL: only the people the narration actually places in this scene appear in frame — NEVER invent background extras, passers-by, bystanders, or a crowd the story doesn't mention. Frame exactly who the beat names; if the narration says the place is empty or the narrator is alone, show the space deserted around them. Stating who is present (and that the rest is empty) stops the model populating the background with strangers.
+
+REAL PARTIES ARE NEVER STAGED (every genre): when the narration names an identifiable real living person (an official, executive, athlete, celebrity, or private individual) or a named real organization's people or events (its officials, spokespeople, meetings, signings, ceremonies, announcements), NEVER write a shot that depicts that party as if photographed at an event — no staged handshakes, podium moments, boardrooms, raids, or ceremonies attributed to the named party. Rendered photoreal, such a frame is a fabricated press photo: a false record of real people at an event that never happened. Depict the beat's SUBSTANCE through representative, anonymous, or conceptual imagery instead: the real place or object itself, documents and maps as physical things, unbranded working hands, a distant non-identifiable figure, symbolic staging (two flags on an empty table, a signed page, an empty podium). Describe that anonymous staging POSITIVELY (see DESCRIBE PRESENCE, NOT ABSENCE), never "no faces". This triggers on IDENTITY, not on people: ordinary unnamed people (a vendor, a nurse, a crowd) stay people, and fictional characters are untouched — the trigger is a real name, a real office or title, real insignia, or context that points at one specific real party. Under an explicitly illustrative, never-photoreal rendering profile, reconstruction is governed by that profile's own contract — but no render, in any style, is ever presented as an authentic photograph of a real event.
 
 PERSPECTIVE: ${perspectiveRule}
 

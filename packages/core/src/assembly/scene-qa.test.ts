@@ -248,3 +248,69 @@ describe('reviewSceneBreakdown — journey-grounded (Phase 2A)', () => {
     expect(r.errors.some((e) => e.includes('FIRST-PERSON'))).toBe(false)
   })
 })
+
+describe('reviewSceneBreakdown — voiceover embodiment', () => {
+  const VO_NARRATION =
+    'May bagong mega-proyekto sa Pilipinas. Ayon sa gobyerno, malaki raw ang maidudulot nito. Pero may mga kritiko na nag-aalala.'
+  const vo = (scenes: SceneQAScene[], over: Record<string, unknown> = {}) =>
+    reviewSceneBreakdown({ narration: VO_NARRATION, peakMoment: '', minScenes: 3, maxScenes: 6, narratorPerspective: 'voiceover', scenes, ...over })
+
+  const cleanScenes: SceneQAScene[] = [
+    { narrationText: 'May bagong mega-proyekto sa Pilipinas.', imagePrompt: 'wide aerial of an industrial district concept rising on open plains at dusk, blueprint overlays marking it as a render', tier: 'video', location: 'project site' },
+    { narrationText: ' Ayon sa gobyerno, malaki raw ang maidudulot nito.', imagePrompt: 'glowing ascending bar-graph forms of light over a night cityscape, abstract, no readable text', tier: 'still', location: 'economic dataviz' },
+    { narrationText: ' Pero may mga kritiko na nag-aalala.', imagePrompt: 'massive cooling towers venting vapor beside high-voltage pylons, a reservoir in the foreground reflecting a dark sky', tier: 'still', location: 'cooling towers' },
+  ]
+
+  it('passes clean subject b-roll with no voiceover errors', () => {
+    const r = vo(cleanScenes)
+    expect(r.errors).toEqual([])
+  })
+
+  it('errors when a voiceover shot names a narrator/host figure', () => {
+    const scenes = [{ ...cleanScenes[0]!, imagePrompt: 'the narrator stands on a rooftop overlooking the city at dawn, papers rustling on the ledge' }, cleanScenes[1]!, cleanScenes[2]!]
+    const r = vo(scenes)
+    expect(r.errors.some((e) => e.includes('VOICEOVER') && e.includes('narrator'))).toBe(true)
+  })
+
+  it('errors on POV framing in a voiceover reel', () => {
+    const scenes = [{ ...cleanScenes[0]!, imagePrompt: 'POV from a rooftop ledge overlooking the skyline, a hand resting on the railing' }, cleanScenes[1]!, cleanScenes[2]!]
+    const r = vo(scenes)
+    expect(r.errors.some((e) => e.includes('VOICEOVER'))).toBe(true)
+  })
+
+  it('warns (not errors) when a voiceover reel carries a narratorEntityId', () => {
+    const r = vo(cleanScenes, { narratorEntityId: 'narrator' })
+    expect(r.errors).toEqual([])
+    expect(r.warnings.some((w) => w.includes('narratorEntityId'))).toBe(true)
+  })
+
+  it('does not run the voiceover check on first_person reels', () => {
+    const scenes = [{ ...cleanScenes[0]!, imagePrompt: "POV of the dark hallway, the narrator's hand pushing the door open" }, cleanScenes[1]!, cleanScenes[2]!]
+    const r = reviewSceneBreakdown({ narration: VO_NARRATION, peakMoment: '', minScenes: 3, maxScenes: 6, narratorPerspective: 'first_person', scenes })
+    expect(r.errors.some((e) => e.includes('VOICEOVER'))).toBe(false)
+  })
+})
+
+describe('reviewSceneBreakdown — depictive-ethics floor (real-party staging, warning-tier)', () => {
+  const N = 'The trade agency announced the deal. Officials met to sign it. Critics questioned the plan.'
+  const base = (scenes: SceneQAScene[]) => reviewSceneBreakdown({ narration: N, peakMoment: '', minScenes: 3, maxScenes: 6, scenes })
+
+  it('warns (not errors) when a role noun is paired with event staging', () => {
+    const r = base([
+      scene({ narrationText: 'The trade agency announced the deal.', imagePrompt: 'a DTI official and a partner shaking hands at a podium in front of two national flags' }),
+      scene({ narrationText: ' Officials met to sign it.', imagePrompt: 'a signed document on a bare desk beside two flags, no people' }),
+      scene({ narrationText: ' Critics questioned the plan.', imagePrompt: 'a weathered protest placard leaning against a concrete wall at dusk' }),
+    ])
+    expect(r.errors).toEqual([])
+    expect(r.warnings.some((w) => w.includes('depictive-ethics floor'))).toBe(true)
+  })
+
+  it('does NOT warn on representative/anonymous staging (no staging verb, or no real-party cue)', () => {
+    const r = base([
+      scene({ narrationText: 'The trade agency announced the deal.', imagePrompt: 'a raw mineral ore chunk transitioning to a polished silicon wafer on a dark reflective surface' }),
+      scene({ narrationText: ' Officials met to sign it.', imagePrompt: 'a single signed page under a desk lamp, a fountain pen resting across it' }),
+      scene({ narrationText: ' Critics questioned the plan.', imagePrompt: 'cooling towers venting vapor beside transmission pylons at dusk' }),
+    ])
+    expect(r.warnings.some((w) => w.includes('depictive-ethics floor'))).toBe(false)
+  })
+})

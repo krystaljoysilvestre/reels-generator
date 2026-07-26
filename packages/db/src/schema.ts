@@ -112,6 +112,12 @@ export const channels = pgTable('channels', {
   // EBN specialization (when storyMode='ebn'): the narrative-permissions/rubric/rendering bundle.
   // Decision-log 2026-07-24-001: EBN leads with 'historical_events' (documentary), not true crime.
   ebnSpecialization: text('ebn_specialization').default('historical_events'),
+  // PRESENTATION identity — how the audience receives the narration, a separate axis from genre (subject)
+  // and mode (generation discipline). '' = no hint (analyzer decides from the story alone); 'voiceover' =
+  // a non-diegetic narrator who never appears on screen (news/documentary/explainer); 'hosted' = leans
+  // toward an embodied teller. Owner-set CONTEXT the analyzer reasons from (a bias, not a command — the
+  // narration's own text decides via the participant test). See hypotheses/voiceover-perspective.md.
+  presentation: text('presentation').notNull().default(''),
   // PROSE dimensions (story-writer-v2): the storytelling TRADITION + the narrator's written SOUND,
   // layered on genre by the Planner/Writer. Per-channel, operator-selectable. NOT the TTS/audio voice
   // (voiceId/voiceMode/voicePool/voiceSearchKeyword) and NOT the visual look (stylePreset/lutConfig).

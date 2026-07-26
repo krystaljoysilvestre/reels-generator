@@ -197,6 +197,53 @@ sequenced this way — lives in `dna/company/roadmap.md` (company DNA starts at
    Also two still-horror-flavored bits to de-bias when generalizing the writing pipeline:
    `scenes.v1` guards ("no faces of fear", "children in threatening contexts") and the hardcoded
    `audienceDescriptor: 'young Filipino adult'` in `generate-story`.
+   *New evidence (2026-07-24 production run):* an all-scene-animated ~100s reel landed at **$7.60 —
+   $0.40 under the cap**; one more scene would have stranded it mid-render (shipped steps hard-throw
+   once `costCents` exceeds the cap, with no stills-fallback). Cap needs to be per-channel/reel
+   configurable AND degrade gracefully (finish with stills) instead of failing terminally.
+
+### Pipeline findings — 2026-07-24 "News Today PH" production run (one-off, $7.60, findings tracker)
+
+A real factual Taglish news reel driven end-to-end surfaced these, ranked. Tackling one-by-one with
+the owner (design first, then implementation). Full evidence in the session summary + hypothesis doc.
+
+1. **Voiceover perspective missing** (owner-endorsed) — the pipeline knows only diegetic narrators
+   (`first_person`/`third_person`), so a voiceover explainer got an invented on-screen host, POV
+   shots, and a photoreal fake press photo of real officials; auto-breakdown unusable for the whole
+   news/documentary/explainer family (incl. committed EBN documentary). Candidate architecture:
+   [hypotheses/voiceover-perspective.md](hypotheses/voiceover-perspective.md) — one enum value +
+   analyzer/scenes/assembly conditionals + channel presentation hint.
+   **Status 2026-07-25:** both director reviews ACCEPT-WITH-CHANGES (folded); Phase-0 probe RAN
+   (39¢): axis mechanism VALIDATED; teaching bar FAILED → judge-and-force **depiction gate**.
+   **PHASE 1 IMPLEMENTED** (working tree, uncommitted): axis (enum + analyzer participant test +
+   scenes VOICEOVER_RULE + scene-qa) · depiction gate (scene-depiction-critic/doctor.v1, informational
+   boards, kill switch, scored audit) · presentation hint (channels.presentation, migration 0045,
+   channel.v1 v1.5, wizard + Settings + analyzer). typecheck/lint/tests green; tenancy 7/7. Next:
+   owner-gated controls lap (~30–50¢, prompt/bible level) → live review → commit → graduate to /specs.
+2. **Depictive-ethics floor for real parties** (separable, ships first) — nothing prevents rendering
+   identifiable real living people / named orgs' officials/events as photoreal event imagery in
+   standard-mode factual content (EBN's illustrative floor doesn't reach it). **Drafted in full at
+   [specs/depictive-ethics-floor.md](specs/depictive-ethics-floor.md)** (visual-director, 2026-07-25):
+   floor wording + 5-point placement inventory + boundaries + edge cases. Awaiting founder
+   ratification (floors-are-law), then implementation.
+3. **Standalone fact gate** — the EBN Extractor + Fact-Fidelity Checker are excellent but only
+   reachable via `storyMode='ebn'`, which also forces illustrative visuals + burned disclosure + a
+   writer that ignores language/persona/length. Decouple "check my script against sources" into an
+   opt-in step any channel can use (production run proved it works standalone: caught a missing
+   Critical fact + forced attribution). Must define which visual floors travel with it (→ #2).
+   Sequenced after #1/#2; amends specs/evidence-based-narrative.md.
+4. **Budget cap** — folded into item 7 above (fresh evidence there).
+5. **Render visual-fingerprint gap** — `render-step.ts` hashes `captionStyle` but NOT subtitle
+   *content*; caption text changes could reuse a stale cached visual. Tiny correctness fix, do anytime.
+6. **`captionStyle` has no "none"** — no-text reels currently require emptying `timings.subtitles`
+   by hand. Make captions-off a first-class channel/reel toggle (some formats legitimately want zero
+   on-screen text; owner shipped one).
+7. **Duration estimator undershoots** — 2.5 wps estimate vs ~2.2 wps real (voice delivery + genre
+   pauses): a ~220-word script rendered 100.7s vs ~86s predicted. Calibrate `estimateNarrationSec`
+   with the voice/pause profile; affects `targetSeconds` honoring end-to-end.
+8. **Style-ref distillation drops signature lighting** — `style-ref.v1` deliberately strips
+   time-of-day, which erased a channel's dusk signature (had to hand-append). Add an owner-set
+   "preserve signature lighting/time-of-day" option to the distillation.
 
 ### Deferred config (currently schema defaults at creation)
 

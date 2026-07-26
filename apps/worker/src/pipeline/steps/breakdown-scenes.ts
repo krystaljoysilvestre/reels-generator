@@ -3,8 +3,33 @@ import type { z } from 'zod'
 import { getDb, reels, stories, scenes, channels } from '@reels/db'
 import { llmCall, buildInputHash } from '@reels/providers'
 import { ScenesOutputSchema, WorldBibleSchema, StoryBibleSchema, EMPTY_STORY_BIBLE, resolveEntities, reviewSceneBreakdown, MOTION_BUDGET, motionBudgetForSeconds, estimateNarrationSec, retileToNarration, cameraMovePrompt, animatorMotionPrompt, slug, planChapters, legsForChapter, CHAPTER_THRESHOLD_SEC, PLATFORM_PRESETS, type StoryChapter, type StoryBible } from '@reels/core'
-import { buildScenesPrompt, SCENES_V1_VERSION, buildPeakExtractPrompt, PEAK_EXTRACT_V1_VERSION, PeakExtractSchema, resolveMediaGenre } from '../../prompts-bridge.js'
+import { buildScenesPrompt, SCENES_V1_VERSION, buildPeakExtractPrompt, PEAK_EXTRACT_V1_VERSION, PeakExtractSchema, resolveMediaGenre, buildSceneDepictionCriticPrompt, SCENE_DEPICTION_CRITIC_V1_VERSION, SceneDepictionVerdictSchema, buildSceneDepictionDoctorPrompt, SCENE_DEPICTION_DOCTOR_V1_VERSION, SceneDepictionRepairSchema } from '../../prompts-bridge.js'
 import { runStep } from '../harness.js'
+
+// ── DEPICTION GATE (judge → targeted repair → re-judge; see scene-depiction-critic.v1) ──────────────
+// Default ON for informational media-genre boards (probe evidence: hypotheses/voiceover-perspective.md
+// Phase 0 — wallpaper boards, 0/8 claims depicted); SCENE_DEPICTION_GATE=0 is the kill switch. The cap is
+// a named const so repair depth is tunable later (cascade failures may warrant more rounds someday).
+const SCENE_DEPICTION_GATE_ENABLED = process.env['SCENE_DEPICTION_GATE'] !== '0'
+const SCENE_DEPICTION_MAX_REPAIRS = 2
+
+// One scored judge round for the gate's audit trail — structured counts, not bare pass/fail, so
+// "2/8 → 7/8 after doctor" is queryable per reel (which channels need the doctor, is it worth its cost).
+interface DepictionRound {
+  round: number
+  sceneCount: number
+  depictedCount: number
+  interchangeableCount: number
+  failedIdxs: number[]
+  repairedIdxs: number[]
+  revertedIdxs: number[]
+  // What the doctor actually rewrote this round (applied repairs only) — production diagnostics: shows
+  // the semantic-fidelity change per scene, and gives a true same-board before/after.
+  repairs: { idx: number; before: string; after: string }[]
+}
+type DepictionAudit =
+  | { chapter: number; status: 'ok'; criticVersion: string; doctorVersion: string; repairedRounds: number; rounds: DepictionRound[] }
+  | { chapter: number; status: 'failed'; error: string }
 
 // The breakdown LLM returns the schema's INPUT shape (defaulted fields are still optional pre-parse); this
 // is what llmCall hands back as `.data`. Type the best-of-N plumbing against it so mutations line up.
@@ -130,6 +155,11 @@ export async function breakdownScenes(reelId: string): Promise<void> {
   const globalBudget = chaptered ? motionBudgetForSeconds(seconds) : MOTION_BUDGET
   const videoAlloc = chaptered ? allocateVideoTiers(chapters, peakChapterIdx, globalBudget) : [MOTION_BUDGET]
 
+  // Media/register genre: EBN → informational (a documentary register), not the empty `general` bucket.
+  // Hoisted (was inline in the prompt vars): also gates the depiction gate below.
+  const mediaGenre = resolveMediaGenre({ storyMode: channel.storyMode, genreCategory: channel.genreCategory, niche: channel.nicheDescription })
+  const depictionGateApplies = SCENE_DEPICTION_GATE_ENABLED && mediaGenre === 'informational'
+
   // Bible folded into the hash: editing the bible (or re-analysis) re-triggers the breakdown. The chapter
   // plan + budget are part of the recipe — a re-cut story re-runs even at the same prompt version.
   const inputHash = buildInputHash(SCENES_V1_VERSION, {
@@ -139,12 +169,20 @@ export async function breakdownScenes(reelId: string): Promise<void> {
     storyBible,
     chapters: chapters.map((c) => `${c.startOffset}-${c.endOffset}`).join('|'),
     videoAlloc: videoAlloc.join(','),
+    // Only perturb the cache key when the depiction gate applies — non-informational genres keep their
+    // existing hashes (no mass re-run); toggling the gate produces distinct keys. (Plan-gate pattern.)
+    ...(depictionGateApplies
+      ? { depictionCriticVersion: SCENE_DEPICTION_CRITIC_V1_VERSION, depictionDoctorVersion: SCENE_DEPICTION_DOCTOR_V1_VERSION }
+      : {}),
   })
 
   const result = await runStep(
     { reelId, stepName: 'breakdown_scenes', inputHash },
     async (cost) => {
       cost.add(peakCost) // spend already incurred resolving the peak, before this step
+
+      // Depiction-gate audit trail, one entry per chapter — attached to the step output (planGate pattern).
+      const depictionAudits: DepictionAudit[] = []
 
       // Character-consistency backstop: in a first-person reel the narrator's own body/reflection edges most
       // POV frames, and the LLM often forgets to reference the narrator entity, so they render as a different
@@ -178,8 +216,8 @@ export async function breakdownScenes(reelId: string): Promise<void> {
           regionDescriptor: worldBible.region,
           nicheDescription: channel.nicheDescription ?? '',
           // Media/register genre: EBN → informational (a documentary register), not the empty `general`
-          // bucket. Identical to the old resolution for standard channels. (resolveMediaGenre)
-          genreCategory: resolveMediaGenre({ storyMode: channel.storyMode, genreCategory: channel.genreCategory, niche: channel.nicheDescription }),
+          // bucket. Identical to the old resolution for standard channels. (Hoisted: resolveMediaGenre.)
+          genreCategory: mediaGenre,
           aspect: platformPreset.aspect,
           narration: chapter.text,
           minScenes,
@@ -216,6 +254,8 @@ export async function breakdownScenes(reelId: string): Promise<void> {
           bibleEntities: storyBible.entities,
           narratorEntityId: analyzed?.continuity.narratorEntityId ?? null,
           journey: storyBible.continuity.journey,
+          // Arms the voiceover no-host/no-POV check (errors → repair round). Absent when unanalyzed.
+          narratorPerspective: analyzed?.continuity.narratorPerspective,
         })
 
         // Deterministic tiling guarantee (see retileToNarration): snap each scene to the exact narration
@@ -276,6 +316,104 @@ export async function breakdownScenes(reelId: string): Promise<void> {
         } else if (chosen.notes.length > 0) {
           console.warn(`[scene-qa] ${reelId.slice(0, 8)}${tag} ${chosen.notes.length} note(s):\n  - ${chosen.notes.join('\n  - ')}`)
         }
+
+        // ── DEPICTION GATE: judge → targeted repair → re-judge (informational boards) ──────────────
+        // Each shot must depict its span's load-bearing claim (not wallpaper). The doctor repairs ONLY
+        // failing imagePrompts — tiling/entities/tier untouched — and a deterministic-QA guard reverts any
+        // repair that introduces new scene-qa errors. Fail-safe: any error keeps the pre-gate board.
+        if (depictionGateApplies) {
+          try {
+            const judge = async (sc: BreakdownScenes) => {
+              const p = buildSceneDepictionCriticPrompt({
+                nicheDescription: channel.nicheDescription ?? '',
+                genreCategory: mediaGenre,
+                narratorPerspective: analyzed?.continuity.narratorPerspective,
+                scenes: sc.map((s, i) => ({ idx: i + 1, narrationText: s.narrationText, imagePrompt: s.imagePrompt, tier: s.tier })),
+              })
+              const res = await llmCall({
+                templateVersion: SCENE_DEPICTION_CRITIC_V1_VERSION,
+                schema: SceneDepictionVerdictSchema,
+                system: p.system,
+                messages: [{ role: 'user', content: p.userMessage }],
+                provider: 'anthropic',
+                maxTokens: 3000,
+              })
+              cost.add(res.costCents)
+              return res.data.scenes
+            }
+            const rounds: DepictionRound[] = []
+            const scoreRound = (verdicts: Awaited<ReturnType<typeof judge>>, repairedIdxs: number[], revertedIdxs: number[], repairs: { idx: number; before: string; after: string }[]) => {
+              rounds.push({
+                round: rounds.length + 1,
+                sceneCount: chosen.scenes.length,
+                depictedCount: verdicts.filter((x) => x.depicted).length,
+                interchangeableCount: verdicts.filter((x) => x.interchangeable).length,
+                failedIdxs: verdicts.filter((x) => !x.depicted).map((x) => x.idx),
+                repairedIdxs,
+                revertedIdxs,
+                repairs,
+              })
+            }
+            let verdicts = await judge(chosen.scenes)
+            scoreRound(verdicts, [], [], [])
+            let repairedRounds = 0
+            while (verdicts.some((x) => !x.depicted) && repairedRounds < SCENE_DEPICTION_MAX_REPAIRS) {
+              repairedRounds++
+              const failing = verdicts
+                .filter((x) => !x.depicted)
+                .flatMap((x) => {
+                  const s = chosen.scenes[x.idx - 1]
+                  return s ? [{ idx: x.idx, narrationText: s.narrationText, imagePrompt: s.imagePrompt, reason: x.reason || `does not depict: ${x.claim}`, primaryEntity: s.primaryEntity ?? null }] : []
+                })
+              if (failing.length === 0) break
+              const dp = buildSceneDepictionDoctorPrompt({
+                nicheDescription: channel.nicheDescription ?? '',
+                genreCategory: mediaGenre,
+                narratorPerspective: analyzed?.continuity.narratorPerspective,
+                scenes: failing,
+              })
+              const doc = await llmCall({
+                templateVersion: SCENE_DEPICTION_DOCTOR_V1_VERSION,
+                schema: SceneDepictionRepairSchema,
+                system: dp.system,
+                messages: [{ role: 'user', content: dp.userMessage }],
+                provider: 'anthropic',
+                maxTokens: 4096,
+              })
+              cost.add(doc.costCents)
+              // Merge with the revert guard: a repair that introduces NEW deterministic errors (e.g. a
+              // changed lead breaking the primary↔lead invariant) is rolled back, not shipped.
+              const baselineErrors = reviewSceneBreakdown(qaInput(chosen.scenes)).errors.length
+              const repairedIdxs: number[] = []
+              const revertedIdxs: number[] = []
+              const repairs: { idx: number; before: string; after: string }[] = []
+              for (const r of doc.data.repairs) {
+                const target = chosen.scenes[r.idx - 1]
+                if (!target || !failing.some((f) => f.idx === r.idx)) continue // the doctor may only touch what it was handed
+                const prevPrompt = target.imagePrompt
+                target.imagePrompt = r.imagePrompt
+                if (reviewSceneBreakdown(qaInput(chosen.scenes)).errors.length > baselineErrors) {
+                  target.imagePrompt = prevPrompt
+                  revertedIdxs.push(r.idx)
+                } else {
+                  repairedIdxs.push(r.idx)
+                  repairs.push({ idx: r.idx, before: prevPrompt, after: r.imagePrompt })
+                }
+              }
+              verdicts = await judge(chosen.scenes)
+              scoreRound(verdicts, repairedIdxs, revertedIdxs, repairs)
+            }
+            depictionAudits.push({ chapter: chapter.idx, status: 'ok', criticVersion: SCENE_DEPICTION_CRITIC_V1_VERSION, doctorVersion: SCENE_DEPICTION_DOCTOR_V1_VERSION, repairedRounds, rounds })
+            const first = rounds[0]!
+            const last = rounds[rounds.length - 1]!
+            console.log(`[depiction-gate] ${reelId.slice(0, 8)}${tag} depicted ${first.depictedCount}/${first.sceneCount} → ${last.depictedCount}/${last.sceneCount} (${repairedRounds} repair round${repairedRounds === 1 ? '' : 's'})`)
+          } catch (err) {
+            // Never fail the step over the gate — the pre-gate board ships, exactly as if this were off.
+            console.warn(`[depiction-gate] ${reelId.slice(0, 8)}${tag} failed, keeping the pre-gate board: ${String(err)}`)
+            depictionAudits.push({ chapter: chapter.idx, status: 'failed', error: String(err) })
+          }
+        }
+
         return chosen.scenes
       }
 
@@ -303,7 +441,11 @@ export async function breakdownScenes(reelId: string): Promise<void> {
         }
       }
 
-      return { output: { scenes: stitched } as BreakdownData, costCents: cost.total }
+      // The depiction-gate audit rides the step output (planGate pattern) — structured scores per round,
+      // so gate cost-benefit is queryable later without re-running anything.
+      const output: BreakdownData & { depictionGate?: DepictionAudit[] } = { scenes: stitched }
+      if (depictionAudits.length > 0) output.depictionGate = depictionAudits
+      return { output, costCents: cost.total }
     },
   )
 

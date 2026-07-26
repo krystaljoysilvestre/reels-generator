@@ -245,12 +245,22 @@ export async function generateImages(reelId: string): Promise<void> {
   // names a person in its prose.
   const peak = story?.twistAnchor?.trim() ?? ''
   const characterIds = new Set((storyBible?.entities ?? []).filter((e) => e.kind === 'character').map((e) => slug(e.id)))
-  const PERSON_NOUN = /\b(boy|man|men|woman|women|girl|child|children|kid|figure|hand|hands|person|people|bystander|stranger|guard|nurse|doctor|teacher|classmate|friend)\b/i
+  // Person nouns + real-party ROLE nouns (depictive-ethics floor): a scene naming an official/executive/
+  // politician must always reach image-QA (the REAL-PARTY FABRICATION check), not depend on luck — the
+  // 2026-07-24 DTI-handshake scene only got QA'd because it happened to say "hands".
+  const PERSON_NOUN = /\b(boy|man|men|woman|women|girl|child|children|kid|figure|hand|hands|person|people|bystander|stranger|guard|nurse|doctor|teacher|classmate|friend|official|officer|minister|senator|president|mayor|governor|executive|spokesperson|spokesman|delegate|politician|representative)\b/i
   const featuresPerson = (s: (typeof pending)[number]) => {
     const refs = [...(s.primaryEntity ? [s.primaryEntity] : []), ...(s.supportingEntities ?? [])]
     return refs.some((r) => characterIds.has(slug(r))) || PERSON_NOUN.test(s.visualPrompt ?? '')
   }
-  const isQATarget = (s: (typeof pending)[number]) => s.tier === 'video' || (peak !== '' && s.narrationText.includes(peak)) || featuresPerson(s)
+  // VOICEOVER reels: person-presence is the wrong risk signal — the load-bearing frames are the ones whose
+  // narration carries a quantity/comparison (the model's weak spot: muddled comparisons, garbled data-viz),
+  // and they're usually people-free, so they'd escape QA entirely. Target them by claim load instead
+  // (digits + EN/Tagalog quantity/comparative words). See hypotheses/voiceover-perspective.md.
+  const isVoiceover = storyBible?.continuity.narratorPerspective === 'voiceover'
+  const CLAIM_LOAD = /\d|%|percent|porsyento|bilyon|milyon|libo|thousand|million|billion|\bkada\b|\bper\b|versus|\bvs\.?\b|kumpara|compared|higit|mas\s+(?:mataas|mababa|malaki|maliit|mahal|mura)|more than|less than|up to|hanggang/i
+  const carriesClaim = (s: (typeof pending)[number]) => CLAIM_LOAD.test(s.narrationText)
+  const isQATarget = (s: (typeof pending)[number]) => s.tier === 'video' || (peak !== '' && s.narrationText.includes(peak)) || featuresPerson(s) || (isVoiceover && carriesClaim(s))
 
   const processScene = async (scene: (typeof pending)[number]) => {
     // FIRST-PERSON NARRATOR VISIBILITY — decide the narrator's splice HERE, deterministically, from whether

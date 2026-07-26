@@ -8,7 +8,7 @@ import { ToneConfigSchema, WorldBibleSchema, PLATFORM_PRESETS, type TargetPlatfo
 import { STYLE_VALUES, STORY_STYLES } from './story-styles.v1.js'
 import { VOICE_VALUES } from './story-voices.v1.js'
 
-export const CHANNEL_V1_VERSION = 'channel.v1.4'
+export const CHANNEL_V1_VERSION = 'channel.v1.5'
 
 // The full derived profile returned by the LLM. Narrator voices are NOT derived
 // — the operator picks real ElevenLabs voices in the UI. We derive an audioMood
@@ -26,6 +26,10 @@ export const ChannelDerivationSchema = z.object({
   captionFontScale: z.number().min(0.85).max(1.25), // size multiplier on the preset's base
   worldBible: WorldBibleSchema,
   genreCategory: z.enum(['horror', 'informational', 'lifestyle', 'drama', 'commentary', 'reddit_story', 'comedy', 'general']), // genre bucket → picks the writer identity + scene-prompt genre module
+  // PRESENTATION identity — how the audience receives the narration (a bias the analyzer reasons from,
+  // not a command). '' = no lean (let each story decide); 'voiceover' = a narrator who never appears on
+  // screen (news/documentary/explainer); 'hosted' = an on-screen teller. See voiceover-perspective.md.
+  presentation: z.enum(['', 'voiceover', 'hosted']).default(''),
   // PROSE dimensions (story-styles / story-voices) — a SUGGESTED default the operator can override.
   // Optional: `general` has no styles, and the create route re-validates the style against the genre.
   narrativeStyle: z.enum(STYLE_VALUES).optional(), // storytelling tradition within the genre ('' = pure genre)
@@ -148,6 +152,7 @@ Produce JSON with exactly these fields:
      - reddit_story: reddit-style first-person confession/AITA/TIFU storytime — must read as a REAL post by a real person
      - comedy: punchline-driven, skits, absurd/funny storytelling — setup, expectation, subversion
      - general: anything that doesn't clearly fit the above (faith, general storytelling) — neutral composition, no genre-specific rules",
+  "presentation": "how this channel's narration reaches the audience. 'voiceover' = a narrator who NEVER appears on screen — the voice explains/reports/argues over b-roll, concept, and data visuals (news, documentary, explainers, education, most commentary). 'hosted' = an on-screen teller/presenter is part of the format. '' = no lean — first-person lived storytelling (horror/drama/reddit confessions) or anything where each story should decide for itself. Pick 'voiceover' only when the FORMAT clearly has no on-screen narrator; when unsure, use ''.",
   "narrativeStyle": "the storytelling TRADITION this channel works in — pick ONE valid for the genreCategory you chose (a suggested default the creator can change); OMIT for 'general' or if none fits. Valid styles per genre:\n${styleMenu}",
   "narrativeVoice": "how the NARRATOR sounds in the prose (NOT the audio/TTS voice) — pick the ONE that fits this channel best from: ${voiceMenu}",
   "voiceSearchKeyword": "1–2 word genre/topic tag for finding fitting narrator voices, e.g. 'horror', 'true crime', 'motivation', 'meditation'",

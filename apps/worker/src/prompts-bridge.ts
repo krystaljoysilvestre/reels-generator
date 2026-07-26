@@ -80,6 +80,21 @@ export {
   type EbnPermissions,
 } from '@reels/core/prompts/story-ebn-writer.v1'
 export { buildEbnFidelityPrompt, STORY_EBN_FIDELITY_V1_VERSION, EbnFidelitySchema, type EbnFidelityVerdict } from '@reels/core/prompts/story-ebn-fidelity.v1'
+// Depiction gate (2026-07-25): judge → targeted-repair → re-judge on a scene breakdown's semantic
+// fidelity (shots must depict their span's claim, not wallpaper). Second instance of the gate pattern
+// after the plan gate. See hypotheses/voiceover-perspective.md Phase 0 for the evidence.
+export {
+  buildSceneDepictionCriticPrompt,
+  SCENE_DEPICTION_CRITIC_V1_VERSION,
+  SceneDepictionVerdictSchema,
+  type SceneDepictionVerdict,
+} from '@reels/core/prompts/scene-depiction-critic.v1'
+export {
+  buildSceneDepictionDoctorPrompt,
+  SCENE_DEPICTION_DOCTOR_V1_VERSION,
+  SceneDepictionRepairSchema,
+  type SceneDepictionRepairs,
+} from '@reels/core/prompts/scene-depiction-doctor.v1'
 export { buildSoundDesignerPrompt, SOUND_DESIGNER_V1_VERSION, SoundDesignSchema, type DesignerScene } from '@reels/core/prompts/sound-designer.v1'
 export { buildScenesPrompt, SCENES_V1_VERSION, resolveMediaGenre } from '@reels/core/prompts/scenes.v1'
 export { buildStoryAnalyzerPrompt, STORY_ANALYZER_V1_VERSION } from '@reels/core/prompts/story-analyzer.v1'

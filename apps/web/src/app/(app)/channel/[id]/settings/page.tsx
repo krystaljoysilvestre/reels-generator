@@ -29,6 +29,7 @@ export default async function ChannelSettingsPage({ params }: { params: Promise<
         stylePreset: channel.stylePreset ?? '',
         styleImageKey: channel.styleImageKey ?? null,
         genreCategory: channel.genreCategory ?? 'general',
+        presentation: (channel.presentation === 'voiceover' || channel.presentation === 'hosted' ? channel.presentation : ''),
         narrativeStyle: channel.narrativeStyle ?? '',
         narrativeVoice: channel.narrativeVoice ?? '',
         styleInfluence: channel.styleInfluence ?? 'medium',
