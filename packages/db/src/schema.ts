@@ -5,6 +5,7 @@ import {
   integer,
   boolean,
   timestamp,
+  date,
   jsonb,
   uuid,
   index,
@@ -510,6 +511,45 @@ export const invites = pgTable('invites', {
   usedAt: timestamp('used_at'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })
+
+// ── App-global cache (deliberately NOT tenant-scoped) ─────────────────────────
+
+// The channel wizard's "Trending now" rail. Public market data from a web search that takes no
+// tenant input and returns the same answer for everyone, so ONE row serves the whole app for a day.
+// The missing user_id is the design, not an oversight: scoping this per user would multiply a ~5¢
+// search call by the user count for byte-identical results. Nothing tenant-owned is read or written
+// here, so there is no cross-tenant surface to gate — the route still requires a signed-in user.
+//
+// (day, segment) is both the cache key and the write lock: the first request of a new day wins the
+// INSERT ... ON CONFLICT DO NOTHING and runs the search, while everyone else serves the previous
+// day's row instead of racing a second paid call. `segment` is 'global' today and exists so a future
+// per-region or per-language rail can key its own rows without a migration.
+export const trendingNiches = pgTable(
+  'trending_niches',
+  {
+    day: date('day').notNull(),                             // UTC day this row caches
+    segment: text('segment').notNull().default('global'),
+    // The niche array, validated against trending-niches.v1's zod schema on the way in and out.
+    // Null while the claiming request is still searching, or if every attempt that day failed.
+    niches: jsonb('niches'),
+    costCents: integer('cost_cents').notNull().default(0),  // app-level spend — no reel/channel to bill
+    // Attribution for that spend, not ownership: whose wizard open happened to claim the day and pay
+    // for the search. The row stays app-global (everyone reads it) — this only answers "who triggered
+    // this charge", which is the one auditable mutation here.
+    refreshedByUserId: uuid('refreshed_by_user_id').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
+    // Claim bookkeeping: a claim whose request died is retakeable once it goes stale, and a search
+    // that keeps failing stops re-firing on every click.
+    attempts: integer('attempts').notNull().default(0),
+    lastAttemptAt: timestamp('last_attempt_at'),
+    refreshedAt: timestamp('refreshed_at'),                 // set when niches lands; null = never succeeded
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.day, t.segment] }),
+    // Serves the "newest successful row" lookup behind stale-while-revalidate.
+    idxSegmentDay: index('idx_trending_niches_segment_day').on(t.segment, t.day),
+  }),
+)
 
 // ── Relations ─────────────────────────────────────────────────────────────────
 
