@@ -799,7 +799,7 @@ export function NewChannelWizard({
       setNarrativeVoice(d.narrativeVoice ?? '')
       setTagline(d.tagline ?? '')
       setAudioMood(d.audioMood ?? null)
-      setCostCents(json.costCents ?? 0)
+      setCostCents((c) => c + (json.costCents ?? 0)) // add — a re-derive doesn't undo earlier spend
       setDerivedSig(`${nicheText}|${language}|${targetPlatform}`)
       // Fresh profile invalidates anything derived from the old one.
       setRecommended([])
@@ -1012,7 +1012,8 @@ export function NewChannelWizard({
           sampleScript: sampleScript.trim() || null,
           sampleSource: sampleIsAi ? 'ai' : 'user',
           extraSampleScripts: extraSampleScripts.map((s) => s.trim()).filter(Boolean),
-          costCents, // accumulated creation cost → persisted on the channel
+          // costCents is deliberately NOT sent: the server records each paid call as it happens and
+          // attributes the total to this channel. The running figure below is display only.
           draftChannelId, // if this was a saved draft, promote that row instead of inserting a new one
 
           sound: {

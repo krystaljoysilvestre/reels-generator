@@ -9,7 +9,8 @@ import {
   ContentFilterError,
   SCENE_IMAGE_QUALITY,
 } from '@reels/providers'
-import { requireApiUser } from '@/lib/api-access'
+import { recordSpendEvent } from '@reels/db'
+import { requireApiUser, requireSpendBudget } from '@/lib/api-access'
 
 // On-demand preview for ONE style option. Called only when the operator clicks "Preview" on a card.
 // Not auto-retried — Retry on the card is the manual path.
@@ -21,6 +22,10 @@ const InputSchema = z.object({
 export async function POST(req: NextRequest) {
   const gate = await requireApiUser()
   if (gate instanceof NextResponse) return gate
+  // Paid call — respect the caller's monthly spend cap before spending (these routes were the gap:
+  // setup, preview, and research spend ran with no budget gate at all).
+  const budgetGate = await requireSpendBudget(gate)
+  if (budgetGate) return budgetGate
 
   const parsed = InputSchema.safeParse(await req.json().catch(() => null))
   if (!parsed.success) {
@@ -41,6 +46,9 @@ export async function POST(req: NextRequest) {
       // approves here is the look their scenes actually get.
       quality: SCENE_IMAGE_QUALITY,
     })
+    // Same route serves the wizard and Settings; the Settings caller dropped the cost. One gpt-image-1
+    // render at scene quality per preview, so a few "try another look" clicks is real money.
+    await recordSpendEvent({ userId: gate.id, surface: 'channel_style_image', provider: 'openai', costCents: result.costCents })
     return NextResponse.json({ imageKey: result.asset.storageKey, costCents: result.costCents })
   } catch (err) {
     if (err instanceof ContentFilterError) {

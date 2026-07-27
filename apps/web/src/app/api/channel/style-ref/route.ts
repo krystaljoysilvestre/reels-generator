@@ -2,13 +2,14 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { randomUUID } from 'node:crypto'
 import { llmCall, uploadBuffer } from '@reels/providers'
+import { recordSpendEvent } from '@reels/db'
 import { ToneConfigSchema } from '@reels/core'
 import {
   buildStyleRefPrompt,
   StyleRefSchema,
   STYLE_REF_V1_VERSION,
 } from '@reels/core/prompts/style-ref.v1'
-import { requireApiUser } from '@/lib/api-access'
+import { requireApiUser, requireSpendBudget } from '@/lib/api-access'
 
 // Operator uploads 1–3 reference images; a vision pass distills their shared visual
 // STYLE into the channel's stylePreset DNA (so the text-to-image pipeline can apply it
@@ -34,6 +35,10 @@ function sniffMime(buf: Buffer): ImageMedia | null {
 export async function POST(req: NextRequest) {
   const gate = await requireApiUser()
   if (gate instanceof NextResponse) return gate
+  // Paid call — respect the caller's monthly spend cap before spending (these routes were the gap:
+  // setup, preview, and research spend ran with no budget gate at all).
+  const budgetGate = await requireSpendBudget(gate)
+  if (budgetGate) return budgetGate
 
   const form = await req.formData().catch(() => null)
   if (!form) return NextResponse.json({ error: 'Invalid form' }, { status: 400 })
@@ -79,6 +84,7 @@ export async function POST(req: NextRequest) {
       messages: [{ role: 'user', content }],
       maxTokens: 700,
     })
+    await recordSpendEvent({ userId: gate.id, surface: 'channel_style_ref', provider: 'openai', costCents: result.costCents })
     return NextResponse.json({
       imageKey,
       label: result.data.label,

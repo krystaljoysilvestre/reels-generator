@@ -1,5 +1,6 @@
-import { getDb, users, channels, reels, invites } from '@reels/db'
+import { getDb, users, channels, reels, compilations, trendingNiches, spendEvents, invites } from '@reels/db'
 import { count, desc, eq, gte, isNull, sum } from 'drizzle-orm'
+import Link from 'next/link'
 import { requireAdmin } from '@/lib/auth'
 import { AdminUsers } from './AdminUsers'
 import { AdminInvites } from './AdminInvites'
@@ -17,13 +18,37 @@ export default async function AdminPage() {
   const now = new Date()
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
 
-  const [userRows, chCounts, spendAll, spendMonth, platAll, platMonth, recentReels, openInvites] = await Promise.all([
+  // Spend sums cover every cost column, not just reels — compilations, channel setup (wizard), and the
+  // app-level trending-niches research all bill the same wallet. Reels-only sums under-reported the platform.
+  const [userRows, chCounts, spendAll, spendMonth, compSpendAll, compSpendMonth, chanSpendAll, chanSpendMonth, platAll, platMonth, recentReels, openInvites] = await Promise.all([
     db.select().from(users).orderBy(desc(users.createdAt)),
     db.select({ userId: channels.userId, n: count() }).from(channels).groupBy(channels.userId),
     db.select({ userId: channels.userId, cents: sum(reels.costCents) }).from(reels).innerJoin(channels, eq(reels.channelId, channels.id)).groupBy(channels.userId),
     db.select({ userId: channels.userId, cents: sum(reels.costCents) }).from(reels).innerJoin(channels, eq(reels.channelId, channels.id)).where(gte(reels.createdAt, monthStart)).groupBy(channels.userId),
-    db.select({ cents: sum(reels.costCents) }).from(reels),
-    db.select({ cents: sum(reels.costCents) }).from(reels).where(gte(reels.createdAt, monthStart)),
+    db.select({ userId: channels.userId, cents: sum(compilations.costCents) }).from(compilations).innerJoin(channels, eq(compilations.channelId, channels.id)).groupBy(channels.userId),
+    db.select({ userId: channels.userId, cents: sum(compilations.costCents) }).from(compilations).innerJoin(channels, eq(compilations.channelId, channels.id)).where(gte(compilations.createdAt, monthStart)).groupBy(channels.userId),
+    Promise.all([
+      db.select({ userId: channels.userId, cents: sum(channels.costCents) }).from(channels).groupBy(channels.userId),
+      db.select({ userId: spendEvents.userId, cents: sum(spendEvents.costCents) }).from(spendEvents).groupBy(spendEvents.userId),
+    ]),
+    Promise.all([
+      db.select({ userId: channels.userId, cents: sum(channels.costCents) }).from(channels).where(gte(channels.createdAt, monthStart)).groupBy(channels.userId),
+      db.select({ userId: spendEvents.userId, cents: sum(spendEvents.costCents) }).from(spendEvents).where(gte(spendEvents.createdAt, monthStart)).groupBy(spendEvents.userId),
+    ]),
+    Promise.all([
+      db.select({ cents: sum(reels.costCents) }).from(reels),
+      db.select({ cents: sum(compilations.costCents) }).from(compilations),
+      db.select({ cents: sum(channels.costCents) }).from(channels),
+      db.select({ cents: sum(trendingNiches.costCents) }).from(trendingNiches),
+      db.select({ cents: sum(spendEvents.costCents) }).from(spendEvents),
+    ]),
+    Promise.all([
+      db.select({ cents: sum(reels.costCents) }).from(reels).where(gte(reels.createdAt, monthStart)),
+      db.select({ cents: sum(compilations.costCents) }).from(compilations).where(gte(compilations.createdAt, monthStart)),
+      db.select({ cents: sum(channels.costCents) }).from(channels).where(gte(channels.createdAt, monthStart)),
+      db.select({ cents: sum(trendingNiches.costCents) }).from(trendingNiches).where(gte(trendingNiches.createdAt, monthStart)),
+      db.select({ cents: sum(spendEvents.costCents) }).from(spendEvents).where(gte(spendEvents.createdAt, monthStart)),
+    ]),
     db
       .select({
         id: reels.id,
@@ -44,6 +69,16 @@ export default async function AdminPage() {
   const chCountMap = new Map(chCounts.map((r) => [r.userId, Number(r.n)]))
   const spendAllMap = new Map(spendAll.map((r) => [r.userId, Number(r.cents ?? 0)]))
   const spendMonthMap = new Map(spendMonth.map((r) => [r.userId, Number(r.cents ?? 0)]))
+  for (const rows of [compSpendAll, ...chanSpendAll]) {
+    for (const r of rows) {
+      if (r.userId) spendAllMap.set(r.userId, (spendAllMap.get(r.userId) ?? 0) + Number(r.cents ?? 0))
+    }
+  }
+  for (const rows of [compSpendMonth, ...chanSpendMonth]) {
+    for (const r of rows) {
+      if (r.userId) spendMonthMap.set(r.userId, (spendMonthMap.get(r.userId) ?? 0) + Number(r.cents ?? 0))
+    }
+  }
 
   const usersView = userRows.map((u) => ({
     id: u.id,
@@ -65,8 +100,8 @@ export default async function AdminPage() {
     createdAt: i.createdAt ? i.createdAt.toISOString() : null,
   }))
 
-  const platformAll = Number(platAll[0]?.cents ?? 0)
-  const platformMonth = Number(platMonth[0]?.cents ?? 0)
+  const platformAll = platAll.reduce((s, rows) => s + Number(rows[0]?.cents ?? 0), 0)
+  const platformMonth = platMonth.reduce((s, rows) => s + Number(rows[0]?.cents ?? 0), 0)
   const pendingCount = usersView.filter((u) => u.status === 'pending').length
 
   return (
@@ -92,7 +127,12 @@ export default async function AdminPage() {
       <div className="space-y-10 p-8">
         {/* Platform cost */}
         <section>
-          <h2 className="micro-label mb-3.5">Platform cost</h2>
+          <div className="mb-3.5 flex items-baseline justify-between">
+            <h2 className="micro-label">Platform cost</h2>
+            <Link href="/admin/costs" className="text-xs font-600 text-accent hover:underline">
+              Full cost report →
+            </Link>
+          </div>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <Stat label="Spent this month" value={money(platformMonth)} />
             <Stat label="Spent all-time" value={money(platformAll)} />
@@ -100,8 +140,8 @@ export default async function AdminPage() {
             <Stat label="Net" value="—" hint="revenue − cost, later" />
           </div>
           <p className="mt-2 text-xs text-faint">
-            Cost is our tracked provider spend (estimated per token / second / character) — a close proxy for
-            what we pay, not reconciled invoices.
+            Cost is our tracked provider spend across reels, compilations, channel setup, and topic research
+            (estimated per token / second / character) — a close proxy for what we pay, not reconciled invoices.
           </p>
         </section>
 

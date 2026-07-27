@@ -72,9 +72,13 @@ async function runPool<T>(items: T[], concurrency: number, worker: (item: T) => 
 
 // Render one image on the chosen engine — gpt-image-1 (openai) via ../../providers generateImage, or a fal
 // model (gemini/flux) via generateImageFal. Both take/return the same shape, so callers stay engine-agnostic.
+// `onSpend` reports the filter-safe rephrase LLM the instant it's billed. It has to be reported rather than
+// folded into the return, because the path it runs on is a safety-filter rejection — and the retry render
+// right after it can be rejected too, in which case this function throws and a folded total is lost.
 async function renderImage(
   engine: ImageEngine,
   params: { prompt: string; negativePrompt: string; reelId: string; sceneIdx?: number; storageKey?: string; aspect: string; referenceImageKeys?: string[] },
+  onSpend?: (cents: number) => void,
 ): Promise<Awaited<ReturnType<typeof generateImageFal>>> {
   // TEXT-TO-IMAGE ONLY for gpt-image-1 (its edit/reference conditioning proved unreliable — ignored wardrobe,
   // flipped gender); fal engines take reference plates. One dispatch, reused for the filter-safe retry below.
@@ -91,7 +95,11 @@ async function renderImage(
     if (!(err instanceof ContentFilterError)) throw err
     const { system, userMessage } = buildFilterSafePrompt(params.prompt)
     const safe = await llmCall({ templateVersion: FILTER_SAFE_V1_VERSION, schema: FilterSafeSchema, system, messages: [{ role: 'user', content: userMessage }] })
-    return dispatch(safe.data.imagePrompt.trim() || params.prompt)
+    if (onSpend) onSpend(safe.costCents)
+    const retry = await dispatch(safe.data.imagePrompt.trim() || params.prompt)
+    // Only fold when there's no sink to report to (the plate path, which sums the return value); otherwise
+    // it was already recorded above and folding would charge it twice.
+    return onSpend ? retry : { ...retry, costCents: retry.costCents + safe.costCents }
   }
 }
 
@@ -353,7 +361,7 @@ export async function generateImages(reelId: string): Promise<void> {
             genreCategory: channel.genreCategory,
             referenceImageKeys,
             engine: sceneEngine,
-          })
+          }, cost.add)
           cost.add(result.costCents) // record spend the moment it's incurred, so a throw below doesn't lose it
           chosen = result
 
@@ -467,11 +475,15 @@ interface ImageGenAttemptParams {
   engine: ImageEngine // per-genre image model (currently gpt-image-1 for all)
 }
 
-async function generateImageWithRetry(params: ImageGenAttemptParams) {
+// `spend` reports the rephrase LLM the moment it's billed, instead of accumulating it into the return
+// value: every path out of this function except a clean render either throws (non-filter error, or the
+// fallback render failing) or is reached after several paid rephrases, and a returned total is lost in all
+// of them. The caller's cost sink persists what it's told even when the step later fails, so the returned
+// costCents is now the image price alone and rephrase spend is never stranded.
+async function generateImageWithRetry(params: ImageGenAttemptParams, spend: (cents: number) => void) {
   let currentPrompt = params.prompt
   let refKeys = params.referenceImageKeys
   const provider: 'openai' | 'fal' = params.engine.family === 'openai' ? 'openai' : 'fal'
-  let totalCost = 0
 
   for (let attempt = 0; attempt < MAX_REPHRASE_ATTEMPTS; attempt++) {
     try {
@@ -482,8 +494,8 @@ async function generateImageWithRetry(params: ImageGenAttemptParams) {
         sceneIdx: params.sceneIdx,
         aspect: params.aspect,
         referenceImageKeys: refKeys, // [] → plain text→image; non-empty → reference-conditioned
-      })
-      return { ...result, provider, costCents: result.costCents + totalCost }
+      }, spend)
+      return { ...result, provider, costCents: result.costCents }
     } catch (err) {
       if (!(err instanceof ContentFilterError)) throw err
 
@@ -508,7 +520,7 @@ async function generateImageWithRetry(params: ImageGenAttemptParams) {
           system,
           messages: [{ role: 'user', content: userMessage }],
         })
-        totalCost += rephrase.costCents
+        spend(rephrase.costCents)
         rephrased = typeof rephrase.data === 'string' && rephrase.data.trim() ? rephrase.data : null
       } catch (e) {
         console.warn(`[rephrase] ${params.reelId.slice(0, 8)} scene${params.sceneIdx} rephrase failed → mood-only: ${e instanceof Error ? e.message : String(e)}`)
@@ -544,7 +556,7 @@ async function generateImageWithRetry(params: ImageGenAttemptParams) {
     sceneIdx: params.sceneIdx,
     aspect: params.aspect,
     referenceImageKeys: refKeys,
-  })
+  }, spend)
   console.warn(`[generate-images] ${params.reelId.slice(0, 8)} scene${params.sceneIdx} exhausted safety-filter rephrases → mood-only atmosphere fallback`)
-  return { ...fallback, provider, costCents: fallback.costCents + totalCost }
+  return { ...fallback, provider, costCents: fallback.costCents }
 }

@@ -2,13 +2,14 @@ import type { NextRequest} from 'next/server';
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { listVoices, llmCall, ProviderRateLimitError } from '@reels/providers'
+import { recordSpendEvent } from '@reels/db'
 import { ToneConfigSchema } from '@reels/core'
 import {
   buildVoiceRecommendPrompt,
   VoiceRecommendationSchema,
   VOICE_RECOMMEND_V1_VERSION,
 } from '@reels/core/prompts/voice-recommend.v1'
-import { requireApiUser } from '@/lib/api-access'
+import { requireApiUser, requireSpendBudget } from '@/lib/api-access'
 
 const InputSchema = z.object({
   nicheDescription: z.string().trim().min(1).max(8000),
@@ -20,6 +21,10 @@ const InputSchema = z.object({
 export async function POST(req: NextRequest) {
   const gate = await requireApiUser()
   if (gate instanceof NextResponse) return gate
+  // Paid call — respect the caller's monthly spend cap before spending (these routes were the gap:
+  // setup, preview, and research spend ran with no budget gate at all).
+  const budgetGate = await requireSpendBudget(gate)
+  if (budgetGate) return budgetGate
 
   const parsed = InputSchema.safeParse(await req.json().catch(() => null))
   if (!parsed.success) {
@@ -44,6 +49,9 @@ export async function POST(req: NextRequest) {
       messages: [{ role: 'user', content: userMessage }],
       maxTokens: 600,
     })
+    // Recorded here rather than by the callers: both of them (the wizard, and the storyboard's voice
+    // picker) threw the cost away, and the route has no reel/channel id to bill.
+    await recordSpendEvent({ userId: gate.id, surface: 'voice_recommend', provider: 'openai', costCents: result.costCents })
 
     // Map recommended ids → full voice objects (with previewUrl); drop unknown ids.
     const byId = new Map(catalog.map((v) => [v.id, v]))

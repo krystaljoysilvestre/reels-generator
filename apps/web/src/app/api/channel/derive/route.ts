@@ -3,13 +3,14 @@ import { NextResponse } from 'next/server'
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import { llmCall } from '@reels/providers'
+import { recordSpendEvent } from '@reels/db'
 import {
   buildChannelDerivationPrompt,
   ChannelDerivationSchema,
   CHANNEL_V1_VERSION,
 } from '@reels/core/prompts/channel.v1'
 import { TargetPlatformSchema } from '@reels/core'
-import { requireApiUser } from '@/lib/api-access'
+import { requireApiUser, requireSpendBudget } from '@/lib/api-access'
 
 const InputSchema = z.object({
   name: z.string().trim().min(1).max(80),
@@ -22,7 +23,8 @@ const InputSchema = z.object({
 // (e.g. the user reloaded mid-generate, lost the result, and clicked again) returns the prior
 // result instead of re-charging the model. In-memory + per-instance — best-effort, not durable.
 type DeriveResult = z.input<typeof ChannelDerivationSchema> // matches llmCall's returned data shape
-type CacheEntry = { at: number; derived: DeriveResult; costCents: number }
+// No costCents here on purpose: a cache hit is free, so there is no cost to replay.
+type CacheEntry = { at: number; derived: DeriveResult }
 const DERIVE_TTL_MS = 30 * 60 * 1000 // 30 min — covers a reload/retry, short enough to stay fresh
 const DERIVE_CACHE_MAX = 200
 const deriveCache = new Map<string, CacheEntry>()
@@ -40,6 +42,10 @@ function cacheKey(input: z.infer<typeof InputSchema>): string {
 export async function POST(req: NextRequest) {
   const gate = await requireApiUser()
   if (gate instanceof NextResponse) return gate
+  // Paid call — respect the caller's monthly spend cap before spending (these routes were the gap:
+  // setup, preview, and research spend ran with no budget gate at all).
+  const budgetGate = await requireSpendBudget(gate)
+  if (budgetGate) return budgetGate
 
   const parsed = InputSchema.safeParse(await req.json().catch(() => null))
   if (!parsed.success) {
@@ -52,7 +58,9 @@ export async function POST(req: NextRequest) {
   const key = cacheKey(parsed.data)
   const cached = deriveCache.get(key)
   if (cached && Date.now() - cached.at < DERIVE_TTL_MS) {
-    return NextResponse.json({ derived: cached.derived, costCents: cached.costCents, cached: true })
+    // costCents 0 on a cache hit — nothing was paid. It used to echo the original call's cost, which the
+    // wizard then added to its running total a second time (the never-charge-on-a-cache-hit rule).
+    return NextResponse.json({ derived: cached.derived, costCents: 0, cached: true })
   }
 
   const { system, userMessage } = buildChannelDerivationPrompt({ name, nicheDescription, languages, targetPlatform })
@@ -65,7 +73,8 @@ export async function POST(req: NextRequest) {
       messages: [{ role: 'user', content: userMessage }],
       maxTokens: 2048,
     })
-    deriveCache.set(key, { at: Date.now(), derived: result.data, costCents: result.costCents })
+    await recordSpendEvent({ userId: gate.id, surface: 'channel_derive', provider: 'openai', costCents: result.costCents })
+    deriveCache.set(key, { at: Date.now(), derived: result.data })
     // Bound the cache: when it grows past the cap, drop expired entries (and oldest if still over).
     if (deriveCache.size > DERIVE_CACHE_MAX) {
       const now = Date.now()

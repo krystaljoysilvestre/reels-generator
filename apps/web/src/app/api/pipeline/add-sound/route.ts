@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { getDb, reels, stories, scenes } from '@reels/db'
-import { eq, and } from 'drizzle-orm'
+import { eq, and, sql } from 'drizzle-orm'
 import { llmCall, listVoices, ProviderRateLimitError } from '@reels/providers'
 import { OperatorSfxSchema, cueVolumeDb, type OperatorCue } from '@reels/core'
 import { buildAddSoundPrompt, AddSoundSchema, ADD_SOUND_V1_VERSION } from '@reels/core/prompts/add-sound.v1'
@@ -53,13 +53,21 @@ export async function POST(req: NextRequest) {
       sceneText: scene?.narrationText ?? story.body.slice(0, 400),
       fullNarration: story.body,
     })
-    const { data } = await llmCall({
+    const { data, costCents } = await llmCall({
       templateVersion: ADD_SOUND_V1_VERSION,
       schema: AddSoundSchema,
       system,
       messages: [{ role: 'user', content: userMessage }],
       maxTokens: 400,
     })
+    // Bill the reel immediately, before the placement checks below — every one of them can return early,
+    // and the tokens are spent either way. This was the only paid call in the app discarding its cost.
+    if (costCents > 0) {
+      await db
+        .update(reels)
+        .set({ costCents: sql`${reels.costCents} + ${costCents}`, updatedAt: new Date() })
+        .where(eq(reels.id, reelId))
+    }
 
     const hits = countOccurrences(story.body, data.anchor)
     if (hits !== 1) {

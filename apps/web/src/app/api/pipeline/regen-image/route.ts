@@ -58,6 +58,18 @@ export async function POST(req: NextRequest) {
   const cast = castNationality(channel.languages, (channel.worldBible as { region?: string } | null)?.region)
   const negativePrompt = assembleNegativePrompt({ genreCategory: channel.genreCategory })
 
+  // Bill the reel as each call is made, not once at the end. A "fresh take" that changes a character's look
+  // can spend a revise LLM + a re-minted plate + a filter-safe LLM on top of the scene image, and every
+  // error path below returns early — so a single trailing increment charged one image for up to four calls.
+  // Atomic because the storyboard invites concurrent regens.
+  const addSpend = async (cents: number): Promise<void> => {
+    if (!(cents > 0)) return
+    await db
+      .update(reels)
+      .set({ costCents: sql`${reels.costCents} + ${cents}`, updatedAt: new Date() })
+      .where(eq(reels.id, reelId))
+  }
+
   // A plain-language change goes through the LLM first, NOT straight into the image model — it bakes the
   // change into a well-formed, content-only image prompt (same conventions scenes.v1 produces).
   const tweak = instruction?.trim()
@@ -77,6 +89,7 @@ export async function POST(req: NextRequest) {
         : []
       const { system, userMessage } = buildReviseScenePrompt(basePrompt, tweak, { genreCategory: channel.genreCategory, entities: sceneEnts, aspect })
       const revised = await llmCall({ templateVersion: REVISE_SCENE_V1_VERSION, schema: ReviseSceneSchema, system, messages: [{ role: 'user', content: userMessage }] })
+      await addSpend(revised.costCents)
       contentPrompt = revised.data.imagePrompt.trim() || basePrompt
       reviseReplace = revised.data.intent === 'replace'
 
@@ -95,6 +108,7 @@ export async function POST(req: NextRequest) {
           const plateRes = plateEngine.family === 'openai'
             ? await generateImage({ prompt: platePrompt, negativePrompt, reelId, sceneIdx, storageKey: plateKey, quality: SCENE_IMAGE_QUALITY, aspect })
             : await generateImageFal({ prompt: platePrompt, negativePrompt, reelId, sceneIdx, storageKey: plateKey, aspect, engine: plateEngine })
+          await addSpend(plateRes.costCents) // a second full image generation, previously uncharged
           ent.referenceImageKey = plateRes.asset.storageKey
         } catch { /* keep old plate; description still updated */ }
         await db.update(reels).set({ storyBible }).where(eq(reels.id, reelId))
@@ -159,6 +173,7 @@ export async function POST(req: NextRequest) {
       try {
         const { system, userMessage } = buildFilterSafePrompt(finalPrompt)
         const safe = await llmCall({ templateVersion: FILTER_SAFE_V1_VERSION, schema: FilterSafeSchema, system, messages: [{ role: 'user', content: userMessage }] })
+        await addSpend(safe.costCents)
         result = await render(safe.data.imagePrompt.trim() || finalPrompt)
       } catch (err2) {
         if (err2 instanceof ProviderRateLimitError) return NextResponse.json({ error: 'Image service is busy — wait a moment and try again.' }, { status: 429 })
@@ -171,6 +186,9 @@ export async function POST(req: NextRequest) {
     }
   }
   const provider = engine.family === 'openai' ? 'openai' : 'fal'
+  // Charged here, before the asset/scene bookkeeping below — those are three more DB writes that can
+  // throw, and the image is the most expensive call in this route.
+  await addSpend(result.costCents)
 
   const [asset] = await db.insert(assets).values({
     reelId,
@@ -197,10 +215,6 @@ export async function POST(req: NextRequest) {
   const reelVideos = await db.query.assets.findMany({ where: and(eq(assets.reelId, reelId), eq(assets.kind, 'video')) })
   const staleIds = reelVideos.filter((a) => (a.meta as Record<string, unknown>)['sceneIdx'] === sceneIdx).map((a) => a.id)
   if (staleIds.length) await db.delete(assets).where(inArray(assets.id, staleIds))
-
-  // Atomic increment — concurrent scene regens (the storyboard invites them) would otherwise drop one
-  // increment under read-modify-write, drifting the reel's cost low.
-  await db.update(reels).set({ costCents: sql`${reels.costCents} + ${result.costCents}`, updatedAt: new Date() }).where(eq(reels.id, reelId))
 
   // entityLook (when the change edited a character's look): the UI flags the other scenes she's in so the
   // operator can refresh them to match — "update globally, refresh on demand".

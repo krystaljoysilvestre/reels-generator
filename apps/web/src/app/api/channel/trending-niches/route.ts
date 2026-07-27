@@ -8,7 +8,7 @@ import {
   TRENDING_NICHES_V1_VERSION,
   type TrendingNiches,
 } from '@reels/core/prompts/trending-niches.v1'
-import { requireApiUser } from '@/lib/api-access'
+import { requireApiUser, requireSpendBudget } from '@/lib/api-access'
 
 // "Trending now" suggestions for the channel wizard — LIVE web-searched niches with strong current
 // RPM, cached one row per UTC day in the DB so the whole app shares a single ~5¢ search call
@@ -65,7 +65,14 @@ export async function GET() {
       if (shared) return NextResponse.json({ niches: shared.niches, costCents: 0, cached: true })
     }
 
-    // Nobody here is searching. Try to become the one request — app-wide — that pays for today.
+    // Nobody here is searching. Try to become the one request — app-wide — that pays for today. The
+    // budget gate sits HERE, not at the top: reading a cached row is free, and an over-cap creator
+    // should still see the rail — they just don't get to trigger the paid search. Note we deliberately
+    // DISCARD the gate's 429 and serve the stale rail instead; the cap blocks spending, not reading.
+    const overCap = (await requireSpendBudget(gate)) !== null
+    if (overCap) {
+      return NextResponse.json({ niches: cached ?? [], costCents: 0, cached: cached !== null })
+    }
     if (await claimDay(db, day)) {
       const fresh = await (inflight ??= refresh(db, day, gate.id).finally(() => { inflight = null }))
       if (fresh) return NextResponse.json({ niches: fresh.niches, costCents: fresh.costCents, cached: false })
@@ -132,17 +139,24 @@ async function refresh(
       webSearch: true, // live results — the whole point; never answer from model memory
       maxTokens: 2500,
     })
+    // Bill the day's row the moment the search is paid for, and INCREMENT rather than SET: up to
+    // MAX_ATTEMPTS_PER_DAY paid searches can run in a day, and the parse below can throw on a call that
+    // was already billed. A trailing SET recorded only the last successful attempt and erased the rest.
+    await db
+      .update(trendingNiches)
+      .set({ costCents: sql`${trendingNiches.costCents} + ${res.costCents}` })
+      .where(and(eq(trendingNiches.day, day), eq(trendingNiches.segment, SEGMENT)))
+
     // Re-parse to resolve schema defaults (llmCall's generic infers the loose input shape).
     const data = TrendingNichesSchema.parse(res.data)
 
     // Publishing the niches also releases the claim — every other request now reads this row.
-    // Cost is app-level (shared cache, pre-channel: no reel or channel exists to bill), so it's
-    // recorded here rather than in a reel's spend, and stays queryable per day alongside its actor.
+    // Cost is app-level (shared cache, pre-channel: no reel or channel exists to bill), so it lives on
+    // this row rather than in a reel's spend, and stays queryable per day alongside its actor.
     await db
       .update(trendingNiches)
       .set({
         niches: data.niches,
-        costCents: res.costCents,
         refreshedByUserId: actorUserId,
         refreshedAt: new Date(),
       })

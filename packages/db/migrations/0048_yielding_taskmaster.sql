@@ -1,0 +1,1 @@
+ALTER TABLE "compilations" ADD COLUMN "input_hash" text;

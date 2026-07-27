@@ -60,6 +60,9 @@ export async function generatePostMeta(reelId: string): Promise<void> {
   let result: { output: PostMeta; skipped: boolean }
   try {
     result = await runStep<PostMeta>({ reelId, stepName: 'generate_post_meta', inputHash }, async () => {
+      // Tracked outside the try: the LLM can succeed and the schema parse below still throw, in which
+      // case the tokens were already billed. Falling back to a minimal meta is free — the call wasn't.
+      let spent = 0
       try {
         const llm = await llmCall({
           templateVersion: POST_META_V1_VERSION,
@@ -69,11 +72,12 @@ export async function generatePostMeta(reelId: string): Promise<void> {
           temperature: 0.8,
           maxTokens: 800,
         })
+        spent = llm.costCents
         const meta = PostMetaSchema.parse({ ...PostMetaLlmSchema.parse(llm.data), v: 1, language: reel.language })
-        return { output: meta, costCents: llm.costCents }
+        return { output: meta, costCents: spent }
       } catch (err) {
         console.warn(`[post-meta] ${reelId.slice(0, 8)} packaging failed, persisting minimal meta: ${err instanceof Error ? err.message : String(err)}`)
-        return { output: minimalMeta, costCents: 0 }
+        return { output: minimalMeta, costCents: spent }
       }
     })
   } catch (err) {

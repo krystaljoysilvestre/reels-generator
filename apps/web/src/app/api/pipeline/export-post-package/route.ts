@@ -7,7 +7,7 @@ import { eq, and, asc, sql } from 'drizzle-orm'
 import { downloadBuffer, llmCall } from '@reels/providers'
 import { PostMetaSchema, PostingRulesSchema, formatPostCaption, formatImageCredits, StoryBibleSchema, type PostMeta } from '@reels/core'
 import { buildPostMetaPrompt, PostMetaLlmSchema, POST_META_V1_VERSION } from '@reels/core/prompts/post-meta.v1'
-import { requireReelOwner } from '@/lib/api-access'
+import { requireReelOwner, requireSpendBudget } from '@/lib/api-access'
 
 // Minimal ZIP builder without native deps (zip is just stored entries)
 function buildZip(files: Array<{ name: string; data: Buffer }>): Buffer {
@@ -137,6 +137,9 @@ export async function GET(req: NextRequest) {
 
   const gate = await requireReelOwner(reelId)
   if (gate instanceof NextResponse) return gate
+  // Paid call (vision / LLM) — respect the caller's spend cap before spending.
+  const budgetGate = await requireSpendBudget(gate)
+  if (budgetGate) return budgetGate
 
   const db = getDb()
   const reel = await db.query.reels.findFirst({

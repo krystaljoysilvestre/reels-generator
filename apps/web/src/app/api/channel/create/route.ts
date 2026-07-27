@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { eq } from 'drizzle-orm'
-import { getDb, channels, stories } from '@reels/db'
+import { getDb, channels, stories, claimSetupSpendForChannel } from '@reels/db'
 import { ToneConfigSchema, WorldBibleSchema, ChannelVoiceSchema, VoiceModeSchema, CaptionStyleSchema, TargetPlatformSchema, PLATFORM_PRESETS, MusicIntensitySchema, MusicModeSchema, AudioMoodSchema, peakFracForType } from '@reels/core'
 import { classifyGenre, GENRE_MODULE_VALUES, asGenreModule } from '@reels/core/prompts/scenes.v1'
 import { STYLE_VALUES, resolveStyle } from '@reels/core/prompts/story-styles.v1'
@@ -46,7 +46,8 @@ const InputSchema = z.object({
   // novel would blow up token cost) — not a UX limit; real scripts are far shorter.
   sampleSource: z.enum(['user', 'ai']).default('user'),
   extraSampleScripts: z.array(z.string().trim().min(1).max(20000)).max(2).default([]), // additional references
-  costCents: z.number().int().min(0).default(0), // accumulated creation cost (derive + style + previews)
+  // NOTE: no costCents field. Setup spend is recorded server-side per paid call (spend_events) and
+  // attributed to this channel below — a client-supplied total was spoofable and lost on accumulator resets.
   draftChannelId: z.string().uuid().nullish(), // finishing a saved draft → promote that row instead of inserting
   // Sound step: optional background-music track (AI-generated or preset; null = no music),
   // the SFX toggle, music loudness, and the derived mood (kept for later regeneration).
@@ -139,7 +140,6 @@ export async function POST(req: NextRequest) {
     lutConfig: { grain: 0.15, vignette: 0.25 },
     audioPacks,
     postingRules: { platforms: ['fb', 'yt'], scheduleUtcHour: 13, qualityThreshold: 0 },
-    costCents: c.costCents, // what creating this channel cost us (derive + style options/previews)
   }
 
   // If finishing a saved draft, promote that same row (draft → active, state cleared) so the dashboard
@@ -162,6 +162,12 @@ export async function POST(req: NextRequest) {
     const inserted = await db.insert(channels).values(values).returning()
     channel = inserted[0]
   }
+
+  // Attribute the wizard's paid work (derive / sample script / style reads / style previews) to the channel
+  // it produced. The spend itself was already recorded per call, so this only stamps the owner — nothing
+  // here can change the amount, which is the point.
+  const setupCents = await claimSetupSpendForChannel(user.id, channel!.id)
+  if (setupCents > 0) console.log(`[channel/create] ${channel!.id} setup spend ${setupCents}¢`)
 
   // Step-2 sample script(s): USER-written scripts become the channel's first reference stories — the
   // creator's actual voice, which nothing else can supply. AI-generated samples persist for the record

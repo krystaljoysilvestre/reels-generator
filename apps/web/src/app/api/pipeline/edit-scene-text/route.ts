@@ -49,7 +49,11 @@ export async function POST(req: NextRequest) {
     columns: { narrationText: true },
   })
   const body = all.map((s) => s.narrationText.trim()).filter(Boolean).join('\n')
-  await db.update(stories).set({ body, updatedAt: new Date() }).where(eq(stories.id, reel.storyId))
+  // Clear the peak anchor: it points at a verbatim line in the OLD body, so after an edit it's either
+  // stale or (when a prior extraction found nothing usable, stored as '') a marker that would stop
+  // breakdown_scenes from ever extracting one again. Null means "not extracted yet" — it re-derives from
+  // the new text, which is what drives the climax scene and the music swell.
+  await db.update(stories).set({ body, twistAnchor: null, updatedAt: new Date() }).where(eq(stories.id, reel.storyId))
 
   return NextResponse.json({ ok: true })
 }

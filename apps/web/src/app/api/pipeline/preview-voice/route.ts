@@ -2,6 +2,7 @@ import type { NextRequest} from 'next/server';
 import { NextResponse } from 'next/server'
 import { ElevenLabsTtsProvider, ProviderRateLimitError } from '@reels/providers'
 import { downloadBuffer } from '@reels/providers'
+import { recordSpendEvent } from '@reels/db'
 import { VoiceSettingsSchema, type VoiceSettings } from '@reels/core'
 import { requireApiUser, requireSpendBudget } from '@/lib/api-access'
 
@@ -28,6 +29,9 @@ export async function POST(req: NextRequest) {
   const previewReelId = `preview-${Date.now()}`
   try {
     const result = await tts.synthesize({ narration: text, voiceId, reelId: previewReelId, ...(voiceSettings ? { voiceSettings } : {}) })
+    // Character-billed TTS, up to 1500 chars per click, and the synthetic preview id means there's no reel
+    // row to bill — so it goes to the ledger for spend with no owning resource. Was recorded nowhere.
+    await recordSpendEvent({ userId: gate.id, surface: 'voice_preview', provider: 'elevenlabs', costCents: result.costCents })
     const buf = await downloadBuffer(result.audioStorageKey)
     return new NextResponse(new Uint8Array(buf), {
       headers: { 'Content-Type': 'audio/mpeg' },

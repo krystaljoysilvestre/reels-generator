@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { eq, and, desc, inArray } from 'drizzle-orm'
-import { getDb, channels, stories, reels, rejections } from '@reels/db'
+import { getDb, channels, stories, reels, rejections, recordSpendEvent } from '@reels/db'
 import { llmCall } from '@reels/providers'
 import {
   buildRubricMinerPrompt,
@@ -10,7 +10,7 @@ import {
   RUBRIC_MINER_V1_VERSION,
 } from '@reels/core/prompts/rubric-miner.v1'
 import { REJECTION_REASON_LABELS } from '@reels/core/assembly/avoidlist'
-import { requireChannelOwner } from '@/lib/api-access'
+import { requireChannelOwner, requireSpendBudget } from '@/lib/api-access'
 
 const InputSchema = z.object({
   channelId: z.string().uuid(),
@@ -27,6 +27,10 @@ export async function POST(req: NextRequest) {
 
   const gate = await requireChannelOwner(parsed.data.channelId)
   if (gate instanceof NextResponse) return gate
+  // Paid call — respect the caller's monthly spend cap before spending (these routes were the gap:
+  // setup, preview, and research spend ran with no budget gate at all).
+  const budgetGate = await requireSpendBudget(gate)
+  if (budgetGate) return budgetGate
 
   const db = getDb()
   const channel = await db.query.channels.findFirst({ where: eq(channels.id, parsed.data.channelId) })
@@ -90,6 +94,14 @@ export async function POST(req: NextRequest) {
       messages: [{ role: 'user', content: userMessage }],
       provider: 'anthropic',
       maxTokens: 2048,
+    })
+    // Settings-time spend the caller discarded. Attributed to the channel it was mined for.
+    await recordSpendEvent({
+      userId: gate.id,
+      channelId: channel.id,
+      surface: 'channel_mine_rubric',
+      provider: 'anthropic',
+      costCents: result.costCents,
     })
     return NextResponse.json({ rubric: result.data.rubric, costCents: result.costCents })
   } catch (err) {

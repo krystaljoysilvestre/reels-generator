@@ -275,6 +275,10 @@ export const compilations = pgTable('compilations', {
   status: compilationStatusEnum('status').notNull().default('drafting'),
   renderUrl: text('render_url'),
   costCents: integer('cost_cents').notNull().default(0),
+  // Recipe fingerprint (reel set + theme + prompt version) — the idempotency key build_compilation lacks
+  // by not running inside runStep. A finished compilation whose hash still matches is not rebuilt, so a
+  // re-trigger can't re-pay the script LLM and every connective-tissue TTS call.
+  inputHash: text('input_hash'),
   youtubeVideoId: text('youtube_video_id'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
@@ -548,6 +552,46 @@ export const trendingNiches = pgTable(
     pk: primaryKey({ columns: [t.day, t.segment] }),
     // Serves the "newest successful row" lookup behind stale-while-revalidate.
     idxSegmentDay: index('idx_trending_niches_segment_day').on(t.segment, t.day),
+  }),
+)
+
+// ── spend_events ──────────────────────────────────────────────────────────────
+// Paid calls with no reel or channel to bill — the channel wizard before its channel row exists, and
+// voice previews. Per-story cost accounting is a named foundation (ARCHITECTURE.md principle 7), so this
+// spend needs a real server-side home: the wizard used to POST its own browser-accumulated total, which
+// was both spoofable (any client could send 0) and lossy (the accumulator reset mid-flow), and preview
+// spend was recorded nowhere at all.
+//
+// `userId` is payer ATTRIBUTION, not a scattered ownership column — pre-channel spend has no channel to
+// derive an owner from, so this is the same pattern trending_niches.refreshed_by_user_id already uses.
+// (Known workspace-migration site: when workspaces land, this spend belongs to the workspace, so this is
+// a second concentrated change point alongside channels.userId.)
+//
+// THIS TABLE IS THE ONLY HOME FOR THIS MONEY. A wizard's rows get stamped with the channel they produced
+// (channelId set) purely for ATTRIBUTION — the amount is never copied into channels.cost_cents, and
+// aggregations count EVERY row here regardless of channelId. Do not "fold" these totals into
+// channels.cost_cents: that column is frozen legacy (pre-ledger, client-supplied) and nothing writes it,
+// which is exactly what makes summing both safe. Copying would double-count every wizard's spend.
+export const spendEvents = pgTable(
+  'spend_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    // Nullable + set null on delete, matching channels.userId: deleting a user must not erase the record
+    // that money was spent, or all-time platform spend silently drops.
+    userId: uuid('user_id').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
+    // Attribution only (see above): which channel this setup spend produced. Null = not attributed yet.
+    channelId: uuid('channel_id').references((): AnyPgColumn => channels.id, { onDelete: 'set null' }),
+    surface: text('surface').notNull(),   // which capability spent it, e.g. 'channel_derive', 'voice_preview'
+    provider: text('provider').notNull(), // 'openai' | 'anthropic' | 'elevenlabs' | 'fal'
+    costCents: integer('cost_cents').notNull(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    // Serves the per-user month-to-date sum in the budget gates.
+    idxUserCreated: index('idx_spend_events_user_created').on(t.userId, t.createdAt),
+    // The app-wide daily kill-switch scans by date alone, which the composite index above can't serve.
+    idxCreated: index('idx_spend_events_created').on(t.createdAt),
+    idxChannel: index('idx_spend_events_channel').on(t.channelId),
   }),
 )
 

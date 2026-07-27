@@ -130,10 +130,18 @@ export async function breakdownScenes(reelId: string): Promise<void> {
 
   // Peak line drives the climax scene (here) + the music swell/sting (compute_timings reads twist_anchor).
   // Generated stories carry it; BYO/legacy stories don't, so extract one and persist it so BOTH consumers
-  // benefit. Idempotent: once twist_anchor is set, a re-run skips this and the breakdown hash stays stable.
+  // benefit.
+  //
+  // This runs BEFORE runStep because peakMoment feeds the step's inputHash — so it gets neither of the
+  // harness's protections and has to provide them itself:
+  //   · Idempotency, via twist_anchor as a three-state marker: null = never extracted, '' = extracted and
+  //     the result was unusable, non-empty = the anchor. Persisting '' is what stops a retry re-paying —
+  //     the old `!peakMoment` test re-ran the LLM on every attempt for any story whose candidate wasn't a
+  //     verbatim substring, and runStep then reported the step skipped with costCents 0.
+  //   · Cost capture, via an atomic increment the moment it's paid, so it lands exactly once whether the
+  //     step below runs, skips, or throws (the old `cost.add(peakCost)` inside the step dropped it on skip).
   let peakMoment = story.twistAnchor?.trim() ?? ''
-  let peakCost = 0
-  if (!peakMoment) {
+  if (story.twistAnchor === null) {
     const peak = buildPeakExtractPrompt(story.body)
     const peakLlm = await llmCall({
       templateVersion: PEAK_EXTRACT_V1_VERSION,
@@ -141,14 +149,18 @@ export async function breakdownScenes(reelId: string): Promise<void> {
       system: peak.system,
       messages: [{ role: 'user', content: peak.userMessage }],
     })
-    peakCost = peakLlm.costCents
-    const candidate = peakLlm.data.peakMoment.trim()
-    // Trust it only if it's a real verbatim substring (the schema can't enforce that); else leave empty
-    // and the climax/music fall back to their soft defaults rather than anchoring to a hallucinated line.
-    if (candidate && story.body.includes(candidate)) {
-      peakMoment = candidate
-      await db.update(stories).set({ twistAnchor: candidate }).where(eq(stories.id, story.id))
+    if (peakLlm.costCents > 0) {
+      await db
+        .update(reels)
+        .set({ costCents: sql`${reels.costCents} + ${peakLlm.costCents}`, updatedAt: new Date() })
+        .where(eq(reels.id, reelId))
     }
+    const candidate = peakLlm.data.peakMoment.trim()
+    // Trust it only if it's a real verbatim substring (the schema can't enforce that); else store '' and
+    // the climax/music fall back to their soft defaults rather than anchoring to a hallucinated line.
+    const usable = candidate && story.body.includes(candidate) ? candidate : ''
+    peakMoment = usable
+    await db.update(stories).set({ twistAnchor: usable }).where(eq(stories.id, story.id))
   }
 
   const peakChapterIdx = peakMoment ? chapters.findIndex((c) => c.text.includes(peakMoment)) : -1
@@ -179,8 +191,6 @@ export async function breakdownScenes(reelId: string): Promise<void> {
   const result = await runStep(
     { reelId, stepName: 'breakdown_scenes', inputHash },
     async (cost) => {
-      cost.add(peakCost) // spend already incurred resolving the peak, before this step
-
       // Depiction-gate audit trail, one entry per chapter — attached to the step output (planGate pattern).
       const depictionAudits: DepictionAudit[] = []
 

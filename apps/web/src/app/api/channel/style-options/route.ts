@@ -2,13 +2,14 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { llmCall } from '@reels/providers'
+import { recordSpendEvent } from '@reels/db'
 import { WorldBibleSchema, ToneConfigSchema } from '@reels/core'
 import {
   buildStyleOptionsPrompt,
   StyleOptionsSchema,
   STYLE_OPTIONS_V1_VERSION,
 } from '@reels/core/prompts/style-options.v1'
-import { requireApiUser } from '@/lib/api-access'
+import { requireApiUser, requireSpendBudget } from '@/lib/api-access'
 
 // Proposes a content-safe sample scene + 4 distinct visual "looks" for a channel.
 // Text-only LLM call (cheap/fast); the wizard falls back to the single derived stylePreset on failure.
@@ -22,6 +23,10 @@ const InputSchema = z.object({
 export async function POST(req: NextRequest) {
   const gate = await requireApiUser()
   if (gate instanceof NextResponse) return gate
+  // Paid call — respect the caller's monthly spend cap before spending (these routes were the gap:
+  // setup, preview, and research spend ran with no budget gate at all).
+  const budgetGate = await requireSpendBudget(gate)
+  if (budgetGate) return budgetGate
 
   const parsed = InputSchema.safeParse(await req.json().catch(() => null))
   if (!parsed.success) {
@@ -44,6 +49,9 @@ export async function POST(req: NextRequest) {
       messages: [{ role: 'user', content: userMessage }],
       maxTokens: 1500,
     })
+    // Reached from Settings ("Customize look") as well as the wizard, and the Settings caller discarded
+    // the cost entirely — so it lands in the ledger here, where both callers are covered.
+    await recordSpendEvent({ userId: gate.id, surface: 'channel_style_options', provider: 'openai', costCents: result.costCents })
     return NextResponse.json({
       sampleScene: result.data.sampleScene,
       styles: result.data.styles,

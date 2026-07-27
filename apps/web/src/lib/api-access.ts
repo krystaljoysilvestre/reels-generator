@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { eq } from 'drizzle-orm'
 import { getDb, channels, reels, stories, getUserUsage, getGlobalSpendTodayCents } from '@reels/db'
-import { assertGlobalDailyBudget, GlobalBudgetExceededError, DEFAULT_USER_LIMITS } from '@reels/core'
+import { assertGlobalDailyBudget, GlobalBudgetExceededError, GLOBAL_DAILY_SPEND_CAP_CENTS, DEFAULT_USER_LIMITS } from '@reels/core'
 import { getCurrentUser, type SessionUser } from '@/lib/auth'
 
 // API-route authorization. The page layer uses the redirect/notFound guards in `lib/access.ts`;
@@ -134,11 +134,15 @@ export function reelIdFromKey(key: string): string | null | undefined {
 // they are at creation. Returns a 429 Denied to short-circuit the route, or null when spending is OK.
 export async function requireSpendBudget(user: SessionUser): Promise<Denied | null> {
   if (user.role === 'admin') return null
-  try {
-    assertGlobalDailyBudget(await getGlobalSpendTodayCents())
-  } catch (e) {
-    if (e instanceof GlobalBudgetExceededError) return deny(429, e.message)
-    throw e
+  // Only query app-wide spend when a cap is actually configured — otherwise assertGlobalDailyBudget is a
+  // no-op and the aggregate scan is pure latency on every preview click. Same guard the harness uses.
+  if (GLOBAL_DAILY_SPEND_CAP_CENTS !== null) {
+    try {
+      assertGlobalDailyBudget(await getGlobalSpendTodayCents())
+    } catch (e) {
+      if (e instanceof GlobalBudgetExceededError) return deny(429, e.message)
+      throw e
+    }
   }
   const usage = await getUserUsage(user.id)
   if (usage && usage.role !== 'admin') {
