@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server'
+import { and, desc, eq, isNull, lt, or, sql } from 'drizzle-orm'
+import { getDb, trendingNiches } from '@reels/db'
 import { llmCall } from '@reels/providers'
 import {
   buildTrendingNichesPrompt,
@@ -9,49 +11,150 @@ import {
 import { requireApiUser } from '@/lib/api-access'
 
 // "Trending now" suggestions for the channel wizard — LIVE web-searched niches with strong current
-// RPM, refreshed at most once a day (module cache) so the whole app shares one ~5¢ search call.
-// Best-effort: on failure the wizard simply doesn't show the rail (static presets always work).
+// RPM, cached one row per UTC day in the DB so the whole app shares a single ~5¢ search call
+// regardless of how many instances are running (a module cache refreshed per-instance instead).
+//
+// Stale-while-revalidate: the newest successful row is served immediately, so only the one request
+// that claims a new day ever waits on the search. Best-effort throughout — on failure the wizard
+// falls back to the previous day's row, and failing that shows no rail at all (static presets in
+// niche-presets.ts always work).
 
-const TTL_MS = 24 * 60 * 60 * 1000
-let cache: { at: number; data: TrendingNiches; costCents: number } | null = null
-let inflight: Promise<{ data: TrendingNiches; costCents: number }> | null = null
+const SEGMENT = 'global' // see schema: reserved for future per-region rails
+const STALE_CLAIM_MS = 5 * 60 * 1000 // a claim that hasn't produced niches in 5 min is treated as dead
+const MAX_ATTEMPTS_PER_DAY = 3       // a persistently failing search stops burning latency and money
+
+/** Today as a UTC date string — matches the `date` column and the UTC-pinned DB session. */
+function utcDay(): string {
+  return new Date().toISOString().slice(0, 10)
+}
+
+/** Parse a stored jsonb array back through the prompt's schema; null if the row is unusable. */
+function readNiches(row: { niches: unknown } | undefined): TrendingNiches['niches'] | null {
+  if (!row?.niches) return null
+  const parsed = TrendingNichesSchema.safeParse({ niches: row.niches })
+  return parsed.success ? parsed.data.niches : null
+}
 
 export async function GET() {
   const gate = await requireApiUser()
   if (gate instanceof NextResponse) return gate
 
-  if (cache && Date.now() - cache.at < TTL_MS) {
-    return NextResponse.json({ niches: cache.data.niches, costCents: 0, cached: true })
-  }
+  const db = getDb()
+  const day = utcDay()
 
   try {
-    // Single-flight: concurrent wizard opens share one search call instead of racing several.
-    const flight = (inflight ??= (async () => {
-      const currentDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long' })
-      const { system, userMessage } = buildTrendingNichesPrompt({ currentDate })
-      const res = await llmCall({
-        templateVersion: TRENDING_NICHES_V1_VERSION,
-        schema: TrendingNichesSchema,
-        system,
-        messages: [{ role: 'user', content: userMessage }],
-        webSearch: true, // live results — the whole point; never answer from model memory
-        maxTokens: 2500,
-      })
-      // Re-parse to resolve schema defaults (llmCall's generic infers the loose input shape).
-      const data = TrendingNichesSchema.parse(res.data)
-      // App-level cost (shared cache, pre-channel — no reel/channel to bill): logged for the record.
-      console.log(`[trending-niches] refreshed: ${data.niches.length} niches, ${res.costCents}¢ (daily)`)
-      return { data, costCents: res.costCents }
-    })())
-    const { data, costCents } = await flight
-    cache = { at: Date.now(), data, costCents }
-    return NextResponse.json({ niches: data.niches, costCents, cached: false })
+    // Newest usable row, whatever day it's from — both the fast path (it's today's) and the
+    // stale-while-revalidate fallback (it isn't, and someone else is already refreshing).
+    const [newest] = await db
+      .select()
+      .from(trendingNiches)
+      .where(and(eq(trendingNiches.segment, SEGMENT), sql`${trendingNiches.niches} is not null`))
+      .orderBy(desc(trendingNiches.day))
+      .limit(1)
+
+    const cached = readNiches(newest)
+    if (cached && newest?.day === day) {
+      return NextResponse.json({ niches: cached, costCents: 0, cached: true })
+    }
+
+    // Today has no result yet. With a stale row in hand we never block: yesterday's niches now beat
+    // today's in ~10s. Only on a cold start (nothing to fall back to) is waiting the better trade —
+    // and then, if this instance is already searching, we share that result rather than duplicate it.
+    if (!cached && inflight) {
+      const shared = await inflight
+      if (shared) return NextResponse.json({ niches: shared.niches, costCents: 0, cached: true })
+    }
+
+    // Nobody here is searching. Try to become the one request — app-wide — that pays for today.
+    if (await claimDay(db, day)) {
+      const fresh = await (inflight ??= refresh(db, day, gate.id).finally(() => { inflight = null }))
+      if (fresh) return NextResponse.json({ niches: fresh.niches, costCents: fresh.costCents, cached: false })
+    }
+
+    // Another instance holds the claim, or our own search failed: stale beats nothing.
+    return NextResponse.json({ niches: cached ?? [], costCents: 0, cached: cached !== null })
   } catch (err) {
-    console.warn(`[trending-niches] fetch failed: ${err instanceof Error ? err.message : String(err)}`)
-    // Stale cache beats nothing; nothing beats an error page.
-    if (cache) return NextResponse.json({ niches: cache.data.niches, costCents: 0, cached: true })
+    console.warn(`[trending-niches] request failed: ${err instanceof Error ? err.message : String(err)}`)
     return NextResponse.json({ niches: [], costCents: 0, cached: false })
-  } finally {
-    inflight = null
+  }
+}
+
+let inflight: Promise<{ niches: TrendingNiches['niches']; costCents: number } | null> | null = null
+
+/**
+ * Atomically take responsibility for refreshing `day`, across every instance.
+ *
+ * Two ways to win, both single-statement so concurrent callers can't both succeed:
+ *  1. Insert the day's row — only the first request of a new day gets past ON CONFLICT DO NOTHING.
+ *  2. Take over a claim that died mid-search (row exists, still no niches, last attempt is older
+ *     than STALE_CLAIM_MS) — without this a crashed or redeployed request would wedge the day.
+ * Attempts are capped so a search that fails all day stops re-firing on every wizard open.
+ */
+async function claimDay(db: ReturnType<typeof getDb>, day: string): Promise<boolean> {
+  const inserted = await db
+    .insert(trendingNiches)
+    .values({ day, segment: SEGMENT, attempts: 1, lastAttemptAt: new Date() })
+    .onConflictDoNothing()
+    .returning({ day: trendingNiches.day })
+  if (inserted.length > 0) return true
+
+  const staleBefore = new Date(Date.now() - STALE_CLAIM_MS)
+  const retaken = await db
+    .update(trendingNiches)
+    .set({ attempts: sql`${trendingNiches.attempts} + 1`, lastAttemptAt: new Date() })
+    .where(
+      and(
+        eq(trendingNiches.day, day),
+        eq(trendingNiches.segment, SEGMENT),
+        isNull(trendingNiches.niches),
+        lt(trendingNiches.attempts, MAX_ATTEMPTS_PER_DAY),
+        or(isNull(trendingNiches.lastAttemptAt), lt(trendingNiches.lastAttemptAt, staleBefore)),
+      ),
+    )
+    .returning({ day: trendingNiches.day })
+  return retaken.length > 0
+}
+
+/** Run the paid web search and persist it as the day's row. Returns null if the search failed. */
+async function refresh(
+  db: ReturnType<typeof getDb>,
+  day: string,
+  actorUserId: string,
+): Promise<{ niches: TrendingNiches['niches']; costCents: number } | null> {
+  try {
+    const currentDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long' })
+    const { system, userMessage } = buildTrendingNichesPrompt({ currentDate })
+    const res = await llmCall({
+      templateVersion: TRENDING_NICHES_V1_VERSION,
+      schema: TrendingNichesSchema,
+      system,
+      messages: [{ role: 'user', content: userMessage }],
+      webSearch: true, // live results — the whole point; never answer from model memory
+      maxTokens: 2500,
+    })
+    // Re-parse to resolve schema defaults (llmCall's generic infers the loose input shape).
+    const data = TrendingNichesSchema.parse(res.data)
+
+    // Publishing the niches also releases the claim — every other request now reads this row.
+    // Cost is app-level (shared cache, pre-channel: no reel or channel exists to bill), so it's
+    // recorded here rather than in a reel's spend, and stays queryable per day alongside its actor.
+    await db
+      .update(trendingNiches)
+      .set({
+        niches: data.niches,
+        costCents: res.costCents,
+        refreshedByUserId: actorUserId,
+        refreshedAt: new Date(),
+      })
+      .where(and(eq(trendingNiches.day, day), eq(trendingNiches.segment, SEGMENT)))
+
+    console.log(
+      `[trending-niches] refreshed ${day}: ${data.niches.length} niches, ${res.costCents}¢ (user ${actorUserId})`,
+    )
+    return { niches: data.niches, costCents: res.costCents }
+  } catch (err) {
+    // The attempt counter was already bumped by claimDay, so the backoff holds without extra writes.
+    console.warn(`[trending-niches] refresh failed: ${err instanceof Error ? err.message : String(err)}`)
+    return null
   }
 }
