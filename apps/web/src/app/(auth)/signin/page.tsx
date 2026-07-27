@@ -3,7 +3,7 @@ import { Suspense, useState } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { AuthShell, GoogleButton, OrDivider } from '../AuthShell'
+import { AuthField, AuthShell, GoogleButton, OrDivider } from '../AuthShell'
 
 function SignInForm() {
   const [email, setEmail] = useState('')
@@ -29,30 +29,33 @@ function SignInForm() {
   }
 
   return (
-    <AuthShell title="Welcome back" subtitle="Sign in to the pipeline console.">
+    <AuthShell title="Welcome back" subtitle="Sign in to your studio console.">
       {inviteError && (
-        <p className="mb-4 rounded-md bg-danger-soft px-3 py-2 text-xs text-danger">
+        <p className="mb-4 rounded-md border border-danger/25 bg-danger/10 px-3 py-2 text-xs text-night-danger">
           That invite link is invalid or already used. You can still sign in below.
         </p>
       )}
       <GoogleButton label="Continue with Google" />
       <OrDivider />
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="email" className="text-xs font-medium text-muted">Email</label>
-          <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="input" autoComplete="email" required />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="password" className="text-xs font-medium text-muted">Password</label>
-          <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="input" autoComplete="current-password" required />
-        </div>
-        {error && <p className="text-xs text-danger">{error}</p>}
-        <button type="submit" disabled={loading || !email || !password} className="btn-accent w-full">
+        <AuthField id="email" label="Email">
+          <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="input-dark" autoComplete="email" required />
+        </AuthField>
+        <AuthField id="password" label="Password">
+          <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="input-dark" autoComplete="current-password" required />
+        </AuthField>
+        {error && <p className="text-xs text-night-danger">{error}</p>}
+        <button type="submit" disabled={loading || !email || !password} className="btn-primary mt-1 w-full gap-2 py-3.5 text-[15px] font-700 shadow-glow-md">
           {loading ? 'Signing in…' : 'Sign in'}
+          {!loading && (
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M5 12h14M13 6l6 6-6 6" />
+            </svg>
+          )}
         </button>
       </form>
-      <p className="mt-6 text-center text-xs text-muted">
-        No account? <Link href="/signup" className="font-medium text-accent">Sign up</Link>
+      <p className="mt-7 text-center text-xs text-night-muted">
+        No account? <Link href="/signup" className="font-600 text-accent hover:text-accent-hover">Sign up</Link>
       </p>
     </AuthShell>
   )

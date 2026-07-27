@@ -9,6 +9,7 @@ import { resolveMotionSettings, motionCostCents, operatorCueLabel, VIDEO_EFFECTS
 import { GenreLoader } from '@/components/GenreLoader'
 import { usePipelineStatus } from '@/hooks/usePipelineStatus'
 import { PipelinePhaseStepper } from '@/components/PipelinePhaseStepper'
+import { ReelStatusPill } from '@/components/ReelStatusPill'
 import { RenderingState } from '@/components/RenderingState'
 import { primeReelAlert } from '@/lib/reel-alert'
 import { MOOD_TINT, type ChannelMood } from '@/lib/pipeline-phases'
@@ -91,15 +92,9 @@ export function StoryboardEditor({
   // the preview swaps immediately (the target's storage key isn't in the sceneImages prop until refresh lands).
   const [imageOverride, setImageOverride] = useState<Record<number, string>>({})
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null) // master-detail: which scene the inspector shows
-  const [timelineView, setTimelineView] = useState<'strip' | 'grid'>('strip') // thumbnail rail layout
-  const scrollRef = useRef<HTMLDivElement>(null) // the single scene scroll container; holds the --shrink var for the rail
-  useEffect(() => {
-    const el = scrollRef.current
-    if (!el) return
-    el.scrollTop = 0
-    el.style.setProperty('--shrink', '0')
-    el.style.setProperty('--hold', '0px')
-  }, [timelineView]) // reset rail collapse on view switch
+  // 'strip' = the cutting-room layout (stage + inspector above a filmstrip dock); 'grid' = a scrolling
+  // overview of every scene. Only the filmstrip scrolls in strip view — the page itself never does.
+  const [timelineView, setTimelineView] = useState<'strip' | 'grid'>('strip')
   const tierBusyRef = useRef<Set<number>>(new Set()) // scenes with an in-flight motion toggle (drops rapid flips)
   const [selectedVoice, setSelectedVoice] = useState(reel.voiceId ?? voicePool[0]?.providerId ?? '')
   const [showVoicePicker, setShowVoicePicker] = useState(false)
@@ -650,7 +645,9 @@ export function StoryboardEditor({
     </div>
   )
 
-  // Final render preview (the music bed lives in its own card below, vettable before render too)
+  // Final render preview (the music bed lives in its own card below, vettable before render too).
+  // In the grid overview it sits under the scenes; on the cutting-room stage it gets its own column,
+  // so the finished reel is watchable without the page ever scrolling.
   const preview = renderUrl ? (
     <div id="preview" className="border-t border-border px-4 py-6 sm:px-8">
       <p className="mb-3 text-xs font-medium text-muted">Render preview</p>
@@ -660,6 +657,20 @@ export function StoryboardEditor({
         controls
         className="max-h-[28rem] rounded-xl border border-border shadow-sm"
         style={{ aspectRatio: '9/16' }}
+      />
+    </div>
+  ) : null
+
+  const stagePreview = renderUrl ? (
+    <div className="hidden min-h-0 flex-shrink-0 flex-col gap-2 py-5 pr-5 xl:flex">
+      <p className="mono-label text-night-faint">The reel</p>
+      {/* Height-driven so the finished reel always fits the stage without scrolling. */}
+      <video
+        key={renderUrl}
+        src={renderUrl}
+        controls
+        className="min-h-0 flex-1 rounded-lg border border-white/10 shadow-lg"
+        style={{ aspectRatio: '9/16', height: '100%', width: 'auto' }}
       />
     </div>
   ) : null
@@ -919,25 +930,6 @@ export function StoryboardEditor({
     </div>
   )
 
-  // Strip collapsing rail — two scroll-linked CSS vars, written straight in the scroll handler (no rAF, no
-  // React re-render). The rail is position:sticky so the browser pins it natively — rock-steady, no JS-pin
-  // shake.
-  //   --shrink 0→1 over COLLAPSE_PX → resizes the rail to a filmstrip
-  //   --hold = min(scrollTop, COLLAPSE_PX)px → a spacer between the rail and panel that hides BEHIND the
-  //     pinned rail; while it grows it keeps the panel glued to the rail's bottom (not under it). It caps at
-  //     COLLAPSE_PX so the panel only starts sliding under once the rail is fully compact.
-  // The panel stays glued SMOOTHLY only while the rail is still shrinking (the shrink supplies real scroll
-  // progress). A hard "lock" past the collapse — holding the panel still while scroll continues — fights
-  // native scroll (transform layers desync; growing spacers make the browser jump), so it shakes. To keep
-  // the panel from tucking under too soon, lengthen the collapse (larger COLLAPSE_PX) rather than locking.
-  const onShrinkScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    const el = e.currentTarget
-    const COLLAPSE_PX = 320 // scroll distance over which the rail shrinks + the panel stays glued to it
-    const st = el.scrollTop
-    el.style.setProperty('--shrink', Math.min(1, Math.max(0, st / COLLAPSE_PX)).toFixed(3))
-    el.style.setProperty('--hold', Math.min(st, COLLAPSE_PX).toFixed(1) + 'px')
-  }
-
   return (
     <div className="relative flex h-full flex-col bg-bg">
       {/* Header */}
@@ -949,12 +941,10 @@ export function StoryboardEditor({
             </svg>
           </a>
           <div className="min-w-0">
-            <p className="truncate text-base font-semibold tracking-tight text-ink">{story?.title ?? 'Untitled reel'}</p>
-            <p className="flex items-center gap-1.5 text-xs text-muted">
-              <span className="hidden font-mono sm:inline">{reel.id.slice(0, 8)}</span>
-              <span className="hidden text-faint sm:inline">·</span>
-              <span className="badge bg-subtle text-muted">{reel.status.replace(/_/g, ' ')}</span>
-              <span className="hidden text-faint sm:inline">·</span>
+            <p className="truncate font-display text-lg font-700 -tracking-[0.02em] text-ink">{story?.title ?? 'Untitled reel'}</p>
+            <p className="mt-0.5 flex items-center gap-2 text-xs text-muted">
+              <span className="hidden font-mono text-faint sm:inline">{reel.id.slice(0, 8)}</span>
+              <ReelStatusPill status={reel.status} />
               <span className="hidden truncate sm:inline">{channelName}</span>
             </p>
           </div>
@@ -985,25 +975,29 @@ export function StoryboardEditor({
         <PipelinePhaseStepper reelStatus={live?.reelStatus ?? reel.status} steps={live?.steps ?? []} mood={channelMoodKey} sceneProgress={sceneProgress} />
       )}
 
-      {/* Scene area — a compact thumbnail TIMELINE on top, the selected scene's INSPECTOR below. In STRIP
-          view the timeline keeps its own lane at the top while the inspector scrolls in a SEPARATE region
-          below (so its content never tucks under the rail); the rail shrinks as that inspector scrolls. In
-          GRID view the whole area scrolls as one. */}
-      <div
-        ref={scrollRef}
-        className={`flex min-h-0 flex-1 flex-col overflow-y-auto [overflow-anchor:none] ${isRendering ? 'pointer-events-none select-none' : ''}`}
-        onScroll={timelineView === 'strip' ? onShrinkScroll : undefined}
-        aria-hidden={isRendering || undefined}
-      >
-        {/* STRIP: the rail pins to the top and shrinks to a slim filmstrip as you scroll; once compact it
-            stays put while the selected-scene panel scrolls underneath it (native sticky → smooth, no shake).
-            Opaque bg + a shadow that deepens with --shrink keep the panel reading as "below/under" the rail.
-            GRID: just scrolls. */}
+      {ambient}
+
+      {/* ══ WORKSPACE ROW ══ One row, fixed height, no page scroll.
+          STRIP: a dark screening-room stage holding the scene's stage-lit preview with the inspector
+          floating beside it as a light panel (the panel owns the only vertical scroll here).
+          GRID: a scrolling overview of every scene instead. */}
+      {timelineView === 'strip' ? (
         <div
-          className={timelineView === 'strip' ? 'sticky top-0 z-20 bg-subtle' : ''}
-          style={timelineView === 'strip' ? { boxShadow: '0 6px 16px -12px rgba(12,12,24,calc(0.45 * var(--shrink, 0)))' } : undefined}
+          className={`stage flex min-h-0 flex-1 ${isRendering ? 'pointer-events-none select-none' : ''}`}
+          aria-hidden={isRendering || undefined}
         >
-          {ambient}
+          <div className="stage-leak" />
+          <div className="film-grain" />
+          <div className="relative flex min-h-0 w-full">
+            {detail}
+            {stagePreview}
+          </div>
+        </div>
+      ) : (
+        <div
+          className={`min-h-0 flex-1 overflow-y-auto bg-subtle ${isRendering ? 'pointer-events-none select-none' : ''}`}
+          aria-hidden={isRendering || undefined}
+        >
           <SceneTimeline
             scenes={scenes}
             sceneImages={bustedImages}
@@ -1019,24 +1013,30 @@ export function StoryboardEditor({
             view={timelineView}
             onViewChange={setTimelineView}
           />
+          {preview}
         </div>
+      )}
 
-        {/* Phase-1 "hold" spacer — sits between the rail and panel and hides BEHIND the sticky rail. While
-            the rail is shrinking it grows with scroll so the panel stays glued to the rail's bottom (never
-            under it); once the rail is fully shrunk it caps, so further scroll slides the panel under it. */}
-        {timelineView === 'strip' && (
-          <div aria-hidden className="flex-shrink-0" style={{ height: 'var(--hold, 0px)' }} />
-        )}
-
-        {detail}
-        {preview}
-
-        {/* Strip-only stabiliser — grows as the rail shrinks so the scroll height never DROPS mid-scroll
-            (which would clamp the scroll and shake). */}
-        {timelineView === 'strip' && (
-          <div aria-hidden className="flex-shrink-0" style={{ height: 'calc(280px * var(--shrink, 0))' }} />
-        )}
-      </div>
+      {/* ══ FILMSTRIP DOCK ══ The scenes ARE the filmstrip. Sideways scroll lives here and nowhere else.
+          Hidden while rendering (the RenderingState overlay owns the surface) and in grid view (the
+          overview already shows every scene). */}
+      {timelineView === 'strip' && !isRendering && (
+        <SceneTimeline
+          scenes={scenes}
+          sceneImages={bustedImages}
+          sceneVideoVariations={sceneVideoVariations}
+          loadedMedia={loadedMedia}
+          markLoaded={markLoaded}
+          loading={loading}
+          selectedIdx={selectedIdx}
+          onSelect={setSelectedIdx}
+          onArrow={selectDelta}
+          moodTint={moodTint}
+          twistIdx={twistIdx}
+          view={timelineView}
+          onViewChange={setTimelineView}
+        />
+      )}
 
       {/* Rendering moment — a playful, mood-tinted overlay that also LOCKS the editor while the render
           chain runs (covers the scene area; the bottom bar is hidden below). Clears itself when the reel
@@ -1058,7 +1058,7 @@ export function StoryboardEditor({
         <button
           onClick={() => setShowVoicePicker(true)}
           disabled={recsLoading && !currentVoice}
-          className={`flex h-11 items-center gap-1.5 rounded-lg border bg-subtle/40 px-2.5 text-xs font-medium text-ink transition-colors hover:bg-subtle disabled:cursor-wait disabled:text-muted ${!selectedVoice ? 'border-accent ring-1 ring-accent' : 'border-border'}`}
+          className={`flex h-11 items-center gap-2 rounded-sm border bg-surface px-2.5 text-xs font-600 text-ink shadow-xs transition-colors hover:border-accent-ring disabled:cursor-wait disabled:text-muted ${!selectedVoice ? 'border-accent ring-1 ring-accent' : 'border-border-mid'}`}
           title="Pick a narrator voice"
         >
           {recsLoading && !currentVoice ? (
@@ -1068,9 +1068,11 @@ export function StoryboardEditor({
             </>
           ) : (
             <>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 text-muted" aria-hidden>
-                <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3ZM19 11a7 7 0 0 1-14 0M12 18v3" />
-              </svg>
+              <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-sm bg-pair-blue-purple">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3ZM19 11a7 7 0 0 1-14 0M12 18v3" />
+                </svg>
+              </span>
               <span className="max-w-[11rem] truncate">{currentVoice ? (currentVoice.description ? `${currentVoice.name} · ${currentVoice.description}` : currentVoice.name) : 'Pick voice'}</span>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 text-faint" aria-hidden>
                 <path d="m6 9 6 6 6-6" />
@@ -1087,7 +1089,16 @@ export function StoryboardEditor({
           </p>
         )}
         <div className="flex-1" />
-        <button onClick={handleRender} disabled={loading === 'render' || !canRender} className="btn-accent active:scale-[.98]" title={!selectedVoice ? 'Pick a narrator voice first' : undefined}>
+        {/* Spend slate — the reel's real cost so far, in the mock's clapperboard treatment. (Not a
+            forecast: render cost is only known once the providers report usage.) */}
+        <div className="hidden overflow-hidden rounded-sm border border-border-mid bg-surface sm:block" title="What this reel has cost to make so far">
+          <div className="clapper-band h-2" />
+          <div className="px-3 py-1">
+            <p className="mono-label text-[9px] tracking-micro-wide">Spend</p>
+            <p key={`s${reel.costCents}`} className="animate-value-flash mono-value text-[13px] text-ink">${(reel.costCents / 100).toFixed(2)}</p>
+          </div>
+        </div>
+        <button onClick={handleRender} disabled={loading === 'render' || !canRender} className="btn-accent py-3 active:scale-[.98]" title={!selectedVoice ? 'Pick a narrator voice first' : undefined}>
           {loading === 'render' ? (
             <>
               <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/70 border-t-transparent" />
@@ -1111,7 +1122,7 @@ export function StoryboardEditor({
           {reel.status === 'spot_check' && (
             <>
               <div className="mr-auto">
-                <p className="text-sm font-semibold text-ink">Spot-check</p>
+                <p className="font-display text-[15px] font-700 text-ink">Spot-check</p>
                 <p className="text-xs text-muted">Watch the render below, then sign it off — or change the voice and re-render to apply changes.</p>
               </div>
               {/* Change voice, then re-render — post-render analog of the storyboard voice pill. The picker
@@ -1157,13 +1168,11 @@ export function StoryboardEditor({
           {reel.status === 'approved' && (
             <>
               <div className="mr-auto">
-                <p className="flex items-center gap-1.5 text-sm font-semibold text-ink">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="text-accent" aria-hidden>
-                    <path d="M20 6 9 17l-5-5" />
-                  </svg>
-                  Approved
+                <p className="flex items-center gap-2">
+                  <ReelStatusPill status="approved" />
+                  <span className="font-display text-[15px] font-700 text-ink">Ready to post</span>
                 </p>
-                <p className="text-xs text-muted">Download the package, upload to your platforms, then mark it published.</p>
+                <p className="mt-0.5 text-xs text-muted">Download the package, upload to your platforms, then mark it published.</p>
               </div>
               <PostCaptionButton reelId={reel.id} />
               <a href={`/api/pipeline/export-post-package?reelId=${reel.id}`} className="btn-secondary">
@@ -1181,13 +1190,16 @@ export function StoryboardEditor({
           {(reel.status === 'published' || reel.status === 'scheduled') && (
             <>
               <div className="mr-auto">
-                <p className="flex items-center gap-1.5 text-sm font-semibold text-ink">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="text-accent" aria-hidden>
-                    <path d="M20 6 9 17l-5-5" />
-                  </svg>
-                  {reel.status === 'published' ? 'Published' : 'Scheduled'}
+                <p className="flex items-center gap-2">
+                  <ReelStatusPill status={reel.status} />
+                  {/* Real views when logged — the only performance figure the app actually holds. */}
+                  {reel.metricsViews != null && (
+                    <span className="mono-value text-[13px] text-ink" title="Views logged for this reel">
+                      {reel.metricsViews.toLocaleString()} views
+                    </span>
+                  )}
                 </p>
-                <p className="text-xs text-muted">Re-download the post package anytime.</p>
+                <p className="mt-0.5 text-xs text-muted">Re-download the post package anytime.</p>
               </div>
               {reel.status === 'published' && <LogPerformanceButton reelId={reel.id} initialViews={reel.metricsViews} />}
               <PostCaptionButton reelId={reel.id} />
@@ -1228,14 +1240,14 @@ export function StoryboardEditor({
 // layer their own badges/controls via `children`. Timeline tiles pass playVideo={false} so only the
 // inspector autoplays video (no fleet of autoplaying clips).
 function SceneMedia({
-  scene, imgSrc, videoKey, showVideo, playVideo, loaded, onLoaded, onDuration, regenerating, animating, compactOnShrink, frameClass, frameStyle, adaptAspect, frameAspect, contain, children,
+  scene, imgSrc, videoKey, showVideo, playVideo, loaded, onLoaded, onDuration, regenerating, animating, compact, frameClass, frameStyle, adaptAspect, frameAspect, contain, children,
 }: {
   scene: Scene; imgSrc?: string | undefined; videoKey?: string | undefined; showVideo: boolean; playVideo: boolean
   loaded: boolean; onLoaded: () => void; onDuration?: ((secs: number) => void) | undefined
   regenerating: boolean; animating: boolean
   // In the strip rail the tile collapses to a slim filmstrip (--shrink → 1); when set, the busy-overlay
   // caption collapses away with it so the tiny tile shows just the spinner, not cramped text.
-  compactOnShrink?: boolean
+  compact?: boolean
   // frameAspect fixes the frame's shape (e.g. '16 / 9' for a landscape, YouTube-style player); contain fits
   // the media inside it (letterboxed on black) instead of cropping. Without them: adaptAspect → media's own
   // aspect, else a 9:16 tile. frameStyle merges onto the frame box (e.g. scroll-linked border radius/width).
@@ -1289,25 +1301,21 @@ function SceneMedia({
       {regenerating && (
         <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-2 bg-ink/45 text-xs font-medium text-white backdrop-blur-sm">
           <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/70 border-t-transparent" />
-          {/* Caption collapses out as the rail shrinks — a slim filmstrip tile has no room for it, just the spinner. */}
-          <span
-            className="overflow-hidden"
-            style={compactOnShrink ? { maxHeight: 'calc(1.25rem * (1 - var(--shrink, 0)))', opacity: 'calc(1 - var(--shrink, 0))' } : undefined}
-          >Reshooting…</span>
+          {/* A dock frame is too small for the caption — the spinner alone carries it there. */}
+          {!compact && <span>Reshooting…</span>}
         </div>
       )}
       {/* Animate overlay — long op, set a gentle expectation */}
       {animating && (
         <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-2 bg-ink/45 px-3 text-center text-xs font-medium text-white backdrop-blur-sm">
           <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/70 border-t-transparent" />
-          {/* Caption + sub-line collapse out as the rail shrinks — a slim filmstrip tile has no room, just the spinner. */}
-          <span
-            className="flex flex-col items-center gap-1 overflow-hidden"
-            style={compactOnShrink ? { maxHeight: 'calc(2.75rem * (1 - var(--shrink, 0)))', opacity: 'calc(1 - var(--shrink, 0))' } : undefined}
-          >
-            Bringing this scene to life…
-            <span className="text-[10px] font-normal text-white/70">takes about a minute</span>
-          </span>
+          {/* A dock frame is too small for the caption — the spinner alone carries it there. */}
+          {!compact && (
+            <span className="flex flex-col items-center gap-1">
+              Bringing this scene to life…
+              <span className="text-[10px] font-normal text-white/70">takes about a minute</span>
+            </span>
+          )}
         </div>
       )}
       {children}
@@ -1317,23 +1325,18 @@ function SceneMedia({
 
 // A motion scene's actual clip length — probed from the generated video's own metadata (not an estimate).
 // Shows just the play glyph until the duration loads, or for a motion scene with no clip generated yet.
-function MotionDurationChip({ clipKey }: { clipKey?: string | undefined }) {
+function MotionDurationChip({ clipKey, compact = false }: { clipKey?: string | undefined; compact?: boolean }) {
   const [secs, setSecs] = useState<number | null>(null)
   return (
     <>
-      {/* Animated-scene chip — full pill (icon + duration) when the rail is expanded; as it collapses the
-          duration smoothly slides away (maxWidth + opacity + margin track --shrink) and the pill tightens to
-          just the camera icon, so the compact filmstrip still marks which scenes move. */}
+      {/* Animated-scene chip — icon + clip length. In a dock frame there's only room for the icon, which
+          still marks which scenes move. */}
       <span
-        className="absolute right-1 top-1 z-20 inline-flex items-center overflow-hidden rounded-full bg-accent/85 py-0.5 text-[10px] font-medium tabular-nums text-white backdrop-blur"
-        style={{ paddingLeft: 'calc(0.375rem - 0.125rem * var(--shrink, 0))', paddingRight: 'calc(0.375rem - 0.125rem * var(--shrink, 0))' }}
+        className={`absolute right-1 top-1 z-20 inline-flex items-center gap-0.5 rounded-full bg-accent/85 py-0.5 font-mono text-[10px] font-700 tabular-nums text-white backdrop-blur ${compact ? 'px-1' : 'px-1.5'}`}
         title="Moves in the final reel"
       >
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="2" y="6" width="13" height="12" rx="2" /><path d="m15 11 6-3.5v9L15 13" /></svg>
-        <span
-          className="overflow-hidden whitespace-nowrap"
-          style={{ maxWidth: 'calc(2.5rem * (1 - var(--shrink, 0)))', marginLeft: 'calc(0.125rem * (1 - var(--shrink, 0)))', opacity: 'calc(1 - var(--shrink, 0))' }}
-        >{secs != null ? fmtSecs(secs) : null}</span>
+        {!compact && <span className="whitespace-nowrap">{secs != null ? fmtSecs(secs) : null}</span>}
       </span>
       {clipKey && (
         <video
@@ -1392,16 +1395,20 @@ function SceneTimeline({
     else if (e.key === 'ArrowLeft') { e.preventDefault(); onArrow(-1) }
   }
 
+  // Estimated runtime, from narration length — the same ~2.5 words/second the rest of the app uses.
+  const totalSecs = scenes.reduce((n, s) => n + Math.ceil(s.narrationText.split(/\s+/).filter(Boolean).length / 2.5), 0)
+
   return (
-    <div className="flex-shrink-0 border-b border-border bg-subtle">
-      {/* Header — scene count + strip/grid view toggle (top-right). In strip view it collapses + fades out
-          as the rail shrinks, so the pinned compact state is just the filmstrip. */}
-      <div
-        className="flex items-center justify-between gap-2 overflow-hidden px-4 pt-3 sm:px-8"
-        style={view === 'strip' ? { maxHeight: 'calc(2.5rem * (1 - var(--shrink, 0)))', paddingTop: 'calc(0.75rem * (1 - var(--shrink, 0)))', opacity: 'calc(1 - var(--shrink, 0))' } : undefined}
-      >
-        <span className="text-xs font-medium text-muted">{scenes.length} {scenes.length === 1 ? 'scene' : 'scenes'}</span>
-        <div className="inline-flex items-center gap-0.5 rounded-lg bg-subtle p-0.5">
+    <div className={view === 'strip' ? 'flex-shrink-0 border-t border-border bg-subtle' : 'border-b border-border bg-subtle'}>
+      {/* Header — scene count + total runtime, and the strip/grid view toggle (top-right). */}
+      <div className="flex items-center justify-between gap-2 px-4 pt-3 sm:px-8">
+        <span className="flex items-center gap-2.5">
+          <span className="micro-label">{scenes.length} {scenes.length === 1 ? 'scene' : 'scenes'}</span>
+          {totalSecs > 0 && (
+            <span className="mono-value text-[11px] text-muted" title="Total runtime across all scenes">{totalSecs}s total</span>
+          )}
+        </span>
+        <div className="inline-flex items-center gap-0.5 rounded-sm bg-subtle-strong p-0.5">
           {([
             ['strip', 'Strip view', <><rect x="3" y="4" width="5" height="16" rx="1" /><rect x="10" y="4" width="5" height="16" rx="1" /><rect x="17" y="4" width="5" height="16" rx="1" /></>],
             ['grid', 'Grid view', <><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></>],
@@ -1423,14 +1430,9 @@ function SceneTimeline({
 
       {view === 'strip' ? (
         <div className="overflow-x-auto [scrollbar-width:thin]" role="listbox" aria-label="Scenes" tabIndex={0} onKeyDown={onKeyDown}>
-          <div
-            className="flex min-w-max items-center px-4 sm:px-8"
-            style={{
-              paddingTop: 'calc(1.5rem - 0.75rem * var(--shrink, 0))',
-              paddingBottom: 'calc(2.5rem - 1.75rem * var(--shrink, 0))',
-              gap: 'calc(1rem - 0.6rem * var(--shrink, 0))',
-            }}
-          >{thumbs}</div>
+          {/* Sprocket holes — the scenes ARE the filmstrip. */}
+          <div aria-hidden className="sprockets mx-4 mt-2 h-2 opacity-60 sm:mx-8" />
+          <div className="flex min-w-max items-end gap-3 px-4 pb-4 pt-3 sm:px-8">{thumbs}</div>
         </div>
       ) : (
         <div role="listbox" aria-label="Scenes" tabIndex={0} onKeyDown={onKeyDown}>
@@ -1448,12 +1450,12 @@ function SceneThumb({
   regenerating: boolean; animating: boolean; moodTint: string; beat: 'Hook' | 'Build-up' | 'Twist' | 'Payoff'; onSelect: (idx: number) => void; layout: 'strip' | 'grid'
 }) {
   const isGrid = layout === 'grid'
-  const isStrip = layout === 'strip' // strip tiles shrink with the --shrink scroll var; grid tiles are fixed
+  const isStrip = layout === 'strip' // dock frames are a fixed, compact filmstrip size
   const isVideo = scene.tier === 'video'
-  // On neutral channels the mood tint IS the brand midnight — identical to the selection accent — so a
-  // hero number wash would read as "selected". Swap in a distinct highlight hue there; dark/warm channels
-  // keep their real mood color (red / amber), which already differs from the selection accent.
-  const heroTint = /^#1a1a2e$/i.test(moodTint) ? '#5E6AD2' : moodTint
+  // On neutral channels the mood tint IS the brand accent (#9B3BFF) — identical to the selection
+  // colour — so a hero wash would read as "selected". Swap in a distinct highlight hue there; dark/warm
+  // channels keep their real mood color (red / amber), which already differs from the selection accent.
+  const heroTint = /^#9b3bff$/i.test(moodTint) ? '#2FA4FF' : moodTint
   // A super-short scene descriptor — the place it's set (capped at 2 words), falling back to its lead mood word.
   const shortDesc = (scene.location || scene.mood?.[0] || '').trim().split(/\s+/).filter(Boolean).slice(0, 2).join(' ')
   // Selected wins the frame with the accent ring; a hero gets only a whisper-faint mood halo (below).
@@ -1467,24 +1469,18 @@ function SceneThumb({
       aria-selected={selected}
       onClick={() => onSelect(scene.idx)}
       ref={(el) => { if (selected && el) el.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' }) }}
-      className={`group flex flex-col text-left focus:outline-none ${isGrid ? 'w-full gap-2' : 'flex-shrink-0'}`}
-      /* The selected scene bulges above the row (center-aligned siblings flank it like a focused carousel
-         item). The grow is a `transform: scale` — NOT a width change — so it animates smoothly on select
-         AND stays independent of the --shrink width (which must resize instantly as you scroll). z-index
-         lifts it above neighbors so the scaled edges aren't clipped. */
+      className={`group flex flex-col text-left focus:outline-none ${isGrid ? 'w-full gap-2' : 'w-[74px] flex-shrink-0'}`}
+      /* The selected frame lifts out of the dock (siblings flank it like a focused carousel item). The
+         grow is a `transform: scale` so it animates smoothly on select; z-index keeps its scaled edges
+         from being clipped by neighbours. */
       style={isStrip ? {
-        width: 'calc(10rem - 6.5rem * var(--shrink, 0))',
-        gap: 'calc(0.5rem - 0.5rem * var(--shrink, 0))',
-        transform: selected ? 'scale(1.07)' : 'scale(1)',
+        transform: selected ? 'scale(1.1)' : 'scale(1)',
+        transformOrigin: 'bottom center',
         transition: 'transform 0.25s cubic-bezier(0.22, 1, 0.36, 1)',
         zIndex: selected ? 10 : 0,
       } : undefined}
     >
-      <div
-        className="rounded-xl"
-        // Match the frame's shrinking corners as it collapses to the compact filmstrip.
-        style={isStrip ? { borderRadius: 'calc(0.75rem - 0.45rem * var(--shrink, 0))' } : undefined}
-      >
+      <div className={isStrip ? 'rounded-sm' : 'rounded-xl'}>
         <SceneMedia
           scene={scene}
           imgSrc={imgSrc}
@@ -1494,50 +1490,43 @@ function SceneThumb({
           onLoaded={() => markLoaded(scene.idx)}
           regenerating={regenerating}
           animating={animating}
-          compactOnShrink={isStrip}
+          compact={isStrip}
           frameClass={frameClass}
-          // In the rail, the tile's border + corners tighten as it collapses to the compact filmstrip.
-          frameStyle={isStrip ? { borderRadius: 'calc(0.75rem - 0.45rem * var(--shrink, 0))', borderWidth: 'calc(1px - 0.5px * var(--shrink, 0))' } : undefined}
         >
           {/* Scene number — top-left corner. The accent when selected, else the plain dark chip (hero scenes
               are no longer special-cased). In the strip it fades with --shrink so the compact filmstrip is
               just clean frames. */}
           <span
-            className={`absolute left-1.5 top-1.5 z-20 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-md px-1 text-[11px] font-semibold text-white backdrop-blur ${selected ? 'bg-accent' : 'bg-ink/70'}`}
-            style={isStrip ? { opacity: 'calc(1 - var(--shrink, 0))' } : undefined}
-          >{scene.idx}</span>
-          {/* Narrative beat label — bottom-left, HERO scenes only, carrying the mood-tint wash. Just the
-              label when expanded; fades out with --shrink as the rail collapses (the mood ring on the frame
-              edge keeps heroes identifiable once compact). */}
-          {scene.isHero && (
+            className={`absolute left-1.5 top-1.5 z-20 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-sm px-1 font-mono text-[11px] font-700 tabular-nums text-white backdrop-blur ${selected ? 'bg-brand-3' : 'bg-ink/70'}`}
+          >{String(scene.idx).padStart(2, '0')}</span>
+          {/* Hero scenes are marked bottom-left: the full beat label in the grid overview (room for it),
+              a star in a dock frame (which is far too narrow for text). */}
+          {scene.isHero && !isStrip && (
             <span
               className="absolute bottom-1.5 left-1.5 z-20 inline-flex items-center rounded-md bg-ink/70 px-1.5 py-px text-[10px] font-semibold text-white backdrop-blur"
-              style={{
-                boxShadow: `inset 0 0 0 999px ${heroTint}55`,
-                // Sequenced crossfade: the badge is fully gone by the halfway point of the shrink (×2), so it
-                // never overlaps the star, which only starts appearing after that.
-                ...(isStrip ? { opacity: 'calc(1 - var(--shrink, 0) * 2)' } : {}),
-              }}
+              style={{ boxShadow: `inset 0 0 0 999px ${heroTint}55` }}
             >{beat}</span>
           )}
-          {/* Hero marker for the compact rail — a white star bottom-left. Only fades IN over the SECOND half
-              of the shrink (×2 − 1), after the badge has fully gone, so the two never overlap. Hidden in
-              grid (the badge always shows there). */}
-          {scene.isHero && (
+          {scene.isHero && isStrip && (
             <svg
               className="absolute bottom-1 left-1 z-20"
-              width="13" height="13" viewBox="0 0 24 24" fill="white" aria-hidden
-              style={isStrip ? { opacity: 'calc(var(--shrink, 0) * 2 - 1)', filter: 'drop-shadow(0 1px 1.5px rgba(0,0,0,0.55))' } : { display: 'none' }}
-            ><path d="M12 2.5l2.6 5.7 6.2.6-4.7 4.1 1.4 6.1L12 16l-5.5 3 1.4-6.1L3.2 8.8l6.2-.6z" /></svg>
+              width="13" height="13" viewBox="0 0 24 24" fill="white" role="img" aria-label={`Key beat: ${beat}`}
+              style={{ filter: 'drop-shadow(0 1px 1.5px rgba(0,0,0,0.55))' }}
+            ><title>{beat}</title><path d="M12 2.5l2.6 5.7 6.2.6-4.7 4.1 1.4 6.1L12 16l-5.5 3 1.4-6.1L3.2 8.8l6.2-.6z" /></svg>
           )}
           {/* Motion scenes show the play glyph + the actual clip length (top-right); stills show no duration. */}
-          {isVideo && <MotionDurationChip clipKey={videoKey} />}
+          {isVideo && <MotionDurationChip clipKey={videoKey} compact={isStrip} />}
         </SceneMedia>
       </div>
       {/* Caption (place + narration) shows in the grid overview only — the strip rail stays just frames. */}
       {isGrid && (
         <div className="flex flex-col gap-0.5 overflow-hidden px-0.5">
-          {shortDesc && <p className="truncate text-xs font-medium capitalize text-ink">{shortDesc}</p>}
+          <p className="flex items-center gap-1.5 overflow-hidden">
+            {shortDesc && <span className="truncate text-xs font-600 capitalize text-ink">{shortDesc}</span>}
+            <span className="mono-label flex-shrink-0 text-[9px]">
+              {regenerating || animating ? 'rendering' : isVideo ? 'motion' : 'still'}
+            </span>
+          </p>
           <p className="line-clamp-1 text-[11px] leading-snug text-muted">{scene.narrationText}</p>
         </div>
       )}
@@ -1613,8 +1602,8 @@ function SceneInspector({
   const goRedo = () => { const t = history[histPos + 1]; if (canRedo && t) onSetSceneImage(scene.idx, t.assetId, t.url) }
   // Actual clip length, read from the playing preview's metadata (state resets per scene via the key prop).
   const [clipSecs, setClipSecs] = useState<number | null>(null)
-  // The Twist beat badge uses the mood color (distinct indigo on neutral channels, where mood == selection accent).
-  const heroTint = /^#1a1a2e$/i.test(moodTint) ? '#5E6AD2' : moodTint
+  // The Twist beat badge uses the mood color (a distinct blue on neutral channels, where mood == selection accent).
+  const heroTint = /^#9b3bff$/i.test(moodTint) ? '#2FA4FF' : moodTint
   const [showFull, setShowFull] = useState(false) // large preview lightbox
   const [fullLoaded, setFullLoaded] = useState(false) // lightbox media has loaded
   const [lightboxAspect, setLightboxAspect] = useState<string | null>(null) // real aspect of the open media
@@ -1673,22 +1662,22 @@ function SceneInspector({
   const runPreviewSound = async (id: string) => { setPreviewingId(id); await onPreviewSound(id); setPreviewingId(null) }
 
   return (
-    <div className="animate-fade-in flex w-full flex-col gap-5 p-4 sm:p-8">
+    <div className="animate-fade-in flex min-h-0 w-full flex-col gap-3 p-4 sm:px-6 sm:py-5">
       <div className="flex items-center gap-2">
-        <h2 className="text-sm font-semibold text-ink">Scene {scene.idx}</h2>
+        <h2 className="font-mono text-[11px] font-700 uppercase tracking-micro-wide text-white/70">Scene {String(scene.idx).padStart(2, '0')}</h2>
         {/* Narrative beat — the Twist (story peak) carries the mood accent; the rest are quietly tinted. */}
         <span
           className={`badge ${beat === 'Hook' ? 'bg-info-soft text-info' : beat === 'Twist' ? '' : 'bg-subtle text-muted'}`}
           style={beat === 'Twist' ? { backgroundColor: `${heroTint}1f`, color: heroTint } : undefined}
         >{beat}</span>
       </div>
-      <div className="flex w-full flex-col gap-6 lg:flex-row">
-      {/* Preview — its own stage, far left; the frame matches the reel's real aspect (9:16) so the image
-          fills it edge-to-edge instead of sitting tiny inside a wide letterbox. */}
-      <div className="order-1 flex w-full flex-shrink-0 flex-col lg:w-80">
+      <div className="flex min-h-0 w-full flex-1 flex-col gap-4 lg:flex-row lg:gap-6">
+      {/* Preview — sits directly on the dark stage, sized by the stage's HEIGHT (not a fixed width) so it
+          always fits without the page scrolling. */}
+      <div className="order-1 flex min-h-0 w-full flex-shrink-0 flex-col lg:aspect-[9/16] lg:h-full lg:w-auto">
         {/* The visual is the hero of this panel — presented as a lit stage: a soft mood-tinted glow behind
             an elevated, generously-rounded frame, so the eye lands here first. */}
-        <div className="relative isolate">
+        <div className="relative isolate flex min-h-0 w-full flex-1 justify-center">
           <div
             aria-hidden
             className="pointer-events-none absolute -inset-4 z-0 rounded-[2.5rem] opacity-30 blur-2xl"
@@ -1697,7 +1686,7 @@ function SceneInspector({
           <div
             onClick={() => imgSrc && (setFullLoaded(false), setLightboxAspect(null), setShowFull(true))}
             title={imgSrc ? 'Open preview' : undefined}
-            className={`group/preview relative z-10 w-full ${imgSrc ? 'cursor-zoom-in' : ''}`}
+            className={`group/preview relative z-10 h-full w-full ${imgSrc ? 'cursor-zoom-in' : ''}`}
           >
             <SceneMedia
               scene={scene}
@@ -1705,6 +1694,8 @@ function SceneInspector({
               videoKey={videoKey}
               showVideo={showVideo}
               playVideo
+              // The wrapper owns the 9:16 aspect on the stage; the frame just fills it.
+              frameStyle={{ height: '100%', width: '100%' }}
               loaded={loaded}
               onLoaded={() => markLoaded(scene.idx)}
               onDuration={setClipSecs}
@@ -1740,6 +1731,10 @@ function SceneInspector({
           </div>
         </div>
       </div>
+      {/* Controls — a light panel floating beside the stage. It owns the ONLY vertical scroll in the
+          workspace row, so the page itself never scrolls. `order-2` keeps it to the RIGHT of the
+          preview (which is order-1) — without it the default order:0 would put it first. */}
+      <div className="surface order-2 flex min-h-0 min-w-0 flex-1 flex-col gap-5 overflow-y-auto p-4 shadow-lg sm:p-5 lg:flex-row lg:gap-6">
       {/* Narration — the primary text edit; takes the flexible space */}
       <div className="order-3 flex min-w-0 flex-1 flex-col">
         <label className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-faint">
@@ -2050,6 +2045,7 @@ function SceneInspector({
           )
         })()}
       </div>
+        </div>
       </div>
 
       {/* AI-grounded feedback — how to use the attached reference. Portaled to <body> (same reason as the

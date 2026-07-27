@@ -51,12 +51,17 @@ function extractCritic(stepOutput: unknown, shownBody: string): CriticSummary | 
   qaIssues.push(...ebnIssues)
 
   if (out.v === 3) {
-    const why = out.plan?.whyThisStory?.trim() ?? ''
-    const verdict = out.gate?.status === 'ok' ? out.gate.verdicts?.[out.gate.verdicts.length - 1] : undefined
-    const gateLine = verdict?.reason?.trim()
-      ? `${verdict.pass ? 'Passed the read' : 'Flagged at the read'}${out.gate?.retried ? ' (after one rewrite)' : ''}: ${verdict.reason.trim()}`
-      : ''
-    const rationale = [why, gateLine].filter(Boolean).join(' · ')
+    const rationale = out.plan?.whyThisStory?.trim() ?? ''
+    // The read-gate verdict rides alongside the rationale (not folded into it) so the studio can
+    // show it as its own pass/flag pill.
+    const last = out.gate?.status === 'ok' ? out.gate.verdicts?.[out.gate.verdicts.length - 1] : undefined
+    const readGate: CriticSummary['readGate'] = last?.reason?.trim()
+      ? {
+          pass: !!last.pass,
+          label: `${last.pass ? 'Passed the read' : 'Flagged at the read'}${out.gate?.retried ? ' (after one rewrite)' : ''}`,
+          reason: last.reason.trim(),
+        }
+      : null
     // The story's composition chips (what parts it's made of) — order chosen for readability.
     const el = out.plan?.elements ?? null
     const elements = el
@@ -65,7 +70,9 @@ function extractCritic(stepOutput: unknown, shownBody: string): CriticSummary | 
           .filter((s): s is string => !!s)
           .map((s) => s.replace(/_/g, ' '))
       : []
-    return rationale || elements.length || qaIssues.length ? { rationale, runnersUp: [], elements, qaIssues } : null
+    return rationale || readGate || elements.length || qaIssues.length
+      ? { rationale, runnersUp: [], elements, qaIssues, readGate }
+      : null
   }
 
   if (out.v !== 2 || !Array.isArray(out.candidates) || out.critic?.status !== 'ok') return null
@@ -74,7 +81,7 @@ function extractCritic(stepOutput: unknown, shownBody: string): CriticSummary | 
     .map((c, idx) => ({ idx, title: c.story?.title ?? '', logline: c.story?.logline ?? null }))
     .filter((c) => c.idx !== out.winnerIdx && c.title)
     .map((c) => ({ title: c.title, logline: c.logline, note: noteByIdx.get(c.idx) ?? '' }))
-  return { rationale: out.critic.rationale ?? '', runnersUp, elements: [], qaIssues: [] }
+  return { rationale: out.critic.rationale ?? '', runnersUp, elements: [], qaIssues: [], readGate: null }
 }
 
 export const dynamic = 'force-dynamic'

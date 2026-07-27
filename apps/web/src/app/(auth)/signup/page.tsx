@@ -3,7 +3,7 @@ import { Suspense, useState } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { AuthShell, GoogleButton, OrDivider } from '../AuthShell'
+import { AuthField, AuthShell, GoogleButton, OrDivider } from '../AuthShell'
 
 function SignUpForm() {
   const [name, setName] = useState('')
@@ -42,32 +42,35 @@ function SignUpForm() {
   return (
     <AuthShell title="Create your account" subtitle={invited ? 'You were invited — finish signing up.' : 'Start building channels.'}>
       {invited && (
-        <p className="mb-4 rounded-md bg-positive-soft px-3 py-2 text-xs text-positive">
-          You were invited: your account is approved automatically.
-        </p>
+        <div className="mb-6 flex items-center gap-2.5 rounded-md border border-night-success-border bg-night-success-bg px-3.5 py-3">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 text-night-success" aria-hidden>
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+            <path d="m22 4-10 10.01L9 11" />
+          </svg>
+          <p className="text-[12.5px] leading-normal text-night-success-body">
+            Your account is <span className="font-700 text-night-success-strong">approved automatically</span> — no waiting for review.
+          </p>
+        </div>
       )}
       <GoogleButton label="Sign up with Google" />
       <OrDivider />
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="name" className="text-xs font-medium text-muted">Name</label>
-          <input id="name" type="text" value={name} onChange={(e) => setName(e.target.value)} className="input" autoComplete="name" />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="email" className="text-xs font-medium text-muted">Email</label>
-          <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="input" autoComplete="email" required />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="password" className="text-xs font-medium text-muted">Password</label>
-          <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="input" autoComplete="new-password" required minLength={8} />
-        </div>
-        {error && <p className="text-xs text-danger">{error}</p>}
-        <button type="submit" disabled={loading || !email || password.length < 8} className="btn-accent w-full">
-          {loading ? 'Creating account…' : 'Create account'}
+        <AuthField id="name" label="Name">
+          <input id="name" type="text" value={name} onChange={(e) => setName(e.target.value)} className="input-dark" autoComplete="name" />
+        </AuthField>
+        <AuthField id="email" label="Email">
+          <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="input-dark" autoComplete="email" required />
+        </AuthField>
+        <AuthField id="password" label="Password">
+          <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="input-dark" autoComplete="new-password" required minLength={8} />
+        </AuthField>
+        {error && <p className="text-xs text-night-danger">{error}</p>}
+        <button type="submit" disabled={loading || !email || password.length < 8} className="btn-primary mt-1 w-full py-3.5 text-[15px] font-700 shadow-glow-md">
+          {loading ? 'Creating account…' : invited ? 'Create account & join' : 'Create account'}
         </button>
       </form>
-      <p className="mt-6 text-center text-xs text-muted">
-        Already have an account? <Link href="/signin" className="font-medium text-accent">Sign in</Link>
+      <p className="mt-7 text-center text-xs text-night-muted">
+        Already have an account? <Link href="/signin" className="font-600 text-accent hover:text-accent-hover">Sign in</Link>
       </p>
     </AuthShell>
   )

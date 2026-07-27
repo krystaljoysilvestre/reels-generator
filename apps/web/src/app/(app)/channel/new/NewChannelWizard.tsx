@@ -13,6 +13,7 @@ import { stylesForGenre } from '@reels/core/prompts/story-styles.v1'
 import { STORY_VOICES } from '@reels/core/prompts/story-voices.v1'
 import { GENRE_OPTIONS } from '@/lib/genre-labels'
 import { getTrendingNiches, type TrendingNiche } from '@/lib/trending-niches'
+import { KendrixMark } from '@/components/Wordmark'
 
 type StyleInfluence = 'light' | 'medium' | 'full'
 const VOICE_OPTIONS = Object.entries(STORY_VOICES).map(([id, v]) => ({ id, label: v.label }))
@@ -29,12 +30,13 @@ const DRAFT_KEY = 'reels:new-channel-draft:v2'
 
 type Phase = 'describe' | 'script' | 'voice' | 'sound' | 'visual'
 const PHASE_ORDER: Phase[] = ['describe', 'script', 'voice', 'sound', 'visual']
-const STEP_SUBTITLE: Record<Phase, string> = {
-  describe: 'Step 1 · Describe the channel',
-  script: 'Step 2 · Teach the channel\'s voice',
-  voice: 'Step 3 · Narrator voice',
-  sound: 'Step 4 · Sound',
-  visual: 'Step 5 · Visual style',
+// The display heading for each step; the step number comes from PHASE_ORDER.
+const STEP_TITLE: Record<Phase, string> = {
+  describe: 'Describe the channel',
+  script: "Teach the channel's voice",
+  voice: 'Pick the narrator voice',
+  sound: 'Set the sound',
+  visual: 'Choose the visual style',
 }
 
 // After the API's own timeout + retries, a transient failure surfaces here —
@@ -1047,11 +1049,20 @@ export function NewChannelWizard({
             Channels
           </button>
           <span className="hidden h-6 w-px flex-shrink-0 bg-border sm:block" aria-hidden />
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-base font-semibold tracking-tight text-ink">New channel</h1>
-            <p className="truncate text-xs text-muted">{STEP_SUBTITLE[phase]}</p>
-          </div>
+          <KendrixMark size={26} />
+          <h1 className="min-w-0 flex-1 truncate font-display text-lg font-800 -tracking-[0.01em] text-ink">New channel</h1>
           <StepDots phase={phase} />
+          <button
+            type="button"
+            onClick={() => requestLeave('/dashboard')}
+            aria-label="Close setup"
+            title="Close setup"
+            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-sm border border-border-mid bg-surface text-muted transition-colors hover:border-accent-ring hover:text-ink"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </button>
         </div>
       </header>
 
@@ -1061,6 +1072,16 @@ export function NewChannelWizard({
             {error}
           </div>
         )}
+
+        {/* Step title — the mock leads each step with a tracked step label over a display heading. */}
+        <div className="mb-6">
+          <p className="micro-label">
+            Setup · step {PHASE_ORDER.indexOf(phase) + 1} of {PHASE_ORDER.length}
+          </p>
+          <h2 className="mt-2 font-display text-[26px] font-800 -tracking-[0.02em] text-ink">
+            {STEP_TITLE[phase]}
+          </h2>
+        </div>
 
         {/* ─────────────────────────── STEP 1 · DESCRIBE ─────────────────────────── */}
         {phase === 'describe' && (
@@ -2141,7 +2162,7 @@ function StepDots({ phase }: { phase: Phase }) {
   return (
     <div className="flex items-center gap-1.5">
       {PHASE_ORDER.map((p, i) => (
-        <span key={p} className={`h-1.5 w-5 rounded-full ${i <= current ? 'bg-accent' : 'bg-border-strong'}`} />
+        <span key={p} className={`h-1.5 w-5 rounded-full ${i <= current ? 'bg-brand-3' : 'bg-border-strong'}`} />
       ))}
     </div>
   )
@@ -2149,14 +2170,16 @@ function StepDots({ phase }: { phase: Phase }) {
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-1.5">
-      <label className="text-sm font-medium text-ink">{label}</label>
-      {hint && <p className="-mt-1 text-xs text-muted">{hint}</p>}
+    <div className="flex flex-col gap-2">
+      <label className="flex flex-wrap items-baseline gap-x-2 text-sm font-600 text-ink">
+        {label}
+        {hint && <span className="text-xs font-400 text-faint">{hint}</span>}
+      </label>
       {children}
     </div>
   )
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <p className="text-sm font-semibold tracking-tight text-ink">{children}</p>
+  return <p className="font-display text-[15px] font-700 -tracking-[0.01em] text-ink">{children}</p>
 }

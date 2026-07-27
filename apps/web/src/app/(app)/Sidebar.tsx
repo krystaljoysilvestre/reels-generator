@@ -2,16 +2,20 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut } from 'next-auth/react'
+import { Wordmark } from '@/components/Wordmark'
 
-type Item = { href: string; label: string; icon: React.ReactNode; match: string }
+type Item = { href: string; label: string; icon: (active: boolean) => React.ReactNode; match: string }
+
+// Active nav icons are stroked with the brand gradient; resting ones sit in `faint`.
+const STROKE = (active: boolean) => (active ? 'url(#nav-gradient)' : '#9B96A8')
 
 const items: Item[] = [
   {
     href: '/dashboard',
     label: 'Channels',
     match: '/dashboard',
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    icon: (active) => (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={STROKE(active)} strokeWidth={active ? 1.9 : 1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
         <rect x="3" y="5" width="18" height="14" rx="2" />
         <path d="M3 9h18M7 5V3M17 5V3" />
       </svg>
@@ -23,8 +27,8 @@ const ADMIN_ITEM: Item = {
   href: '/admin',
   label: 'Admin',
   match: '/admin',
-  icon: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+  icon: (active) => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={STROKE(active)} strokeWidth={active ? 1.9 : 1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d="M12 3l7 4v5c0 4.4-3 7.4-7 9-4-1.6-7-4.6-7-9V7l7-4Z" />
     </svg>
   ),
@@ -40,43 +44,74 @@ export function Sidebar({
   userLabel?: string
 }) {
   const pathname = usePathname()
-  const navItems = isAdmin ? [...items, ADMIN_ITEM] : items
   const initials = userLabel.trim().slice(0, 2).toUpperCase() || 'AC'
-  return (
-    <aside className="flex h-full w-56 flex-shrink-0 flex-col gap-1 border-r border-border bg-bg px-3 py-4">
-      {/* Account */}
-      <div className="mb-3 flex items-center gap-2.5 rounded-lg px-2 py-1.5">
-        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-ink text-xs font-semibold text-white">
-          {initials}
-        </div>
-        <div className="min-w-0 leading-tight">
-          <p className="truncate text-sm font-semibold text-ink">{userLabel}</p>
-          <p className="truncate text-xs text-faint">{isAdmin ? 'Admin' : 'Creator'}</p>
-        </div>
-      </div>
+  const isActive = (match: string) => pathname === match || pathname.startsWith(match + '/')
 
-      <nav className="flex flex-col gap-0.5">
-        {navItems.map((item) => {
-          const active = pathname === item.match || pathname.startsWith(item.match + '/')
-          return (
-            <Link key={item.label} href={item.href} onClick={() => onNavigate?.()} className={`nav-link ${active ? 'nav-link-active' : ''}`}>
-              <span className={active ? 'text-accent' : 'text-faint'}>{item.icon}</span>
-              {item.label}
-            </Link>
-          )
-        })}
-      </nav>
+  const navRow = (item: Item) => {
+    const active = isActive(item.match)
+    return (
+      <Link
+        key={item.label}
+        href={item.href}
+        onClick={() => onNavigate?.()}
+        aria-current={active ? 'page' : undefined}
+        className={`nav-link ${active ? 'nav-link-active' : ''}`}
+      >
+        <span className="flex-shrink-0">{item.icon(active)}</span>
+        {item.label}
+      </Link>
+    )
+  }
+
+  return (
+    <aside className="flex h-full w-sidebar flex-shrink-0 flex-col border-r border-border bg-surface px-3.5 py-5">
+      {/* One shared gradient def for every active nav icon in this sidebar. */}
+      <svg width="0" height="0" className="absolute" aria-hidden>
+        <defs>
+          <linearGradient id="nav-gradient" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stopColor="#2FA4FF" />
+            <stop offset="0.5" stopColor="#9B3BFF" />
+            <stop offset="1" stopColor="#FF2D9B" />
+          </linearGradient>
+        </defs>
+      </svg>
+
+      {/* Logo lockup */}
+      <Link href="/dashboard" onClick={() => onNavigate?.()} className="px-2 pb-5 pt-1">
+        <Wordmark size={34} textClass="text-[19px]" />
+      </Link>
+
+      <p className="micro-label px-2.5 pb-2 pt-1.5">Workspace</p>
+      <nav className="flex flex-col gap-0.5">{items.map(navRow)}</nav>
+
+      {isAdmin && (
+        <>
+          <p className="micro-label px-2.5 pb-2 pt-5">Operations</p>
+          <nav className="flex flex-col gap-0.5">{navRow(ADMIN_ITEM)}</nav>
+        </>
+      )}
 
       <div className="flex-1" />
 
-      <div className="px-1">
-        <button className="nav-link w-full" type="button" onClick={() => signOut({ callbackUrl: '/signin' })}>
-          <span className="text-faint">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
-            </svg>
-          </span>
-          Sign out
+      {/* Operator footer */}
+      <div className="mt-2 flex items-center gap-2.5 border-t border-border-soft px-1.5 pb-0.5 pt-3">
+        <div className="flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-sm bg-pair-blue-purple text-[12px] font-700 text-white">
+          {initials}
+        </div>
+        <div className="min-w-0 flex-1 leading-tight">
+          <p className="truncate text-[13px] font-600 text-ink">{userLabel}</p>
+          <p className="truncate text-[11px] text-faint">{isAdmin ? 'Admin' : 'Creator'}</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => signOut({ callbackUrl: '/signin' })}
+          aria-label="Sign out"
+          title="Sign out"
+          className="flex-shrink-0 rounded-sm p-1 text-faint transition-colors hover:bg-subtle hover:text-ink"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
+          </svg>
         </button>
       </div>
     </aside>

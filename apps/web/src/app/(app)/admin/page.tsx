@@ -3,6 +3,7 @@ import { count, desc, eq, gte, isNull, sum } from 'drizzle-orm'
 import { requireAdmin } from '@/lib/auth'
 import { AdminUsers } from './AdminUsers'
 import { AdminInvites } from './AdminInvites'
+import { ReelStatusPill } from '@/components/ReelStatusPill'
 
 export const dynamic = 'force-dynamic'
 
@@ -69,19 +70,29 @@ export default async function AdminPage() {
   const pendingCount = usersView.filter((u) => u.status === 'pending').length
 
   return (
-    <div className="min-h-screen">
-      <header className="sticky top-0 z-10 border-b border-border bg-bg/80 px-8 py-4 backdrop-blur">
-        <h1 className="text-base font-semibold tracking-tight text-ink">Admin</h1>
-        <p className="text-xs text-muted">
-          {usersView.length} user{usersView.length === 1 ? '' : 's'}
-          {pendingCount > 0 ? ` · ${pendingCount} awaiting approval` : ''}
-        </p>
+    <div className="min-h-full">
+      <header className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-border bg-bg/80 px-8 py-5 backdrop-blur">
+        <div>
+          <h1 className="text-[22px] font-700 -tracking-[0.02em] text-ink">Admin</h1>
+          <p className="mt-0.5 text-[13px] text-muted">
+            <span className="mono-value text-[13px]">{usersView.length}</span> user{usersView.length === 1 ? '' : 's'}
+            {pendingCount > 0 ? <> · <span className="font-600 text-accent">{pendingCount} awaiting approval</span></> : ''}
+          </p>
+        </div>
+        {/* Month spend, on a clapperboard slate */}
+        <div className="hidden overflow-hidden rounded-sm border border-border-mid bg-surface sm:block" title="Tracked provider spend this month">
+          <div className="clapper-band h-2" />
+          <div className="flex items-center gap-3 px-3.5 py-1.5">
+            <span className="mono-label text-[9px] tracking-micro-wide">Spend · month</span>
+            <span className="mono-value text-ink">{money(platformMonth)}</span>
+          </div>
+        </div>
       </header>
 
       <div className="space-y-10 p-8">
         {/* Platform cost */}
         <section>
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">Platform cost</h2>
+          <h2 className="micro-label mb-3.5">Platform cost</h2>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <Stat label="Spent this month" value={money(platformMonth)} />
             <Stat label="Spent all-time" value={money(platformAll)} />
@@ -96,30 +107,30 @@ export default async function AdminPage() {
 
         {/* Invites */}
         <section>
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">Invite links</h2>
+          <h2 className="micro-label mb-3.5">Invite test users</h2>
           <AdminInvites invites={invitesView} />
         </section>
 
         {/* Users */}
         <section>
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">Users</h2>
+          <h2 className="micro-label mb-3.5">Test users</h2>
           <AdminUsers users={usersView} currentUserId={admin.id} />
         </section>
 
         {/* Activity */}
         <section>
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">Recent activity</h2>
+          <h2 className="micro-label mb-3.5">Recent activity</h2>
           <div className="card divide-y divide-border">
             {recentReels.length === 0 && <p className="p-4 text-sm text-muted">No activity yet.</p>}
             {recentReels.map((r) => (
-              <div key={r.id} className="flex items-center justify-between px-4 py-2.5 text-sm">
-                <div className="min-w-0">
-                  <span className="text-ink">{r.ownerName || r.ownerEmail || 'unknown'}</span>
+              <div key={r.id} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-row-hover">
+                <div className="min-w-0 truncate">
+                  <span className="font-600 text-ink">{r.ownerName || r.ownerEmail || 'unknown'}</span>
                   <span className="text-muted"> · {r.channelName}</span>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="badge bg-subtle text-muted">{r.status.replace(/_/g, ' ')}</span>
-                  <span className="text-xs tabular-nums text-faint">
+                <div className="flex flex-shrink-0 items-center gap-3">
+                  <ReelStatusPill status={r.status} />
+                  <span className="mono-value text-[11px] text-faint">
                     {r.updatedAt ? new Date(r.updatedAt).toLocaleDateString() : ''}
                   </span>
                 </div>
@@ -136,9 +147,9 @@ export default async function AdminPage() {
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="card p-4">
-      <p className="text-xs text-muted">{label}</p>
-      <p className="mt-1 font-mono text-lg tabular-nums text-ink">{value}</p>
-      {hint && <p className="mt-0.5 text-[10px] text-faint">{hint}</p>}
+      <p className="micro-label">{label}</p>
+      <p className="mono-value mt-1.5 text-xl text-ink">{value}</p>
+      {hint && <p className="mt-1 text-[10px] leading-snug text-faint">{hint}</p>}
     </div>
   )
 }

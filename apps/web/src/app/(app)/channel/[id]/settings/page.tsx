@@ -21,6 +21,7 @@ export default async function ChannelSettingsPage({ params }: { params: Promise<
       id={channel.id}
       initial={{
         name: channel.name,
+        avatarKey: channel.avatarKey ?? null,
         description: channel.description ?? '',
         nicheDescription: channel.nicheDescription,
         tagline: channel.tagline ?? '',

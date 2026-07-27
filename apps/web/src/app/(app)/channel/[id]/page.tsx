@@ -4,7 +4,8 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { PostingRulesSchema, UNSHIPPED_REEL_STATUSES, autoProduceBacklogCap } from '@reels/core'
 import { assertChannelAccess } from '@/lib/access'
-import { ChannelAvatar } from '@/components/ChannelAvatar'
+import { ChannelAvatar, avatarGradient } from '@/components/ChannelAvatar'
+import { ReelStatusPill } from '@/components/ReelStatusPill'
 import { CreateReelButton } from './CreateReelButton'
 
 export const dynamic = 'force-dynamic'
@@ -72,6 +73,46 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
       </header>
 
       <div className="mx-auto max-w-4xl p-8">
+        {/* Channel banner — the channel's identity + the numbers that matter, in one dark plum block */}
+        <div className="relative mb-5 overflow-hidden rounded-xl px-7 py-6 text-white" style={{ background: 'linear-gradient(120deg,#2A1240,#4A1A5E 55%,#6B1746)' }}>
+          <div
+            className="pointer-events-none absolute inset-0"
+            style={{
+              background:
+                'radial-gradient(320px 180px at 90% -20%,rgba(255,45,155,0.5),transparent 65%), radial-gradient(280px 200px at 15% 130%,rgba(155,59,255,0.5),transparent 65%)',
+            }}
+          />
+          <div className="relative flex flex-wrap items-center gap-x-8 gap-y-5">
+            <div className="min-w-0">
+              <p className="text-[11px] font-600 uppercase tracking-micro text-white/65">
+                {[channel.genreCategory?.replace(/_/g, ' '), ...languages].filter(Boolean).join(' · ') || 'no genre set'}
+              </p>
+              <p className="mt-1 text-xl font-700">
+                {autoProduce?.enabled
+                  ? `Making ${autoProduce.reelsPerDay === 1 ? '1 reel' : `${autoProduce.reelsPerDay} reels`} a day`
+                  : channel.tagline || 'Producing on request'}
+              </p>
+            </div>
+            <div className="flex-1" />
+            <div className="flex items-stretch gap-7">
+              <div>
+                <p className="font-mono text-2xl font-400 tabular-nums">{reelRows.length}</p>
+                <p className="text-[11px] tracking-[0.04em] text-white/60">REELS</p>
+              </div>
+              <div className="w-px bg-white/[0.16]" />
+              <div>
+                <p className="font-mono text-2xl font-400 tabular-nums">{reelRows.filter((r) => r.status === 'published').length}</p>
+                <p className="text-[11px] tracking-[0.04em] text-white/60">PUBLISHED</p>
+              </div>
+              <div className="w-px bg-white/[0.16]" />
+              <div title="What this month's reels cost to make">
+                <p className="font-mono text-2xl font-400 tabular-nums">${(monthSpendCents / 100).toFixed(2)}</p>
+                <p className="text-[11px] tracking-[0.04em] text-white/60">SPEND · MTD</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Production status — pause warnings first, then the quiet facts */}
         {producePaused && (
           <div className="mb-4 flex items-start gap-3 rounded-lg border border-warning/30 bg-warning-soft px-4 py-3">
@@ -108,17 +149,35 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
             </div>
           ) : (
             <>
-              <div className="mb-3 flex justify-end">
+              <div className="mb-3.5 flex items-center justify-between gap-3">
+                <h2 className="font-display text-[15px] font-700 text-ink">Reels</h2>
                 <CreateReelButton channelId={channel.id} compact channelMode={channel.generationMode === 'auto' ? 'auto' : 'review'} />
               </div>
-              <div className="card divide-y divide-border">
+              <div className="card overflow-hidden divide-y divide-border-soft">
                 {reelRows.map((r) => (
-                  <Link key={r.id} href={reelHref(r.status, r.id)} className="flex items-center justify-between gap-3 px-5 py-3 transition-colors hover:bg-subtle">
-                    <p className="min-w-0 truncate text-sm font-medium text-ink">{r.story?.title ?? 'Untitled'}</p>
-                    <span className="flex flex-shrink-0 items-center gap-2">
-                      {r.alertNote && <span className="badge bg-warning-soft text-warning" title={r.alertNote}>needs attention</span>}
-                      <span className={`badge ${r.status === 'failed' ? 'bg-danger-soft text-danger' : 'bg-subtle text-muted'}`}>{r.status.replace(/_/g, ' ')}</span>
+                  <Link
+                    key={r.id}
+                    href={reelHref(r.status, r.id)}
+                    className="flex items-center gap-3.5 px-[18px] py-3 transition-colors hover:bg-row-hover"
+                  >
+                    {/* 9:16 thumb — the shape the reel will be, tinted per reel */}
+                    <span
+                      className="relative h-12 w-[34px] flex-shrink-0 overflow-hidden rounded-[7px]"
+                      style={{ background: avatarGradient(r.story?.title ?? r.id) }}
+                    >
+                      <span
+                        className="absolute inset-0"
+                        style={{ background: 'radial-gradient(circle at 40% 25%,rgba(255,255,255,0.3),transparent 60%)' }}
+                      />
                     </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-600 text-ink">{r.story?.title ?? 'Untitled'}</span>
+                      <span className="block truncate text-xs text-faint">{relativeDay(r.createdAt)}</span>
+                    </span>
+                    {r.alertNote && (
+                      <span className="badge flex-shrink-0 bg-warning-soft text-warning" title={r.alertNote}>needs attention</span>
+                    )}
+                    <ReelStatusPill status={r.status} />
                   </Link>
                 ))}
               </div>
@@ -134,4 +193,14 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
 // everything past that → the storyboard (which also surfaces the render preview).
 function reelHref(status: string, id: string): string {
   return status === 'drafting' || status === 'story_review' ? '/review' : `/storyboard/${id}`
+}
+
+// Plain-language age for a reel row — the mock's meta line, from the data we actually have.
+function relativeDay(at: Date): string {
+  const days = Math.floor((Date.now() - at.getTime()) / 86_400_000)
+  if (days <= 0) return 'Started today'
+  if (days === 1) return 'Started yesterday'
+  if (days < 30) return `Started ${days} days ago`
+  const months = Math.round(days / 30)
+  return `Started ${months} month${months === 1 ? '' : 's'} ago`
 }

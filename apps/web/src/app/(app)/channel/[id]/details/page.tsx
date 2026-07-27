@@ -59,7 +59,7 @@ export default async function ChannelDetailsPage({ params }: { params: Promise<{
           </Link>
           <ChannelAvatar name={channel.name} avatarKey={channel.avatarKey} className="h-9 w-9" textClass="text-xs" />
           <div className="min-w-0 flex-1">
-            <h1 className="truncate text-base font-semibold tracking-tight text-ink">{channel.name}</h1>
+            <h1 className="truncate font-display text-lg font-700 -tracking-[0.02em] text-ink">{channel.name}</h1>
             <p className="truncate text-xs text-muted">Channel details</p>
           </div>
           <Link href={`/channel/${channel.id}/settings`} className="btn-secondary btn-sm" title="Edit channel settings">
@@ -92,7 +92,7 @@ export default async function ChannelDetailsPage({ params }: { params: Promise<{
                     <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-subtle">
                       <div className="h-full rounded-full bg-accent" style={{ width: `${v * 10}%` }} />
                     </div>
-                    <span className="w-6 text-right font-mono text-xs tabular-nums text-ink">{v}</span>
+                    <span className="mono-value w-6 text-right text-xs text-ink">{v}</span>
                   </div>
                 )
               })}
@@ -199,14 +199,14 @@ export default async function ChannelDetailsPage({ params }: { params: Promise<{
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <p className="text-sm font-semibold tracking-tight text-ink">{children}</p>
+  return <p className="font-display text-[15px] font-700 -tracking-[0.01em] text-ink">{children}</p>
 }
 
 function Meta({ label, value }: { label: string; value?: string }) {
   return (
     <div>
-      <p className="text-xs font-medium text-muted">{label}</p>
-      <p className="mt-0.5 text-sm text-ink">{value || '—'}</p>
+      <p className="micro-label">{label}</p>
+      <p className="mt-1 text-sm text-ink">{value || '—'}</p>
     </div>
   )
 }
@@ -214,12 +214,14 @@ function Meta({ label, value }: { label: string; value?: string }) {
 function ChipList({ label, items }: { label: string; items: string[] }) {
   return (
     <div>
-      <p className="text-xs font-medium text-muted">{label}</p>
-      <div className="mt-1.5 flex flex-wrap gap-1.5">
+      <p className="micro-label">{label}</p>
+      <div className="mt-2 flex flex-wrap gap-1.5">
         {items.length === 0 ? (
           <span className="text-sm text-faint">—</span>
         ) : (
-          items.map((it, i) => <span key={i} className="badge bg-subtle text-muted">{it}</span>)
+          items.map((it, i) => (
+            <span key={i} className="rounded-[8px] border border-border-mid bg-surface px-2.5 py-1 text-xs font-600 text-muted">{it}</span>
+          ))
         )}
       </div>
     </div>

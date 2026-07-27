@@ -17,6 +17,8 @@ export interface CriticSummary {
   // Finishing QA punch-list (detection-only) — a quick, targeted "worth a look before you approve"
   // list from the finishing judge. Empty/absent = nothing flagged.
   qaIssues: Array<{ axis: string; problem: string }>
+  // The read-gate verdict, kept separate from `rationale` so it can render as its own pill.
+  readGate: { pass: boolean; label: string; reason: string } | null
 }
 
 interface StoryStudioProps {
@@ -136,159 +138,310 @@ export function StoryStudio({ reelId, channelId, channelName, mood, genre, initi
     setBusy(false)
   }
 
+  const backLink = (
+    <Link
+      href={`/channel/${channelId}`}
+      title="Back to channel"
+      className="flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center rounded-sm border border-white/[0.14] bg-white/[0.05] text-white transition-colors hover:bg-white/[0.1]"
+    >
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="m15 18-6-6 6-6" />
+      </svg>
+    </Link>
+  )
+
+  // ── Pre-story states keep the light single-column layout (see the "story generating" mock) ──
+  if (failed || generating || !story) {
+    return (
+      <div className="min-h-full">
+        <header className="sticky top-0 z-10 border-b border-border bg-bg/80 px-8 py-4 backdrop-blur">
+          <div className="mx-auto flex max-w-2xl items-center gap-3">
+            <Link href={`/channel/${channelId}`} className="btn-ghost btn-sm -ml-1.5" title="Back to channel">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="m15 18-6-6 6-6" />
+              </svg>
+            </Link>
+            <div className="min-w-0 flex-1">
+              <h1 className="truncate text-base font-700 -tracking-[0.02em] text-ink">New reel</h1>
+              <p className="truncate text-xs text-muted">{channelName}</p>
+            </div>
+          </div>
+        </header>
+
+        <div className="mx-auto max-w-2xl p-8">
+          {failed ? (
+            <div className="card flex flex-col items-center gap-3 px-6 py-16 text-center">
+              <p className="font-display text-lg font-700 -tracking-[0.02em] text-ink">The story couldn&apos;t be written</p>
+              <p className="max-w-sm text-sm text-muted">Something went wrong while writing it. You can try again.</p>
+              {actionError && <p className="text-sm text-danger">{actionError}</p>}
+              <button onClick={retry} disabled={busy} className="btn-accent mt-1">{busy ? 'Retrying…' : 'Try again'}</button>
+            </div>
+          ) : (
+            <StoryGenerating mood={mood} genre={genre} lines={phaseTicker('writing', mood)} draft={draft} costCents={costCents} />
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  const runtimeSec = Math.ceil(story.body.split(' ').length / 2.5)
+
+  // ── The cutting room: dark story stage + light editing rail ──
   return (
-    <div className="min-h-screen">
-      <header className="sticky top-0 z-10 border-b border-border bg-bg/80 px-8 py-4 backdrop-blur">
-        <div className="mx-auto flex max-w-2xl items-center gap-3">
-          <Link href={`/channel/${channelId}`} className="btn-ghost btn-sm -ml-1.5" title="Back to channel">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <path d="m15 18-6-6 6-6" />
-            </svg>
-          </Link>
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-base font-semibold tracking-tight text-ink">New reel</h1>
-            <p className="truncate text-xs text-muted">{channelName}</p>
+    <div className="flex h-full min-h-0 flex-col lg:flex-row">
+      {/* ═══ LEFT · story stage (the story as a film title card) ═══ */}
+      <div className="stage flex min-h-[440px] w-full flex-shrink-0 flex-col bg-night-800 lg:min-h-0 lg:w-[46%] lg:min-w-[420px]">
+        <div className="stage-leak" />
+        <div className="film-grain" />
+        {/* 9:16 frame guide — the shape this story will become */}
+        <div className="pointer-events-none absolute bottom-[104px] top-24 left-1/2 aspect-[9/16] -translate-x-1/2 rounded-lg border border-white/[0.08]" />
+
+        <div className="relative flex items-center gap-3.5 px-7 py-5">
+          {backLink}
+          <div className="flex-1" />
+          <div className="text-right font-mono text-[11px] leading-normal tracking-[0.1em] text-white/55">
+            <span className="uppercase">{channelName}</span>
+            <br />
+            <span className="text-white/35">STORY · TAKE {String(draft + 1).padStart(2, '0')}</span>
           </div>
         </div>
-      </header>
 
-      <div className="mx-auto max-w-2xl p-8">
-        {failed ? (
-          <div className="card flex flex-col items-center gap-3 px-6 py-16 text-center">
-            <p className="text-base font-semibold text-ink">The story couldn&apos;t be written</p>
-            <p className="max-w-sm text-sm text-muted">Something went wrong while writing it. You can try again.</p>
-            <button onClick={retry} disabled={busy} className="btn-accent mt-1">{busy ? 'Retrying…' : 'Try again'}</button>
-          </div>
-        ) : generating || !story ? (
-          <StoryGenerating mood={mood} genre={genre} lines={phaseTicker('writing', mood)} draft={draft} costCents={costCents} />
-        ) : reviewing ? (
-          <div className="card flex flex-col gap-4 p-5">
-            <div>
-              <p className="text-sm font-semibold text-ink">What didn&apos;t land?</p>
-              <p className="text-xs text-muted">Pick what&apos;s off and add a note — the next drafts are judged against it.</p>
-            </div>
-            <div className="grid gap-2">
-              {STORY_REJECTION_REASONS.map((r) => (
-                <button
-                  key={r.code}
-                  onClick={() => setSelectedReason(r.code)}
-                  disabled={busy}
-                  aria-pressed={selectedReason === r.code}
-                  className={`rounded-lg border px-3 py-2.5 text-left text-sm font-medium transition-colors disabled:opacity-50 ${selectedReason === r.code ? 'border-accent bg-accent-soft text-accent ring-1 ring-accent' : 'border-border-strong text-ink hover:border-accent/50 hover:bg-accent-soft'}`}
-                >
-                  {r.label}
-                </button>
+        <div className="relative flex flex-1 flex-col justify-center px-7 py-6 sm:px-11">
+          {genre && (
+            <p className="gradient-text animate-stage-up text-xs font-600 uppercase tracking-[0.24em]" style={{ animationDelay: '.02s' }}>
+              {genre.replace(/_/g, ' ')}
+            </p>
+          )}
+          <h1
+            className="animate-stage-up mt-3.5 text-[38px] font-800 leading-[0.98] -tracking-[0.03em] text-white sm:text-[52px] 2xl:text-[60px]"
+            style={{ animationDelay: '.09s' }}
+          >
+            <Typewriter text={story.title} />
+          </h1>
+          {story.logline && (
+            <p className="animate-stage-up mt-5 max-w-[390px] text-[15px] leading-relaxed text-white/[0.74]" style={{ animationDelay: '.16s' }}>
+              {story.logline}
+            </p>
+          )}
+          {story.subgenreTags.length > 0 && (
+            <div className="animate-stage-up mt-5 flex flex-wrap gap-2" style={{ animationDelay: '.23s' }}>
+              {story.subgenreTags.map((t) => (
+                <span key={t} className="rounded-2xl border border-white/[0.12] bg-white/[0.06] px-3 py-1 text-xs font-600 text-white/85">
+                  {t}
+                </span>
               ))}
             </div>
-            <textarea
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="What specifically to change… (optional)"
-              className="input h-20 resize-none"
-            />
-            <div className="flex gap-3">
-              <button onClick={() => setReviewing(false)} disabled={busy} className="btn-secondary flex-1">← Back</button>
-              <button
-                onClick={() => regenerate(selectedReason)}
-                disabled={busy || !selectedReason}
-                className="btn-accent flex-1"
-              >
-                {busy ? 'Writing…' : 'Write another'}
-              </button>
+          )}
+        </div>
+
+        {/* clapperboard slate */}
+        <div className="relative mx-7 mb-6 overflow-hidden rounded-md border border-white/10 bg-night-800/60 backdrop-blur">
+          <div className="clapper-band h-3.5" />
+          <div className="grid grid-cols-4 gap-2 px-4 py-2.5">
+            <div>
+              <p className="slate-label">TAKE</p>
+              <p className="slate-value">{String(draft + 1).padStart(2, '0')}</p>
+            </div>
+            <div>
+              <p className="slate-label">LANG</p>
+              <p className="slate-value">{story.language.toUpperCase()}</p>
+            </div>
+            <div>
+              <p className="slate-label">RUNTIME</p>
+              <p className="slate-value">{runtimeSec}s</p>
+            </div>
+            <div>
+              <p className="slate-label">SPEND</p>
+              <p className="gradient-text font-mono text-sm font-400 tabular-nums" title="What this reel has cost so far">
+                ${(costCents / 100).toFixed(2)}
+              </p>
             </div>
           </div>
-        ) : (
-          <div className="card animate-fade-in flex flex-col overflow-hidden">
-            <div className="border-b border-border px-5 py-4">
-              <p className="text-base font-semibold tracking-tight text-ink">
-                <Typewriter text={story.title} />
-              </p>
-              {story.logline && <p className="mt-1 text-sm text-muted">{story.logline}</p>}
-              {story.subgenreTags.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {story.subgenreTags.map((t) => (
-                    <span key={t} className="badge bg-subtle text-muted">{t}</span>
-                  ))}
-                </div>
-              )}
+        </div>
+      </div>
+
+      {/* ═══ RIGHT · editing rail ═══ */}
+      <div className="min-w-0 flex-1 overflow-y-auto bg-bg">
+        <div className="mx-auto max-w-[560px] px-6 py-8 sm:px-10">
+          {reviewing ? (
+            /* Reject → "what didn't land?" reason picker + note */
+            <div className="animate-fade-in flex flex-col gap-4">
+              <div>
+                <h2 className="font-display text-xl font-700 -tracking-[0.02em] text-ink">What didn&apos;t land?</h2>
+                <p className="mt-1 text-[13px] text-muted">Pick what&apos;s off and add a note — the next drafts are judged against it.</p>
+              </div>
+              <div className="grid gap-2">
+                {STORY_REJECTION_REASONS.map((r) => (
+                  <button
+                    key={r.code}
+                    onClick={() => setSelectedReason(r.code)}
+                    disabled={busy}
+                    aria-pressed={selectedReason === r.code}
+                    className={`rounded-sm border px-3.5 py-3 text-left text-sm font-600 transition-colors disabled:opacity-50 ${
+                      selectedReason === r.code
+                        ? 'border-accent bg-accent-soft text-accent ring-1 ring-accent'
+                        : 'border-border-mid bg-surface text-ink hover:border-accent-ring hover:bg-accent-soft'
+                    }`}
+                  >
+                    {r.label}
+                  </button>
+                ))}
+              </div>
+              <textarea
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="What specifically to change… (optional)"
+                className="input h-20 resize-none"
+              />
+              {actionError && <p className="text-sm text-danger">{actionError}</p>}
+              <div className="flex gap-3">
+                <button onClick={() => setReviewing(false)} disabled={busy} className="btn-secondary flex-1 py-3.5">← Back</button>
+                <button onClick={() => regenerate(selectedReason)} disabled={busy || !selectedReason} className="btn-accent flex-[1.4] py-3.5">
+                  {busy ? 'Writing…' : 'Write another'}
+                </button>
+              </div>
             </div>
-            <div className="max-h-96 overflow-y-auto whitespace-pre-wrap px-5 py-4 text-sm leading-relaxed text-ink/90">
-              {story.body}
-            </div>
-            <div className="flex items-center gap-2 border-t border-border bg-subtle/40 px-5 py-2.5 text-xs text-muted">
-              <span className="badge bg-surface text-muted ring-1 ring-inset ring-border">{story.language.toUpperCase()}</span>
-              <span>est {Math.ceil(story.body.split(' ').length / 2.5)}s</span>
-              <span className="text-faint">·</span>
-              <span className="font-mono tabular-nums text-ink">${(costCents / 100).toFixed(2)}</span>
-              <span>so far</span>
+          ) : (
+            <div className="animate-fade-in">
+              <div className="mb-5 flex items-center justify-between gap-3">
+                <p className="micro-label tracking-[0.16em]">The read</p>
+                <span className="rounded-2xl border border-accent/[0.22] bg-brand-wash px-2.5 py-1 text-[11px] font-700 uppercase tracking-[0.08em] text-accent">
+                  Story · step 1 of 3
+                </span>
+              </div>
+
+              {/* the story */}
+              <div className="max-h-[330px] overflow-y-auto whitespace-pre-line pr-2 text-base font-400 leading-[1.78] text-body">
+                {story.body}
+              </div>
+
+              {/* voice reference */}
               <button
                 onClick={toggleReference}
                 disabled={refBusy}
                 title="Voice references teach future stories how this channel sounds."
-                className={`ml-auto rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset transition-colors ${
-                  isReference
-                    ? 'bg-accent/10 text-accent ring-accent/30'
-                    : 'bg-surface text-muted ring-border hover:text-ink'
-                }`}
+                aria-pressed={isReference}
+                className="card mt-5 flex w-full items-center gap-3 px-4 py-3.5 text-left transition-shadow hover:shadow-sm disabled:opacity-60"
               >
-                {isReference ? '✓ Voice reference' : 'Make it a voice reference'}
+                <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-sm bg-pair-blue-purple">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3zM19 10v2a7 7 0 0 1-14 0v-2M12 19v3" />
+                  </svg>
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[13px] font-600 text-ink">Make it a voice reference</span>
+                  <span className="block text-xs text-faint">Future stories learn how this channel sounds.</span>
+                </span>
+                {/* switch */}
+                <span
+                  className={`relative h-[23px] w-10 flex-shrink-0 rounded-2xl transition-colors ${isReference ? 'bg-pair-purple-pink' : 'bg-subtle-strong'}`}
+                >
+                  <span
+                    className={`absolute top-0.5 h-[19px] w-[19px] rounded-full bg-white shadow-xs transition-all ${isReference ? 'right-0.5' : 'left-0.5'}`}
+                  />
+                </span>
               </button>
-            </div>
-            {critic && (
-              <div className="border-t border-border px-5 py-3">
-                {critic.elements.length > 0 && (
-                  <div className="mb-2.5 flex flex-wrap gap-1.5">
+
+              {critic?.elements.length ? (
+                <>
+                  <p className="micro-label mb-2.5 mt-6 tracking-micro-wide">Built from</p>
+                  <div className="flex flex-wrap gap-[7px]">
                     {critic.elements.map((e, i) => (
-                      <span key={i} className="badge bg-subtle text-muted ring-1 ring-inset ring-border">{e}</span>
+                      <span key={i} className="rounded-[8px] border border-border-mid bg-surface px-2.5 py-1 text-xs font-600 text-muted">
+                        {e}
+                      </span>
                     ))}
                   </div>
-                )}
-                {critic.rationale && (
-                <p className="text-xs leading-relaxed text-muted">
-                  <span className="font-medium text-ink">Why this one:</span> {critic.rationale}
-                </p>
-                )}
-                {critic.qaIssues.length > 0 && (
-                  <div className="mt-2.5 rounded-lg bg-warning/5 px-3 py-2 ring-1 ring-inset ring-warning/20">
-                    <p className="text-xs font-medium text-ink">Worth a look before you approve ({critic.qaIssues.length})</p>
-                    <ul className="mt-1.5 space-y-1.5">
-                      {critic.qaIssues.map((q, i) => (
-                        <li key={i} className="text-xs leading-relaxed text-muted">
-                          <span className="badge mr-1.5 bg-subtle text-faint ring-1 ring-inset ring-border">{q.axis}</span>
-                          {q.problem}
-                        </li>
-                      ))}
-                    </ul>
+                </>
+              ) : null}
+
+              {(critic?.rationale || critic?.readGate) && (
+                <div className="card relative mt-5 overflow-hidden py-4 pl-5 pr-4 shadow-sm">
+                  <span className="absolute inset-y-0 left-0 w-1 bg-brand-bar" />
+                  <div className="mb-2.5 flex items-center gap-2.5">
+                    <span className="flex h-[26px] w-[26px] items-center justify-center rounded-[8px] bg-pair-purple-pink">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                        <path d="M15 4V2M15 16v-2M8 9h2M20 9h2M17.8 11.8 19 13M15 9h.01M17.8 6.2 19 5M3 21l9-9M12.2 6.2 11 5" />
+                      </svg>
+                    </span>
+                    <span className="text-sm font-700 text-ink">Why this one</span>
                   </div>
-                )}
-                {critic.runnersUp.length > 0 && (
-                  <details className="mt-2 group">
-                    <summary className="cursor-pointer select-none text-xs font-medium text-muted transition-colors hover:text-ink">
-                      Other takes ({critic.runnersUp.length})
-                    </summary>
-                    <p className="mt-1.5 text-xs text-faint">The takes that didn&rsquo;t make the cut, and why.</p>
-                    <ul className="mt-2 space-y-2">
-                      {critic.runnersUp.map((r, i) => (
-                        <li key={i} className="rounded-lg bg-subtle/60 px-3 py-2">
-                          <p className="text-xs font-medium text-ink">{r.title}</p>
-                          {r.logline && <p className="mt-0.5 text-xs text-muted">{r.logline}</p>}
-                          {r.note && <p className="mt-1 text-xs italic text-faint">&ldquo;{r.note}&rdquo;</p>}
-                        </li>
-                      ))}
-                    </ul>
-                  </details>
-                )}
-              </div>
-            )}
-            <div className="border-t border-border px-5 py-4">
-              {actionError && <p className="mb-3 text-sm text-danger">{actionError}</p>}
-              <div className="flex gap-3">
-                <button onClick={() => setReviewing(true)} disabled={busy} className="btn-secondary flex-1">Write another</button>
-                <button onClick={approve} disabled={busy} className="btn-accent flex-1">{busy ? 'Saving…' : 'Use this story'}</button>
+                  {critic.rationale && <p className="text-[13px] leading-relaxed text-body">{critic.rationale}</p>}
+                  {critic.readGate && (
+                    <span
+                      className={`mt-3 inline-flex items-center gap-1.5 rounded-2xl px-2.5 py-1 text-[11px] font-600 ${
+                        critic.readGate.pass ? 'bg-success-soft text-success' : 'bg-warning-soft text-warning'
+                      }`}
+                      title={critic.readGate.reason}
+                    >
+                      {critic.readGate.pass && (
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                          <path d="M20 6 9 17l-5-5" />
+                        </svg>
+                      )}
+                      {critic.readGate.label}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {critic?.qaIssues.length ? (
+                <div className="mt-3.5 rounded-lg border border-warning-ring bg-warning-soft px-4 py-4">
+                  <p className="flex items-center gap-2 text-xs font-700 text-warning">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                      <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                      <path d="M12 9v4M12 17h.01" />
+                    </svg>
+                    Worth a look before you approve ({critic.qaIssues.length})
+                  </p>
+                  <ul className="mt-2.5 flex flex-col gap-2.5">
+                    {critic.qaIssues.map((q, i) => (
+                      <li key={i} className="text-xs leading-normal text-muted">
+                        <span className="mr-2 inline-block rounded-[6px] border border-border-mid bg-surface px-2 py-0.5 align-middle text-[10px] font-700 text-faint">
+                          {q.axis}
+                        </span>
+                        {q.problem}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              {/* Legacy best-of-N takes — the v3 pipeline writes one story, so this is empty on new
+                  reels, but older reels still have it. */}
+              {critic?.runnersUp.length ? (
+                <details className="group mt-3.5">
+                  <summary className="cursor-pointer select-none text-xs font-600 text-muted transition-colors hover:text-ink">
+                    Other takes ({critic.runnersUp.length})
+                  </summary>
+                  <p className="mt-1.5 text-xs text-faint">The takes that didn&rsquo;t make the cut, and why.</p>
+                  <ul className="mt-2 space-y-2">
+                    {critic.runnersUp.map((r, i) => (
+                      <li key={i} className="rounded-sm bg-subtle px-3 py-2">
+                        <p className="text-xs font-600 text-ink">{r.title}</p>
+                        {r.logline && <p className="mt-0.5 text-xs text-muted">{r.logline}</p>}
+                        {r.note && <p className="mt-1 text-xs italic text-faint">&ldquo;{r.note}&rdquo;</p>}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              ) : null}
+
+              {actionError && <p className="mt-4 text-sm text-danger">{actionError}</p>}
+              <div className="mt-6 flex gap-3">
+                <button onClick={() => setReviewing(true)} disabled={busy} className="btn-secondary flex-1 py-3.5">Write another</button>
+                <button onClick={approve} disabled={busy} className="btn-accent flex-[1.4] gap-2 py-3.5 font-700">
+                  {busy ? 'Saving…' : 'Use this story'}
+                  {!busy && (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                      <path d="M5 12h14M13 6l6 6-6 6" />
+                    </svg>
+                  )}
+                </button>
               </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   )

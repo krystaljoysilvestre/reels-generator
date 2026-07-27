@@ -44,8 +44,8 @@ export function Shell({
               <path d="M3 6h18M3 12h18M3 18h18" />
             </svg>
           </button>
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-ink text-[11px] font-semibold text-white">{initials}</div>
-          <span className="text-sm font-semibold text-ink">{userLabel}</span>
+          <div className="flex h-7 w-7 items-center justify-center rounded-sm bg-pair-blue-purple text-[11px] font-700 text-white">{initials}</div>
+          <span className="text-sm font-600 text-ink">{userLabel}</span>
         </div>
 
         <main className="flex-1 overflow-y-auto [scrollbar-gutter:stable]">{children}</main>

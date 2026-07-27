@@ -23,6 +23,7 @@ import { CaptionPreview } from '@/components/CaptionPreview'
 import { PlatformPicker } from '@/components/PlatformPicker'
 import { Dropdown } from '@/components/Dropdown'
 import { VisualStyle } from './VisualStyle'
+import { ChannelAvatar } from '@/components/ChannelAvatar'
 
 const SETTINGS_VOICE_OPTIONS = Object.entries(STORY_VOICES).map(([id, v]) => ({ value: id, label: v.label }))
 const SETTINGS_INFLUENCE_OPTIONS = [
@@ -40,6 +41,7 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
 interface Initial {
   name: string
+  avatarKey: string | null
   description: string
   nicheDescription: string
   tagline: string
@@ -184,7 +186,12 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
               <path d="m15 18-6-6 6-6" />
             </svg>
           </button>
-          <h1 className="flex-1 text-base font-semibold tracking-tight text-ink">Channel settings</h1>
+          <ChannelAvatar name={initial.name} avatarKey={initial.avatarKey} className="h-9 w-9" textClass="text-xs" />
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate font-display text-lg font-700 -tracking-[0.02em] text-ink">{initial.name}</h1>
+            <p className="truncate text-xs text-muted">Channel settings</p>
+          </div>
+          <button onClick={() => router.push(`/channel/${id}`)} className="btn-secondary btn-sm">Cancel</button>
           <button onClick={handleSave} disabled={saving || !name.trim() || !niche.trim()} className="btn-accent btn-sm">
             {saving ? 'Saving…' : 'Save changes'}
           </button>
@@ -218,12 +225,21 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
             ] as const).map((opt) => (
               <label
                 key={opt.key}
-                className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${generationMode === opt.key ? 'border-accent bg-accent-soft ring-1 ring-accent' : 'border-border-strong hover:bg-subtle'}`}
+                className={`flex cursor-pointer items-start justify-between gap-3 rounded-lg border p-4 transition-colors ${generationMode === opt.key ? 'border-accent bg-accent-soft ring-1 ring-accent' : 'border-border-mid hover:border-accent-ring hover:bg-subtle'}`}
               >
-                <input type="radio" name="generationMode" checked={generationMode === opt.key} onChange={() => setGenerationMode(opt.key)} className="mt-0.5 h-4 w-4 flex-shrink-0 accent-accent" />
-                <span>
-                  <span className="block text-sm font-medium text-ink">{opt.label}</span>
-                  <span className="mt-0.5 block text-xs text-muted">{opt.sub}</span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-700 text-ink">{opt.label}</span>
+                  <span className="mt-1 block text-xs leading-normal text-muted">{opt.sub}</span>
+                </span>
+                <input type="radio" name="generationMode" checked={generationMode === opt.key} onChange={() => setGenerationMode(opt.key)} className="sr-only" />
+                {/* Selected reads as a filled gradient check, per the mock */}
+                <span
+                  aria-hidden
+                  className={`mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border ${generationMode === opt.key ? 'border-transparent bg-brand-3 text-white' : 'border-border-strong'}`}
+                >
+                  {generationMode === opt.key && (
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+                  )}
                 </span>
               </label>
             ))}
@@ -513,14 +529,17 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <p className="text-xs font-semibold uppercase tracking-wide text-faint">{children}</p>
+  return <p className="micro-label">{children}</p>
 }
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-1.5">
-      <label className="text-sm font-medium text-ink">{label}</label>
-      {hint && <p className="-mt-1 text-xs text-muted">{hint}</p>}
+    <div className="flex flex-col gap-2">
+      {/* The mock sets the hint inline after the label ("Description · shown on the channel card"). */}
+      <label className="text-sm font-600 text-ink">
+        {label}
+        {hint && <span className="ml-1.5 font-400 text-faint">· {hint}</span>}
+      </label>
       {children}
     </div>
   )
