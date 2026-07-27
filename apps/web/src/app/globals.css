@@ -150,6 +150,12 @@
            focus:border-accent focus:ring-focus-dark;
   }
 
+  /* Invalid value. Add alongside `.input` (defined after it, so it wins the border/ring)
+     and pair with a short message under the field saying how to fix it. */
+  .input-error {
+    @apply border-danger focus:border-danger focus:ring-danger/15;
+  }
+
   /* ── Badges ────────────────────────────────────────────── */
   .badge {
     @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5

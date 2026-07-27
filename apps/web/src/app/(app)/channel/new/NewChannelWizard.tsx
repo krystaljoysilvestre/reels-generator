@@ -28,6 +28,10 @@ const INFLUENCE_OPTIONS: Array<{ id: StyleInfluence; label: string }> = [
 // caption look) instead of half-restoring them.
 const DRAFT_KEY = 'reels:new-channel-draft:v2'
 
+// Longest niche description the channel APIs accept — every route that takes one caps at this,
+// so raising it here alone would just move the rejection server-side.
+const NICHE_MAX = 8000
+
 type Phase = 'describe' | 'script' | 'voice' | 'sound' | 'visual'
 const PHASE_ORDER: Phase[] = ['describe', 'script', 'voice', 'sound', 'visual']
 // The display heading for each step; the step number comes from PHASE_ORDER.
@@ -150,6 +154,10 @@ export function NewChannelWizard({
   const [name, setName] = useState('')
   const [committedName, setCommittedName] = useState('') // drives avatar color; updated on blur to avoid per-keystroke flicker
   const [description, setDescription] = useState('')
+  // The card line a preset last filled in. Picking a preset seeds the description too, but only while
+  // it's still ours to overwrite — the moment the creator types their own, this stops matching and we
+  // leave it alone.
+  const [seededDescription, setSeededDescription] = useState('')
   const [niche, setNiche] = useState('')
   const [languages, setLanguages] = useState<string[]>(['English'])
   const [targetPlatform, setTargetPlatform] = useState<TargetPlatform>('all') // shapes caption/length derivation + render presets
@@ -282,6 +290,7 @@ export function NewChannelWizard({
         if (typeof d.name === 'string') setName(d.name)
         if (typeof d.committedName === 'string') setCommittedName(d.committedName)
         if (typeof d.description === 'string') setDescription(d.description)
+        if (typeof d.seededDescription === 'string') setSeededDescription(d.seededDescription)
         if (typeof d.niche === 'string') setNiche(d.niche)
         if (Array.isArray(d.languages) && d.languages.length) setLanguages(d.languages)
         if (['tiktok', 'youtube_shorts', 'facebook_reels', 'youtube_long', 'all'].includes(d.targetPlatform)) setTargetPlatform(d.targetPlatform)
@@ -345,7 +354,7 @@ export function NewChannelWizard({
       if (v.imageKey) previewKeys[Number(k)] = { imageKey: v.imageKey }
     }
     return {
-      phase, name, committedName, description, niche, languages, targetPlatform, presetId,
+      phase, name, committedName, description, seededDescription, niche, languages, targetPlatform, presetId,
       avatarKey, costCents, tone, style, region, era, locations, objects, vocab,
       voiceMode, selectedVoices, recommended, voiceSearchKeyword, genreCategory, presentation, narrativeStyle, narrativeVoice, styleInfluence, tagline, derivedSig,
       targetSeconds, captionStyle, sampleScript, sampleIsAi, extraSampleScripts,
@@ -363,7 +372,7 @@ export function NewChannelWizard({
     } catch {
       /* storage full / unavailable — non-fatal */
     }
-  }, [hydrated, phase, name, committedName, description, niche, languages, targetPlatform, presetId, avatarKey, costCents, tone, targetSeconds, style, region, era, locations, objects, vocab, voiceMode, selectedVoices, recommended, voiceSearchKeyword, genreCategory, presentation, narrativeStyle, narrativeVoice, styleInfluence, tagline, derivedSig, captionStyle, sampleScript, sampleIsAi, extraSampleScripts, audioMood, musicChoice, selectedPresetIds, presetPickedManually, uploadedMusic, styleProposals, selectedStyleIdx, uploadedStyleIdx, stylePreviews, draftChannelId])
+  }, [hydrated, phase, name, committedName, description, seededDescription, niche, languages, targetPlatform, presetId, avatarKey, costCents, tone, targetSeconds, style, region, era, locations, objects, vocab, voiceMode, selectedVoices, recommended, voiceSearchKeyword, genreCategory, presentation, narrativeStyle, narrativeVoice, styleInfluence, tagline, derivedSig, captionStyle, sampleScript, sampleIsAi, extraSampleScripts, audioMood, musicChoice, selectedPresetIds, presetPickedManually, uploadedMusic, styleProposals, selectedStyleIdx, uploadedStyleIdx, stylePreviews, draftChannelId])
 
   // ── Unsaved-progress guard ──────────────────────────────────────────────────
   // The draft autosaves, but leaving mid-flow still deserves a heads-up so the operator
@@ -427,7 +436,9 @@ export function NewChannelWizard({
       const res = await fetch('/api/channel/save-draft', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ draftChannelId, name, nicheDescription: niche, draftState: buildDraft() }),
+        // The column is a denormalized copy for the dashboard card and the route caps it, so clamp
+        // rather than let an over-limit draft fail to save. draftState carries the full text back.
+        body: JSON.stringify({ draftChannelId, name, nicheDescription: niche.trim().slice(0, NICHE_MAX), draftState: buildDraft() }),
       })
       if (res.ok) {
         const { channelId } = (await res.json()) as { channelId: string }
@@ -670,7 +681,13 @@ export function NewChannelWizard({
     audio.play().then(() => setPlayingVoiceId(v.id)).catch(() => setPlayingVoiceId(null))
   }
 
-  const canGenerate = name.trim().length > 0 && niche.trim().length >= 20 && languages.length > 0
+  // The niche field is soft-capped rather than maxLength-clamped: a hard cap silently swallows the
+  // tail of a long paste, so we take the text and show an error instead. Both bounds match what the
+  // derive/create APIs accept, so the field can never submit something they'd reject.
+  const nicheLength = niche.trim().length
+  const nicheOverLimit = nicheLength > NICHE_MAX
+  const canGenerateNiche = nicheLength >= 20 && !nicheOverLimit
+  const canGenerate = name.trim().length > 0 && canGenerateNiche && languages.length > 0
   // Profile is "fresh" if the niche+language haven't changed since we derived it —
   // then we can Continue without re-calling the API. (Name/description/avatar don't
   // feed the creative bible, so editing them doesn't stale it.)
@@ -703,6 +720,15 @@ export function NewChannelWizard({
   const topPickId = recommended[0]?.id
   const allVoicesLoading = showAllVoices && voicesLoading && allVoices.length === 0
 
+  // The card line is cosmetic, so a preset fills it as a courtesy — never over anything the creator
+  // wrote. Blurbs can run past the input's cap (the trending schema allows 160), so clamp.
+  function seedDescription(blurb: string) {
+    if (description.trim() !== '' && description !== seededDescription) return
+    const line = blurb.trim().slice(0, 140)
+    setDescription(line)
+    setSeededDescription(line)
+  }
+
   function pickPreset(id: string) {
     const preset = NICHE_PRESETS.find((p) => p.id === id)
     if (!preset) return
@@ -714,10 +740,14 @@ export function NewChannelWizard({
     setPresetId(id)
     setNiche(preset.description)
     setLanguages([preset.language])
+    seedDescription(preset.blurb)
   }
 
   function pickCustom() {
-    if (presetId !== null) setNiche('') // clear the seeded preset text for a fresh start
+    if (presetId !== null) {
+      setNiche('') // clear the seeded preset text for a fresh start
+      if (description === seededDescription) { setDescription(''); setSeededDescription('') }
+    }
     setPresetId(null)
     nicheRef.current?.focus()
   }
@@ -1150,11 +1180,13 @@ export function NewChannelWizard({
                   ) : (
                     <div className="animate-fade-in grid grid-cols-2 gap-2 sm:grid-cols-3">
                       {trending.map((t, i) => {
-                        const id = `trending-${i}`
+                        // Keyed by label, not position: the rail refreshes daily, and an index-based id
+                        // would highlight whatever card happens to sit in that slot when a draft resumes.
+                        const id = `trending:${t.label.trim().toLowerCase()}`
                         const on = presetId === id
                         return (
                           <button
-                            key={id}
+                            key={`${i}-${id}`}
                             type="button"
                             title={t.whyNow}
                             onClick={() => {
@@ -1162,6 +1194,7 @@ export function NewChannelWizard({
                               setPresetId(id)
                               setNiche(t.description)
                               setLanguages([t.language || 'English'])
+                              seedDescription(t.blurb)
                             }}
                             className={`flex flex-col items-start gap-1 rounded-lg border p-3 text-left transition-all ${
                               on ? 'border-accent bg-accent-soft ring-1 ring-accent' : 'border-border-strong hover:bg-subtle'
@@ -1224,13 +1257,19 @@ export function NewChannelWizard({
             <Field label="Describe your channel" hint="Genre, audience, format, tone, how it's narrated — plus any recurring world or characters. The more you give us, the better every reel; we safely fill in the rest.">
               <textarea
                 ref={nicheRef}
-                className="input h-44 resize-none"
+                className={`input h-44 resize-none${nicheOverLimit ? ' input-error' : ''}`}
                 value={niche}
                 onChange={(e) => { setNiche(e.target.value); setPresetId(null) }}
-                maxLength={8000}
+                aria-invalid={nicheOverLimit}
+                aria-describedby={nicheOverLimit ? 'niche-error' : undefined}
                 placeholder="e.g. 'true-crime cases cracked by one overlooked detail, calm narration', or 'cozy 2-minute pasta recipes, warm and upbeat', or 'mind-bending space facts told with awe'. Cover the genre, audience, format, tone, and how it's narrated — the more detail, the better; we safely fill in the rest."
               />
-              <p className="mt-1 text-xs text-faint">{niche.trim().length} characters · 20 min, 2000 max</p>
+              {/* No running counter — length isn't the point until it's a problem. */}
+              {nicheOverLimit && (
+                <p id="niche-error" className="mt-1 text-xs text-danger">
+                  That&apos;s {(nicheLength - NICHE_MAX).toLocaleString()} characters too long — trim it and we&apos;ll take it from there.
+                </p>
+              )}
             </Field>
 
             {/* Follow-up questions from the profile derive — only for dimensions the description left
