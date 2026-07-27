@@ -230,9 +230,15 @@ export async function generateStory(reelId: string, channelId: string, language:
 
   // ── Avoid list from recent rejections ────────────────────────────────────
   const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000)
-  const recentRejections = await db.query.rejections.findMany({
-    where: gte(rejections.createdAt, fourteenDaysAgo),
-  })
+  // Scoped to THIS channel, joining through reels because a rejection only carries a reelId. Unscoped, the
+  // avoid-list was built from EVERY tenant's rejections: one channel's operator feedback steered another
+  // channel's planner, and unrelated activity anywhere in the app churned this step's cache key. Reason
+  // codes are per-channel taste, not a global signal.
+  const recentRejections = await db
+    .select({ reasonCode: rejections.reasonCode })
+    .from(rejections)
+    .innerJoin(reels, eq(rejections.reelId, reels.id))
+    .where(and(gte(rejections.createdAt, fourteenDaysAgo), eq(reels.channelId, channelId)))
 
   const rejectionCounts = recentRejections.reduce<Record<string, number>>((acc, r) => {
     acc[r.reasonCode] = (acc[r.reasonCode] ?? 0) + 1
@@ -286,14 +292,33 @@ export async function generateStory(reelId: string, channelId: string, language:
 
   // ── Previous round's winning angle → exclude it from this round ───────────
   // runStep OVERWRITES the step row, so read the prior output before calling it.
+  const prevStep = await db.query.pipelineSteps.findFirst({
+    where: and(eq(pipelineSteps.reelId, reelId), eq(pipelineSteps.stepName, 'generate_story')),
+  })
+  const prevOutput = prevStep?.output as Partial<StudioOutput> | null | undefined
   let prevWinnerAngleId: string | undefined
   if (regenerationNonce > 0) {
-    const prevStep = await db.query.pipelineSteps.findFirst({
-      where: and(eq(pipelineSteps.reelId, reelId), eq(pipelineSteps.stepName, 'generate_story')),
-    })
-    const prev = prevStep?.output as Partial<StudioOutput> | null | undefined
-    if (prev && prev.v === 3 && typeof prev.angleId === 'string') prevWinnerAngleId = prev.angleId
+    if (prevOutput && prevOutput.v === 3 && typeof prevOutput.angleId === 'string') prevWinnerAngleId = prevOutput.angleId
     // (older reels may carry a legacy v:2 output; its angle isn't reused — a fresh angle is fine.)
+  }
+
+  // ── Re-entry guard: already generated, and nobody asked for another draft ─────────────────────────
+  // The job can be redelivered AFTER this step succeeded (a crash or lost ack between the step finishing
+  // and the dispatcher enqueuing the next one). runStep's own cache can't catch that case: the studio hash
+  // embeds fast-moving inputs this step's OWN success mutates — persisting the story bumps the channel's
+  // story count (rotationOffset → a different angle) and its recent-premise list — so the recomputed hash
+  // misses, re-pays the whole ~5-call chain, and inserts a DUPLICATE story. Another draft is only ever
+  // requested through the regenerate-story route, which records a rejection BEFORE re-enqueuing; so a
+  // completed step with no rejection filed after it means the story on disk IS the story being asked for.
+  const doneAt = prevStep?.status === 'done' ? prevStep.finishedAt : null
+  const cachedWinner = prevOutput?.winner ?? null
+  if (doneAt && cachedWinner && !(latestRejection && latestRejection.createdAt > doneAt)) {
+    const linked = await db.query.reels.findFirst({ where: eq(reels.id, reelId), columns: { storyId: true } })
+    if (linked?.storyId) {
+      console.log(`[generate_story] ${reelId.slice(0, 8)}: step already done + story linked, no newer rejection — reusing (no re-pay)`)
+      await setReelStatus(reelId, 'story_review')
+      return cachedWinner
+    }
   }
 
   const worldBible = WorldBibleSchema.parse(channel.worldBible)

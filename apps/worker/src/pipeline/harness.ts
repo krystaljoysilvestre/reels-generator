@@ -1,12 +1,13 @@
 import { eq, and, sql } from 'drizzle-orm'
 import { getDb, getGlobalSpendTodayCents, getReelOwnerUsage } from '@reels/db'
-import { pipelineSteps, reels } from '@reels/db'
+import { pipelineSteps, reels, channels } from '@reels/db'
+import { spendFromError } from '@reels/providers'
 import {
   assertBudget,
   assertGlobalDailyBudget,
   assertUserBudget,
   GLOBAL_DAILY_SPEND_CAP_CENTS,
-  DEFAULT_BUDGET_CAPS_CENTS,
+  budgetCapForSeconds,
   DEFAULT_USER_LIMITS,
   baseStepName,
   canTransition,
@@ -49,7 +50,6 @@ export async function runStep<T>(
   fn: (cost: CostSink) => Promise<{ output: T; costCents: number }>,
 ): Promise<StepResult<T>> {
   const db = getDb()
-  const cap = ctx.budgetCap ?? DEFAULT_BUDGET_CAPS_CENTS.short
   let accrued = 0
   const cost: CostSink = { add: (c) => { if (c > 0) accrued += c }, get total() { return accrued } }
 
@@ -72,6 +72,14 @@ export async function runStep<T>(
   // ── 2. Budget pre-check (fail before spending) ────────────────────────────
   const reel = await db.query.reels.findFirst({ where: eq(reels.id, ctx.reelId) })
   if (!reel) throw new Error(`Reel not found: ${ctx.reelId}`)
+  // Per-reel cap: an explicit ctx.budgetCap wins; otherwise scale by the channel's reel length so a
+  // long-form or all-animated reel gets proportionate headroom (a flat $8 stranded an 85s animated reel
+  // one scene short — 2026-07-24). Still a bounded runaway-spend backstop (budgetCapForSeconds caps it).
+  let cap = ctx.budgetCap
+  if (cap == null) {
+    const channel = await db.query.channels.findFirst({ where: eq(channels.id, reel.channelId), columns: { targetSeconds: true } })
+    cap = budgetCapForSeconds(channel?.targetSeconds)
+  }
   assertBudget(ctx.reelId, reel.costCents, cap)
 
   // Per-user monthly budget (mid-pipeline). The create-time gate is lagging — a burst of creates all
@@ -139,15 +147,18 @@ export async function runStep<T>(
 
     return { output, costCents, skipped: false }
   } catch (err) {
-    // Persist any spend that landed BEFORE the throw (only steps using the cost sink accrue). This makes
-    // reels.costCents reflect money actually spent — incl. across retries — so the budget gates enforce
-    // against reality instead of under-counting partial failures. Best-effort: a bookkeeping failure here
-    // must not mask the real step error.
-    if (accrued > 0) {
+    // Persist any spend that landed BEFORE the throw. Two sources: the cost sink (what the step itself
+    // reported) and the error, for providers that paid for one or more calls and THEN failed — llmCall's
+    // schema-repair path bills two completions, the TTS chunk loop bills the chunks that succeeded — and
+    // carry those cents out on the error because a throw has no return value (see attachSpend). Together
+    // they make reels.costCents reflect money actually spent, incl. across retries, so the budget gates
+    // enforce against reality. Best-effort: a bookkeeping failure here must not mask the real step error.
+    const unreturned = accrued + spendFromError(err)
+    if (unreturned > 0) {
       try {
         await db
           .update(reels)
-          .set({ costCents: sql`${reels.costCents} + ${accrued}`, updatedAt: new Date() })
+          .set({ costCents: sql`${reels.costCents} + ${unreturned}`, updatedAt: new Date() })
           .where(eq(reels.id, ctx.reelId))
       } catch (costErr) {
         console.error(`[harness] failed to record partial cost for ${ctx.reelId}/${ctx.stepName}:`, costErr)

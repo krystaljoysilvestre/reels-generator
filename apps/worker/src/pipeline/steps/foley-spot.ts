@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { mkdir, writeFile, readFile, readdir, rm } from 'node:fs/promises'
 import { getDb, reels, scenes, assets } from '@reels/db'
-import { generateSfx as elGenerateSfx, buildInputHash, downloadBuffer, llmCall } from '@reels/providers'
+import { generateSfx as elGenerateSfx, buildInputHash, downloadBuffer, llmCall, spendFromError } from '@reels/providers'
 import {
   TimingsSchema,
   isVocalSfxPrompt,
@@ -80,10 +80,15 @@ export async function spotFoleyForReel(reelId: string): Promise<void> {
       })
     if (existingFoley.length > 0) continue
 
-    const inputHash = `${buildInputHash('foley.spot.v1', { clipAt: sourceClipAt, sceneIdx: scene.idx, reelId })}:foley-s${scene.idx}` as never
+    const inputHash = buildInputHash('foley.spot.v1', { clipAt: sourceClipAt, sceneIdx: scene.idx, reelId })
 
+    // Per-scene step row (`animate_scenes:foley-s<idx>`), matching the fan-out convention. The suffix used to
+    // sit on the inputHash while every scene shared the bare 'animate_scenes' step name; since idempotency is
+    // keyed on (reelId, stepName), the scenes overwrote each other's row and the cached result never hit. A
+    // scene that spots ZERO events leaves no asset behind, so the existingFoley pre-check above can't cover
+    // it — it re-paid the 20-frame vision call on every re-run of animate_scenes.
     await runStep(
-      { reelId, stepName: 'animate_scenes', inputHash },
+      { reelId, stepName: `animate_scenes:foley-s${scene.idx}` as never, inputHash },
       async (costSink) => {
         // Hoisted above the try: foley is fail-soft (a spotting error must not fail the render), and the
         // catch used to return 0 — so a vision call plus N generated SFX that had ALREADY been paid for
@@ -181,9 +186,12 @@ export async function spotFoleyForReel(reelId: string): Promise<void> {
           console.log(`[foley] ${reelId.slice(0, 8)} scene${scene.idx}: ${spotted.length} spotted → ${generated} placed`)
           return { output: { sceneIdx: scene.idx, spotted: spotted.length, generated }, costCents: cost }
         } catch (err) {
-          console.warn(`[foley] ${reelId.slice(0, 8)} scene${scene.idx} skipped (error, ${cost}¢ already spent): ${err instanceof Error ? err.message : String(err)}`)
           // Bill what was already spent before the error, not 0 — the money left our account either way.
-          return { output: { sceneIdx: scene.idx, spotted: 0, generated: 0 }, costCents: cost }
+          // spendFromError picks up calls the provider paid for and then threw on (a schema-repair round,
+          // partially-synthesized TTS chunks): this catch swallows the error, so nothing else can recover it.
+          const spent = cost + spendFromError(err)
+          console.warn(`[foley] ${reelId.slice(0, 8)} scene${scene.idx} skipped (error, ${spent}¢ already spent): ${err instanceof Error ? err.message : String(err)}`)
+          return { output: { sceneIdx: scene.idx, spotted: 0, generated: 0 }, costCents: spent }
         }
       },
     )

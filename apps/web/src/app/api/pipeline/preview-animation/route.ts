@@ -79,6 +79,15 @@ export async function POST(req: NextRequest) {
         engine,
       })
 
+      // Bill BEFORE the bookkeeping write (the pattern regen-image uses): fal has already charged us for
+      // this clip. Recording it last meant an asset-insert failure — or any throw on the way out — dropped
+      // a 35-70¢ clip from reels.costCents, where no total and no budget gate could ever see it. The
+      // increment is atomic so concurrent previews don't lose spend to read-modify-write.
+      await db.update(reels)
+        .set({ costCents: sql`${reels.costCents} + ${result.costCents}`, updatedAt: new Date() })
+        .where(eq(reels.id, reelId))
+      costAdded += result.costCents
+
       await db.insert(assets).values({
         reelId,
         channelId: reel.channelId,
@@ -89,7 +98,6 @@ export async function POST(req: NextRequest) {
         costCents: result.costCents,
         meta: { ...result.asset.meta, sceneIdx, variationIdx: v },
       })
-      costAdded += result.costCents
     }
   } catch (err) {
     // Map provider failures to actionable statuses instead of an opaque 500: a content-filter rejection
@@ -103,13 +111,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'That take didn’t come through — try again.' }, { status: 502 })
   } finally {
     inFlight.delete(lockKey)
-  }
-
-  if (costAdded > 0) {
-    // Atomic increment so concurrent previews don't drop spend under read-modify-write.
-    await db.update(reels)
-      .set({ costCents: sql`${reels.costCents} + ${costAdded}`, updatedAt: new Date() })
-      .where(eq(reels.id, reelId))
   }
 
   return NextResponse.json({ ok: true, costCents: costAdded })

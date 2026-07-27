@@ -59,7 +59,7 @@ export async function generateTts(reelId: string): Promise<void> {
 
   const result = await runStep(
     { reelId, stepName: 'generate_tts', inputHash },
-    async () => {
+    async (cost) => {
       // Submit story.body VERBATIM — no normalization, SSML, or text mutation [M10]
       const ttsResult = await ttsProvider.synthesize({
         narration: story.body,
@@ -67,6 +67,10 @@ export async function generateTts(reelId: string): Promise<void> {
         reelId,
         voiceSettings,
       })
+      // Report the synthesis cost the moment it's incurred: the pause splice below (download → ffmpeg →
+      // upload) can throw, and this is the reel's largest single audio charge. Without the sink the harness
+      // records nothing for an already-paid synthesis and the retry re-synthesizes at full price.
+      cost.add(ttsResult.costCents)
 
       // Resolve beats against the REAL alignment: only top up silence that isn't already there naturally.
       const pauses = resolvePauses(pauseBeats, ttsResult.alignment)

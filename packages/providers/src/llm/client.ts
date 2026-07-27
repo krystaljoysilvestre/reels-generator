@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import OpenAI from 'openai'
 import type { z } from 'zod'
-import { ProviderError, ProviderRateLimitError } from '../shared/types.js'
+import { ProviderError, ProviderRateLimitError, attachSpend } from '../shared/types.js'
 import { withProviderLimit } from '../shared/limiter.js'
 import { buildInputHash } from './input-hash.js'
 
@@ -240,7 +240,15 @@ export async function llmCall<T>(opts: LlmCallOptions<T>): Promise<LlmResult<T>>
     },
   ]
 
-  const res2 = await transport(provider, model, opts.system, repairMessages, maxTokens, opts.temperature, webSearch)
+  // The first attempt is already PAID for. Every exit from here on has to carry that cost out with it —
+  // a throw has no return value, so it rides on the error (see attachSpend) and the worker harness records
+  // it. Otherwise a schema failure silently burns two completions the reel never gets billed for.
+  let res2: TransportResult
+  try {
+    res2 = await transport(provider, model, opts.system, repairMessages, maxTokens, opts.temperature, webSearch)
+  } catch (err) {
+    throw attachSpend(err, cost1)
+  }
   const totalCost = cost1 + calcCostCents(model, res2.inputTokens, res2.outputTokens) + searchFee
 
   const parsed2 = tryParse(res2.text, opts.schema)
@@ -248,8 +256,11 @@ export async function llmCall<T>(opts: LlmCallOptions<T>): Promise<LlmResult<T>>
     return { data: parsed2, costCents: totalCost, inputHash }
   }
 
-  throw new ProviderError(
-    provider,
-    `Schema validation failed after repair. Raw: ${res2.text.slice(0, 200)}`,
+  throw attachSpend(
+    new ProviderError(
+      provider,
+      `Schema validation failed after repair. Raw: ${res2.text.slice(0, 200)}`,
+    ),
+    totalCost,
   )
 }

@@ -1,6 +1,6 @@
-import { eq, and, sql } from 'drizzle-orm'
+import { eq, and } from 'drizzle-orm'
 import { getDb, reels, scenes, assets, channels, stories } from '@reels/db'
-import { generateImage, generateImageFal, imageEngineForGenre, FLUX_IMAGE_ENGINE, buildInputHash, ContentFilterError, llmCall, downloadBuffer, uploadBuffer, sourcePlaceImage, SCENE_IMAGE_MODEL, SCENE_IMAGE_QUALITY, type ImageEngine } from '@reels/providers'
+import { generateImage, generateImageFal, imageEngineForGenre, FLUX_IMAGE_ENGINE, buildInputHash, ContentFilterError, llmCall, downloadBuffer, uploadBuffer, sourcePlaceImage, spendFromError, SCENE_IMAGE_MODEL, SCENE_IMAGE_QUALITY, type ImageEngine } from '@reels/providers'
 import { assembleImagePrompt, assembleNegativePrompt, assembleReferencePrompt, castNationality, reelLightingDirective, sceneEntities, slug, PLATFORM_PRESETS, StoryBibleSchema, EBN_RENDERING_PROFILE } from '@reels/core'
 import { z } from 'zod'
 import { buildRephrasePrompt, REPHRASE_V1_VERSION, buildImageQAPrompt, IMAGE_QA_V1_VERSION, ImageQASchema, buildFilterSafePrompt, FILTER_SAFE_V1_VERSION, FilterSafeSchema, buildPlaceSourceDecidePrompt, buildPlaceVerifyPrompt, PlaceSourceDecisionSchema, PlaceVerifySchema, PLACE_SOURCE_V1_VERSION } from '../../prompts-bridge.js'
@@ -218,30 +218,60 @@ export async function generateImages(reelId: string): Promise<void> {
       for (const e of sceneEntities(storyBible, { primaryEntity: s.primaryEntity, supportingEntities: s.supportingEntities })) referenced.add(slug(e.id))
     }
     const refNeg = assembleNegativePrompt({ genreCategory: channel.genreCategory })
-    let plateCost = 0
-    await Promise.all(
-      storyBible.entities.map(async (entity) => {
-        if (entity.referenceImageKey || !referenced.has(slug(entity.id))) return
-        try {
-          // FACTUAL genre: for a real, named PLACE, try a REAL sourced photograph before inventing one. A
-          // generic setting, or a failed / low-confidence source, falls through to the generated plate below.
-          if (channel.genreCategory === 'informational' && entity.kind === 'location') {
-            const sourced = await sourceLocationPlate(entity, reelId, region)
-            plateCost += sourced.costCents
-            if (sourced.sourced) { entity.referenceImageKey = sourced.key; entity.referenceOrigin = sourced.origin; return }
-          }
-          // The supernatural threat mints on the grittier Flux engine for horror — Gemini beautifies faces,
-          // sanding the dread off the scare. Every other entity uses the channel's normal engine.
-          const plateEngine = channel.genreCategory === 'horror' && entity.role === 'threat' ? FLUX_IMAGE_ENGINE : imageEngine
-          const res = await renderImage(plateEngine, { prompt: assembleReferencePrompt(entity, effectiveStyle, lighting, cast), negativePrompt: refNeg, reelId, storageKey: `reels/${reelId}/refs/${slug(entity.id)}.webp`, aspect })
-          entity.referenceImageKey = res.asset.storageKey
-          plateCost += res.costCents
-        } catch (err) {
-          console.warn(`[generate-images] ${reelId.slice(0, 8)} reference plate failed for "${entity.id}": ${err instanceof Error ? err.message : String(err)}`)
-        }
-      }),
-    )
-    if (plateCost > 0) await db.update(reels).set({ storyBible, costCents: sql`${reels.costCents} + ${plateCost}`, updatedAt: new Date() }).where(eq(reels.id, reelId))
+    const toMint = storyBible.entities.filter((e) => !e.referenceImageKey && referenced.has(slug(e.id)))
+    // Plate minting runs INSIDE runStep. It was the one paid path in the pipeline that bypassed the budget
+    // gates (assertBudget / assertUserBudget / the global daily kill-switch), and its spend was recorded by a
+    // single update AFTER every plate had rendered — so a crash or DB failure mid-flight lost the whole run's
+    // plate cost AND the in-memory keys, and the retry re-minted (re-paid for) plates already bought. The
+    // sink now persists whatever landed before a throw. Idempotency still comes from the bible's per-entity
+    // referenceImageKey: the hash is the set of entities still MISSING a plate, so a swallowed plate failure
+    // retries on the next run instead of being cached away as done.
+    if (toMint.length > 0) {
+      const plateHash = buildInputHash('image_plates.v1', {
+        reelId,
+        entities: toMint.map((e) => `${slug(e.id)}|${e.description}`).sort().join('\n'),
+        engine: `${imageEngine.imageModel}|${imageEngine.editModel}`,
+      })
+      await runStep(
+        { reelId, stepName: 'generate_images:plates' as never, inputHash: plateHash },
+        async (cost) => {
+          let plateCost = 0
+          // Bill each call the moment it's paid: plates render concurrently, so one entity's later failure
+          // must not erase another's cost. (The harness bills the sink ONLY when fn throws, never alongside
+          // the returned total — reporting to both is not a double-add.)
+          const bill = (cents: number) => { if (cents > 0) { plateCost += cents; cost.add(cents) } }
+          await Promise.all(
+            toMint.map(async (entity) => {
+              try {
+                // FACTUAL genre: for a real, named PLACE, try a REAL sourced photograph before inventing one. A
+                // generic setting, or a failed / low-confidence source, falls through to the generated plate below.
+                if (channel.genreCategory === 'informational' && entity.kind === 'location') {
+                  const sourced = await sourceLocationPlate(entity, reelId, region)
+                  bill(sourced.costCents)
+                  if (sourced.sourced) { entity.referenceImageKey = sourced.key; entity.referenceOrigin = sourced.origin; return }
+                }
+                // The supernatural threat mints on the grittier Flux engine for horror — Gemini beautifies faces,
+                // sanding the dread off the scare. Every other entity uses the channel's normal engine.
+                const plateEngine = channel.genreCategory === 'horror' && entity.role === 'threat' ? FLUX_IMAGE_ENGINE : imageEngine
+                // `bill` as onSpend: on a safety-filter rejection the rephrase LLM is paid BEFORE the retry
+                // render, and that retry can itself throw — folding it into the return would lose it.
+                const res = await renderImage(plateEngine, { prompt: assembleReferencePrompt(entity, effectiveStyle, lighting, cast), negativePrompt: refNeg, reelId, storageKey: `reels/${reelId}/refs/${slug(entity.id)}.webp`, aspect }, bill)
+                entity.referenceImageKey = res.asset.storageKey
+                bill(res.costCents)
+              } catch (err) {
+                // This catch swallows the failure (a missing plate falls back to text-to-image), so it is the
+                // last chance to record calls the provider paid for before throwing.
+                bill(spendFromError(err))
+                console.warn(`[generate-images] ${reelId.slice(0, 8)} reference plate failed for "${entity.id}": ${err instanceof Error ? err.message : String(err)}`)
+              }
+            }),
+          )
+          // Persist the minted keys even when some plates failed — the successes must never be re-paid.
+          await db.update(reels).set({ storyBible, updatedAt: new Date() }).where(eq(reels.id, reelId))
+          return { output: { minted: toMint.filter((e) => e.referenceImageKey).length }, costCents: plateCost }
+        },
+      )
+    }
   }
 
   const pending = reelScenes.filter((s) => s.visualPrompt && !s.imageAssetId) // skip already-generated (idempotency)

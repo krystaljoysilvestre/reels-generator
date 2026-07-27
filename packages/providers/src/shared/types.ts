@@ -49,3 +49,24 @@ export class ProviderError extends Error {
     this.name = 'ProviderError'
   }
 }
+
+// ── Spend already incurred when a call throws ────────────────────────────────
+// Some provider calls pay for one or more transports and THEN fail: llmCall's schema-repair path bills two
+// completions before giving up, and the TTS chunk loop bills chunks 1..N-1 before chunk N errors. That money
+// left the account, so it has to reach the reel — but a throw carries no return value to put it in. The
+// provider attaches it to the error; the worker harness reads it back off the caught error and records it
+// alongside the cost sink. Without this the reel under-counts real spend and the budget gates under-enforce.
+export function attachSpend<E>(err: E, costCents: number): E {
+  if (costCents > 0 && err && typeof err === 'object') {
+    const e = err as { costCents?: number }
+    e.costCents = (e.costCents ?? 0) + costCents
+  }
+  return err
+}
+
+// Cents already spent on a failed provider call, or 0 when the error carries none.
+export function spendFromError(err: unknown): number {
+  if (!err || typeof err !== 'object') return 0
+  const c = (err as { costCents?: unknown }).costCents
+  return typeof c === 'number' && Number.isFinite(c) && c > 0 ? Math.ceil(c) : 0
+}

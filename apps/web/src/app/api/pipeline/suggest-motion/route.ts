@@ -45,6 +45,12 @@ export async function POST(req: NextRequest) {
       maxTokens: 300,
     })
 
+    // Bill before the bookkeeping writes below: those can throw, and the catch turns any failure into a 502
+    // that would drop an already-paid call from every spend total and budget gate.
+    if (costCents > 0) {
+      await db.update(reels).set({ costCents: sql`${reels.costCents} + ${costCents}`, updatedAt: new Date() }).where(eq(reels.id, reelId))
+    }
+
     const motionPrompt = animatorMotionPrompt(data.cameraMove, data.subjectMotion)
 
     // Arm for (re)animation from the CURRENT image: video tier + drop the stale clip so animate regenerates.
@@ -52,10 +58,6 @@ export async function POST(req: NextRequest) {
     const reelClips = await db.query.assets.findMany({ where: and(eq(assets.reelId, reelId), eq(assets.kind, 'video')) })
     const staleIds = reelClips.filter((a) => (a.meta as Record<string, unknown>)['sceneIdx'] === sceneIdx).map((a) => a.id)
     if (staleIds.length) await db.delete(assets).where(inArray(assets.id, staleIds))
-
-    if (costCents > 0) {
-      await db.update(reels).set({ costCents: sql`${reels.costCents} + ${costCents}`, updatedAt: new Date() }).where(eq(reels.id, reelId))
-    }
 
     return NextResponse.json({ ok: true, motionPrompt, subjectMotion: data.subjectMotion, cameraMove: data.cameraMove })
   } catch (err) {

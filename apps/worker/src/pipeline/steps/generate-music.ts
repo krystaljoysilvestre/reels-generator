@@ -76,8 +76,11 @@ export async function generateMusicStep(reelId: string): Promise<void> {
 
   await runStep(
     { reelId, stepName: 'generate_music', inputHash },
-    async () => {
+    async (cost) => {
       const bed = await generateMusic({ prompt, lengthMs })
+      // Report before the upload + reel write below: the bed is already paid for, and a storage/DB failure
+      // would otherwise drop the charge and re-compose it at full price on retry.
+      cost.add(bed.costCents ?? 0)
       // Content-hash the key on prompt+length so a re-composed bed lands on a NEW key — the mixer hashes
       // reel.musicKey, so a same-key overwrite would NOT trigger a re-mix and the new bed would go unheard.
       const promptHash = createHash('sha1').update(`${prompt}|${lengthMs}`).digest('hex').slice(0, 10)

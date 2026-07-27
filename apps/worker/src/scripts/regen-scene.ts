@@ -16,7 +16,7 @@ async function main() {
   if (!reelId || Number.isNaN(sceneIdx)) throw new Error('Usage: regen-scene.ts <reelId> <sceneIdx> [vary|fresh]')
 
   const { getDb, scenes, assets, channels, reels } = await import('@reels/db')
-  const { eq, and, inArray } = await import('drizzle-orm')
+  const { eq, and, inArray, sql } = await import('drizzle-orm')
   const { generateImageFal, imageEngineForGenre } = await import('@reels/providers')
   const { assembleImagePrompt, assembleNegativePrompt, reelLightingDirective, sceneEntities, StoryBibleSchema, PLATFORM_PRESETS } =
     await import('@reels/core')
@@ -57,6 +57,13 @@ async function main() {
     ...(referenceImageKeys.length ? { referenceImageKeys } : {}), engine,
   })
 
+  // Bill first, atomically. This used to be a read-modify-write (`reel.costCents + result.costCents`) at the
+  // very end, against a row read minutes earlier — the whole fal render sat inside that window, so any
+  // concurrent pipeline or route increment was silently overwritten.
+  await db.update(reels)
+    .set({ costCents: sql`${reels.costCents} + ${result.costCents}`, updatedAt: new Date() })
+    .where(eq(reels.id, reelId))
+
   const [asset] = await db.insert(assets).values({
     reelId, channelId: channel.id, kind: 'image', storageKey: result.asset.storageKey,
     provider: 'fal', costCents: result.costCents, meta: result.asset.meta,
@@ -70,7 +77,6 @@ async function main() {
   const staleIds = reelVideos.filter((a) => (a.meta as Record<string, unknown>)['sceneIdx'] === sceneIdx).map((a) => a.id)
   if (staleIds.length) await db.delete(assets).where(inArray(assets.id, staleIds))
 
-  await db.update(reels).set({ costCents: reel.costCents + result.costCents, updatedAt: new Date() }).where(eq(reels.id, reelId))
   console.log(`Done → ${result.asset.storageKey}. Reload the storyboard.`)
 }
 

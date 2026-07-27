@@ -1,7 +1,7 @@
 import { ElevenLabsClient } from 'elevenlabs'
 import type { Readable } from 'node:stream'
 import { uploadBuffer } from '../shared/storage.js'
-import { ProviderError, ProviderRateLimitError } from '../shared/types.js'
+import { ProviderError, ProviderRateLimitError, attachSpend } from '../shared/types.js'
 import { withProviderLimit } from '../shared/limiter.js'
 import type { AlignedChar, SfxResult, TtsProvider, TtsResult } from './types.js'
 import type { VoiceSettings } from '@reels/core'
@@ -222,6 +222,10 @@ export class ElevenLabsTtsProvider implements TtsProvider {
     voiceSettings?: VoiceSettings
   }): Promise<TtsResult> {
     const client = getClient()
+    // Chunks are billed per request. If chunk N fails, chunks 1..N-1 are already paid for — that spend
+    // rides out on the error so the reel still records it (see attachSpend); the success path below keeps
+    // billing the whole narration in one calculation, unchanged. Declared outside the try so the catch sees it.
+    let spentCents = 0
 
     try {
       // Narration over the model's single-request cap synthesizes in chunks that concatenate back to
@@ -248,6 +252,9 @@ export class ElevenLabsTtsProvider implements TtsProvider {
           ...(i > 0 ? { previous_text: chunks[i - 1]!.slice(-300) } : {}),
           ...(i < chunks.length - 1 ? { next_text: chunks[i + 1]!.slice(0, 300) } : {}),
         }, TTS_OPTS))
+
+        // The request completed — this chunk is billable whatever happens next.
+        spentCents += Math.ceil((chunk.length / 1000) * TTS_COST_CENTS_PER_1K_CHARS)
 
         const { audio_base64, alignment } = response
         if (!alignment) {
@@ -285,11 +292,12 @@ export class ElevenLabsTtsProvider implements TtsProvider {
 
       return { audioStorageKey: storageKey, durationMs, alignment: alignedChars, costCents }
     } catch (err) {
-      if (err instanceof ProviderError) throw err
+      // Carry out whatever chunks were already paid for before the failure.
+      if (err instanceof ProviderError) throw attachSpend(err, spentCents)
       if (Number((err as Record<string, unknown>)['statusCode']) === 429) {
-        throw new ProviderRateLimitError('elevenlabs')
+        throw attachSpend(new ProviderRateLimitError('elevenlabs'), spentCents)
       }
-      throw new ProviderError('elevenlabs', String(err))
+      throw attachSpend(new ProviderError('elevenlabs', String(err)), spentCents)
     }
   }
 }
@@ -315,6 +323,9 @@ export async function generateSfx(params: {
   // ElevenLabs text-to-sound-effects rejects prompts over ~450 chars with a 400 (which, un-caught, fails
   // the whole reel). Cap defensively so no prompt — LLM or deterministic — can ever break a render.
   const text = params.prompt.length > SFX_PROMPT_MAX_CHARS ? params.prompt.slice(0, SFX_PROMPT_MAX_CHARS) : params.prompt
+  const costCents = Math.max(1, Math.ceil(durationSec * SFX_COST_CENTS_PER_SEC))
+  // Set once the clip is in hand: the upload below can still fail, and by then the generation is paid for.
+  let paid = false
 
   try {
     // textToSoundEffects.convert returns a Readable stream. `loop` is supported by the API but missing
@@ -328,20 +339,20 @@ export async function generateSfx(params: {
     const stream = (await withProviderLimit('elevenlabs', () => client.textToSoundEffects.convert(body, SFX_OPTS))) as Readable
 
     const audioBuffer = await readableToBuffer(stream)
+    paid = true
     const slug = params.anchorLabel.toLowerCase().replace(/\s+/g, '-').slice(0, 40)
     const suffix = params.slugSuffix ? `-${params.slugSuffix}` : ''
     const storageKey = `reels/${params.reelId}/sfx/${slug}${suffix}.mp3`
     await uploadBuffer(storageKey, audioBuffer, 'audio/mpeg')
 
     const durationMs = Math.ceil(durationSec * 1000)
-    const costCents = Math.max(1, Math.ceil(durationSec * SFX_COST_CENTS_PER_SEC))
 
     return { audioStorageKey: storageKey, durationMs, costCents }
   } catch (err) {
     if (Number((err as Record<string, unknown>)['statusCode']) === 429) {
-      throw new ProviderRateLimitError('elevenlabs')
+      throw attachSpend(new ProviderRateLimitError('elevenlabs'), paid ? costCents : 0)
     }
-    throw new ProviderError('elevenlabs', String(err))
+    throw attachSpend(new ProviderError('elevenlabs', String(err)), paid ? costCents : 0)
   }
 }
 
@@ -356,6 +367,9 @@ export async function generateSpeechClip(params: {
   voiceSettings?: VoiceSettings
 }): Promise<{ audioStorageKey: string; durationMs: number; costCents: number }> {
   const client = getClient()
+  const costCents = Math.ceil((params.text.length / 1000) * TTS_COST_CENTS_PER_1K_CHARS)
+  // Set once the clip is in hand: the upload below can still fail, and by then synthesis is paid for.
+  let paid = false
   try {
     const response = await withProviderLimit('elevenlabs', () => client.textToSpeech.convertWithTimestamps(params.voiceId, {
       text: params.text,
@@ -363,16 +377,17 @@ export async function generateSpeechClip(params: {
       output_format: 'mp3_44100_128',
       ...(params.voiceSettings ? { voice_settings: params.voiceSettings } : {}),
     }, TTS_OPTS))
+    paid = true
     const audioBuffer = Buffer.from(response.audio_base64, 'base64')
     const ends = response.alignment?.character_end_times_seconds
     const durationMs = ends && ends.length ? Math.ceil(ends[ends.length - 1]! * 1000) : 0
     await uploadBuffer(params.storageKey, audioBuffer, 'audio/mpeg')
-    const costCents = Math.ceil((params.text.length / 1000) * TTS_COST_CENTS_PER_1K_CHARS)
     return { audioStorageKey: params.storageKey, durationMs, costCents }
   } catch (err) {
-    if (err instanceof ProviderError) throw err
-    if (Number((err as Record<string, unknown>)['statusCode']) === 429) throw new ProviderRateLimitError('elevenlabs')
-    throw new ProviderError('elevenlabs', String(err))
+    const spent = paid ? costCents : 0
+    if (err instanceof ProviderError) throw attachSpend(err, spent)
+    if (Number((err as Record<string, unknown>)['statusCode']) === 429) throw attachSpend(new ProviderRateLimitError('elevenlabs'), spent)
+    throw attachSpend(new ProviderError('elevenlabs', String(err)), spent)
   }
 }
 
