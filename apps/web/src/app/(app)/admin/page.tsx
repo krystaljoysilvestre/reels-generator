@@ -8,6 +8,8 @@ import { ReelStatusPill } from '@/components/ReelStatusPill'
 
 export const dynamic = 'force-dynamic'
 
+export const metadata = { title: 'Admin' }
+
 function money(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`
 }

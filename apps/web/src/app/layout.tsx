@@ -26,9 +26,14 @@ const spaceMono = Space_Mono({
   variable: '--font-space-mono',
 })
 
+// Pages set only their own name; the template appends the brand. Entity-first where a page is
+// about one thing ("Batang Bangis · Settings"), so a narrow tab still shows which one it is.
 export const metadata: Metadata = {
-  title: 'Reels — Operator',
-  description: 'AI reel generator — operator pipeline',
+  title: {
+    default: 'Kendrix',
+    template: '%s · Kendrix',
+  },
+  description: 'A storytelling operating system — from an idea to a finished story, guided end to end.',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

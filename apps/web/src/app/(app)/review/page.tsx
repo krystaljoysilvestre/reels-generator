@@ -6,6 +6,8 @@ import { accessibleChannelIds } from '@/lib/access'
 
 export const dynamic = 'force-dynamic'
 
+export const metadata = { title: 'Review queue' }
+
 export default async function ReviewPage({
   searchParams,
 }: {

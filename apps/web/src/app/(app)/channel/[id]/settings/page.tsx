@@ -5,8 +5,13 @@ import { assertChannelAccess } from '@/lib/access'
 import { ToneConfigSchema, WorldBibleSchema, CaptionStyleSchema, AudioPacksSchema, TargetPlatformSchema, PostingRulesSchema } from '@reels/core'
 import { isYouTubeConfigured } from '@reels/providers'
 import { ChannelSettings } from './ChannelSettings'
+import { channelMetadata } from '@/lib/page-metadata'
 
 export const dynamic = 'force-dynamic'
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  return channelMetadata((await params).id, 'Settings')
+}
 
 export default async function ChannelSettingsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params

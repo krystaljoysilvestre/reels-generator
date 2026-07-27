@@ -7,6 +7,9 @@ import { requireUser } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
+// Matches the sidebar item that leads here, not the "Portfolio" heading on the page.
+export const metadata = { title: 'Channels' }
+
 export default async function DashboardPage() {
   const user = await requireUser()
   const db = getDb()

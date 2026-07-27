@@ -5,6 +5,8 @@ import { NewChannelWizard } from './NewChannelWizard'
 
 export const dynamic = 'force-dynamic'
 
+export const metadata = { title: 'New channel' }
+
 export default async function NewChannelPage({
   searchParams,
 }: {

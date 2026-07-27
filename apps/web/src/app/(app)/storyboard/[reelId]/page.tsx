@@ -6,8 +6,13 @@ import { type ChannelVoice, type VoiceSettings, moodToVoiceSettings, ToneConfigS
 import { isYouTubeConfigured } from '@reels/providers'
 import { channelMood, MOOD_TINT } from '@/lib/pipeline-phases'
 import { StoryboardEditor } from './StoryboardEditor'
+import { reelMetadata } from '@/lib/page-metadata'
 
 export const dynamic = 'force-dynamic'
+
+export async function generateMetadata({ params }: { params: Promise<{ reelId: string }> }) {
+  return reelMetadata((await params).reelId, 'Storyboard')
+}
 
 export default async function StoryboardPage({ params }: { params: Promise<{ reelId: string }> }) {
   const { reelId } = await params

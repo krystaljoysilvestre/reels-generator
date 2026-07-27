@@ -5,6 +5,7 @@ import { ToneConfigSchema } from '@reels/core'
 import { assertReelAccess } from '@/lib/access'
 import { channelMood } from '@/lib/pipeline-phases'
 import { StoryStudio, type CriticSummary } from './StoryStudio'
+import { reelMetadata } from '@/lib/page-metadata'
 
 // Read the round persisted on the generate_story step and shape it for the story card.
 // v2 = legacy best-of-N (winner + losing takes + ranking-critic verdicts); v3 = studio pipeline
@@ -85,6 +86,10 @@ function extractCritic(stepOutput: unknown, shownBody: string): CriticSummary | 
 }
 
 export const dynamic = 'force-dynamic'
+
+export async function generateMetadata({ params }: { params: Promise<{ reelId: string }> }) {
+  return reelMetadata((await params).reelId, 'Story')
+}
 
 // Per-reel Story Studio — the guided story phase (generate/BYO → watch it write → review →
 // regenerate-with-reason). Once past the story phase, the reel's home is the storyboard.

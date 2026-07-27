@@ -7,8 +7,13 @@ import { ChannelAvatar } from '@/components/ChannelAvatar'
 import { CaptionPreview } from '@/components/CaptionPreview'
 import type { ToneConfig, WorldBible, ChannelVoice } from '@reels/core'
 import { CaptionStyleSchema, PLATFORM_PRESETS, AudioPacksSchema } from '@reels/core'
+import { channelMetadata } from '@/lib/page-metadata'
 
 export const dynamic = 'force-dynamic'
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  return channelMetadata((await params).id, 'Details')
+}
 
 const TONE_KEYS: Array<keyof ToneConfig> = ['intensity', 'warmth', 'energy', 'pacing', 'humor']
 const CAPTION_LABELS: Record<string, string> = {

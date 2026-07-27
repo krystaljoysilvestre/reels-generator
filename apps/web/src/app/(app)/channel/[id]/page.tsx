@@ -7,8 +7,13 @@ import { assertChannelAccess } from '@/lib/access'
 import { ChannelAvatar, avatarGradient } from '@/components/ChannelAvatar'
 import { ReelStatusPill } from '@/components/ReelStatusPill'
 import { CreateReelButton } from './CreateReelButton'
+import { channelMetadata } from '@/lib/page-metadata'
 
 export const dynamic = 'force-dynamic'
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  return channelMetadata((await params).id)
+}
 
 export default async function ChannelPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
