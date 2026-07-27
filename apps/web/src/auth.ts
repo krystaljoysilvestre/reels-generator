@@ -59,12 +59,16 @@ export const authConfig: NextAuthConfig = {
       if (uid && session.user) {
         session.user.id = uid
         const row = await db
-          .select({ role: users.role, status: users.status })
+          .select({ role: users.role, status: users.status, name: users.name, image: users.image })
           .from(users)
           .where(eq(users.id, uid))
           .then((r) => r[0])
         session.user.role = row?.role ?? 'tester'
         session.user.status = row?.status ?? 'pending'
+        // Display name + avatar also come from the DB rather than the JWT, so the profile backfill
+        // below (or a changed Google photo) shows up on the next request instead of the next login.
+        if (row?.name) session.user.name = row.name
+        if (row?.image) session.user.image = row.image
       }
       return session
     },
@@ -75,8 +79,21 @@ export const authConfig: NextAuthConfig = {
     createUser: async ({ user }) => {
       if (user?.id) await consumeInviteForUser(user.id)
     },
-    signIn: async ({ user }) => {
-      if (user?.id) await db.update(users).set({ lastSeenAt: new Date() }).where(eq(users.id, user.id))
+    signIn: async ({ user, account, profile }) => {
+      if (!user?.id) return
+      const patch: { lastSeenAt: Date; name?: string; image?: string } = { lastSeenAt: new Date() }
+      // Linking an OAuth account to an existing row (allowDangerousEmailAccountLinking, above) does
+      // NOT refresh that row's profile fields — a seeded admin keeps its placeholder name and has no
+      // avatar. Nothing in the app lets a user set either field, so the verified provider profile is
+      // our only source: sync it on every OAuth sign-in.
+      if (account?.type === 'oauth' || account?.type === 'oidc') {
+        const p = profile as { name?: unknown; picture?: unknown; image?: unknown } | undefined
+        const name = typeof p?.name === 'string' ? p.name.trim() : ''
+        const image = typeof p?.picture === 'string' ? p.picture : typeof p?.image === 'string' ? p.image : ''
+        if (name) patch.name = name
+        if (image) patch.image = image
+      }
+      await db.update(users).set(patch).where(eq(users.id, user.id))
     },
   },
 }

@@ -7,13 +7,21 @@ export type SessionUser = {
   status: string // 'pending' | 'active' | 'suspended'
   email: string | null
   name: string | null
+  image: string | null
 }
 
 export async function getCurrentUser(): Promise<SessionUser | null> {
   const session = await auth()
   const u = session?.user
   if (!u?.id) return null
-  return { id: u.id, role: u.role, status: u.status, email: u.email ?? null, name: u.name ?? null }
+  return {
+    id: u.id,
+    role: u.role,
+    status: u.status,
+    email: u.email ?? null,
+    name: u.name ?? null,
+    image: u.image ?? null,
+  }
 }
 
 // Back-compat boolean gate for the many API routes that only need "is this request authenticated".

@@ -1,4 +1,5 @@
 'use client'
+import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut } from 'next-auth/react'
@@ -34,17 +35,68 @@ const ADMIN_ITEM: Item = {
   ),
 }
 
+// First + last initial ("Krystal Joy Silvestre" → KS); falls back to the first two characters for
+// single-word labels like an email address.
+function initialsFrom(label: string) {
+  const words = label.trim().split(/\s+/).filter(Boolean)
+  if (words.length === 0) return 'AC'
+  const first = words[0]!
+  const second = words.length > 1 ? words[words.length - 1]! : first.slice(1)
+  return ((first[0] ?? '') + (second[0] ?? '')).toUpperCase()
+}
+
+/** The signed-in operator's photo, with the gradient initials tile as the fallback. */
+export function Avatar({
+  label,
+  image,
+  size,
+  textClass,
+}: {
+  label: string
+  image?: string | null | undefined
+  size: number
+  textClass: string
+}) {
+  const [failed, setFailed] = useState(false)
+  const box = { width: size, height: size }
+
+  // A plain <img>, not next/image: provider avatar hosts change (Google, and whatever we add next),
+  // and each one would otherwise need a remotePatterns entry in next.config before it would render.
+  if (image && !failed) {
+    return (
+      <img
+        src={image}
+        alt=""
+        style={box}
+        // Google's lh3 CDN refuses hotlinked avatars when a referrer is attached.
+        referrerPolicy="no-referrer"
+        onError={() => setFailed(true)}
+        className="flex-shrink-0 rounded-sm object-cover"
+      />
+    )
+  }
+  return (
+    <div
+      style={box}
+      className={`flex flex-shrink-0 items-center justify-center rounded-sm bg-pair-blue-purple font-700 text-white ${textClass}`}
+    >
+      {initialsFrom(label)}
+    </div>
+  )
+}
+
 export function Sidebar({
   onNavigate,
   isAdmin = false,
   userLabel = 'Account',
+  userImage,
 }: {
   onNavigate?: () => void
   isAdmin?: boolean
   userLabel?: string
+  userImage?: string | null | undefined
 }) {
   const pathname = usePathname()
-  const initials = userLabel.trim().slice(0, 2).toUpperCase() || 'AC'
   const isActive = (match: string) => pathname === match || pathname.startsWith(match + '/')
 
   const navRow = (item: Item) => {
@@ -95,9 +147,7 @@ export function Sidebar({
 
       {/* Operator footer */}
       <div className="mt-2 flex items-center gap-2.5 border-t border-border-soft px-1.5 pb-0.5 pt-3">
-        <div className="flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-sm bg-pair-blue-purple text-[12px] font-700 text-white">
-          {initials}
-        </div>
+        <Avatar label={userLabel} image={userImage} size={30} textClass="text-[12px]" />
         <div className="min-w-0 flex-1 leading-tight">
           <p className="truncate text-[13px] font-600 text-ink">{userLabel}</p>
           <p className="truncate text-[11px] text-faint">{isAdmin ? 'Admin' : 'Creator'}</p>

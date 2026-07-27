@@ -31,9 +31,12 @@ async function main() {
     adminId = existing.id
     console.log(`✓ Promoted existing user ${email} → admin/active (${adminId})`)
   } else {
+    // No placeholder name: the sidebar falls back to the email until the real one arrives (the first
+    // Google sign-in syncs name + avatar from the verified profile — see events.signIn in auth.ts).
+    // A made-up "Admin" would just outrank it, since a non-empty name always wins the fallback.
     const [created] = await db
       .insert(users)
-      .values({ email, name: 'Admin', role: 'admin', status: 'active', ...(passwordHash ? { passwordHash } : {}) })
+      .values({ email, role: 'admin', status: 'active', ...(passwordHash ? { passwordHash } : {}) })
       .returning({ id: users.id })
     adminId = created!.id
     console.log(`✓ Created admin ${email} (${adminId})`)

@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { Sidebar } from './Sidebar'
+import { Avatar, Sidebar } from './Sidebar'
 import { ToastProvider } from '@/components/Toast'
 import { RenderAlertWatcher } from '@/components/RenderAlertWatcher'
 
@@ -8,13 +8,14 @@ export function Shell({
   children,
   isAdmin = false,
   userLabel = 'Account',
+  userImage,
 }: {
   children: React.ReactNode
   isAdmin?: boolean
   userLabel?: string
+  userImage?: string | null | undefined
 }) {
   const [open, setOpen] = useState(false)
-  const initials = userLabel.trim().slice(0, 2).toUpperCase() || 'AC'
 
   return (
     <ToastProvider>
@@ -23,7 +24,7 @@ export function Shell({
     <div className="flex h-screen overflow-hidden bg-bg">
       {/* Desktop sidebar — fixed full-height; only <main> scrolls (see h-screen + overflow-hidden above). */}
       <div className="hidden md:flex">
-        <Sidebar isAdmin={isAdmin} userLabel={userLabel} />
+        <Sidebar isAdmin={isAdmin} userLabel={userLabel} userImage={userImage} />
       </div>
 
       {/* Mobile drawer */}
@@ -31,7 +32,7 @@ export function Shell({
         <div className="fixed inset-0 z-50 md:hidden">
           <div className="animate-fade-in absolute inset-0 bg-ink/30 backdrop-blur-sm" onClick={() => setOpen(false)} />
           <div className="animate-slide-in-left absolute left-0 top-0 h-full">
-            <Sidebar onNavigate={() => setOpen(false)} isAdmin={isAdmin} userLabel={userLabel} />
+            <Sidebar onNavigate={() => setOpen(false)} isAdmin={isAdmin} userLabel={userLabel} userImage={userImage} />
           </div>
         </div>
       )}
@@ -44,7 +45,7 @@ export function Shell({
               <path d="M3 6h18M3 12h18M3 18h18" />
             </svg>
           </button>
-          <div className="flex h-7 w-7 items-center justify-center rounded-sm bg-pair-blue-purple text-[11px] font-700 text-white">{initials}</div>
+          <Avatar label={userLabel} image={userImage} size={28} textClass="text-[11px]" />
           <span className="text-sm font-600 text-ink">{userLabel}</span>
         </div>
 
