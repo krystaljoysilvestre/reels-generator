@@ -7,21 +7,14 @@ import { Dropdown } from '@/components/Dropdown'
 import { avatarGradient, avatarInitials } from '@/components/ChannelAvatar'
 import { CaptionPreview } from '@/components/CaptionPreview'
 import { PlatformPicker } from '@/components/PlatformPicker'
-import { type CaptionPreset, type CaptionStyle, type TargetPlatform, type AudioMood, resolveCaptionStyle, CaptionStyleSchema, PLATFORM_PRESETS, PRESET_BEDS, rankPresets, presetsForGenre, stylePresetThumbKey } from '@reels/core'
+import { type CaptionPreset, type CaptionStyle, type TargetPlatform, type AudioMood, resolveCaptionStyle, CaptionStyleSchema, PLATFORM_PRESETS, PRESET_BEDS, rankPresets, presetsForGenre, stylePresetThumbKey, sampleSceneForGenre } from '@reels/core'
 import { type GenreModule, asGenreModule } from '@reels/core/prompts/scenes.v1'
 import { stylesForGenre } from '@reels/core/prompts/story-styles.v1'
-import { STORY_VOICES } from '@reels/core/prompts/story-voices.v1'
-import { GENRE_OPTIONS } from '@/lib/genre-labels'
+import { GENRE_OPTIONS, genreLabel } from '@/lib/genre-labels'
 import { getTrendingNiches, type TrendingNiche } from '@/lib/trending-niches'
 import { KendrixMark } from '@/components/Wordmark'
 
 type StyleInfluence = 'light' | 'medium' | 'full'
-const VOICE_OPTIONS = Object.entries(STORY_VOICES).map(([id, v]) => ({ id, label: v.label }))
-const INFLUENCE_OPTIONS: Array<{ id: StyleInfluence; label: string }> = [
-  { id: 'light', label: 'Light — a hint of the style' },
-  { id: 'medium', label: 'Medium — clearly in the style' },
-  { id: 'full', label: 'Full — commit hard to the style' },
-]
 
 // v2: caption persistence changed from preset+highlight to a resolved captionStyle object.
 // Bumping the key drops pre-v2 drafts (which would otherwise fall back to the default
@@ -132,12 +125,13 @@ interface StyleProposals {
   sampleScene: string
   styles: StyleOption[]
 }
-// Per-card preview lifecycle. Only one of imageKey/error is set at a time.
+// The picture on a style card: a pre-rendered preset thumbnail or an uploaded reference. Nothing in
+// the wizard renders one on demand any more, so there is no loading or error state to model — a card
+// with no key just shows its placeholder. `error` stays readable because drafts saved by the old
+// paid-preview flow can still carry one.
 interface PreviewState {
-  loading?: boolean
   imageKey?: string
   error?: string
-  errorKind?: 'filtered' | 'transient'
 }
 
 export function NewChannelWizard({
@@ -211,6 +205,8 @@ export function NewChannelWizard({
   const [narrativeStyle, setNarrativeStyle] = useState('')
   const [narrativeVoice, setNarrativeVoice] = useState('')
   const [styleInfluence, setStyleInfluence] = useState<StyleInfluence>('medium')
+  // Step 2 states the derived style instead of asking for it; this opens the overrides.
+  const [styleOpen, setStyleOpen] = useState(false)
   const [tagline, setTagline] = useState('') // AI-derived one-line positioning (persisted on the channel)
   // Follow-up questions from the derive (dimensions the description left open). Answers append to the
   // niche text and re-derive. `clarifyHandledText` remembers WHICH niche text was already asked about —
@@ -227,6 +223,11 @@ export function NewChannelWizard({
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
   const language = languages[0] ?? 'English'
+
+  // Label for the derived prose style, shown next to the genre in step 2. '' = pure genre (nothing to name).
+  const narrativeStyleLabel = genreCategory && narrativeStyle
+    ? (stylesForGenre(genreCategory).find((s) => s.id === narrativeStyle)?.label ?? '')
+    : ''
 
   // ── sample script (step 2, optional) — manual preferred; "Write one for me" seeds it ──
   // A draft can target the main script ('main') or one of the extra references (its index).
@@ -259,7 +260,6 @@ export function NewChannelWizard({
   const [styleLoading, setStyleLoading] = useState(false)
   const [styleError, setStyleError] = useState('')
   const styleReqRef = useRef(0) // guards against a superseded fetch clobbering newer state
-  const autoPreviewedGenRef = useRef(-1) // which proposals "generation" already auto-rendered (dedupes StrictMode + resolves)
   const deriveAbortRef = useRef<AbortController | null>(null) // aborts an in-flight step-1 derive on unmount / re-fire
   // Operator-uploaded reference image → vision-derived style, added as a pickable tile.
   const [uploadingRef, setUploadingRef] = useState(false)
@@ -501,6 +501,17 @@ export function NewChannelWizard({
     }
   }
 
+  // The cached catalog belongs to the language it was fetched for — a language change makes it
+  // wrong, and the lazy-load below won't refetch while it's non-empty. Drop it so "Show all
+  // voices" can't serve the previous language's voices.
+  const allVoicesLang = useRef(language)
+  useEffect(() => {
+    if (allVoicesLang.current !== language) {
+      allVoicesLang.current = language
+      setAllVoices([])
+    }
+  }, [language])
+
   // Pick a narrator persona → auto-match a real voice by the persona's keyword + gender.
   // This is the whole point: the operator picks "creepy storyteller", we cast the voice.
   // "Show all voices" lazy-loads the full language-appropriate catalog.
@@ -537,17 +548,13 @@ export function NewChannelWizard({
     if (top && !(selectedPresetIds.length === 1 && selectedPresetIds[0] === top)) setSelectedPresetIds([top])
   }, [musicChoice, presetPickedManually, selectedPresetIds, niche, audioMood, tone])
 
-  // Once styles are proposed, auto-render every preview in parallel so the operator
-  // sees each personalized look without clicking (cards develop in as they finish).
-  // Guarded per proposals "generation" so it kicks off once (survives StrictMode's
-  // double-invoke); skips indices already resolved (e.g. hydrated from a saved draft).
-  useEffect(() => {
-    if (!styleProposals || autoPreviewedGenRef.current === styleReqRef.current) return
-    autoPreviewedGenRef.current = styleReqRef.current
-    styleProposals.styles.forEach((_, i) => {
-      if (!stylePreviews[i]) void previewStyle(i)
-    })
-  }, [styleProposals])
+  // No auto-render here on purpose. Onboarding spends NOTHING on visuals: every style card gets its
+  // picture for free — the preset gallery from pre-rendered thumbnails, an uploaded reference from its
+  // own upload — so there is nothing left to pay an image model for. This used to kick off a paid
+  // render per card, from the era when the wizard proposed bespoke LLM styles; the only way it could
+  // still fire was a resumed draft with a missing preview, where it would silently bill the creator
+  // mid-onboarding. Such a card now shows its placeholder instead. Bespoke looks stay opt-in and paid,
+  // behind "Customize look" in channel Settings.
 
   function vocabRecord(): Record<string, string> {
     const v: Record<string, string> = {}
@@ -570,13 +577,18 @@ export function NewChannelWizard({
   // via "Customize look" in Settings. (Upload-your-own below still works and is operator-initiated.)
   function fetchStyleOptions() {
     styleReqRef.current++
-    const presets = presetsForGenre(genreCategory)
+    const genre = genreCategory || 'general'
+    const presets = presetsForGenre(genre)
     const proposals: StyleProposals = {
-      sampleScene: '',
+      // The scene the thumbnails were rendered on — shown under the gallery so the creator knows what
+      // they're comparing, and reused if they later render a bespoke preview.
+      sampleScene: sampleSceneForGenre(genre),
       styles: presets.map((p) => ({ label: p.label, description: p.description, stylePreset: p.stylePreset })),
     }
     const previews: Record<number, PreviewState> = {}
-    presets.forEach((p, i) => { previews[i] = { imageKey: stylePresetThumbKey(p.id) } })
+    // Genre-keyed thumbnail. /api/asset falls back to the pre-genre key when a genre's thumbnails
+    // haven't been rendered yet, so this is safe to use before the render script has run.
+    presets.forEach((p, i) => { previews[i] = { imageKey: stylePresetThumbKey(p.id, genre) } })
     setStyleProposals(proposals)
     setStylePreviews(previews)
     setSelectedStyleIdx(0)
@@ -591,36 +603,6 @@ export function NewChannelWizard({
     if (!card) return
     setSelectedStyleIdx(idx)
     setStyle(card.stylePreset)
-  }
-
-  async function previewStyle(idx: number) {
-    const card = styleProposals?.styles[idx]
-    if (!card || !styleProposals) return
-    const reqId = styleReqRef.current // tie this render to the current proposals generation
-    const preset = card.stylePreset
-    const scene = styleProposals.sampleScene
-    setStylePreviews((p) => ({ ...p, [idx]: { loading: true } }))
-    try {
-      const res = await fetch('/api/channel/style-image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stylePreset: preset, sampleScene: scene }),
-      })
-      const json = await res.json()
-      if (styleReqRef.current !== reqId) return // a regenerate superseded these proposals — drop the stale result
-      if (!res.ok) {
-        setStylePreviews((p) => ({
-          ...p,
-          [idx]: { error: json.error ?? 'Preview failed', errorKind: json.kind === 'filtered' ? 'filtered' : 'transient' },
-        }))
-        return
-      }
-      setStylePreviews((p) => ({ ...p, [idx]: { imageKey: json.imageKey } }))
-      setCostCents((c) => c + (json.costCents ?? 0))
-    } catch {
-      if (styleReqRef.current !== reqId) return
-      setStylePreviews((p) => ({ ...p, [idx]: { error: 'Couldn’t reach the image service.', errorKind: 'transient' } }))
-    }
   }
 
   // Upload 1–3 reference images → a vision pass derives the channel's style DNA; the
@@ -1372,54 +1354,57 @@ export function NewChannelWizard({
           <div className="animate-fade-in flex flex-col gap-6">
             <Recap name={name} description={description} language={language} avatarPreview={avatarPreview} />
 
+            {/* The style is already chosen from the description — this states it rather than asking.
+                "Change" is the escape hatch for a bad read; the finer knobs live in Settings. */}
             {genreCategory && (
               <div className="card p-5">
-                <SectionLabel>Storytelling style</SectionLabel>
-                <p className="mt-1 text-xs text-faint">
-                  How this channel tells its stories — the kind of story, the tradition it works in, and how the narrator sounds. We read your description and picked a fit; change anything.
-                  {' '}Mixing genres? Pick the dominant one — your description carries the blend into every reel.
-                </p>
-                <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  <label className="flex flex-col gap-1.5 text-xs font-medium text-muted">
-                    Kind of story
-                    <Dropdown
-                      value={genreCategory}
-                      onChange={(v) => {
-                        setGenreCategory(v as GenreModule)
-                        setNarrativeStyle('') // styles are scoped to the genre — a switch resets to pure genre
-                      }}
-                      options={GENRE_OPTIONS}
-                    />
-                  </label>
-                  {stylesForGenre(genreCategory).length > 0 && (
-                    <label className="flex flex-col gap-1.5 text-xs font-medium text-muted">
-                      Style
-                      <Dropdown
-                        value={narrativeStyle}
-                        onChange={setNarrativeStyle}
-                        options={[{ value: '', label: 'Pure genre (no style)' }, ...stylesForGenre(genreCategory).map((s) => ({ value: s.id, label: s.label }))]}
-                      />
-                    </label>
-                  )}
-                  <label className="flex flex-col gap-1.5 text-xs font-medium text-muted">
-                    Narrator voice
-                    <Dropdown
-                      value={narrativeVoice}
-                      onChange={setNarrativeVoice}
-                      options={[{ value: '', label: 'Default (genre voice)' }, ...VOICE_OPTIONS.map((v) => ({ value: v.id, label: v.label }))]}
-                    />
-                  </label>
-                  {narrativeStyle && (
-                    <label className="flex flex-col gap-1.5 text-xs font-medium text-muted">
-                      Style strength
-                      <Dropdown
-                        value={styleInfluence}
-                        onChange={(v) => setStyleInfluence(v as StyleInfluence)}
-                        options={INFLUENCE_OPTIONS.map((o) => ({ value: o.id, label: o.label }))}
-                      />
-                    </label>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <SectionLabel>Storytelling style</SectionLabel>
+                    <p className="mt-1.5 text-sm font-medium text-ink">
+                      {genreLabel(genreCategory)}
+                      {narrativeStyleLabel && <span className="text-muted"> · {narrativeStyleLabel}</span>}
+                    </p>
+                    <p className="mt-1 text-xs text-faint">
+                      Chosen from your description — every reel on this channel is written this way.
+                    </p>
+                  </div>
+                  {!styleOpen && (
+                    <button type="button" onClick={() => setStyleOpen(true)} className="btn-ghost btn-sm">
+                      Change
+                    </button>
                   )}
                 </div>
+
+                {styleOpen && (
+                  <div className="mt-4 grid gap-3 border-t border-border pt-4 sm:grid-cols-2">
+                    <label className="flex flex-col gap-1.5 text-xs font-medium text-muted">
+                      Kind of story
+                      <Dropdown
+                        value={genreCategory}
+                        onChange={(v) => {
+                          setGenreCategory(v as GenreModule)
+                          setNarrativeStyle('') // styles are scoped to the genre — a switch resets to pure genre
+                        }}
+                        options={GENRE_OPTIONS}
+                      />
+                    </label>
+                    {stylesForGenre(genreCategory).length > 0 && (
+                      <label className="flex flex-col gap-1.5 text-xs font-medium text-muted">
+                        Style
+                        <Dropdown
+                          value={narrativeStyle}
+                          onChange={setNarrativeStyle}
+                          options={[{ value: '', label: 'Pure genre (no style)' }, ...stylesForGenre(genreCategory).map((s) => ({ value: s.id, label: s.label }))]}
+                        />
+                      </label>
+                    )}
+                    <p className="text-xs text-faint sm:col-span-2">
+                      Mixing genres? Pick the dominant one — your description carries the blend into every reel.
+                      Finer tuning lives in channel settings.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1931,6 +1916,13 @@ export function NewChannelWizard({
                       {selStyle && (
                         <p className="mt-3 text-xs text-muted">
                           <span className="font-medium text-ink">{selStyle.label}</span> — {selStyle.description}
+                        </p>
+                      )}
+                      {/* Name the shared scene: every card is the SAME moment, so the only thing
+                          being compared is the look. Without this the repetition reads as a bug. */}
+                      {styleProposals.sampleScene && (
+                        <p className="mt-1 text-[11px] text-faint">
+                          Every look shown on the same scene — {styleProposals.sampleScene}
                         </p>
                       )}
                     </div>

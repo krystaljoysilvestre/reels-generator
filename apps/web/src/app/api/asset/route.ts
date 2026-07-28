@@ -4,6 +4,7 @@ import type { NextRequest} from 'next/server';
 import { NextResponse } from 'next/server'
 import { Readable } from 'node:stream'
 import { downloadStream } from '@reels/providers'
+import { presetThumbFallbackKey } from '@reels/core'
 import { requireApiUser, callerMayUseStorageKey } from '@/lib/api-access'
 
 const MIME: Record<string, string> = {
@@ -53,7 +54,17 @@ export async function GET(req: NextRequest) {
     // video, and <video> needs byte-range seeking — Safari refuses sources that don't advertise it, and
     // Chrome would otherwise re-download the whole file on every seek. R2 handles range parsing → 206.
     const range = req.headers.get('range')
-    const out = await downloadStream(key, range)
+    let out
+    try {
+      out = await downloadStream(key, range)
+    } catch (err) {
+      // Style-preset thumbnails are keyed per genre (`style-presets/<genre>/<id>.webp`). A genre whose
+      // thumbnails haven't been rendered yet falls back to the pre-genre key, which every consumer of a
+      // channel's stored styleImageKey gets for free — including channels created before the render ran.
+      const fallback = presetThumbFallbackKey(key)
+      if (!fallback || s3Status(err) !== 404) throw err
+      out = await downloadStream(fallback, range)
+    }
     const headers: Record<string, string> = {
       'Content-Type': out.contentType ?? contentType,
       'Accept-Ranges': 'bytes',

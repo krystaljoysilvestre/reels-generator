@@ -99,8 +99,12 @@ export function VisualStyle({
       {/* Preset gallery — free (thumbnails pre-rendered once) */}
       <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4">
         {presets.map((p) => {
-          const key = stylePresetThumbKey(p.id)
-          return <Card key={p.id} imgKey={key} label={p.label} selected={styleImageKey === key} onPick={() => onChange(p.stylePreset, key)} />
+          const key = stylePresetThumbKey(p.id, genre || 'general')
+          const legacyKey = stylePresetThumbKey(p.id)
+          // Match the legacy key too, so a channel that picked its look before thumbnails were
+          // keyed per genre still shows as selected instead of looking unset.
+          const selected = styleImageKey === key || styleImageKey === legacyKey
+          return <Card key={p.id} imgKey={key} label={p.label} selected={selected} onPick={() => onChange(p.stylePreset, key)} />
         })}
       </div>
 
