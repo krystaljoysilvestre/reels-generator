@@ -13,7 +13,9 @@ import { requireApiUser, requireSpendBudget } from '@/lib/api-access'
 
 const InputSchema = z.object({
   nicheDescription: z.string().trim().min(1).max(8000),
-  language: z.string().trim().min(1),
+  // Capped like the other free-text fields: this string is echoed into the prompt, so an
+  // unbounded one is a token-cost vector. Every supported language name is well under 40.
+  language: z.string().trim().min(1).max(40),
   toneConfig: ToneConfigSchema,
   searchKeyword: z.string().trim().max(40).optional(),
 })
@@ -32,10 +34,29 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const catalog = await listVoices(
-      parsed.data.language,
-      parsed.data.searchKeyword ? { search: parsed.data.searchKeyword } : undefined,
-    )
+    // The genre keyword narrows hard in most languages — Italian/Japanese/Korean + "horror" return a
+    // SINGLE in-language voice, so recommending from that slice alone means the model rubber-stamps
+    // the only option it was shown. Pool the genre-branded voices with the rest of the language's
+    // catalog (branded first, so they still win ties) and let the model choose from a real field.
+    // Everything here is in-language: a thin genre must never become a wrong-language narrator.
+    const [keyed, broad] = await Promise.all([
+      listVoices(parsed.data.language, parsed.data.searchKeyword ? { search: parsed.data.searchKeyword } : undefined),
+      // Degrades to the keyword slice alone rather than failing the request — but say so, otherwise a
+      // systematically failing widen looks identical to a language that's genuinely thin.
+      parsed.data.searchKeyword
+        ? listVoices(parsed.data.language).catch((err: unknown) => {
+            console.warn(`[voices] widen past keyword failed for ${parsed.data.language}:`, err)
+            return []
+          })
+        : Promise.resolve([]),
+    ])
+    const pool: typeof keyed = []
+    const poolIds = new Set<string>()
+    for (const v of [...keyed, ...broad]) {
+      if (v.id && !poolIds.has(v.id)) { poolIds.add(v.id); pool.push(v) }
+    }
+    // Cap what the model reads so a wider pool doesn't grow the prompt without bound.
+    const catalog = pool.slice(0, 40)
     const { system, userMessage } = buildVoiceRecommendPrompt({
       nicheDescription: parsed.data.nicheDescription,
       language: parsed.data.language,
@@ -63,14 +84,11 @@ export async function POST(req: NextRequest) {
       .filter((v): v is NonNullable<typeof v> => v !== null)
 
     // Don't hand the operator only the model's few picks — return the WHOLE browsable pool, with the
-    // recommended ones surfaced first (and their reasons). Broaden past the genre keyword too (the
-    // multilingual TTS narrates this language with any voice), so there are plenty to choose from.
-    const broad = parsed.data.searchKeyword
-      ? await listVoices(parsed.data.language).catch(() => [])
-      : []
+    // recommended ones surfaced first (and their reasons). `pool` already spans the genre keyword plus
+    // the rest of the language's catalog, so this browses wider than the 40 the model was shown.
     const seen = new Set(recommended.map((v) => v.id))
-    const rest: Array<(typeof catalog)[number] & { reason: string }> = []
-    for (const v of [...catalog, ...broad]) {
+    const rest: Array<(typeof pool)[number] & { reason: string }> = []
+    for (const v of pool) {
       if (v.id && !seen.has(v.id)) {
         seen.add(v.id)
         rest.push({ ...v, reason: '' })
@@ -79,6 +97,8 @@ export async function POST(req: NextRequest) {
     const voices = [...recommended, ...rest]
     return NextResponse.json({ voices, costCents: result.costCents })
   } catch (err) {
+    // The client only ever sees a generic message, so without this the failure leaves no trace at all.
+    console.error('[voices] recommend failed:', err)
     // A rate limit is worth a calm retry; otherwise return a generic message (don't leak provider internals).
     if (err instanceof ProviderRateLimitError) {
       return NextResponse.json({ error: 'Busy right now — give it a moment and try again.' }, { status: 429 })

@@ -88,23 +88,32 @@ const getShared = (params: Record<string, unknown>) =>
 // Lists narrator voices for `language` from the shared library, scoped to
 // narration use-case and sorted by popularity. `opts.search` adds a genre/topic
 // keyword (e.g. "horror") to surface voices branded for that niche.
+//
+// The `language` param is only a RANKING signal upstream once `search` is present — a
+// Filipino+"horror" query comes back majority Hindi/English-Indian/Portuguese, and a narrow
+// one ("scary stories") can return zero Filipino voices at all. A voice that doesn't speak
+// the channel's language is never castable, so filter every response and let the emptiness
+// fallbacks below widen the search instead of shipping wrong-language voices.
 export async function listVoices(language?: string, opts?: { search?: string }): Promise<VoiceOption[]> {
   const code = language ? toElevenLabsLang(language) : 'en'
   const base = { language: code, useCases: 'narrative_story', sort: 'cloned_by_count', pageSize: 40 }
-
-  let res = await getShared(opts?.search ? { ...base, search: opts.search } : base)
-  let voices = ((res['voices'] ?? []) as unknown) as Array<Record<string, unknown>>
-
-  // The genre keyword may be too narrow → retry without it.
-  if (voices.length === 0 && opts?.search) {
-    res = await getShared(base)
-    voices = ((res['voices'] ?? []) as unknown) as Array<Record<string, unknown>>
+  // Primary language only. `verified_languages` looks like the more generous signal but is
+  // useless for this: in a search response EVERY off-language voice carries a verified entry
+  // for the queried language, so trusting it filters nothing at all (measured 15/15 and 19/19).
+  const speaksLanguage = (v: Record<string, unknown>): boolean =>
+    String(v['language'] ?? '').toLowerCase() === code
+  const fetchScoped = async (params: Record<string, unknown>) => {
+    const res = await getShared(params)
+    const voices = ((res['voices'] ?? []) as unknown) as Array<Record<string, unknown>>
+    return voices.filter(speaksLanguage)
   }
+
+  let voices = await fetchScoped(opts?.search ? { ...base, search: opts.search } : base)
+
+  // The genre keyword may be too narrow (or return only off-language voices) → retry without it.
+  if (voices.length === 0 && opts?.search) voices = await fetchScoped(base)
   // Some languages have few/no narration-tagged voices → widen to any use-case.
-  if (voices.length === 0) {
-    res = await getShared({ language: code, sort: 'cloned_by_count', pageSize: 40 })
-    voices = ((res['voices'] ?? []) as unknown) as Array<Record<string, unknown>>
-  }
+  if (voices.length === 0) voices = await fetchScoped({ language: code, sort: 'cloned_by_count', pageSize: 40 })
 
   return voices.map(mapSharedVoice)
 }
