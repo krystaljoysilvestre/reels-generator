@@ -1,4 +1,4 @@
-import { getDb, reels, scenes, assets, channels, pipelineSteps } from '@reels/db'
+import { getDb, reels, scenes, assets, channels, pipelineSteps, publications } from '@reels/db'
 import { and, desc, eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { assertReelAccess } from '@/lib/access'
@@ -102,6 +102,15 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
   // Channel-mood accent (dark=red / warm=amber / neutral=midnight) for the storyboard's ambient touches.
   const moodTint = MOOD_TINT[channelMood(tone)]
 
+  // A scheduled reel is already uploaded and waiting on its slot — the footer shows when it goes live.
+  let scheduledAt: string | null = null
+  if (reel.status === 'scheduled') {
+    const pub = await db.query.publications.findFirst({
+      where: and(eq(publications.reelId, reelId), eq(publications.status, 'scheduled')),
+    })
+    scheduledAt = pub?.scheduledAt?.toISOString() ?? null
+  }
+
   // If the reel hard-failed, surface which step + why (the chain stops at the first failed step).
   let failure: { step: string; error: string } | null = null
   if (reel.status === 'failed') {
@@ -123,6 +132,7 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
         language: reel.language,
         metricsViews: (reel.metrics as { views?: number } | null)?.views ?? null,
         youtubeConfigured: isYouTubeConfigured(),
+        scheduledAt,
       }}
       story={reel.story ?? null}
       scenes={reel.scenes.sort((a, b) => a.idx - b.idx)}

@@ -249,7 +249,14 @@ the owner (design first, then implementation). Full evidence in the session summ
 
 - `lutConfig` / `audioPacks` — need real asset files (LUTs, ambient beds, music
   pack); configure later in channel settings.
-- `postingRules` — defaults to fb+yt, 21:00 PHT, no quality filter.
+- `postingRules` — creation still seeds the defaults (fb+yt, 21:00 PHT, no quality filter), but the
+  parts that matter are now editable in channel settings: the auto-produce cadence and the **posting
+  schedule** (`postingRules.publish` — post as soon as a reel is ready, or hold it for the channel's
+  next free day/time slot). On an auto-publishing YouTube channel the slot is handed to YouTube as
+  `publishAt`, so the schedule fires even if our worker is down; `publish_promote` (every 15 min) is
+  what moves our own records from scheduled to live. Still deferred: per-platform schedules (only
+  YouTube publishes by itself — fb/ig/tiktok get the next slot printed on the post package) and
+  per-channel timezones (slots are stored as UTC hours, shown in the operator's local time).
 
 ### Known gaps / cleanup
 

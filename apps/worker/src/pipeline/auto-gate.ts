@@ -1,8 +1,8 @@
-import { eq, and } from 'drizzle-orm'
+import { eq, and, gt, isNotNull } from 'drizzle-orm'
 import { getDb, reels, channels, stories, assets, publications } from '@reels/db'
 import { enqueueStep } from '@reels/queue'
 import { listVoices, downloadBuffer, uploadToYouTube, isYouTubeConfigured } from '@reels/providers'
-import { PostingRulesSchema, PostMetaSchema, formatPostCaption, formatImageCredits, StoryBibleSchema, matchNarratorVoice, type ChannelVoice, type NarratorVoice } from '@reels/core'
+import { PostingRulesSchema, PostMetaSchema, formatPostCaption, formatImageCredits, StoryBibleSchema, matchNarratorVoice, nextPublishSlot, resolvePublishSlots, resolvePublishDays, type PostingRules, type ChannelVoice, type NarratorVoice } from '@reels/core'
 import { setReelStatus } from './harness.js'
 
 // The three steps where the pipeline normally STOPS for human review (resolveNextStep returns null):
@@ -61,11 +61,31 @@ export async function autoCrossGate(stepName: string, reelId: string): Promise<v
     // Opt-in last mile: upload the approved reel to YouTube (mirrors /api/pipeline/publish-youtube —
     // keep the two in sync). Fail-soft: an upload failure leaves the reel approved with a visible
     // needs-attention note; it never fails the pipeline.
+    //
+    // On a channel that posts to a schedule, the reel is booked into its next free slot and YouTube
+    // holds it private until then — the render finishing is not what decides when it goes out.
     const rules = PostingRulesSchema.safeParse(channel.postingRules ?? {})
     if (rules.success && rules.data.autoProduce.autoPublishYouTube && isYouTubeConfigured()) {
       try {
-        await autoPublishYouTube(reelId)
-        console.log(`[auto] ${reelId.slice(0, 8)} approved → published on YouTube`)
+        let slot: Date | null = null
+        if (rules.data.publish.mode === 'slots') {
+          slot = await nextFreeChannelSlot(channel.id, rules.data)
+          if (!slot) {
+            // The calendar is booked out as far as we're willing to look. Don't invent a time —
+            // say so and leave the reel approved (the backlog guard will pause production).
+            console.warn(`[auto] ${reelId.slice(0, 8)} no free posting slot — left approved`)
+            await db.update(reels)
+              .set({ alertNote: 'No posting time free — add another time, or post this one yourself.', updatedAt: new Date() })
+              .where(eq(reels.id, reelId))
+            return
+          }
+        }
+        await autoPublishYouTube(reelId, slot)
+        console.log(
+          slot
+            ? `[auto] ${reelId.slice(0, 8)} approved → scheduled on YouTube for ${slot.toISOString()}`
+            : `[auto] ${reelId.slice(0, 8)} approved → published on YouTube`,
+        )
       } catch (err) {
         console.warn(`[auto] ${reelId.slice(0, 8)} YouTube upload failed: ${err instanceof Error ? err.message : String(err)}`)
         await db.update(reels)
@@ -76,8 +96,35 @@ export async function autoCrossGate(stepName: string, reelId: string): Promise<v
   }
 }
 
+// The channel's next free posting slot. Slots already claimed by reels waiting to go out are passed
+// in so two reels never land on the same one (a 3-a-day channel with one slot must not triple-post).
+async function nextFreeChannelSlot(channelId: string, rules: PostingRules): Promise<Date | null> {
+  const db = getDb()
+  const now = new Date()
+  const booked = await db
+    .select({ scheduledAt: publications.scheduledAt })
+    .from(publications)
+    .innerJoin(reels, eq(publications.reelId, reels.id))
+    .where(
+      and(
+        eq(reels.channelId, channelId),
+        eq(publications.status, 'scheduled'),
+        isNotNull(publications.scheduledAt),
+        gt(publications.scheduledAt, now),
+      ),
+    )
+  return nextPublishSlot({
+    now,
+    slotsUtc: resolvePublishSlots(rules),
+    daysUtc: resolvePublishDays(rules),
+    taken: booked.map((b) => b.scheduledAt!),
+  })
+}
+
 // Upload one approved reel to YouTube and record it (worker twin of /api/pipeline/publish-youtube).
-async function autoPublishYouTube(reelId: string): Promise<void> {
+// With a slot, YouTube holds the video private and publishes it itself at that instant — so the
+// schedule doesn't depend on this worker being alive later.
+async function autoPublishYouTube(reelId: string, slot: Date | null): Promise<void> {
   const db = getDb()
   const reel = await db.query.reels.findFirst({ where: eq(reels.id, reelId) })
   if (!reel) throw new Error('reel disappeared')
@@ -109,23 +156,36 @@ async function autoPublishYouTube(reelId: string): Promise<void> {
     where: and(eq(assets.reelId, reelId), eq(assets.storageKey, `reels/${reelId}/thumbnail.jpg`)),
   })
   const thumbnailJpeg = thumbAsset ? await downloadBuffer(thumbAsset.storageKey).catch(() => undefined) : undefined
-  const result = await uploadToYouTube({ video, title, description, tags, ...(thumbnailJpeg ? { thumbnailJpeg } : {}) })
+  const result = await uploadToYouTube({
+    video,
+    title,
+    description,
+    tags,
+    ...(thumbnailJpeg ? { thumbnailJpeg } : {}),
+    ...(slot ? { publishAt: slot } : {}),
+  })
 
   // Idempotent on the unique (reelId, platform) index: if a concurrent run already recorded this
   // publication, don't create a second row (the early-return above handles the sequential-retry case;
   // this closes the check-then-insert race between two concurrent runs).
+  //
+  // A scheduled publication carries scheduledAt and NO publishedAt — publishedAt means "this is
+  // actually live", which is what the metrics poll keys off. publish-promote fills it in at the slot.
   await db
     .insert(publications)
     .values({
       reelId,
       platform: 'yt',
       platformPostId: result.videoId,
-      status: 'published',
-      publishedAt: new Date(),
+      status: slot ? 'scheduled' : 'published',
+      ...(slot ? { scheduledAt: slot } : { publishedAt: new Date() }),
       disclosureApplied: true, // containsSyntheticMedia is set on the upload itself
     })
     .onConflictDoNothing({ target: [publications.reelId, publications.platform] })
-  await db.update(reels).set({ status: 'published', updatedAt: new Date() }).where(eq(reels.id, reelId))
+  await db
+    .update(reels)
+    .set({ status: slot ? 'scheduled' : 'published', updatedAt: new Date() })
+    .where(eq(reels.id, reelId))
 }
 
 // Auto-mode voice: single-voice channels use their pool; per_story (empty pool) picks the top match

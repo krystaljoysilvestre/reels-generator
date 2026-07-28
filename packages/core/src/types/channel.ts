@@ -413,10 +413,28 @@ export const AudioPacksSchema = z.object({
 })
 export type AudioPacks = z.infer<typeof AudioPacksSchema>
 
+// When a finished reel actually goes out. 'immediate' = the moment it's approved (the original
+// behavior, and the default for every existing channel). 'slots' = hold it for the channel's next
+// free posting slot, so a channel publishes on a rhythm instead of whenever a render happens to land.
+//
+// Hours are UTC (like the rest of postingRules); the UI renders them in the operator's local time.
+// slotsUtc empty → fall back to the channel's single scheduleUtcHour slot.
+// daysUtc: 0 = Sunday … 6 = Saturday (UTC weekday); empty → every day.
+export const PublishScheduleSchema = z.object({
+  mode: z.enum(['immediate', 'slots']).default('immediate'),
+  slotsUtc: z.array(z.number().int().min(0).max(23)).max(8).default([]),
+  daysUtc: z.array(z.number().int().min(0).max(6)).max(7).default([0, 1, 2, 3, 4, 5, 6]),
+})
+export type PublishSchedule = z.infer<typeof PublishScheduleSchema>
+
 export const PostingRulesSchema = z.object({
   platforms: z.array(z.enum(['fb', 'ig', 'yt', 'tiktok'])).default(['fb']),
   scheduleUtcHour: z.number().int().min(0).max(23).default(13), // 9PM PHT = 13:00 UTC
   qualityThreshold: z.number().min(0).max(10).default(0),       // 0 = no auto-filter in Phase 1
+  // WHEN a finished reel goes out (see PublishScheduleSchema). Separate axis from autoProduce, which
+  // governs when reels are CREATED. Defaults to 'immediate' so channels created before this existed
+  // behave exactly as they did.
+  publish: PublishScheduleSchema.default({ mode: 'immediate', slotsUtc: [], daysUtc: [0, 1, 2, 3, 4, 5, 6] }),
   // The consistency engine: when enabled, the worker's hourly tick auto-creates reels on this cadence
   // (one per tick until the day's quota is met, starting at startHourUtc). Gates still behave per the
   // channel's generationMode — 'auto' runs to a finished render, 'review' queues stories for approval.
@@ -442,4 +460,18 @@ export const UNSHIPPED_REEL_STATUSES = [
 ] as const
 export function autoProduceBacklogCap(reelsPerDay: number): number {
   return reelsPerDay * 3
+}
+
+// The channel's posting slots, resolved. A channel that never set explicit slots still has one —
+// scheduleUtcHour — so "post on a schedule" is meaningful the moment it's switched on.
+export function resolvePublishSlots(rules: PostingRules): number[] {
+  const slots = rules.publish.slotsUtc.length ? rules.publish.slotsUtc : [rules.scheduleUtcHour]
+  return [...new Set(slots)].sort((a, b) => a - b)
+}
+
+// The UTC weekdays the channel posts on. Empty means "no day was picked", which we read as every day
+// rather than never — a schedule that can never fire would silently strand finished reels.
+export function resolvePublishDays(rules: PostingRules): number[] {
+  const days = rules.publish.daysUtc.length ? rules.publish.daysUtc : [0, 1, 2, 3, 4, 5, 6]
+  return [...new Set(days)].sort((a, b) => a - b)
 }

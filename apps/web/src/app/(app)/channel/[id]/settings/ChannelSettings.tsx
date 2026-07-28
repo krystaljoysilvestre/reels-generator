@@ -62,8 +62,25 @@ interface Initial {
   musicMode: MusicMode // only AI-music channels expose a mood control
   tasteRubric: string | null // story-critic bar; null = built-in default for the genre
   autoProduce: { enabled: boolean; reelsPerDay: number; startHourUtc: number; autoPublishYouTube: boolean } // the consistency engine cadence
+  publish: { mode: 'immediate' | 'slots'; slotsUtc: number[]; daysUtc: number[] } // when a finished reel goes out
   youtubeConfigured: boolean // YOUTUBE_* env keys present → auto-publish is offerable
 }
+
+const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+// Slots are stored as UTC hours but shown in the operator's own time, so a slot can sit on a
+// different weekday than the one we store. This maps each visible day back to the UTC day that
+// actually lands on it, so picking "Fri" means the Friday the operator sees.
+function localDayShift(hourUtc: number): number {
+  const probe = new Date(Date.UTC(2001, 0, 7, hourUtc)) // 2001-01-07 was a Sunday
+  return (probe.getDay() - probe.getUTCDay() + 7) % 7
+}
+
+function formatHour(hourUtc: number): string {
+  return new Date(Date.UTC(2000, 0, 1, hourUtc)).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+}
+
+const HOUR_OPTIONS = Array.from({ length: 24 }, (_, h) => ({ value: String(h), label: formatHour(h) }))
 
 export function ChannelSettings({ id, initial }: { id: string; initial: Initial }) {
   const router = useRouter()
@@ -79,6 +96,7 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
   const [captionStyle, setCaptionStyle] = useState<CaptionStyle>(initial.captionStyle)
   const [generationMode, setGenerationMode] = useState<'review' | 'auto'>(initial.generationMode)
   const [autoProduce, setAutoProduce] = useState(initial.autoProduce)
+  const [publish, setPublish] = useState(initial.publish)
   const [musicMood, setMusicMood] = useState<MusicMood | null>(initial.musicMood)
   const [region, setRegion] = useState(initial.worldBible.region ?? '')
   const [era, setEra] = useState(initial.worldBible.era ?? '')
@@ -144,6 +162,7 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
       captionStyle,
       generationMode,
       autoProduce,
+      publish,
       genreCategory,
       presentation,
       musicMood,
@@ -265,20 +284,6 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
                 </span>
               </span>
             </label>
-            {autoProduce.enabled && initial.youtubeConfigured && generationMode === 'auto' && (
-              <label className="mt-3 flex cursor-pointer items-start gap-3 pl-7">
-                <input
-                  type="checkbox"
-                  checked={autoProduce.autoPublishYouTube}
-                  onChange={(e) => setAutoProduce((a) => ({ ...a, autoPublishYouTube: e.target.checked }))}
-                  className="mt-0.5 h-4 w-4 flex-shrink-0 accent-accent"
-                />
-                <span>
-                  <span className="block text-sm font-medium text-ink">Post to YouTube on its own</span>
-                  <span className="mt-0.5 block text-xs text-muted">Finished reels go straight to your YouTube channel — title, caption, and AI label included.</span>
-                </span>
-              </label>
-            )}
             {autoProduce.enabled && (
               <div className="mt-3 grid gap-3 pl-7 sm:grid-cols-2">
                 <label className="flex flex-col gap-1.5 text-xs font-medium text-muted">
@@ -294,12 +299,152 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
                   <Dropdown
                     value={String(autoProduce.startHourUtc)}
                     onChange={(v) => setAutoProduce((a) => ({ ...a, startHourUtc: Number(v) || 0 }))}
-                    options={Array.from({ length: 24 }, (_, h) => ({
-                      value: String(h),
-                      label: new Date(Date.UTC(2000, 0, 1, h)).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
-                    }))}
+                    options={HOUR_OPTIONS}
                   />
                 </label>
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* Publishing — WHEN a finished reel goes out (the section above is when reels get MADE) */}
+        <section className="card space-y-3 p-5">
+          <SectionLabel>Publishing</SectionLabel>
+          <p className="text-xs text-muted">
+            {autoProduce.autoPublishYouTube && initial.youtubeConfigured && generationMode === 'auto'
+              ? 'Finished reels are posted for you — the schedule below decides when.'
+              : 'Nothing posts by itself. Your posting times go on every post package, so you keep the same rhythm by hand.'}
+          </p>
+
+          {initial.youtubeConfigured && generationMode === 'auto' && (
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                checked={autoProduce.autoPublishYouTube}
+                onChange={(e) => setAutoProduce((a) => ({ ...a, autoPublishYouTube: e.target.checked }))}
+                className="mt-0.5 h-4 w-4 flex-shrink-0 accent-accent"
+              />
+              <span>
+                <span className="block text-sm font-medium text-ink">Post to YouTube on its own</span>
+                <span className="mt-0.5 block text-xs text-muted">Finished reels go straight to your YouTube channel — title, caption, and AI label included.</span>
+              </span>
+            </label>
+          )}
+
+          <div className={initial.youtubeConfigured && generationMode === 'auto' ? 'border-t border-border pt-3' : ''}>
+            <p className="text-xs font-medium text-muted">When to post</p>
+            <div className="mt-2 flex flex-col gap-2">
+              {([
+                { key: 'immediate', label: 'As soon as it’s ready', sub: 'Each reel goes out the moment it’s finished.' },
+                { key: 'slots', label: 'On a posting schedule', sub: 'Reels wait for your next posting time, so the channel keeps a rhythm.' },
+              ] as const).map((opt) => (
+                <label
+                  key={opt.key}
+                  className={`flex cursor-pointer items-start justify-between gap-3 rounded-lg border p-3 transition-colors ${publish.mode === opt.key ? 'border-accent bg-accent-soft ring-1 ring-accent' : 'border-border-mid hover:border-accent-ring hover:bg-subtle'}`}
+                >
+                  <span className="min-w-0">
+                    <span className="block text-sm font-700 text-ink">{opt.label}</span>
+                    <span className="mt-0.5 block text-xs leading-normal text-muted">{opt.sub}</span>
+                  </span>
+                  <input type="radio" name="publishMode" checked={publish.mode === opt.key} onChange={() => setPublish((p) => ({ ...p, mode: opt.key }))} className="sr-only" />
+                  <span
+                    aria-hidden
+                    className={`mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border ${publish.mode === opt.key ? 'border-transparent bg-brand-3 text-white' : 'border-border-strong'}`}
+                  >
+                    {publish.mode === opt.key && (
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+                    )}
+                  </span>
+                </label>
+              ))}
+            </div>
+
+            {publish.mode === 'slots' && (
+              <div className="mt-4 space-y-4">
+                <div>
+                  <p className="text-xs font-medium text-muted">Days</p>
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {DAY_LABELS.map((label, localDay) => {
+                      // Each chip is the operator's day; the stored value is the matching UTC day.
+                      const utcDay = (localDay - localDayShift(publish.slotsUtc[0] ?? 13) + 7) % 7
+                      const on = publish.daysUtc.includes(utcDay)
+                      return (
+                        <button
+                          key={label}
+                          type="button"
+                          aria-pressed={on}
+                          onClick={() =>
+                            setPublish((p) => ({
+                              ...p,
+                              daysUtc: on ? p.daysUtc.filter((d) => d !== utcDay) : [...p.daysUtc, utcDay],
+                            }))
+                          }
+                          className={`rounded-lg border px-2.5 py-1.5 text-xs font-600 transition-colors ${on ? 'border-accent bg-accent-soft text-accent' : 'border-border-mid text-muted hover:border-accent-ring hover:bg-subtle'}`}
+                        >
+                          {label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {publish.daysUtc.length === 0 && (
+                    <p className="mt-1.5 text-xs text-muted">Pick at least one day, or reels will post every day.</p>
+                  )}
+                </div>
+
+                <div>
+                  <p className="text-xs font-medium text-muted">Times</p>
+                  <p className="mt-0.5 text-xs text-muted">Shown in your time. One reel goes out per time slot.</p>
+                  <div className="mt-2 flex flex-col gap-2">
+                    {publish.slotsUtc.map((hour, i) => (
+                      <div key={`${hour}-${i}`} className="flex items-center gap-2">
+                        <div className="w-40">
+                          <Dropdown
+                            value={String(hour)}
+                            onChange={(v) =>
+                              setPublish((p) => ({
+                                ...p,
+                                slotsUtc: p.slotsUtc.map((h, j) => (j === i ? Number(v) || 0 : h)),
+                              }))
+                            }
+                            options={HOUR_OPTIONS}
+                          />
+                        </div>
+                        {publish.slotsUtc.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => setPublish((p) => ({ ...p, slotsUtc: p.slotsUtc.filter((_, j) => j !== i) }))}
+                            className="btn-ghost btn-sm"
+                            title="Remove this time"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  {publish.slotsUtc.length < 8 && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPublish((p) => {
+                          const next = [...p.slotsUtc]
+                          const last = next[next.length - 1] ?? 13
+                          next.push((last + 4) % 24)
+                          return { ...p, slotsUtc: next }
+                        })
+                      }
+                      className="btn-secondary btn-sm mt-2"
+                    >
+                      Add a time
+                    </button>
+                  )}
+                  {autoProduce.enabled && publish.slotsUtc.length < autoProduce.reelsPerDay && (
+                    <p className="mt-2 text-xs text-[#9A6B12]">
+                      You make {autoProduce.reelsPerDay} reels a day but only have {publish.slotsUtc.length}{' '}
+                      {publish.slotsUtc.length === 1 ? 'time' : 'times'} to post them — the extras wait for a later day.
+                    </p>
+                  )}
+                </div>
               </div>
             )}
           </div>

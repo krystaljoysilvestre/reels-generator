@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { eq } from 'drizzle-orm'
 import { getDb, channels } from '@reels/db'
-import { ToneConfigSchema, WorldBibleSchema, CaptionStyleSchema, TargetPlatformSchema, PLATFORM_PRESETS, MAX_TARGET_SECONDS, AudioPacksSchema, MusicMoodSchema, PostingRulesSchema } from '@reels/core'
+import { ToneConfigSchema, WorldBibleSchema, CaptionStyleSchema, TargetPlatformSchema, PLATFORM_PRESETS, MAX_TARGET_SECONDS, AudioPacksSchema, MusicMoodSchema, PostingRulesSchema, PublishScheduleSchema } from '@reels/core'
 import { STYLE_VALUES } from '@reels/core/prompts/story-styles.v1'
 import { GENRE_MODULE_VALUES } from '@reels/core/prompts/scenes.v1'
 import { VOICE_VALUES } from '@reels/core/prompts/story-voices.v1'
@@ -49,6 +49,8 @@ const UpdateSchema = z
       startHourUtc: z.number().int().min(0).max(23),
       autoPublishYouTube: z.boolean(),
     }),
+    // Posting schedule — WHEN a finished reel goes out. Also in postingRules, merged below.
+    publish: PublishScheduleSchema,
   })
   .partial()
   .strict()
@@ -73,7 +75,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   const patch = parsed.data
   const updates: Record<string, unknown> = { updatedAt: new Date() }
   for (const [k, v] of Object.entries(patch)) {
-    if (k === 'musicMood' || k === 'autoProduce') continue
+    if (k === 'musicMood' || k === 'autoProduce' || k === 'publish') continue
     if (k === 'description') updates[k] = v ?? null
     else if (k === 'tasteRubric') updates[k] = v || null // clearing the textarea reverts to the default rubric
     else if (v !== undefined) updates[k] = v
@@ -87,10 +89,11 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     updates['audioPacks'] = packs
   }
 
-  // Auto-produce cadence → merge into postingRules (the rest of the rules are untouched).
-  if (patch.autoProduce !== undefined) {
+  // Auto-produce cadence + posting schedule → merge into postingRules (the rest is untouched).
+  if (patch.autoProduce !== undefined || patch.publish !== undefined) {
     const rules = PostingRulesSchema.parse(existing.postingRules ?? {})
-    rules.autoProduce = patch.autoProduce
+    if (patch.autoProduce !== undefined) rules.autoProduce = patch.autoProduce
+    if (patch.publish !== undefined) rules.publish = patch.publish
     updates['postingRules'] = rules
   }
 

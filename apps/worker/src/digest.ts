@@ -25,6 +25,7 @@ export async function registerDigestSchedule(): Promise<void> {
 interface ChannelDigest {
   name: string
   ready: number
+  scheduled: number
   needsAttention: number
   failed: number
   paused: boolean
@@ -42,6 +43,8 @@ export async function runDailyDigest(): Promise<void> {
       (await db.select({ n: count() }).from(reels).where(and(eq(reels.channelId, channel.id), where)))[0]?.n ?? 0
 
     const ready = await countWhere(eq(reels.status, 'approved'))
+    // Already uploaded and waiting on a posting slot — why the shelf can look empty on a scheduled channel.
+    const scheduled = await countWhere(eq(reels.status, 'scheduled'))
     const failed = await countWhere(eq(reels.status, 'failed'))
     const rows = await db.query.reels.findMany({
       where: eq(reels.channelId, channel.id),
@@ -53,8 +56,10 @@ export async function runDailyDigest(): Promise<void> {
     const paused =
       !!rules.success && rules.data.autoProduce.enabled && unshipped >= autoProduceBacklogCap(rules.data.autoProduce.reelsPerDay)
 
+    // Queued-for-a-slot reels are shown but never a reason to send: a channel quietly working its
+    // schedule is not news, and the digest's contract is that a quiet portfolio sends nothing.
     if (ready || failed || needsAttention || paused) {
-      digests.push({ name: channel.name, ready, needsAttention, failed, paused })
+      digests.push({ name: channel.name, ready, scheduled, needsAttention, failed, paused })
     }
   }
 
@@ -86,6 +91,7 @@ export async function runDailyDigest(): Promise<void> {
   const lines = digests.map((d) => {
     const bits = [
       d.ready ? `${d.ready} ready to post` : null,
+      d.scheduled ? `${d.scheduled} waiting for their posting time` : null,
       d.paused ? 'production paused — post or clear the backlog' : null,
       d.needsAttention ? `${d.needsAttention} need${d.needsAttention === 1 ? 's' : ''} attention` : null,
       d.failed ? `${d.failed} failed` : null,

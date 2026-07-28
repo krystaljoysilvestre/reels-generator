@@ -9,6 +9,7 @@ import { withJobTimeout, reapStuckReels, PIPELINE_STEP_TIMEOUT_MS, RENDER_STEP_T
 import { registerAutoProduceSchedule, runAutoProduceTick, AUTO_PRODUCE_JOB } from './scheduler.js'
 import { registerDigestSchedule, runDailyDigest, DAILY_DIGEST_JOB } from './digest.js'
 import { registerMetricsPollSchedule, runMetricsPoll, METRICS_POLL_JOB } from './metrics-poll.js'
+import { registerPublishPromoteSchedule, runPublishPromote, PUBLISH_PROMOTE_JOB } from './publish-promote.js'
 
 initSentry()
 
@@ -80,7 +81,7 @@ if (runs('pipeline') || runs('render')) {
   void reapStuckReels().catch((e) => console.error('[liveness] reaper failed:', e))
 }
 
-// ── Scheduler: auto-produce ticks + daily digest + metrics poll ──────────────
+// ── Scheduler: auto-produce ticks + daily digest + metrics poll + publish slots ──
 // Repeatable jobs are registered here (idempotent). Only the scheduler role runs this worker + Bull
 // Board, so with multiple pipeline/render processes the ticks aren't consumed by every process.
 if (runs('scheduler')) {
@@ -90,6 +91,7 @@ if (runs('scheduler')) {
       if (job.name === AUTO_PRODUCE_JOB) await runAutoProduceTick()
       else if (job.name === DAILY_DIGEST_JOB) await runDailyDigest()
       else if (job.name === METRICS_POLL_JOB) await runMetricsPoll()
+      else if (job.name === PUBLISH_PROMOTE_JOB) await runPublishPromote()
     },
     1,
   )
@@ -100,6 +102,7 @@ if (runs('scheduler')) {
   void registerAutoProduceSchedule().catch((e) => console.error('[scheduler] could not register schedule:', e))
   void registerDigestSchedule().catch((e) => console.error('[scheduler] could not register digest:', e))
   void registerMetricsPollSchedule().catch((e) => console.error('[scheduler] could not register metrics poll:', e))
+  void registerPublishPromoteSchedule().catch((e) => console.error('[scheduler] could not register publish promote:', e))
 
   const BULL_BOARD_PORT = parseInt(process.env['BULL_BOARD_PORT'] ?? '3001', 10)
   startBullBoard(BULL_BOARD_PORT)

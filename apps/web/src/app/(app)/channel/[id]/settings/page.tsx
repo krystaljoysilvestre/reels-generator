@@ -2,7 +2,7 @@ import { getDb, channels } from '@reels/db'
 import { eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { assertChannelAccess } from '@/lib/access'
-import { ToneConfigSchema, WorldBibleSchema, CaptionStyleSchema, AudioPacksSchema, TargetPlatformSchema, PostingRulesSchema } from '@reels/core'
+import { ToneConfigSchema, WorldBibleSchema, CaptionStyleSchema, AudioPacksSchema, TargetPlatformSchema, PostingRulesSchema, resolvePublishSlots, resolvePublishDays } from '@reels/core'
 import { isYouTubeConfigured } from '@reels/providers'
 import { ChannelSettings } from './ChannelSettings'
 import { channelMetadata } from '@/lib/page-metadata'
@@ -21,6 +21,7 @@ export default async function ChannelSettingsPage({ params }: { params: Promise<
   if (!channel) notFound()
 
   // Parse through the same schemas as creation so the form always starts from valid values.
+  const postingRules = PostingRulesSchema.parse(channel.postingRules ?? {})
   return (
     <ChannelSettings
       id={channel.id}
@@ -46,7 +47,14 @@ export default async function ChannelSettingsPage({ params }: { params: Promise<
         musicMood: AudioPacksSchema.parse(channel.audioPacks ?? {}).musicMood ?? null,
         musicMode: AudioPacksSchema.parse(channel.audioPacks ?? {}).musicMode,
         tasteRubric: channel.tasteRubric ?? null,
-        autoProduce: PostingRulesSchema.parse(channel.postingRules ?? {}).autoProduce,
+        autoProduce: postingRules.autoProduce,
+        // Posting schedule. Slots come back resolved (a channel that never set any still has one —
+        // its scheduleUtcHour) so the form shows the times the schedule would actually use.
+        publish: {
+          mode: postingRules.publish.mode,
+          slotsUtc: resolvePublishSlots(postingRules),
+          daysUtc: resolvePublishDays(postingRules),
+        },
         youtubeConfigured: isYouTubeConfigured(),
       }}
     />

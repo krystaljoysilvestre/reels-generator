@@ -5,7 +5,7 @@ import { NextResponse } from 'next/server'
 import { getDb, reels, assets, scenes, channels } from '@reels/db'
 import { eq, and, asc, sql } from 'drizzle-orm'
 import { downloadBuffer, llmCall } from '@reels/providers'
-import { PostMetaSchema, PostingRulesSchema, formatPostCaption, formatImageCredits, StoryBibleSchema, type PostMeta } from '@reels/core'
+import { PostMetaSchema, PostingRulesSchema, formatPostCaption, formatImageCredits, StoryBibleSchema, nextPublishSlot, resolvePublishSlots, resolvePublishDays, type PostMeta } from '@reels/core'
 import { buildPostMetaPrompt, PostMetaLlmSchema, POST_META_V1_VERSION } from '@reels/core/prompts/post-meta.v1'
 import { requireReelOwner, requireSpendBudget } from '@/lib/api-access'
 
@@ -201,6 +201,22 @@ export async function GET(req: NextRequest) {
     : (story?.logline ?? story?.title ?? '')
   const caption = imageCredits ? `${captionBody}\n\n${imageCredits}` : captionBody
 
+  // The channel's posting slot, as a line an operator can act on. On a scheduled channel that's the
+  // next actual slot (date + time); otherwise it's the single standing posting hour.
+  const rules = PostingRulesSchema.parse(channel?.postingRules ?? {})
+  const nextSlot =
+    rules.publish.mode === 'slots'
+      ? nextPublishSlot({
+          now: new Date(),
+          slotsUtc: resolvePublishSlots(rules),
+          daysUtc: resolvePublishDays(rules),
+          taken: [],
+        })
+      : null
+  const postingSlotLine = nextSlot
+    ? `[ ] Post at ${nextSlot.toISOString().replace('T', ' ').slice(0, 16)} UTC (your channel's next posting slot)`
+    : `[ ] Post around ${String(rules.scheduleUtcHour).padStart(2, '0')}:00 UTC (your channel's posting slot)`
+
   // AI disclosure note (required by platform policies)
   const disclosure = [
     'AI DISCLOSURE',
@@ -215,7 +231,7 @@ export async function GET(req: NextRequest) {
     'POSTING CHECKLIST:',
     '[ ] Add AI disclosure label in the platform upload settings',
     '[ ] Cross-post as separate native uploads (never repost identical files)',
-    `[ ] Post around ${String(PostingRulesSchema.parse(channel?.postingRules ?? {}).scheduleUtcHour).padStart(2, '0')}:00 UTC (your channel's posting slot)`,
+    postingSlotLine,
     '[ ] Reply to the first few comments within the hour',
   ].join('\n')
 

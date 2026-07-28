@@ -29,7 +29,7 @@ type PickerVoice = ChannelVoice & { reason?: string | undefined }
 const fmtSecs = (secs: number) => `${Math.round(secs * 10) / 10}s`
 
 interface StoryboardEditorProps {
-  reel: { id: string; status: string; voiceId: string | null; costCents: number; operatorMinutes: number; language: string; metricsViews: number | null; youtubeConfigured: boolean }
+  reel: { id: string; status: string; voiceId: string | null; costCents: number; operatorMinutes: number; language: string; metricsViews: number | null; youtubeConfigured: boolean; scheduledAt?: string | null }
   story: Story | null
   scenes: Scene[]
   voicePool: Voice[]
@@ -1199,7 +1199,11 @@ export function StoryboardEditor({
                     </span>
                   )}
                 </p>
-                <p className="mt-0.5 text-xs text-muted">Re-download the post package anytime.</p>
+                <p className="mt-0.5 text-xs text-muted">
+                  {reel.status === 'scheduled' && reel.scheduledAt
+                    ? `Uploaded and waiting — goes live ${new Date(reel.scheduledAt).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}.`
+                    : 'Re-download the post package anytime.'}
+                </p>
               </div>
               {reel.status === 'published' && <LogPerformanceButton reelId={reel.id} initialViews={reel.metricsViews} />}
               <PostCaptionButton reelId={reel.id} />

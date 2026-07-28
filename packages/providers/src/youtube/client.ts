@@ -17,6 +17,10 @@ export interface YouTubeUploadParams {
   description: string // ≤5000 bytes
   tags?: string[]
   privacyStatus?: 'public' | 'unlisted' | 'private'
+  // Schedule instead of publishing now. YouTube itself flips the video public at this instant, so a
+  // posting schedule survives our worker being down. The API only accepts publishAt on a PRIVATE
+  // video, so passing this forces privacyStatus to 'private' (ignoring any value above).
+  publishAt?: Date
   // Optional custom thumbnail (JPEG). Best-effort: custom thumbnails need a phone-verified YouTube
   // account — when the API refuses, the upload still succeeds with YouTube's auto-picked frame.
   thumbnailJpeg?: Buffer
@@ -63,7 +67,8 @@ export async function uploadToYouTube(params: YouTubeUploadParams): Promise<YouT
       ...(params.tags?.length ? { tags: params.tags.slice(0, 30) } : {}),
     },
     status: {
-      privacyStatus: params.privacyStatus ?? 'public',
+      privacyStatus: params.publishAt ? 'private' : (params.privacyStatus ?? 'public'),
+      ...(params.publishAt ? { publishAt: params.publishAt.toISOString() } : {}),
       selfDeclaredMadeForKids: false,
       // Platform policy: AI-generated content must be disclosed (mirrors the zip's AI-DISCLOSURE note).
       containsSyntheticMedia: true,
