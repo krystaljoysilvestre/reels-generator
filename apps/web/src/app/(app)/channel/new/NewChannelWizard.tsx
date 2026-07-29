@@ -1246,7 +1246,10 @@ export function NewChannelWizard({
       {/* Two panes: the brief scrolls on the left, the poster it produces sits on the right. Below xl
           the poster is hidden and the brief takes the full width. */}
       <div className="flex min-h-0 flex-1">
-      <div className="flex-1 overflow-y-auto">
+      {/* min-w-0 matters: a flex item defaults to min-width:auto, so the horizontal trending rail (and
+          any long unbroken string) would widen this pane past its share instead of scrolling inside it,
+          squeezing the poster or overflowing the page. */}
+      <div className="min-w-0 flex-1 overflow-y-auto">
       <div className="mx-auto w-full max-w-[600px] p-5 sm:px-10 sm:pb-14 sm:pt-8">
         {error && (
           <div className="mb-5 rounded-lg border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger">
@@ -1276,10 +1279,13 @@ export function NewChannelWizard({
                 onPick={handleAvatar}
                 onRemove={removeAvatar}
               />
-              <div className="flex-1">
-                <Field label="Channel name" hint="The publishing brand. Avatar is optional.">
+              {/* min-w-0 so a long name can't push the avatar out of the row. The hint the old field
+                  carried is gone: the pencil badge already says the avatar is editable, and "optional"
+                  now lives on the Description label below, where the mock puts it. */}
+              <div className="min-w-0 flex-1">
+                <Field label="Channel name">
                   <input
-                    className="input"
+                    className="input py-3 text-[15px]"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     onBlur={() => setCommittedName(name.trim())}
@@ -2324,32 +2330,33 @@ function AvatarPicker({ committedName, preview, uploading, onPick, onRemove }: {
   onPick: (file: File | undefined) => void
   onRemove: () => void
 }) {
+  // A rounded square, not a circle: it's the same tile the channel wears on its poster, its card and the
+  // reel slate, so the shape should agree everywhere. The gradient stays per-NAME (avatarGradient) rather
+  // than the mock's one fixed pair — that tint is the channel's identity, and the dashboard card's corner
+  // glow is derived from the same seed. The pencil badge replaces the old hover-only camera overlay and
+  // its "Avatar" caption: discoverable without hovering, and it costs no vertical space.
   const hasGradient = !preview && committedName.length > 0
   return (
-    <div className="flex flex-col items-center gap-1">
+    <div className="relative flex-shrink-0">
       <label
-        className={`group relative flex h-16 w-16 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-border-strong text-base font-semibold shadow-xs transition-all hover:scale-[1.03] ${
-          hasGradient ? 'text-white' : preview ? '' : 'bg-subtle text-faint'
+        className={`relative flex h-[60px] w-[60px] cursor-pointer items-center justify-center overflow-hidden rounded-lg font-display text-[21px] font-800 shadow-xs transition-transform hover:scale-[1.03] ${
+          hasGradient ? 'text-white' : preview ? '' : 'border border-border-strong bg-subtle text-faint'
         }`}
         style={hasGradient ? { background: avatarGradient(committedName) } : undefined}
+        title={preview ? 'Change avatar' : 'Add an avatar (optional)'}
       >
         {preview ? (
           <img src={preview} alt="" className="h-full w-full object-cover" />
         ) : (
           <span>{avatarInitials(committedName)}</span>
         )}
-        <span className="absolute inset-0 flex items-center justify-center bg-ink/50 opacity-0 transition-opacity group-hover:opacity-100">
-          {uploading ? (
+        {uploading && (
+          <span className="absolute inset-0 flex items-center justify-center bg-ink/50">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" className="animate-spin" aria-hidden>
               <path d="M21 12a9 9 0 1 1-6.22-8.56" />
             </svg>
-          ) : (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z" />
-              <circle cx="12" cy="13" r="3" />
-            </svg>
-          )}
-        </span>
+          </span>
+        )}
         <input
           type="file"
           accept="image/png,image/jpeg,image/webp"
@@ -2357,10 +2364,26 @@ function AvatarPicker({ committedName, preview, uploading, onPick, onRemove }: {
           onChange={(e) => onPick(e.target.files?.[0])}
         />
       </label>
-      {preview ? (
-        <button type="button" onClick={onRemove} className="text-xs text-faint hover:text-danger">Remove</button>
-      ) : (
-        <span className="text-xs text-faint">Avatar</span>
+      {/* Outside the label but pointer-events-none, so it reads as attached while every click still
+          lands on the label's file input — one target, no dead pixels. */}
+      <span className="pointer-events-none absolute -bottom-1.5 -right-1.5 flex h-[26px] w-[26px] items-center justify-center rounded-[8px] border border-border-mid bg-surface shadow-sm">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9B3BFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+        </svg>
+      </span>
+      {/* Only reachable once there's something to remove, so the empty state stays a single control. */}
+      {preview && !uploading && (
+        <button
+          type="button"
+          onClick={onRemove}
+          title="Remove avatar"
+          aria-label="Remove avatar"
+          className="absolute -right-1.5 -top-1.5 flex h-[22px] w-[22px] items-center justify-center rounded-full border border-border-mid bg-surface text-faint shadow-sm transition-colors hover:border-danger/40 hover:text-danger"
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M18 6 6 18M6 6l12 12" />
+          </svg>
+        </button>
       )}
     </div>
   )
