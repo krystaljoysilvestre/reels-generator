@@ -1,8 +1,8 @@
 import { eq, and, gt, isNotNull } from 'drizzle-orm'
 import { getDb, reels, channels, stories, assets, publications } from '@reels/db'
 import { enqueueStep } from '@reels/queue'
-import { listVoices, downloadBuffer, uploadToYouTube, isYouTubeConfigured } from '@reels/providers'
-import { PostingRulesSchema, PostMetaSchema, formatPostCaption, formatImageCredits, StoryBibleSchema, matchNarratorVoice, nextPublishSlot, resolvePublishSlots, resolvePublishDays, type PostingRules, type ChannelVoice, type NarratorVoice } from '@reels/core'
+import { listVoices, downloadBuffer, uploadToYouTube, isYouTubeConfigured, toElevenLabsLang } from '@reels/providers'
+import { PostingRulesSchema, PostMetaSchema, formatPostCaption, formatImageCredits, StoryBibleSchema, matchNarratorVoice, nextPublishSlot, resolvePublishSlots, resolvePublishDays, resolveSidecarSrt, type PostingRules, type ChannelVoice, type NarratorVoice } from '@reels/core'
 import { setReelStatus } from './harness.js'
 
 // The three steps where the pipeline normally STOPS for human review (resolveNextStep returns null):
@@ -156,6 +156,10 @@ async function autoPublishYouTube(reelId: string, slot: Date | null): Promise<vo
     where: and(eq(assets.reelId, reelId), eq(assets.storageKey, `reels/${reelId}/thumbnail.jpg`)),
   })
   const thumbnailJpeg = thumbAsset ? await downloadBuffer(thumbAsset.storageKey).catch(() => undefined) : undefined
+  // Channels that don't burn captions ship a native CC track instead, from the same timings.
+  const ytChannel = await db.query.channels.findFirst({ where: eq(channels.id, reel.channelId) })
+  const captionsSrt = resolveSidecarSrt(reel.timings, ytChannel?.captionStyle)
+  const captionsLanguage = toElevenLabsLang(ytChannel?.languages?.[0] ?? 'english')
   const result = await uploadToYouTube({
     video,
     title,
@@ -163,6 +167,7 @@ async function autoPublishYouTube(reelId: string, slot: Date | null): Promise<vo
     tags,
     ...(thumbnailJpeg ? { thumbnailJpeg } : {}),
     ...(slot ? { publishAt: slot } : {}),
+    ...(captionsSrt ? { captionsSrt, captionsLanguage } : {}),
   })
 
   // Idempotent on the unique (reelId, platform) index: if a concurrent run already recorded this

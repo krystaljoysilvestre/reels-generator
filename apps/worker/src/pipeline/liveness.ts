@@ -14,11 +14,20 @@ import { getDb, pipelineSteps, reels } from '@reels/db'
 //   2. reapStuckReels — on worker boot, fail reels whose step has been 'running' past a generous
 //      threshold. Catches reels orphaned by a hard crash (lock lapsed, but status left 'running').
 
-export const PIPELINE_STEP_TIMEOUT_MS = Number(process.env['PIPELINE_STEP_TIMEOUT_MS'] ?? 10 * 60_000) // 10 min
-export const RENDER_STEP_TIMEOUT_MS = Number(process.env['RENDER_STEP_TIMEOUT_MS'] ?? 25 * 60_000) // 25 min
+// These ceilings must cover the SLOWEST legitimate reel, which is the longest one a channel can ask for
+// (MAX_TARGET_SECONDS). Sized for that worst case, not the common one:
+//   - render: Remotion runs ~18fps at concurrency cores/2, so a 20-min reel is ~36k frames ≈ 33 min,
+//     plus the mux. 45 min leaves headroom without being unbounded.
+//   - pipeline: the binding step is generate_images — a 20-min reel breaks into ~70–110 scenes at
+//     concurrency 4, each with a QA pass and a possible reroll.
+// The cost of sizing for the worst case is that a genuinely HUNG short-form step now parks its slot
+// longer before the timeout fires. Both stay env-overridable, and scaling the ceiling from the reel's
+// own targetSeconds (rather than one global worst case) is the proper follow-up.
+export const PIPELINE_STEP_TIMEOUT_MS = Number(process.env['PIPELINE_STEP_TIMEOUT_MS'] ?? 20 * 60_000) // 20 min
+export const RENDER_STEP_TIMEOUT_MS = Number(process.env['RENDER_STEP_TIMEOUT_MS'] ?? 45 * 60_000) // 45 min
 // Must exceed the longest job timeout so the reaper never kills a step legitimately running on a sibling
-// worker (multi-replica). 40 min > the 25-min render ceiling.
-export const STUCK_REEL_THRESHOLD_MS = Number(process.env['STUCK_REEL_THRESHOLD_MS'] ?? 40 * 60_000)
+// worker (multi-replica). 60 min > the 45-min render ceiling.
+export const STUCK_REEL_THRESHOLD_MS = Number(process.env['STUCK_REEL_THRESHOLD_MS'] ?? 60 * 60_000)
 
 class StepTimeoutError extends Error {
   constructor(ms: number, label: string) {

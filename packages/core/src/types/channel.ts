@@ -59,7 +59,7 @@ export interface PlatformPreset {
 
 // The absolute ceiling any channel's targetSeconds can take — the largest platform cap (YouTube
 // long-form). Route schemas validate against THIS; the per-platform clamp happens after.
-export const MAX_TARGET_SECONDS = 600
+export const MAX_TARGET_SECONDS = 1200
 
 export const PLATFORM_PRESETS: Record<TargetPlatform, PlatformPreset> = {
   tiktok: {
@@ -83,13 +83,18 @@ export const PLATFORM_PRESETS: Record<TargetPlatform, PlatformPreset> = {
     hookHint: 'a relatable, story-led hook in the first 3s',
     safeZoneBottomPct: 20, watermark: false,
   },
-  // Long-form YouTube (regular horizontal uploads, not Shorts). The 600s cap keeps the
-  // narration near ElevenLabs' single-request comfort zone (see specs/long-form.md);
-  // raise deliberately, with a listen test, not casually.
+  // Long-form YouTube (regular horizontal uploads, not Shorts). YouTube itself imposes no ceiling
+  // here; this cap tracks what the PIPELINE can finish. The original 600s reason — keeping narration
+  // inside ElevenLabs' single-request comfort zone — is obsolete: narrations past the chunk threshold
+  // synthesize in seam-safe chunks, and the TTS timeout scales with the text. What binds now is render
+  // wall-time (~18k frames per 10 min, see RENDER_STEP_TIMEOUT_MS) and two QUALITY ceilings that do NOT
+  // move with this number: the music bed maxes at 5 min and loops, and the motion budget caps at 8 i2v
+  // clips. Past ~20 min a reel is a slideshow over a 4×-looped bed — raise further only with a listen
+  // test (see specs/long-form.md), not casually.
   youtube_long: {
-    label: 'YouTube', aspect: '16:9', width: 1920, height: 1080, maxSeconds: 600, sweetSpot: [300, 480],
+    label: 'YouTube', aspect: '16:9', width: 1920, height: 1080, maxSeconds: 1200, sweetSpot: [300, 480],
     captionHint: 'restrained cinematic subtitles on a subtle bar — long-form viewers usually have sound ON, so captions support rather than perform',
-    lengthHint: '5–10 minutes; give the story room to breathe and escalate in chapters',
+    lengthHint: '5–20 minutes; give the story room to breathe and escalate in chapters. 5–8 is the sweet spot unless the story genuinely earns more',
     hookHint: 'a cold-open hook in the first 20–30s that promises the payoff, then a fresh pull every minute or two',
     safeZoneBottomPct: 8, watermark: false,
   },
@@ -148,6 +153,12 @@ export const CaptionShadowSchema = z.enum(['none', 'soft', 'hard', 'glow'])
 export type CaptionShadow = z.infer<typeof CaptionShadowSchema>
 
 export const CaptionStyleSchema = z.object({
+  // First-class captions-off toggle: false burns NO subtitles (the renderer skips the overlay). Some
+  // formats/channels want clean visuals + narration only — previously this required emptying
+  // timings.subtitles by hand (see the News Today PH production). Optional so absent/undefined = ON (every
+  // existing channel + preset keeps captions); only an explicit false disables. In the captionStyle jsonb,
+  // so no schema migration. See ROADMAP finding.
+  enabled: z.boolean().optional(),
   preset: CaptionPresetSchema.default('clean'),
   mode: z.enum(['block', 'word']).default('word'), // word = per-word treatment/animation
   animation: CaptionAnimationSchema.default('fade'),

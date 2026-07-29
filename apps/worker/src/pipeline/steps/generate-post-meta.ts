@@ -35,14 +35,16 @@ export async function generatePostMeta(reelId: string): Promise<void> {
     title: story.title,
     logline: story.logline ?? '',
     narration: story.body,
+    targetSeconds: channel.targetSeconds ?? undefined,
   })
 
-  // Narration covers story edits/regens; platforms so a Settings change re-packages.
+  // Narration covers story edits/regens; platforms + runtime so a Settings change re-packages.
   const inputHash = buildInputHash(POST_META_V1_VERSION, {
     narration: story.body,
     title: story.title,
     platforms: postingRules.platforms.join(','),
     language: reel.language,
+    targetSeconds: channel.targetSeconds ?? 0,
   })
 
   const minimalMeta: PostMeta = {

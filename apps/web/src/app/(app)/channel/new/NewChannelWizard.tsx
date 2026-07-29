@@ -215,6 +215,8 @@ export function NewChannelWizard({
   // Resolved caption style is the single source of truth: AI picks a preset + nudges a few
   // safe knobs (accent / base color / position / size); switching chips re-resolves.
   const [captionStyle, setCaptionStyle] = useState<CaptionStyle>(() => resolveCaptionStyle('pop'))
+  // Once the creator sets burn-captions themselves, switching platform stops overriding their choice.
+  const [captionsTouched, setCaptionsTouched] = useState(false)
   const [style, setStyle] = useState('')
   const [region, setRegion] = useState('')
   const [era, setEra] = useState('')
@@ -964,11 +966,16 @@ export function NewChannelWizard({
       setTone(d.toneConfig)
       if (typeof d.targetSeconds === 'number') setTargetSeconds(d.targetSeconds)
       if (d.captionPreset) {
-        setCaptionStyle(resolveCaptionStyle(d.captionPreset, {
-          highlightColor: d.captionHighlight,
-          color: d.captionTextColor,
-          position: d.captionPosition,
-          fontScale: d.captionFontScale,
+        // The AI picks the LOOK; whether captions burn at all is a platform/creator decision, so carry
+        // the current on/off through — otherwise deriving would silently switch a long-form channel back on.
+        setCaptionStyle((prev) => ({
+          ...resolveCaptionStyle(d.captionPreset!, {
+            highlightColor: d.captionHighlight,
+            color: d.captionTextColor,
+            position: d.captionPosition,
+            fontScale: d.captionFontScale,
+          }),
+          enabled: prev.enabled,
         }))
       }
       setStyle(d.stylePreset)
@@ -1490,7 +1497,16 @@ export function NewChannelWizard({
             </Field>
 
             <Field label="Target platform" hint="Where these reels get posted — we fit the length, framing, and captions to it.">
-              <PlatformPicker value={targetPlatform} onChange={setTargetPlatform} />
+              <PlatformPicker
+                value={targetPlatform}
+                onChange={(p) => {
+                  setTargetPlatform(p)
+                  // Burned captions are a mute-autoplay answer: essential in a feed, wrong for long-form,
+                  // where viewers have sound on and YouTube's own CC track is better (selectable, translatable).
+                  // Only a default — the creator can flip it back on in the Captions card below.
+                  if (!captionsTouched) setCaptionStyle((cs) => ({ ...cs, enabled: p !== 'youtube_long' }))
+                }}
+              />
             </Field>
 
             <div className="flex items-center justify-end gap-3 border-t border-border pt-5">
@@ -2120,36 +2136,52 @@ export function NewChannelWizard({
             <div className="card p-5">
               <SectionLabel>Captions</SectionLabel>
               <p className="mt-1 text-xs text-faint">
-                Burned into every reel (most are watched on mute) — playing live below, just like in the video.
-                Suggested for your niche; switch anytime.
+                {targetPlatform === 'youtube_long'
+                  ? 'Long-form viewers watch with sound on, so we leave the picture clean by default. Turn this on if you want words burned into the video.'
+                  : 'Burned into every reel (most are watched on mute) — playing live below, just like in the video. Suggested for your niche; switch anytime.'}
               </p>
-              <div className="mt-3">
-                <CaptionPreview
-                  key={captionStyle.preset}
-                  style={captionStyle}
-                  safeZonePct={PLATFORM_PRESETS[targetPlatform].safeZoneBottomPct}
-                  backgroundImageUrl={chosenStyleImageKey ? `/api/asset?key=${encodeURIComponent(chosenStyleImageKey)}` : undefined}
+              <label className="mt-3 flex items-center gap-2 text-sm font-medium text-muted">
+                <input
+                  type="checkbox"
+                  checked={captionStyle.enabled !== false}
+                  onChange={(e) => {
+                    setCaptionsTouched(true)
+                    setCaptionStyle((cs) => ({ ...cs, enabled: e.target.checked }))
+                  }}
                 />
-              </div>
-              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {CAPTION_OPTIONS.map((o) => (
-                  <button
-                    key={o.preset}
-                    type="button"
-                    // Switching presets keeps the channel's brand palette (accent + base color)
-                    // but resets motion/size/placement to that preset's signature look.
-                    onClick={() => setCaptionStyle(resolveCaptionStyle(o.preset, { highlightColor: captionStyle.highlightColor, color: captionStyle.color }))}
-                    title={o.vibe}
-                    className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${captionStyle.preset === o.preset ? 'border-accent bg-accent-soft text-accent ring-1 ring-accent' : 'border-border-strong text-muted hover:bg-subtle'}`}
-                  >
-                    {o.label}
-                  </button>
-                ))}
-              </div>
-              {(() => {
-                const selected = CAPTION_OPTIONS.find((o) => o.preset === captionStyle.preset)
-                return selected ? <p className="mt-2.5 text-xs text-muted">{selected.vibe}</p> : null
-              })()}
+                Burn captions onto the video
+              </label>
+              {captionStyle.enabled !== false && (
+                <>
+                  <div className="mt-3">
+                    <CaptionPreview
+                      key={captionStyle.preset}
+                      style={captionStyle}
+                      safeZonePct={PLATFORM_PRESETS[targetPlatform].safeZoneBottomPct}
+                      backgroundImageUrl={chosenStyleImageKey ? `/api/asset?key=${encodeURIComponent(chosenStyleImageKey)}` : undefined}
+                    />
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {CAPTION_OPTIONS.map((o) => (
+                      <button
+                        key={o.preset}
+                        type="button"
+                        // Switching presets keeps the channel's brand palette (accent + base color)
+                        // but resets motion/size/placement to that preset's signature look.
+                        onClick={() => setCaptionStyle((cs) => ({ ...resolveCaptionStyle(o.preset, { highlightColor: cs.highlightColor, color: cs.color }), enabled: cs.enabled }))}
+                        title={o.vibe}
+                        className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${captionStyle.preset === o.preset ? 'border-accent bg-accent-soft text-accent ring-1 ring-accent' : 'border-border-strong text-muted hover:bg-subtle'}`}
+                      >
+                        {o.label}
+                      </button>
+                    ))}
+                  </div>
+                  {(() => {
+                    const selected = CAPTION_OPTIONS.find((o) => o.preset === captionStyle.preset)
+                    return selected ? <p className="mt-2.5 text-xs text-muted">{selected.vibe}</p> : null
+                  })()}
+                </>
+              )}
             </div>
 
             <div className="flex items-center justify-between gap-3 border-t border-border pt-5">

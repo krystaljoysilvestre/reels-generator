@@ -1,9 +1,9 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { eq, and } from 'drizzle-orm'
-import { getDb, reels, assets, publications } from '@reels/db'
-import { transition, PostMetaSchema, formatPostCaption, formatImageCredits, StoryBibleSchema } from '@reels/core'
-import { downloadBuffer, uploadToYouTube, isYouTubeConfigured } from '@reels/providers'
+import { getDb, reels, channels, assets, publications } from '@reels/db'
+import { transition, PostMetaSchema, formatPostCaption, formatImageCredits, StoryBibleSchema, resolveSidecarSrt } from '@reels/core'
+import { downloadBuffer, uploadToYouTube, isYouTubeConfigured, toElevenLabsLang } from '@reels/providers'
 import { requireReelOwner } from '@/lib/api-access'
 
 // Post an approved reel straight to YouTube (env-gated — the manual zip flow is untouched when the
@@ -60,9 +60,20 @@ export async function POST(req: NextRequest) {
     where: and(eq(assets.reelId, reelId), eq(assets.storageKey, `reels/${reelId}/thumbnail.jpg`)),
   })
   const thumbnailJpeg = thumbAsset ? await downloadBuffer(thumbAsset.storageKey).catch(() => undefined) : undefined
+  // Channels that don't burn captions ship a native CC track instead, from the same timings.
+  const channel = await db.query.channels.findFirst({ where: eq(channels.id, reel.channelId) })
+  const captionsSrt = resolveSidecarSrt(reel.timings, channel?.captionStyle)
+  const captionsLanguage = toElevenLabsLang(channel?.languages?.[0] ?? 'english')
   let result
   try {
-    result = await uploadToYouTube({ video, title, description, tags, ...(thumbnailJpeg ? { thumbnailJpeg } : {}) })
+    result = await uploadToYouTube({
+      video,
+      title,
+      description,
+      tags,
+      ...(thumbnailJpeg ? { thumbnailJpeg } : {}),
+      ...(captionsSrt ? { captionsSrt, captionsLanguage } : {}),
+    })
   } catch (err) {
     return NextResponse.json(
       { error: `Upload didn’t go through: ${err instanceof Error ? err.message : String(err)}` },

@@ -34,8 +34,19 @@ function getClient(): ElevenLabsClient {
 // Per-request resilience: each attempt times out, and transient failures
 // (connection/429/5xx) auto-retry once. TTS gets a longer budget than metadata.
 const QUICK_OPTS = { maxRetries: 1, timeoutInSeconds: 30 }
-const TTS_OPTS = { maxRetries: 1, timeoutInSeconds: 120 }
 const SFX_OPTS = { maxRetries: 1, timeoutInSeconds: 60 }
+
+// TTS synthesis time scales with the text, so a fixed budget that fits a 75s reel (~1.1k chars) starves
+// a long-form narration: a 10-minute video is ~9k chars, which sits UNDER the chunk threshold below and
+// so goes out as one request — 120s could never cover it. Scale with length instead, keeping the old
+// 120s as the floor so short-form behavior is unchanged.
+const TTS_TIMEOUT_SEC_PER_1K_CHARS = 30
+const TTS_TIMEOUT_MIN_SEC = 120
+const TTS_TIMEOUT_MAX_SEC = 600
+function ttsOpts(chars: number) {
+  const scaled = Math.ceil((chars / 1000) * TTS_TIMEOUT_SEC_PER_1K_CHARS)
+  return { maxRetries: 1, timeoutInSeconds: Math.min(TTS_TIMEOUT_MAX_SEC, Math.max(TTS_TIMEOUT_MIN_SEC, scaled)) }
+}
 
 // ── Voice library ───────────────────────────────────────────────────────────
 // Real, selectable voices from the ElevenLabs account. Metadata is read-only;
@@ -260,7 +271,7 @@ export class ElevenLabsTtsProvider implements TtsProvider {
           // Prosody continuity across chunk seams: the model hears what surrounds this chunk.
           ...(i > 0 ? { previous_text: chunks[i - 1]!.slice(-300) } : {}),
           ...(i < chunks.length - 1 ? { next_text: chunks[i + 1]!.slice(0, 300) } : {}),
-        }, TTS_OPTS))
+        }, ttsOpts(chunk.length)))
 
         // The request completed — this chunk is billable whatever happens next.
         spentCents += Math.ceil((chunk.length / 1000) * TTS_COST_CENTS_PER_1K_CHARS)
@@ -385,7 +396,7 @@ export async function generateSpeechClip(params: {
       model_id: 'eleven_multilingual_v2',
       output_format: 'mp3_44100_128',
       ...(params.voiceSettings ? { voice_settings: params.voiceSettings } : {}),
-    }, TTS_OPTS))
+    }, ttsOpts(params.text.length)))
     paid = true
     const audioBuffer = Buffer.from(response.audio_base64, 'base64')
     const ends = response.alignment?.character_end_times_seconds
@@ -410,11 +421,16 @@ export async function generateSpeechClip(params: {
 // ~40s (real ~16¢/60s, ~37¢/135s → 3.7× at 135s). Music credits are a deterministic function of length, so
 // this is effectively exact.
 const MUSIC_CREDITS_PER_MIN = 900
-function musicCostCents(lengthMs: number): number {
-  return Math.max(1, Math.ceil((lengthMs / 60_000) * MUSIC_CREDITS_PER_MIN * ELEVEN_CENTS_PER_CREDIT))
-}
 const MUSIC_MIN_MS = 10_000       // Eleven Music length bounds
 const MUSIC_MAX_MS = 300_000
+
+// Exported so budget guards can RESERVE the bed's real cost instead of a guessed constant — at long-form
+// lengths the bed is the largest remaining spend after animation, and a stale guess would let the
+// animation step eat the headroom the music step still needs.
+export function musicCostCents(lengthMs: number): number {
+  const clamped = Math.min(MUSIC_MAX_MS, Math.max(MUSIC_MIN_MS, lengthMs))
+  return Math.max(1, Math.ceil((clamped / 60_000) * MUSIC_CREDITS_PER_MIN * ELEVEN_CENTS_PER_CREDIT))
+}
 
 export interface MusicResult {
   audio: Buffer

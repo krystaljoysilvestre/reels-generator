@@ -9,7 +9,8 @@
 //
 // Cost: the YouTube Data API is free (quota-metered, not billed) — an upload costs ~1600 quota units
 // of the default 10,000/day, i.e. ~6 uploads/day before a quota raise is needed. costCents: 0 is the
-// true marginal cost, not an unaccounted estimate.
+// true marginal cost, not an unaccounted estimate. Attaching a caption track adds ~400 units to an
+// upload (~2000 total), which lowers the ceiling to ~5 uploads/day on the default quota.
 
 export interface YouTubeUploadParams {
   video: Buffer
@@ -24,6 +25,13 @@ export interface YouTubeUploadParams {
   // Optional custom thumbnail (JPEG). Best-effort: custom thumbnails need a phone-verified YouTube
   // account — when the API refuses, the upload still succeeds with YouTube's auto-picked frame.
   thumbnailJpeg?: Buffer
+  // Optional SubRip caption track — the platform-native alternative to burning captions into the
+  // picture (see subtitlesToSrt). Best-effort for the same reason as the thumbnail, plus one of its
+  // own: captions.insert needs the youtube.force-ssl scope, which a token minted for youtube.upload
+  // alone does not carry. A 403 there must not fail an otherwise-successful upload.
+  captionsSrt?: string
+  // BCP-47 tag for the caption track (e.g. 'en', 'fil'). Defaults to 'en'.
+  captionsLanguage?: string
 }
 
 export interface YouTubeUploadResult {
@@ -118,7 +126,44 @@ export async function uploadToYouTube(params: YouTubeUploadParams): Promise<YouT
     }
   }
 
+  if (params.captionsSrt?.trim()) {
+    await insertCaptionTrack(accessToken, json.id, params.captionsSrt, params.captionsLanguage ?? 'en')
+  }
+
   return { videoId: json.id, url: `https://youtu.be/${json.id}`, costCents: 0 }
+}
+
+// captions.insert — a multipart/related upload (metadata part + the .srt bytes). ~400 quota units.
+// Best-effort by contract: every failure path warns and returns, because a missing caption track is a
+// degraded video, not a failed publish. The most likely failure is a 403 from a refresh token that
+// only carries the youtube.upload scope; force-ssl is required to write captions.
+async function insertCaptionTrack(accessToken: string, videoId: string, srt: string, language: string): Promise<void> {
+  const boundary = `kendrix-captions-${videoId}`
+  const metadata = JSON.stringify({
+    snippet: { videoId, language, name: '', isDraft: false },
+  })
+  const body =
+    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n` +
+    `--${boundary}\r\nContent-Type: application/octet-stream\r\n\r\n${srt}\r\n` +
+    `--${boundary}--\r\n`
+
+  try {
+    const res = await fetch('https://www.googleapis.com/upload/youtube/v3/captions?part=snippet&uploadType=multipart', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': `multipart/related; boundary=${boundary}`,
+      },
+      body,
+    })
+    if (!res.ok) {
+      const detail = (await res.text()).slice(0, 300)
+      const hint = res.status === 403 ? ' — the refresh token likely lacks the youtube.force-ssl scope' : ''
+      console.warn(`[youtube] caption track rejected (${res.status})${hint}: ${detail}`)
+    }
+  } catch (err) {
+    console.warn(`[youtube] caption upload failed: ${err instanceof Error ? err.message : String(err)}`)
+  }
 }
 
 // ── Video statistics (metrics polling) ────────────────────────────────────────

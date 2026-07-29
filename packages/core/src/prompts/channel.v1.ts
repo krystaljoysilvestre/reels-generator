@@ -4,7 +4,7 @@
 // Versioned source code. Never edit after a channel ships on this version — bump to v2.
 
 import { z } from 'zod'
-import { ToneConfigSchema, WorldBibleSchema, PLATFORM_PRESETS, type TargetPlatform } from '../types/channel.js'
+import { ToneConfigSchema, WorldBibleSchema, PLATFORM_PRESETS, MAX_TARGET_SECONDS, type TargetPlatform } from '../types/channel.js'
 import { STYLE_VALUES, STORY_STYLES } from './story-styles.v1.js'
 import { VOICE_VALUES } from './story-voices.v1.js'
 
@@ -17,7 +17,7 @@ export const CHANNEL_V1_VERSION = 'channel.v1.5'
 export const ChannelDerivationSchema = z.object({
   tagline: z.string(), // one-line positioning
   toneConfig: ToneConfigSchema,
-  targetSeconds: z.number().int().min(15).max(600), // natural video length for this niche (clamped to the platform cap at create)
+  targetSeconds: z.number().int().min(15).max(MAX_TARGET_SECONDS), // natural video length for this niche (clamped to the platform cap at create)
   stylePreset: z.string(), // ~80–100 word visual style DNA for image prompts
   captionPreset: z.enum(['clean', 'pop', 'hype', 'karaoke', 'neon', 'whisper', 'impact', 'elegant', 'comic', 'terminal', 'cinematic', 'breaking', 'marker', 'script', 'retro', 'glitch']), // animated caption style
   captionHighlight: z.string(), // accent hex (box fill / karaoke fill / glow / active word)
@@ -99,7 +99,7 @@ Produce JSON with exactly these fields:
   "toneConfig": {
     "intensity": 0-10, "warmth": 0-10, "energy": 0-10, "pacing": 0-10, "humor": 0-10
   },  // genre-neutral; score honestly for THIS niche: intensity=light→heavy/serious, warmth=clinical→inviting, energy=calm→hyped, pacing=slow-burn→rapid, humor=straight→comedic
-  "targetSeconds": 15-600,  // the natural length of ONE video — but MUST be within the TARGET PLATFORM's cap above. Quick informational/listicle niches run short (~20-40s); atmospheric or story-driven niches run longer; a long-form platform wants minutes, not seconds. Pick what the format wants, then clamp to the platform's sweet spot/max — do not exceed the platform HARD MAX.
+  "targetSeconds": 15-${MAX_TARGET_SECONDS},  // the natural length of ONE video — but MUST be within the TARGET PLATFORM's cap above. Quick informational/listicle niches run short (~20-40s); atmospheric or story-driven niches run longer; a long-form platform wants minutes, not seconds. Pick what the format wants, then clamp to the platform's sweet spot/max — do not exceed the platform HARD MAX.
   "stylePreset": "60–90 words of comma-separated VISUAL style descriptors for an image model — LOOK ONLY: film stock/medium, color palette, texture/grain, mood, composition tendencies (e.g. negative space, framing), depth-of-field, and lighting QUALITY (contrast/softness), plus a region/era aesthetic. This string is prepended to EVERY scene, so it must describe HOW shots look, never WHAT is in them. Two hard rules: (1) Do NOT bake in a time of day or light level (no 'night', 'daylight', 'low-light', 'moonlight', 'candlelight') — each scene sets its own lighting from the narration. (2) Do NOT name any specific OBJECT, PROP, set-piece, or light source ('cracked walls', 'a wooden door', 'a candle', 'capiz window', 'a lamp') and do NOT focus on a specific subject ('shallow focus on the door') — those are per-SCENE content, decided from the narration + world bible. If baked into the style they force themselves into every frame and flatten variety. Style DNA only — no objects, no characters, no story content, no time of day.",
   "captionPreset": "the animated on-screen caption style — pick the ONE that best matches this niche's energy + audience (these are competitive TikTok/Reels/Shorts styles, not plain subtitles). Choose intentionally; don't default to pop:
      - clean: refined white, gentle fade — calm, educational, explainer

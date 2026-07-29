@@ -8,7 +8,7 @@
 import type { z } from 'zod'
 import { PostMetaSchema } from '../types/post-meta.js'
 
-export const POST_META_V1_VERSION = 'post-meta.v1.0'
+export const POST_META_V1_VERSION = 'post-meta.v1.1'
 
 // The model emits the meta WITHOUT the version discriminator; the caller stamps `v: 1`.
 export const PostMetaLlmSchema = PostMetaSchema.omit({ v: true, language: true })
@@ -23,10 +23,17 @@ export interface PostMetaVars {
   title: string // the story's working title
   logline: string
   narration: string // full narration — the caption must be true to it
+  // Runtime of the finished video. Context, not a formula: a 45-second vertical post and a 9-minute
+  // one are read in different places by differently-committed viewers, and the model should judge the
+  // packaging from that rather than from a hardcoded per-length template. Absent → unstated.
+  targetSeconds?: number | undefined
 }
 
 export function buildPostMetaPrompt(v: PostMetaVars): { system: string; userMessage: string } {
-  const system = `You package finished short videos for posting. For the channel "${v.channelName}" (${v.nicheDescription}), you write the title, hook, caption, and hashtags a viewer sees BEFORE deciding to watch.
+  const runtimeLine = v.targetSeconds
+    ? `\n\nRUNTIME: about ${v.targetSeconds < 90 ? `${v.targetSeconds} seconds` : `${Math.round(v.targetSeconds / 60)} minutes`}. Let that inform how much the package has to carry — a viewer choosing a longer watch is deciding differently than a viewer mid-scroll — but judge what this story and audience need; there is no per-length template.`
+    : ''
+  const system = `You package finished videos for posting. For the channel "${v.channelName}" (${v.nicheDescription}), you write the title, hook, caption, and hashtags a viewer sees BEFORE deciding to watch.${runtimeLine}
 
 You are given the finished story. Your job is to earn the click honestly — the best packaging makes the story's own strongest tension visible, it never promises something the video doesn't deliver.
 
@@ -37,7 +44,7 @@ PLATFORMS: ${v.platforms.join(', ')}. One package serves all of them, so favor w
 FIELDS
 - title: the video's title (YouTube title / bold opening on other platforms). Short and specific to THIS story. No clickbait caps, no emoji spam — intrigue comes from the story, not punctuation.
 - hook: the single line a scroller reads first. The story's sharpest question or tension, in the audience's own register. May be empty if the title already IS the hook.
-- caption: the post body under the hook. A few short lines at most — set the scene or deepen the pull, never summarize the ending or spoil the turn. May be empty if the hook says it all.
+- caption: the post body under the hook. Set the scene or deepen the pull, never summarize the ending or spoil the turn. Length is yours to judge from the runtime and where this gets read — a scroller wants a line or two, a longer watch can support a fuller note. May be empty if the hook says it all.
 - hashtags: up to 8, with '#'. Choose what real posts in this niche + language actually use — a mix of niche-specific and discovery tags, in whatever language(s) the audience searches. Fewer is fine; use only tags that genuinely fit this story and channel. Never invent a tag that looks like another channel's brand.
 
 Return ONLY JSON: {"title": "...", "hook": "...", "caption": "...", "hashtags": ["#...", ...]}`

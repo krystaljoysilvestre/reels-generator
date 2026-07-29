@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { eq } from 'drizzle-orm'
 import { getDb, channels, stories, claimSetupSpendForChannel } from '@reels/db'
-import { ToneConfigSchema, WorldBibleSchema, ChannelVoiceSchema, VoiceModeSchema, CaptionStyleSchema, TargetPlatformSchema, PLATFORM_PRESETS, MusicIntensitySchema, MusicModeSchema, AudioMoodSchema, peakFracForType } from '@reels/core'
+import { ToneConfigSchema, WorldBibleSchema, ChannelVoiceSchema, VoiceModeSchema, CaptionStyleSchema, TargetPlatformSchema, PLATFORM_PRESETS, MAX_TARGET_SECONDS, MusicIntensitySchema, MusicModeSchema, AudioMoodSchema, peakFracForType } from '@reels/core'
 import { classifyGenre, GENRE_MODULE_VALUES, asGenreModule } from '@reels/core/prompts/scenes.v1'
 import { STYLE_VALUES, resolveStyle } from '@reels/core/prompts/story-styles.v1'
 import { VOICE_VALUES, resolveVoice } from '@reels/core/prompts/story-voices.v1'
@@ -22,7 +22,7 @@ const InputSchema = z.object({
   voiceSearchKeyword: z.string().trim().max(80).default(''), // AI-derived genre tag for voice matching
   stylePreset: z.string().trim().min(1),
   styleImageKey: z.string().trim().min(1).nullish(), // previewed style image, if the operator rendered one
-  targetSeconds: z.number().int().min(15).max(600).default(75), // per-channel video length (long-form allows minutes; clamped to the platform cap below)
+  targetSeconds: z.number().int().min(15).max(MAX_TARGET_SECONDS).default(75), // per-channel video length (long-form allows minutes; clamped to the platform cap below)
   captionStyle: CaptionStyleSchema.default({}), // burned-in caption look
   worldBible: WorldBibleSchema,
   // Genre bucket from channel.v1; falls back to keyword classification if absent.

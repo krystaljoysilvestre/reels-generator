@@ -233,17 +233,83 @@ the owner (design first, then implementation). Full evidence in the session summ
    Critical fact + forced attribution). Must define which visual floors travel with it (→ #2).
    Sequenced after #1/#2; amends specs/evidence-based-narrative.md.
 4. **Budget cap** — folded into item 7 above (fresh evidence there).
-5. **Render visual-fingerprint gap** — `render-step.ts` hashes `captionStyle` but NOT subtitle
-   *content*; caption text changes could reuse a stale cached visual. Tiny correctness fix, do anytime.
-6. **`captionStyle` has no "none"** — no-text reels currently require emptying `timings.subtitles`
-   by hand. Make captions-off a first-class channel/reel toggle (some formats legitimately want zero
-   on-screen text; owner shipped one).
+5. **Render visual-fingerprint gap** — NON-ISSUE on inspection: `render-step.ts` already hashes
+   subtitle text+timings into the visual fingerprint alongside `captionStyle`. Closed, no work.
+6. **`captionStyle` has no "none"** — DONE (2026-07-29). `CaptionStyle.enabled` (optional, absent =
+   on, so existing channels are unchanged) skips the overlay; toggle in Settings and the wizard; no
+   migration (lives in the `captionStyle` jsonb). New `youtube_long` channels default it OFF and ship
+   a native YouTube CC track instead (`subtitlesToSrt` → `captions.insert`) — burned captions answer
+   mute-autoplay in a feed, which isn't how long-form is watched. Exactly one delivery per reel, never
+   both. UNVERIFIED LIVE: needs a real long-form publish, and `captions.insert` needs the
+   `youtube.force-ssl` scope the current refresh token may not carry (failure is best-effort/warn-only).
 7. **Duration estimator undershoots** — 2.5 wps estimate vs ~2.2 wps real (voice delivery + genre
    pauses): a ~220-word script rendered 100.7s vs ~86s predicted. Calibrate `estimateNarrationSec`
    with the voice/pause profile; affects `targetSeconds` honoring end-to-end.
 8. **Style-ref distillation drops signature lighting** — `style-ref.v1` deliberately strips
    time-of-day, which erased a channel's dusk signature (had to hand-append). Add an owner-set
    "preserve signature lighting/time-of-day" option to the distillation.
+
+### Long-form (`youtube_long`) readiness — 2026-07-29 audit, before the first live channel
+
+Long-form shipped 2026-07-15 and has **never run live**. The pipeline is correctly parameterized where
+the spec promised (frame/aspect threading, render-QA duration gate, chaptered breakdown, story token
+budget, 16:9 thumbnail). The gaps cluster in the last mile and in budgets calibrated for 75s reels.
+
+FIXED in this pass: TTS request timeout now scales with narration length (a ~9k-char long-form
+narration sits *under* the chunk threshold, so it went out as ONE request on a 120s budget — the most
+likely first-run hard failure); the animation budget reserve now scales with runtime via the real
+`musicCostCents` (a flat 50¢ reserve was smaller than the ~82¢ 5-minute bed it was protecting);
+`post-meta.v1.1` takes runtime as context instead of saying "short videos" and capping caption
+guidance at "a few short lines".
+
+Open, ranked:
+
+1. **[BLOCKER for auto-publish] YouTube upload holds the whole file in memory and can't resume** —
+   `uploadToYouTube` takes a `Buffer`, then does ONE `PUT` of a full second copy; the resumable
+   session is used only to get the URL (no `Content-Range`, no chunking, no retry). A 600s 1080p
+   render is ~0.5–1.5 GB, so peak RSS is 2–3× that and a drop at 90% restarts from zero — including
+   the re-download. Never stressed: a 75s reel is ~50–100 MB. Fix = stream in ~8MB chunks with
+   `Content-Range` + resume-on-drop. Same whole-file-in-memory pattern in `render-step` uploads and
+   `export-post-package`. Also: `publish-youtube/route.ts` has no `maxDuration` export — a serverless
+   deploy would cut the upload off regardless. **Manual upload is the safe path until this lands.**
+2. **Chapters are a dead feature** — `planChapters` output is used only as an LLM batching device in
+   `breakdown-scenes` and then discarded; `StoryChapter` never reaches the DB, `post-meta`, or the
+   description, so YouTube gets no timestamps. For a 10-minute channel chapters are table stakes.
+   Needs a real design: `StoryChapter` has offsets but **no titles**, so this is title generation +
+   mapping chapter offsets to actual `timings` (not `estSec`) + a description block — not a quick fix.
+3. **Step timeouts** — RAISED 2026-07-29 to cover the new 20-min ceiling (`PIPELINE_STEP_TIMEOUT_MS`
+   10→20 min, `RENDER_STEP_TIMEOUT_MS` 25→45 min, `STUCK_REEL_THRESHOLD_MS` 40→60 min). The cost is
+   that a genuinely HUNG short-form step now parks its slot longer. **Proper fix, still open:** scale
+   each ceiling from the reel's own `targetSeconds` instead of one global worst case. Note render has
+   no intra-attempt resume — a timeout there restarts from frame 0 (the heavy per-scene steps do
+   resume via ledger rows, but only within `attempts: 3`).
+4. **Budget cap stops scaling before long-form starts** — `budgetCapForSeconds` saturates at
+   `BUDGET_CAP_MAX_CENTS` from 289s up, so a 300s and a 1200s channel share a $30 cap. Real spend
+   ~$10.4–12.8 at 600s and ~$15–17 at 1200s (i2v caps at 8 clips and music at a 5-min bed, so the
+   marginal minute past ~10 min is only ~$0.45 — mostly images + TTS). Headroom is fine; the cap is
+   just no longer doing length-proportional work. It would start binding around ~30 min.
+5. **No length control during onboarding** — the wizard has no duration field at all (`targetSeconds`
+   seeds at 75 and is only overwritten by the LLM derive). A creator picking long-form gets whatever
+   the model derived; the only real control is the Settings slider, post-creation. This matters more
+   now that the ceiling is 20 min: the derive decides between a 5-min and a 20-min channel unaided.
+
+**Duration ceiling raised 600s → 1200s (2026-07-29).** YouTube imposes no limit; the cap tracks what
+the pipeline can finish. The original 600s rationale (keep narration inside ElevenLabs' single-request
+comfort zone) is **obsolete** — long narrations chunk seam-safely and the TTS timeout now scales.
+Going past 20 min needs three things that do NOT move with the number: the music bed maxes at 5 min
+and loops (a 20-min reel already hears it 4×, never listen-tested), `motionBudgetForSeconds` caps at
+8 i2v clips (~1 clip / 2.5 min at 20 min — reads as a slideshow), and the $30 budget cap starts
+binding near 30 min.
+6. **hookHint holes** — the main writer path was fixed in `23dc6e7` (the `decision-log.md:412` entry
+   calling it broken is **stale**), but the `story.v1` fallback drops `platformHookHint` entirely, and
+   the EBN writer never reads it — so an EBN long-form channel writes short-form-shaped prose. The
+   genre probe passes `undefined` for long-form runs, so it can't catch either.
+7. **Sound + editor deferrals** (all known, all in `specs/long-form.md`): one 5-minute bed looped
+   twice for a 600s video (never listen-tested); `sfx.max(18)` is a whole-video cap, so density drops
+   from ~1 cue/4s to ~1 cue/33s; the storyboard editor is 9:16-shaped everywhere except the main stage.
+8. **Metrics window is short-form-shaped** — `metrics-poll.ts` stops at 30 days by explicit
+   Shorts reasoning; long-form accrues over months, so recorded performance (which feeds few-shot
+   selection) will systematically under-count long-form.
 
 ### Deferred config (currently schema defaults at creation)
 

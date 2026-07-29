@@ -40,7 +40,8 @@ function bandStyle(position: CaptionStyle['position'], height: number, safeZoneP
   }
 }
 
-// Burned-in subtitles — non-optional (most reels watched muted). CLAUDE.md non-negotiable.
+// Burned-in subtitles — on by default (most short-form reels are watched muted), but a first-class
+// channel choice: captionStyle.enabled === false burns nothing (clean visuals + narration only).
 // Animates word-by-word with the channel's CaptionStyle (pop / bounce / punch / karaoke /
 // highlight-box / typewriter / fade), driven by the real per-word timings in each chunk.
 // Mirrors the in-app CaptionPreview so the wizard preview matches the shipped video.
@@ -48,6 +49,8 @@ export const SubtitleOverlay: React.FC<SubtitleOverlayProps> = ({ subtitles, cap
   const frame = useCurrentFrame()
   const { fps, width, height } = useVideoConfig()
   const currentMs = (frame / fps) * 1000
+
+  if (style.enabled === false) return null
 
   const active = subtitles.find((s) => currentMs >= s.startMs && currentMs < s.endMs)
   if (!active) return null
