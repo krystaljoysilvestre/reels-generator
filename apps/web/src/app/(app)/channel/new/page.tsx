@@ -10,10 +10,12 @@ export const metadata = { title: 'New channel' }
 export default async function NewChannelPage({
   searchParams,
 }: {
-  searchParams: Promise<{ draft?: string }>
+  searchParams: Promise<{ draft?: string; preset?: string; trending?: string }>
 }) {
   await requireAuth()
-  const { draft } = await searchParams
+  // `preset` / `trending` are quick-start deep links from the dashboard's empty state. Both are just
+  // selection hints — the wizard validates them against its own lists and ignores anything unknown.
+  const { draft, preset, trending } = await searchParams
 
   // Resuming a saved draft (?draft=<id>): load its stored wizard state so the wizard hydrates from
   // the DB. This works even on a different browser than where it was saved (the localStorage autosave
@@ -29,5 +31,12 @@ export default async function NewChannelPage({
     }
   }
 
-  return <NewChannelWizard initialDraft={initialDraft} initialDraftChannelId={initialDraftChannelId} />
+  return (
+    <NewChannelWizard
+      initialDraft={initialDraft}
+      initialDraftChannelId={initialDraftChannelId}
+      initialPresetId={preset ?? null}
+      initialTrendingId={trending ?? null}
+    />
+  )
 }

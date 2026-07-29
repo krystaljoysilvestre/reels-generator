@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { NICHE_PRESETS } from './niche-presets'
+import { NICHE_PRESETS, trendingId } from './niche-presets'
 import { SUPPORTED_LANGUAGES } from './languages'
 import { Dropdown } from '@/components/Dropdown'
 import { avatarGradient, avatarInitials } from '@/components/ChannelAvatar'
@@ -13,6 +13,7 @@ import { stylesForGenre } from '@reels/core/prompts/story-styles.v1'
 import { GENRE_OPTIONS, genreLabel } from '@/lib/genre-labels'
 import { getTrendingNiches, type TrendingNiche } from '@/lib/trending-niches'
 import { KendrixMark } from '@/components/Wordmark'
+import { GreenlightPoster } from './GreenlightPoster'
 
 type StyleInfluence = 'light' | 'medium' | 'full'
 
@@ -34,6 +35,36 @@ const STEP_TITLE: Record<Phase, string> = {
   voice: 'Pick the narrator voice',
   sound: 'Set the sound',
   visual: 'Choose the visual style',
+}
+// One line under each heading saying what this step decides — the brief reads as a brief.
+const STEP_SUB: Record<Phase, string> = {
+  describe: 'One publishing brand — its niche, voice, look and rules. Fill the brief; the poster builds as you go.',
+  script: 'Show us how it should sound. Paste a real opening, or have one written to preview the voice.',
+  voice: 'One voice for the whole channel, or a fresh pick per reel.',
+  sound: 'Choose the music bed under every reel.',
+  visual: 'Lock the look and the caption style — the final piece.',
+}
+// Short labels for the header timeline.
+const STEP_TAB: Record<Phase, string> = {
+  describe: 'Describe',
+  script: 'Script',
+  voice: 'Voice',
+  sound: 'Sound',
+  visual: 'Visual',
+}
+// Compact labels for the poster's slate line and checklist (the pickers keep their own fuller copy).
+const PLATFORM_LABELS: Record<TargetPlatform, string> = {
+  tiktok: 'TikTok',
+  youtube_shorts: 'Shorts',
+  facebook_reels: 'Reels',
+  youtube_long: 'Long-form',
+  all: 'All',
+}
+const MUSIC_LABELS: Record<'preset' | 'ai' | 'upload' | 'none', string> = {
+  ai: 'Original score',
+  preset: 'From our library',
+  upload: 'Your own music',
+  none: 'No music',
 }
 
 // After the API's own timeout + retries, a transient failure surfaces here —
@@ -137,9 +168,15 @@ interface PreviewState {
 export function NewChannelWizard({
   initialDraft = null,
   initialDraftChannelId = null,
+  initialPresetId = null,
+  initialTrendingId = null,
 }: {
   initialDraft?: Record<string, unknown> | null // stored wizard state when resuming a saved draft
   initialDraftChannelId?: string | null // the draft channel's id, so finishing promotes that same row
+  // Deep links from the dashboard's quick-start cards — a curated preset id, or a trending card's
+  // slug. Both are applied ONCE on arrival, and only over an untouched brief (a resumed draft wins).
+  initialPresetId?: string | null
+  initialTrendingId?: string | null
 } = {}) {
   const router = useRouter()
   const [phase, setPhase] = useState<Phase>('describe')
@@ -460,6 +497,26 @@ export function NewChannelWizard({
     return () => { cancelled = true }
   }, [])
 
+  // Quick-start deep links from the dashboard. Applied once, and only over an UNTOUCHED brief — a
+  // resumed draft or anything already typed always wins, so a stale link can't wipe real work. Curated
+  // presets resolve immediately; a trending slug has to wait for the rail to load before it can match.
+  const deepLinkDone = useRef(false)
+  useEffect(() => {
+    if (!hydrated || deepLinkDone.current) return
+    if (niche.trim() !== '' || initialDraft) { deepLinkDone.current = true; return }
+    if (initialPresetId && NICHE_PRESETS.some((p) => p.id === initialPresetId)) {
+      deepLinkDone.current = true
+      pickPreset(initialPresetId)
+      return
+    }
+    if (initialTrendingId) {
+      if (trendingLoading) return // rail still in flight — try again when it lands
+      const match = trending.find((t) => trendingId(t.label) === initialTrendingId)
+      deepLinkDone.current = true
+      if (match) pickTrending(match)
+    }
+  }, [hydrated, trendingLoading, trending, initialPresetId, initialTrendingId])
+
   // Requested an exit: prompt if there's progress, otherwise just go.
   function requestLeave(href: string) {
     if (hasProgress) setLeaveTo(href)
@@ -734,6 +791,23 @@ export function NewChannelWizard({
         : []
   const poolSize = chosenTracks.length
 
+  // ── Poster values (display only) ─────────────────────────────────────────────
+  // Every one of these reads existing state; the poster adds no state and triggers no work. The look
+  // reuses whatever preview the Visual step already rendered, so it never causes a paid render.
+  const posterInitials = avatarInitials(committedName || name || 'K')
+  const posterPlatformLabel = (PLATFORM_LABELS[targetPlatform] ?? 'All').toUpperCase()
+  const posterGenreTags = [
+    genreCategory ? genreLabel(genreCategory) : '',
+    narrativeStyleLabel,
+    ...(audioMood?.moodTags ?? []).slice(0, 1),
+  ].filter(Boolean) as string[]
+  const posterMusicLabel = musicChoice ? MUSIC_LABELS[musicChoice] : ''
+  const posterStyleLabel =
+    selectedStyleIdx !== null ? (styleProposals?.styles[selectedStyleIdx]?.label ?? '') : ''
+  const posterCaptionLabel = CAPTION_OPTIONS.find((o) => o.preset === captionStyle.preset)?.label ?? ''
+  const posterStyleImageKey = selectedStyleIdx !== null ? stylePreviews[selectedStyleIdx]?.imageKey : undefined
+  const posterStyleImageUrl = posterStyleImageKey ? `/api/asset?key=${encodeURIComponent(posterStyleImageKey)}` : null
+
   // Voice lists for single mode (gender-filtered). The recommend route returns the model's true
   // picks (each carrying a reason) followed by the whole browsable in-language pool (reason '').
   // Only the true picks render under "Recommended" — the pool waits behind "Show all voices",
@@ -806,6 +880,21 @@ export function NewChannelWizard({
     setLanguages([preset.language])
     seedDescription(preset.blurb)
     seedName(preset.suggestedName)
+  }
+
+  // Applying a trending card. Extracted from the rail's onClick so the dashboard's quick-start cards
+  // can land on the same code path via ?trending= instead of duplicating the seeding rules.
+  function pickTrending(t: TrendingNiche) {
+    const id = trendingId(t.label)
+    if (presetId === id) { setPresetId(null); return }
+    setPresetId(id)
+    setNiche(t.description)
+    // The rail's language is free text from a live search, so it can name one we don't support (or one
+    // we deliberately removed). Only honor it if the picker offers it — that list is the promise we can
+    // actually produce it.
+    setLanguages([SUPPORTED_LANGUAGES.includes(t.language) ? t.language : 'English'])
+    seedDescription(t.blurb)
+    seedName(t.label)
   }
 
   function pickCustom() {
@@ -1126,7 +1215,7 @@ export function NewChannelWizard({
           <span className="hidden h-6 w-px flex-shrink-0 bg-border sm:block" aria-hidden />
           <KendrixMark size={26} />
           <h1 className="min-w-0 flex-1 truncate font-display text-lg font-800 -tracking-[0.01em] text-ink">New channel</h1>
-          <StepDots phase={phase} />
+          <StepTimeline phase={phase} onGo={setPhase} />
           {/* The safe exit, in plain sight — before this it existed only inside the leave-confirm
               modal, so saving looked like an escape hatch instead of a feature. Gated on progress
               so an untouched wizard can't mint empty draft rows. */}
@@ -1154,21 +1243,26 @@ export function NewChannelWizard({
         </div>
       </header>
 
-      <div className="mx-auto w-full max-w-2xl p-5 sm:p-8">
+      {/* Two panes: the brief scrolls on the left, the poster it produces sits on the right. Below xl
+          the poster is hidden and the brief takes the full width. */}
+      <div className="flex min-h-0 flex-1">
+      <div className="flex-1 overflow-y-auto">
+      <div className="mx-auto w-full max-w-[600px] p-5 sm:px-10 sm:pb-14 sm:pt-8">
         {error && (
           <div className="mb-5 rounded-lg border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger">
             {error}
           </div>
         )}
 
-        {/* Step title — the mock leads each step with a tracked step label over a display heading. */}
+        {/* Step title — a tracked "brief" label over the display heading, then what this step decides. */}
         <div className="mb-6">
-          <p className="micro-label">
-            Setup · step {PHASE_ORDER.indexOf(phase) + 1} of {PHASE_ORDER.length}
+          <p className="mono-label">
+            The brief · step {PHASE_ORDER.indexOf(phase) + 1} of {PHASE_ORDER.length}
           </p>
-          <h2 className="mt-2 font-display text-[26px] font-800 -tracking-[0.02em] text-ink">
+          <h2 className="mt-2 font-display text-[27px] font-800 -tracking-[0.025em] text-ink">
             {STEP_TITLE[phase]}
           </h2>
+          <p className="mt-1.5 text-sm leading-relaxed text-muted">{STEP_SUB[phase]}</p>
         </div>
 
         {/* ─────────────────────────── STEP 1 · DESCRIBE ─────────────────────────── */}
@@ -1218,16 +1312,18 @@ export function NewChannelWizard({
                   Quietly removed when the fetch has nothing (static presets always work). */}
               {(trendingLoading || trending.length > 0) && (
                 <div>
-                  <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted">
+                  <p className="mono-label mb-2 flex items-center gap-1.5">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-accent" aria-hidden>
                       <path d="M23 6l-9.5 9.5-5-5L1 18" /><path d="M17 6h6v6" />
                     </svg>
-                    Trending now — refreshed daily from live data
+                    Trending now — refreshed daily
                   </p>
+                  {/* A horizontal rail, not a grid: the live feed returns 3–6 cards and a grid of six
+                      pushes the brief's own fields off-screen in the narrower two-pane layout. */}
                   {trendingLoading ? (
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    <div className="flex gap-2.5 overflow-x-auto pb-3">
                       {[0, 1, 2].map((i) => (
-                        <div key={i} className="animate-pulse rounded-lg border border-border-strong p-3">
+                        <div key={i} className="w-[180px] flex-none animate-pulse rounded-md border border-border-strong p-3">
                           <div className="h-3.5 w-14 rounded-full bg-subtle" />
                           <div className="mt-2 h-4 w-3/4 rounded bg-subtle" />
                           <div className="mt-1.5 h-3 w-full rounded bg-subtle" />
@@ -1235,32 +1331,23 @@ export function NewChannelWizard({
                       ))}
                     </div>
                   ) : (
-                    <div className="animate-fade-in grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    <div className="animate-fade-in flex gap-2.5 overflow-x-auto pb-3">
                       {trending.map((t, i) => {
                         // Keyed by label, not position: the rail refreshes daily, and an index-based id
                         // would highlight whatever card happens to sit in that slot when a draft resumes.
-                        const id = `trending:${t.label.trim().toLowerCase()}`
+                        const id = trendingId(t.label)
                         const on = presetId === id
                         return (
                           <button
                             key={`${i}-${id}`}
                             type="button"
                             title={t.whyNow}
-                            onClick={() => {
-                              if (presetId === id) { setPresetId(null); return }
-                              setPresetId(id)
-                              setNiche(t.description)
-                              // The rail's language is free text from a live search, so it can name one
-                              // we don't support (or one we deliberately removed). Only honor it if the
-                              // picker offers it — that list is the promise we can actually produce it.
-                              setLanguages([SUPPORTED_LANGUAGES.includes(t.language) ? t.language : 'English'])
-                              seedDescription(t.blurb)
-                            }}
-                            className={`flex flex-col items-start gap-1 rounded-lg border p-3 text-left transition-all ${
+                            onClick={() => pickTrending(t)}
+                            className={`flex w-[180px] flex-none flex-col items-start gap-1.5 rounded-md border p-3 text-left transition-all ${
                               on ? 'border-accent bg-accent-soft ring-1 ring-accent' : 'border-border-strong hover:bg-subtle'
                             }`}
                           >
-                            <span className={`rounded-full px-1.5 py-[1px] text-[9px] font-semibold uppercase tracking-wide ${t.rpm === 'high' ? 'bg-emerald-50 text-emerald-600' : 'bg-subtle text-muted'}`}>
+                            <span className={`rounded-full px-2 py-[2px] font-mono text-[9px] font-700 uppercase tracking-micro ${t.rpm === 'high' ? 'bg-success-soft text-success' : 'bg-subtle-strong text-muted'}`}>
                               {t.rpm === 'high' ? 'High payout' : 'Rising'}
                             </span>
                             <span className="line-clamp-1 text-sm font-medium text-ink">{t.label}</span>
@@ -1351,13 +1438,13 @@ export function NewChannelWizard({
                   </label>
                 ))}
                 <div className="flex items-center justify-end gap-3 pt-1">
-                  <button type="button" disabled={loading} onClick={() => { setClarify([]); goToScript() }} className="btn-ghost btn-sm">
+                  <button type="button" disabled={loading} onClick={() => { setClarify([]); goToScript() }} className="btn-ghost">
                     Skip
                   </button>
                   <button
                     type="button"
                     disabled={loading}
-                    className="btn-accent btn-sm"
+                    className="btn-accent btn-glow"
                     onClick={() => {
                       const additions = clarify
                         .map((q, i) => {
@@ -1407,7 +1494,7 @@ export function NewChannelWizard({
               {clarify.length === 0 && <button
                 onClick={derivedFresh ? () => goToScript() : () => handleGenerate()}
                 disabled={!canGenerate || loading || preparingExample}
-                className="btn-accent"
+                className="btn-accent btn-lg btn-glow"
               >
                 {loading || preparingExample ? (
                   <>
@@ -1560,7 +1647,7 @@ export function NewChannelWizard({
                           type="button"
                           onClick={() => handleSampleDraft(mainSteer, sampleIsAi ? {} : { reviseDraft: sampleScript })}
                           disabled={drafting}
-                          className="btn-secondary btn-sm flex-shrink-0"
+                          className="btn-secondary flex-shrink-0"
                         >
                           {drafting ? 'Writing…' : sampleScript.trim() ? 'Rewrite' : 'Write it'}
                         </button>
@@ -1617,14 +1704,14 @@ export function NewChannelWizard({
             </div>
 
             <div className="flex items-center justify-between gap-3 border-t border-border pt-5">
-              <button onClick={() => setPhase('describe')} className="btn-secondary">
+              <button onClick={() => setPhase('describe')} className="btn-secondary btn-lg">
                 <BackArrow /> Back
               </button>
               <div className="flex flex-col items-end gap-1">
                 {!sampleScript.trim() && (
                   <p className="text-xs text-faint">No script is fine — your channel learns from its first approved reels.</p>
                 )}
-                <button onClick={() => setPhase('voice')} className="btn-accent">
+                <button onClick={() => setPhase('voice')} className="btn-accent btn-lg btn-glow">
                   Next
                   <FwdArrow />
                 </button>
@@ -1755,10 +1842,10 @@ export function NewChannelWizard({
             </div>
 
             <div className="flex items-center justify-between gap-3 border-t border-border pt-5">
-              <button onClick={() => setPhase('script')} className="btn-secondary">
+              <button onClick={() => setPhase('script')} className="btn-secondary btn-lg">
                 <BackArrow /> Back
               </button>
-              <button onClick={() => setPhase('sound')} disabled={!canLeaveVoice} className="btn-accent">
+              <button onClick={() => setPhase('sound')} disabled={!canLeaveVoice} className="btn-accent btn-lg btn-glow">
                 Next <FwdArrow />
               </button>
             </div>
@@ -1908,10 +1995,10 @@ export function NewChannelWizard({
             </div>
 
             <div className="flex items-center justify-between gap-3 border-t border-border pt-5">
-              <button onClick={() => { stopPreview(); setPhase('voice') }} className="btn-secondary">
+              <button onClick={() => { stopPreview(); setPhase('voice') }} className="btn-secondary btn-lg">
                 <BackArrow /> Back
               </button>
-              <button onClick={() => { stopPreview(); setPhase('visual') }} className="btn-accent">
+              <button onClick={() => { stopPreview(); setPhase('visual') }} className="btn-accent btn-lg btn-glow">
                 Next <FwdArrow />
               </button>
             </div>
@@ -1981,13 +2068,13 @@ export function NewChannelWizard({
                                 {s.label}
                               </span>
                               {idx === uploadedStyleIdx ? (
-                                <span className="absolute left-1.5 top-1.5 rounded bg-ink/85 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white shadow-sm">Uploaded</span>
+                                <span className="absolute left-1.5 top-1.5 rounded-[5px] bg-ink/85 px-1.5 py-0.5 font-mono text-[8px] font-700 uppercase tracking-micro leading-none text-white shadow-sm">Uploaded</span>
                               ) : idx === 0 ? (
-                                <span className="absolute left-1.5 top-1.5 rounded bg-accent px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white shadow-sm">Recommended</span>
+                                <span className="absolute left-1.5 top-1.5 rounded-[5px] bg-accent px-1.5 py-0.5 font-mono text-[8px] font-700 uppercase tracking-micro leading-none text-white shadow-sm">Recommended</span>
                               ) : null}
                               {selected && (
-                                <span className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-accent text-white shadow-sm">
-                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M20 6 9 17l-5-5" /></svg>
+                                <span className="absolute right-1.5 top-1.5 flex h-[18px] w-[18px] items-center justify-center rounded-full bg-pair-purple-pink text-white shadow-sm">
+                                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M20 6 9 17l-5-5" /></svg>
                                 </span>
                               )}
                             </button>
@@ -2060,7 +2147,7 @@ export function NewChannelWizard({
             </div>
 
             <div className="flex items-center justify-between gap-3 border-t border-border pt-5">
-              <button onClick={() => setPhase('sound')} className="btn-secondary">
+              <button onClick={() => setPhase('sound')} className="btn-secondary btn-lg">
                 <BackArrow /> Back
               </button>
               {/* Setup spend is recorded server-side per call and claimed by the channel at create;
@@ -2068,13 +2155,31 @@ export function NewChannelWizard({
                   creators hesitate on every optional button. Totals live in /admin/costs. */}
               <div className="flex flex-col items-end gap-1">
                 {sampleSettling && <p className="text-xs text-faint">Finishing your example…</p>}
-                <button onClick={handleCreate} disabled={creating || !canCreate} className="btn-accent">
+                <button onClick={handleCreate} disabled={creating || !canCreate} className="btn-accent btn-lg btn-glow">
                   {creating ? 'Creating…' : 'Create channel'}
                 </button>
               </div>
             </div>
           </div>
         )}
+      </div>
+      </div>
+
+        <GreenlightPoster
+          stepIndex={PHASE_ORDER.indexOf(phase)}
+          name={name}
+          description={description}
+          initials={posterInitials}
+          language={language}
+          platformLabel={posterPlatformLabel}
+          genreTags={posterGenreTags}
+          voiceMode={voiceMode ?? ''}
+          voiceName={selectedVoices[0]?.name ?? ''}
+          musicLabel={posterMusicLabel}
+          styleLabel={posterStyleLabel}
+          captionLabel={posterCaptionLabel}
+          styleImageUrl={posterStyleImageUrl}
+        />
       </div>
 
       {/* Leave-confirmation: keep the autosaved draft, discard it, or stay. */}
@@ -2296,7 +2401,8 @@ function VoiceRow({ v, selected, playing, reason, topPick, onPick, onPreview }: 
         <p className="truncate text-xs text-muted">{v.description || v.accent || '—'}</p>
         {reason && <p className="mt-0.5 truncate text-xs text-accent">{reason}</p>}
       </div>
-      <span className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border ${selected ? 'border-accent bg-accent text-white' : 'border-border-strong'}`}>
+      {/* Gradient disc when chosen; an empty ring otherwise — the pick reads at a glance down the list. */}
+      <span className={`flex h-[22px] w-[22px] flex-shrink-0 items-center justify-center rounded-full ${selected ? 'bg-pair-purple-pink text-white' : 'border border-border-strong'}`}>
         {selected && (
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M20 6 9 17l-5-5" /></svg>
         )}
@@ -2305,13 +2411,38 @@ function VoiceRow({ v, selected, playing, reason, topPick, onPick, onPreview }: 
   )
 }
 
-function StepDots({ phase }: { phase: Phase }) {
+// Header progress. Steps already passed are clickable so the creator can go back and change an answer;
+// FORWARD stays with the step's own CTA, which is where the gating lives (a profile must be derived
+// before steps 2–5 have anything to show, and the voice step needs a pick).
+function StepTimeline({ phase, onGo }: { phase: Phase; onGo: (p: Phase) => void }) {
   const current = PHASE_ORDER.indexOf(phase)
   return (
-    <div className="flex items-center gap-1.5">
-      {PHASE_ORDER.map((p, i) => (
-        <span key={p} className={`h-1.5 w-5 rounded-full ${i <= current ? 'bg-brand-3' : 'bg-border-strong'}`} />
-      ))}
+    <div className="hidden items-center md:flex">
+      {PHASE_ORDER.map((p, i) => {
+        const active = i === current
+        const done = i < current
+        return (
+          <div key={p} className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => onGo(p)}
+              disabled={i > current}
+              title={done ? `Back to ${STEP_TAB[p]}` : STEP_TAB[p]}
+              className={`flex h-[22px] w-[22px] items-center justify-center rounded-full font-mono text-[11px] font-700 transition-colors ${
+                active
+                  ? 'bg-brand-3 text-white'
+                  : done
+                    ? 'bg-accent text-white hover:bg-accent-hover'
+                    : 'bg-subtle-strong text-faint shadow-[inset_0_0_0_1px_#E4E1EE]'
+              } ${i > current ? 'cursor-default' : 'cursor-pointer'}`}
+            >
+              {i + 1}
+            </button>
+            <span className={`text-xs ${active ? 'font-700 text-ink' : 'font-500 text-faint'}`}>{STEP_TAB[p]}</span>
+            {i < PHASE_ORDER.length - 1 && <span className="mx-2 h-0.5 w-5 bg-border-mid" aria-hidden />}
+          </div>
+        )
+      })}
     </div>
   )
 }

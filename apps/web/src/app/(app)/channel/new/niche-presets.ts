@@ -2,6 +2,14 @@
 // niche description (still fully editable) + suggests languages. This is a
 // hand-curated list, not live TikTok data — edit freely as trends move.
 
+// Selection id for a LIVE trending card (the rail in step 1), as opposed to the curated presets below.
+// Derived from the label, not its position: the rail refreshes daily and an index-based id would
+// highlight whatever card happens to sit in that slot on a draft resume. Lives here — a plain data
+// module — so both the wizard (client) and the dashboard (server) can build the same id.
+export function trendingId(label: string): string {
+  return `trending:${label.trim().toLowerCase()}`
+}
+
 export interface NichePreset {
   id: string
   icon: string // key into PRESET_ICONS in NewChannelWizard.tsx

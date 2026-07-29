@@ -1,9 +1,71 @@
-import { getDb, channels, reels } from '@reels/db'
-import { and, desc, eq, count, gte, sum, inArray } from 'drizzle-orm'
+import { getDb, channels, reels, trendingNiches } from '@reels/db'
+import { and, desc, eq, count, gte, sum, inArray, sql } from 'drizzle-orm'
 import Link from 'next/link'
+import { TrendingNichesSchema } from '@reels/core/prompts/trending-niches.v1'
+import { NICHE_PRESETS, trendingId } from '../channel/new/niche-presets'
 import { CreateChannelButton } from './CreateChannelButton'
 import { ChannelAvatar, avatarGlow } from '@/components/ChannelAvatar'
+import { KendrixMark } from '@/components/Wordmark'
 import { requireUser } from '@/lib/auth'
+
+// The gradients the three quick-start tiles cycle through, in order.
+const QUICK_START_TONES = ['bg-pair-purple-pink', 'bg-pair-blue-violet', 'bg-pair-pink-orange'] as const
+
+interface QuickStart {
+  key: string
+  href: string
+  label: string
+  blurb: string
+  /** Only set for live trending rows, where `rpm` is real data. Curated presets carry no claim. */
+  badge: 'High payout' | 'Rising' | null
+  title?: string
+}
+
+/**
+ * The empty state's "start from a proven niche" cards.
+ *
+ * Prefers the LIVE trending rail — the same rows the wizard's rail shows, read straight from the
+ * `trending_niches` cache so a dashboard load stays free and can never trigger the paid web search
+ * (only the wizard's route may claim a day). When the cache is cold we fall back to curated presets
+ * and drop the badges: "High payout" is a claim, and we only make it when the data says so.
+ */
+async function loadQuickStarts(db: ReturnType<typeof getDb>): Promise<QuickStart[]> {
+  try {
+    const [newest] = await db
+      .select({ niches: trendingNiches.niches })
+      .from(trendingNiches)
+      .where(and(eq(trendingNiches.segment, 'global'), sql`${trendingNiches.niches} is not null`))
+      .orderBy(desc(trendingNiches.day))
+      .limit(1)
+    const parsed = TrendingNichesSchema.safeParse({ niches: newest?.niches })
+    if (parsed.success && parsed.data.niches.length > 0) {
+      return parsed.data.niches.slice(0, 3).map((n) => ({
+        key: n.label,
+        href: `/channel/new?trending=${encodeURIComponent(trendingId(n.label))}`,
+        label: n.label,
+        blurb: n.blurb,
+        badge: n.rpm === 'high' ? 'High payout' : 'Rising',
+        title: n.whyNow,
+      }))
+    }
+  } catch {
+    /* cache unreadable — the curated fallback below always works */
+  }
+  return NICHE_PRESETS.slice(0, 3).map((p) => ({
+    key: p.id,
+    href: `/channel/new?preset=${encodeURIComponent(p.id)}`,
+    label: p.label,
+    blurb: p.blurb,
+    badge: null,
+  }))
+}
+
+const HOW_IT_WORKS = [
+  { n: 1, title: 'Set up a channel', copy: 'Niche, voice, sound and look — once.', tone: 'bg-pair-blue-purple' },
+  { n: 2, title: 'Generate a reel', copy: 'A story is written, storyboarded and voiced.', tone: 'bg-pair-blue-violet' },
+  { n: 3, title: 'Review & approve', copy: 'You stay in the loop, or let it auto-run.', tone: 'bg-pair-purple-pink' },
+  { n: 4, title: 'Publish everywhere', copy: 'TikTok, Shorts and Reels on a schedule.', tone: 'bg-pair-pink-orange' },
+] as const
 
 export const dynamic = 'force-dynamic'
 
@@ -62,6 +124,8 @@ export default async function DashboardPage() {
   }
 
   const isEmpty = activeRows.length === 0 && draftRows.length === 0
+  // Only the empty state shows these, so don't pay the query on a populated portfolio.
+  const quickStarts = isEmpty ? await loadQuickStarts(db) : []
   const subtitle = isEmpty
     ? 'No channels yet'
     : [
@@ -82,27 +146,107 @@ export default async function DashboardPage() {
             <h1 className="text-[22px] font-700 -tracking-[0.02em] text-ink">Portfolio</h1>
             <p className="mt-0.5 text-[13px] text-muted">{subtitle}</p>
           </div>
-          {!isEmpty && <CreateChannelButton />}
+          {/* Shown even when empty — the mock keeps the header CTA, and the hero's is the louder one. */}
+          <CreateChannelButton />
         </div>
       </header>
 
       <div className="space-y-10 p-8">
         {isEmpty ? (
-          <div className="card flex flex-col items-center justify-center px-6 py-20 text-center">
-            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-md bg-brand-wash">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#9B3BFF" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                <rect x="3" y="5" width="18" height="14" rx="2" />
-                <path d="M3 9h18M7 5V3M17 5V3" />
-              </svg>
+          <div className="mx-auto w-full max-w-[900px]">
+            {/* Hero — the dark plum stage with the floating K. Same motif as the auth panes. */}
+            <div className="relative overflow-hidden rounded-3xl bg-[linear-gradient(150deg,#160D28,#2A1650_55%,#3D1A54)] px-8 py-12 text-night-ink shadow-lg sm:px-12 sm:py-[52px]">
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(460px_300px_at_88%_-12%,rgba(255,45,155,0.4),transparent_62%),radial-gradient(420px_320px_at_6%_118%,rgba(47,164,255,0.32),transparent_60%)]" />
+              {/* Floating mark + aura — hidden on small screens where the copy needs the width. */}
+              <div className="pointer-events-none absolute right-12 top-1/2 hidden -translate-y-1/2 lg:block">
+                <div className="relative flex h-[132px] w-[132px] items-center justify-center">
+                  <span className="absolute -inset-6 rounded-full bg-[radial-gradient(circle,rgba(155,59,255,0.6),transparent_70%)] animate-aura-pulse" />
+                  <KendrixMark size={132} className="relative animate-k-float drop-shadow-[0_16px_44px_rgba(155,59,255,0.55)]" />
+                </div>
+              </div>
+              <div className="relative max-w-[460px]">
+                <p className="mono-label gradient-text !text-[11px] tracking-[0.2em]">Let&apos;s make your first channel</p>
+                <h2 className="mt-3 font-display text-[33px] font-900 leading-[1.06] -tracking-[0.025em]">
+                  Your studio is
+                  <br />
+                  ready to run.
+                </h2>
+                <p className="mt-4 max-w-[400px] text-[15px] leading-relaxed text-night-body">
+                  A channel is one publishing brand — its niche, voice, look and rules. Set one up once and
+                  Kendrix turns ideas into publish-ready reels.
+                </p>
+                <div className="mt-7 flex flex-wrap items-center gap-3">
+                  <CreateChannelButton label="Create your first channel" className="btn-lg btn-glow" />
+                  {/* NOT WIRED YET — matches the mock exactly (13px/18px, white 6% fill, 18% border) and
+                      is intentionally inert: clicking does nothing until there's a tour to play. The
+                      dashboard is a server component, so wiring this up means moving it into a small
+                      client component, the way CreateChannelButton next door already is. */}
+                  <button
+                    type="button"
+                    className="btn gap-2 rounded-md border border-white/[0.18] bg-white/[0.06] px-[18px] py-[13px] text-sm font-600 text-white hover:-translate-y-px hover:bg-white/10"
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                      <path d="M8 5v14l11-7z" />
+                    </svg>
+                    Watch 60-sec tour
+                  </button>
+                </div>
+              </div>
             </div>
-            <p className="font-display text-lg font-700 -tracking-[0.02em] text-ink">Build your first channel</p>
-            <p className="mt-1.5 max-w-sm text-sm text-muted">
-              A channel is one publishing brand — its niche, voice, look, and posting rules.
-              We turn a niche into publish-ready videos for it.
-            </p>
-            <div className="mt-6">
-              <CreateChannelButton />
-            </div>
+
+            {/* Quick-start on-ramps — the real presets are picked on step 1 of the wizard. */}
+            <section className="mt-9">
+              <div className="mb-3.5 flex items-baseline justify-between gap-3">
+                <h2 className="mono-label">Start from a proven niche</h2>
+                <span className="text-xs text-faint">or describe your own in setup</span>
+              </div>
+              <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
+                {quickStarts.map((q, i) => (
+                  <Link
+                    key={q.key}
+                    href={q.href}
+                    title={q.title}
+                    className="card group flex flex-col p-[18px] transition-all hover:-translate-y-0.5 hover:border-accent-ring hover:shadow-sm"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className={`flex h-10 w-10 items-center justify-center rounded-md ${QUICK_START_TONES[i % QUICK_START_TONES.length]}`}>
+                        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                          <path d="M23 6l-9.5 9.5-5-5L1 18" />
+                          <path d="M17 6h6v6" />
+                        </svg>
+                      </span>
+                      {q.badge && (
+                        <span
+                          className={`badge font-mono text-[9px] font-700 uppercase tracking-micro ${
+                            q.badge === 'Rising' ? 'bg-subtle-strong text-muted' : 'bg-success-soft text-success'
+                          }`}
+                        >
+                          {q.badge}
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-3.5 text-[15px] font-700 text-ink">{q.label}</p>
+                    <p className="mt-1 line-clamp-2 text-[12.5px] leading-snug text-muted">{q.blurb}</p>
+                  </Link>
+                ))}
+              </div>
+            </section>
+
+            {/* How it works — sets the expectation that setup is once, not per reel. */}
+            <section className="mt-9">
+              <h2 className="micro-label mb-3.5">How it works</h2>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {HOW_IT_WORKS.map((s) => (
+                  <div key={s.n} className="flex flex-col gap-2">
+                    <span className={`flex h-[26px] w-[26px] items-center justify-center rounded-sm font-mono text-xs font-700 text-white ${s.tone}`}>
+                      {s.n}
+                    </span>
+                    <p className="text-[13.5px] font-700 text-ink">{s.title}</p>
+                    <p className="text-xs leading-snug text-muted">{s.copy}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
           </div>
         ) : (
           <>

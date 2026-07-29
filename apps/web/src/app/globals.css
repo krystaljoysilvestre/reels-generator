@@ -101,6 +101,25 @@
     @apply px-2.5 py-1.5 text-xs rounded-sm;
   }
 
+  /* Setup-scale buttons (empty-state hero + the channel wizard). The default .btn is sized for dense
+     app chrome; these screens are the product's front door, where the design calls for a taller,
+     roomier control. SIZE ONLY — pair with .btn-glow for the primary CTA. Additive on purpose: the
+     ~27 existing .btn-accent buttons elsewhere keep their current size. */
+  .btn-lg {
+    @apply gap-2 px-6 py-[13px] text-sm rounded-md;
+  }
+
+  /* One notch down — page-header CTAs, which sit in a bar and shouldn't tower over the title. */
+  .btn-md {
+    @apply gap-2 px-[18px] py-2.5 rounded-[11px] text-[13px];
+  }
+
+  /* The primary CTA's resting presence: heavier weight and a coloured glow that lifts on hover,
+     rather than the near-invisible 1px shadow the dense buttons carry. */
+  .btn-glow {
+    @apply font-700 shadow-glow-md hover:shadow-glow-lg hover:-translate-y-px active:translate-y-0;
+  }
+
   /* ── Surfaces ──────────────────────────────────────────── */
   .card {
     @apply bg-surface border border-border rounded-lg shadow-xs;
