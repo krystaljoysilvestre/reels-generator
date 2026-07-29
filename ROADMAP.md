@@ -245,9 +245,16 @@ the owner (design first, then implementation). Full evidence in the session summ
 7. **Duration estimator undershoots** — 2.5 wps estimate vs ~2.2 wps real (voice delivery + genre
    pauses): a ~220-word script rendered 100.7s vs ~86s predicted. Calibrate `estimateNarrationSec`
    with the voice/pause profile; affects `targetSeconds` honoring end-to-end.
-8. **Style-ref distillation drops signature lighting** — `style-ref.v1` deliberately strips
-   time-of-day, which erased a channel's dusk signature (had to hand-append). Add an owner-set
-   "preserve signature lighting/time-of-day" option to the distillation.
+8. ~~**Style-ref distillation drops signature lighting**~~ — **CLOSED, no code (2026-07-25).** The
+   observation was real (`style-ref.v1` strips time-of-day, so a dusk signature had to be hand-appended)
+   but the proposed `preserveSignatureLighting` flag was **built and then reverted** as unearned: (a) the
+   distillation already keeps the brand's real carrier — palette ("deep blue + warm orange", "dramatic
+   skies") survived fine; only the literal time-of-day word was lost; (b) `stylePreset` is already
+   owner-editable prose in Settings — a channel whose brand IS always-dusk types that in, which is exactly
+   what the production run did, so a prompt-forking config flag duplicated an existing text field; (c) the
+   exclusion is load-bearing — time-of-day is kept out of the DNA so it composes with the per-scene
+   lighting directive, and a pinned "always dusk" would fight every night-set story. Fix if it recurs:
+   better `stylePreset` guidance, not a knob.
 
 ### Long-form (`youtube_long`) readiness — 2026-07-29 audit, before the first live channel
 
