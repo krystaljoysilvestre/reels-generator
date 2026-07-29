@@ -8,6 +8,11 @@ import { markReelFailed } from './pipeline/harness.js'
 import { withJobTimeout, reapStuckReels, PIPELINE_STEP_TIMEOUT_MS, RENDER_STEP_TIMEOUT_MS } from './pipeline/liveness.js'
 import { registerAutoProduceSchedule, runAutoProduceTick, AUTO_PRODUCE_JOB } from './scheduler.js'
 import { registerDigestSchedule, runDailyDigest, DAILY_DIGEST_JOB } from './digest.js'
+import {
+  registerTrendingRefreshSchedule,
+  runTrendingRefresh,
+  TRENDING_REFRESH_JOB,
+} from './trending-refresh.js'
 import { registerMetricsPollSchedule, runMetricsPoll, METRICS_POLL_JOB } from './metrics-poll.js'
 import { registerPublishPromoteSchedule, runPublishPromote, PUBLISH_PROMOTE_JOB } from './publish-promote.js'
 
@@ -92,6 +97,7 @@ if (runs('scheduler')) {
       else if (job.name === DAILY_DIGEST_JOB) await runDailyDigest()
       else if (job.name === METRICS_POLL_JOB) await runMetricsPoll()
       else if (job.name === PUBLISH_PROMOTE_JOB) await runPublishPromote()
+      else if (job.name === TRENDING_REFRESH_JOB) await runTrendingRefresh()
     },
     1,
   )
@@ -103,6 +109,11 @@ if (runs('scheduler')) {
   void registerDigestSchedule().catch((e) => console.error('[scheduler] could not register digest:', e))
   void registerMetricsPollSchedule().catch((e) => console.error('[scheduler] could not register metrics poll:', e))
   void registerPublishPromoteSchedule().catch((e) => console.error('[scheduler] could not register publish promote:', e))
+  void registerTrendingRefreshSchedule().catch((e) => console.error('[scheduler] could not register trending refresh:', e))
+  // Catch-up on boot: the niche rail is now written ONLY by this job, so a cold install or a day the
+  // worker was down would otherwise show a stale rail until 21:00 UTC. The day-claim inside makes this
+  // a no-op when today is already fresh, so repeated deploys can't buy the search twice.
+  void runTrendingRefresh().catch((e) => console.error('[scheduler] trending catch-up failed:', e))
 
   const BULL_BOARD_PORT = parseInt(process.env['BULL_BOARD_PORT'] ?? '3001', 10)
   startBullBoard(BULL_BOARD_PORT)
