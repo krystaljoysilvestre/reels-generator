@@ -122,6 +122,12 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
   const [rubricError, setRubricError] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  // Delete flow — GitHub-style type-to-confirm. Confirm against initial.name (the stored name the
+  // server checks), not the editable `name` field, so unsaved renames can't change the required text.
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [confirmName, setConfirmName] = useState('')
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
   async function handleMineRubric() {
     setMining(true)
@@ -144,6 +150,34 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
 
   function setTier(k: keyof ToneConfig, v: number) {
     setTone((t) => ({ ...t, [k]: v }))
+  }
+
+  function closeDeleteModal() {
+    if (deleting) return
+    setConfirmingDelete(false)
+    setConfirmName('')
+    setDeleteError('')
+  }
+
+  async function handleDelete() {
+    setDeleting(true)
+    setDeleteError('')
+    try {
+      const res = await fetch(`/api/channel/${id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirmName }),
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => null)
+        throw new Error(j?.error ?? 'That didn’t come through — try again.')
+      }
+      router.push('/dashboard')
+      router.refresh()
+    } catch (e) {
+      setDeleteError(e instanceof Error ? e.message : 'That didn’t come through — try again.')
+      setDeleting(false)
+    }
   }
 
   async function handleSave() {
@@ -668,7 +702,57 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
             {saving ? 'Saving…' : 'Save changes'}
           </button>
         </div>
+
+        {/* Danger zone — last, after the save row, so it never reads as part of the normal flow */}
+        <section className="card space-y-3 border-danger/30 p-5">
+          <SectionLabel>Danger zone</SectionLabel>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-600 text-ink">Delete this channel</p>
+              <p className="mt-0.5 text-xs text-muted">Every reel, story, and finished video goes with it. There&rsquo;s no undo.</p>
+            </div>
+            <button type="button" onClick={() => setConfirmingDelete(true)} className="btn-danger btn-sm flex-shrink-0">
+              Delete channel…
+            </button>
+          </div>
+        </section>
       </div>
+
+      {confirmingDelete && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-ink/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" onClick={closeDeleteModal}>
+          <div className="card animate-fade-in w-full max-w-md p-6 text-left" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-base font-semibold text-ink">Delete {initial.name}?</h2>
+            <p className="mt-1 text-sm text-muted">
+              This deletes the channel and everything in it — every reel, story, and finished video. There&rsquo;s no undo.
+            </p>
+            <label className="mt-4 block">
+              <span className="mb-1 block text-xs font-medium text-muted">
+                Type <span className="font-600 text-ink">{initial.name}</span> to confirm.
+              </span>
+              <input
+                value={confirmName}
+                onChange={(e) => setConfirmName(e.target.value)}
+                autoFocus
+                autoComplete="off"
+                spellCheck={false}
+                className="input"
+              />
+            </label>
+            {deleteError && <p className="mt-2 text-xs text-danger">{deleteError}</p>}
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" onClick={closeDeleteModal} disabled={deleting} className="btn-ghost btn-sm">Cancel</button>
+              <button
+                type="button"
+                onClick={() => void handleDelete()}
+                disabled={deleting || confirmName !== initial.name}
+                className="btn-danger btn-sm"
+              >
+                {deleting ? 'Deleting…' : 'Delete this channel'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

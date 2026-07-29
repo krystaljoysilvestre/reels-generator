@@ -108,3 +108,34 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   await db.update(channels).set(updates).where(eq(channels.id, id))
   return NextResponse.json({ ok: true })
 }
+
+// Delete a channel, GitHub-style: the client re-sends the channel's name and we verify it against
+// the stored row, so a stray or replayed request can never delete one. Reels, stories, scenes,
+// assets, and compilations cascade in the DB; spend_events rows survive with channelId nulled —
+// deleting a channel must not erase the record that money was spent. Known leftovers, both benign:
+// R2 objects orphan until the r2-sweep script runs, and in-flight jobs for the channel's reels fail
+// their retries on the missing row.
+const DeleteSchema = z.object({ confirmName: z.string() }).strict()
+
+export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  const { id } = await ctx.params
+
+  const gate = await requireChannelOwner(id)
+  if (gate instanceof NextResponse) return gate
+
+  const parsed = DeleteSchema.safeParse(await req.json().catch(() => null))
+  if (!parsed.success) {
+    return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
+  }
+
+  const db = getDb()
+  const existing = await db.query.channels.findFirst({ where: eq(channels.id, id) })
+  if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (parsed.data.confirmName !== existing.name) {
+    return NextResponse.json({ error: 'That name doesn’t match this channel.' }, { status: 400 })
+  }
+
+  await db.delete(channels).where(eq(channels.id, id))
+  console.log(`[audit] channel.delete actor=${gate.id} channel=${id} name="${existing.name}" outcome=deleted`)
+  return NextResponse.json({ ok: true })
+}

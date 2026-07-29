@@ -1,4 +1,4 @@
-import { getDb, channels, reels } from '@reels/db'
+import { getDb, channels, reels, stories } from '@reels/db'
 import { desc, eq } from 'drizzle-orm'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -29,6 +29,17 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
     with: { story: { columns: { title: true } } },
   })
   const languages = channel.languages ?? []
+
+  // Setup sample scripts: the stories no reel points at. Every pipeline-written story is linked
+  // from its reel (reels.storyId), so the unlinked remainder is exactly what the wizard saved —
+  // `source` can't distinguish them (both paths write 'user'/'ai').
+  const storyRows = await db.query.stories.findMany({
+    where: eq(stories.channelId, id),
+    orderBy: [desc(stories.createdAt)],
+    columns: { id: true, title: true, body: true, source: true },
+  })
+  const linkedStoryIds = new Set(reelRows.map((r) => r.storyId).filter(Boolean))
+  const sampleStories = storyRows.filter((s) => !linkedStoryIds.has(s.id))
 
   // Production status strip: what's ready to post, and whether auto-produce is paused on backlog —
   // the same math the scheduler uses, so "paused" here is exactly when the worker skips the channel.
@@ -189,6 +200,36 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
             </>
           )}
         </section>
+
+        {/* Sample scripts — what the wizard saved at setup, so the creator can see their story landed */}
+        {sampleStories.length > 0 && (
+          <section className="mt-8">
+            <div className="mb-3.5">
+              <h2 className="font-display text-[15px] font-700 text-ink">Sample scripts</h2>
+              <p className="mt-0.5 text-xs text-muted">From your channel setup — the voice this channel starts from.</p>
+            </div>
+            <div className="card overflow-hidden divide-y divide-border-soft">
+              {sampleStories.map((s) => (
+                <details key={s.id} className="group">
+                  <summary className="flex cursor-pointer list-none items-center gap-3.5 px-[18px] py-3 transition-colors hover:bg-row-hover [&::-webkit-details-marker]:hidden">
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-600 text-ink">{s.title}</span>
+                    </span>
+                    <span className="badge flex-shrink-0 bg-subtle text-muted">
+                      {s.source === 'user' ? 'written by you' : 'written for you'}
+                    </span>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 text-faint transition-transform group-open:rotate-180" aria-hidden>
+                      <path d="m6 9 6 6 6-6" />
+                    </svg>
+                  </summary>
+                  <div className="border-t border-border-soft px-[18px] py-4">
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">{s.body}</p>
+                  </div>
+                </details>
+              ))}
+            </div>
+          </section>
+        )}
       </div>
     </div>
   )
