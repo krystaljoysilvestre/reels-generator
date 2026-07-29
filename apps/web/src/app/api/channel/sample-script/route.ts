@@ -22,6 +22,9 @@ const InputSchema = z.object({
   voiceStyle: z.string().trim().optional(),
   targetPlatform: TargetPlatformSchema.default('all'),
   promptHint: z.string().trim().max(8000).optional(), // optional operator steer — can be a long, detailed brief
+  // The operator's OWN draft, to be rebuilt in the channel's voice. Capped like the other free-text
+  // fields since it is echoed into the prompt. Only ever their words — never a sample we wrote.
+  reviseDraft: z.string().trim().max(8000).optional(),
   genreCategory: z.string().trim().optional(), // derived bucket → picks the writer identity (niche keywords as fallback)
   narrativeStyle: z.string().trim().optional(), // prose style (story-styles); resolves within genre or falls back
   narrativeVoice: z.string().trim().optional(), // prose narrator voice (story-voices)
@@ -56,6 +59,7 @@ export async function POST(req: NextRequest) {
     ...(c.styleInfluence ? { styleInfluence: c.styleInfluence } : {}),
     ...(c.voiceStyle ? { voiceStyle: c.voiceStyle } : {}),
     ...(c.promptHint ? { promptHint: c.promptHint } : {}),
+    ...(c.reviseDraft ? { reviseDraft: c.reviseDraft } : {}),
   })
 
   try {

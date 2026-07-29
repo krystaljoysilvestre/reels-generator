@@ -12,7 +12,7 @@ import { STORY_STYLES_V1_VERSION, resolveStyle, renderStyleTellingForWriter, typ
 import { STORY_VOICES_V1_VERSION, resolveVoice, renderVoice } from './story-voices.v1.js'
 import { asGenreModule, classifyGenre } from './scenes.v1.js'
 
-export const CHANNEL_SAMPLE_V2_VERSION = `channel-sample.v2.2+${STORY_CRAFT_V1_VERSION}+${WRITER_IDENTITIES_V1_VERSION}+${STORY_STYLES_V1_VERSION}+${STORY_VOICES_V1_VERSION}`
+export const CHANNEL_SAMPLE_V2_VERSION = `channel-sample.v2.3+${STORY_CRAFT_V1_VERSION}+${WRITER_IDENTITIES_V1_VERSION}+${STORY_STYLES_V1_VERSION}+${STORY_VOICES_V1_VERSION}`
 
 export const ChannelSampleSchema = z.object({
   title: z.string(),
@@ -35,6 +35,7 @@ export interface ChannelSampleVars {
   voiceStyle?: string // delivery style of the lead narrator, if any (TTS-ish hint; distinct from narrativeVoice)
   hookHint?: string // target-platform hook convention (shapes the opening line)
   promptHint?: string // optional operator steer for what THIS sample should be about
+  reviseDraft?: string // the operator's OWN draft to rebuild in the channel's voice (same story, better told)
 }
 
 export function buildChannelSamplePrompt(v: ChannelSampleVars): {
@@ -66,7 +67,7 @@ GUARDS: fictionalize specific real places and people; no graphic gore or sexual 
 This is a SAMPLE that demonstrates the channel's voice — make it self-contained and complete. It becomes the channel's first reference story, so every future story learns its voice from this one.`
 
   const userMessage = `Write ONE complete sample narration for a ~${v.targetSeconds}-second reel (≈${targetWords} words at natural narration pace). Make it feel like a real reel on this channel — natural length, never padded or cut short.
-${v.promptHint ? `\nOPERATOR'S DIRECTION FOR THIS ONE: ${v.promptHint}\nHonor whatever they specified — topic, characters, tone, structure, setting, ending — and freely invent everything they left out. A few words is a seed, not a limit; don't pad a sparse idea with filler, and don't treat a detailed brief as optional. Always keep the channel's niche, tone, and world.\n` : ''}${v.hookHint ? `\nHOOK STYLE (tailor the opening line to the target platform): ${v.hookHint}\n` : ''}
+${v.promptHint ? `\nOPERATOR'S DIRECTION FOR THIS ONE: ${v.promptHint}\nHonor whatever they specified — topic, characters, tone, structure, setting, ending — and freely invent everything they left out. A few words is a seed, not a limit; don't pad a sparse idea with filler, and don't treat a detailed brief as optional. Always keep the channel's niche, tone, and world.\n` : ''}${v.reviseDraft ? `\nREBUILD THEIR DRAFT: the operator wrote the version below and wants it told properly in this channel's voice. Keep what it is ABOUT — the same story, the same people, the ending it reaches. Change how it LANDS: a hook that opens on the hottest moment, concrete sensory specifics where it goes vague, the varied rhythm of real speech. Fix what's weak; never swap it for a different story. If a direction was given above, apply it to this draft.\nTHEIR DRAFT:\n"""\n${v.reviseDraft}\n"""\n` : ''}${v.hookHint ? `\nHOOK STYLE (tailor the opening line to the target platform): ${v.hookHint}\n` : ''}
 Craft:
 - Open on a hook (never setting description or a greeting); build with grounded, specific detail; land on an ending that pays off something planted earlier — whatever paying off means in this niche.
 - Use whatever point of view + register this story naturally wants (first-hand account, retold to a friend, reported, explainer) — choose what serves it, not a default.

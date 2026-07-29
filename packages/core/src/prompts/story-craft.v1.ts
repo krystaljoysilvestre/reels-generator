@@ -8,7 +8,7 @@
 // product bar — "sounds like a real person"), not creative choices made for the model. Nothing
 // here prescribes content, quotas, or genre texture.
 
-export const STORY_CRAFT_V1_VERSION = 'craft.v1.7'
+export const STORY_CRAFT_V1_VERSION = 'craft.v1.8'
 
 // The six principles, addressed to the writer. Order matters: lived-truth first, tests last.
 export const STORY_CRAFT_CORE = `HOW YOU WRITE — six principles, non-negotiable:
@@ -30,15 +30,23 @@ export const STORY_CRAFT_CORE = `HOW YOU WRITE — six principles, non-negotiabl
 //
 // LANGUAGE-AGNOSTIC by design (see .claude/skills/unbiased-design → Language): the UNIVERSAL block
 // applies to EVERY language; the model is never handed one language's conventions as the default and
-// never left with nothing for the others. Mixed-code languages (today only Taglish — the one real,
-// owner-set audience) get an extra documented ADDENDUM layered on top. Adding another mixed language
-// = another addendum here, not a rewrite. Never returns '' — every language gets the universal voice.
-// A neutral audience descriptor when the caller has nothing better — language-derived, never a
-// baked nationality on a shared prompt. Taglish is this channel's known, owner-set audience; every
-// other language stays generic until a channel supplies its own.
-export function defaultAudienceDescriptor(language: string): string {
+// never left with nothing for the others. The Filipino register (below) gets an extra documented
+// ADDENDUM layered on top. Adding another mixed-code language = another addendum here, not a
+// rewrite. Never returns '' — every language gets the universal voice.
+
+// The Filipino spoken register — one predicate so every stage groups these the same way. 'Taglish' and
+// 'Tagalog' are no longer offered in the channel picker (a code-switch isn't a separate language, and
+// Tagalog was a duplicate of Filipino), but both stay accepted here: channels created earlier carry them.
+export function isFilipinoRegister(language: string): boolean {
   const l = language.toLowerCase()
   return l === 'taglish' || l === 'filipino' || l === 'tagalog'
+}
+
+// A neutral audience descriptor when the caller has nothing better — language-derived, never a baked
+// nationality on a shared prompt. Filipino is this channel's known, owner-set audience; every other
+// language stays generic until a channel supplies its own.
+export function defaultAudienceDescriptor(language: string): string {
+  return isFilipinoRegister(language)
     ? 'young Filipino adult'
     : 'the kind of person who watches this channel'
 }
@@ -49,8 +57,7 @@ export function spokenRegisterBlock(language: string, audienceDescriptor: string
 - NO LITERAL TRANSLATION — the #1 AI tell in any language. Think in ${language} and say what a person would really say; never translate a thought word-for-word from another language. A line that reads translated is dead — re-say it or cut it.
 - If you're not sure a phrase is how people really talk, you don't know it — use the plain everyday words. Never invent, never force grammar; a garbled or grammatically-wrong phrase is worse than plain simple speech.`
 
-  const l = language.toLowerCase()
-  if (l !== 'taglish' && l !== 'filipino' && l !== 'tagalog') return universal
+  if (!isFilipinoRegister(language)) return universal
 
   // Filipino code-switch addendum (documented per-language exception). Real spoken Filipino is
   // naturally code-switched — the English isn't "Taglish as a separate language," it's how people

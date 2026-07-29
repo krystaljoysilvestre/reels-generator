@@ -13,8 +13,9 @@
 // universal-vs-cultural craft line), and flagging "not agentic enough" here would mis-fire on endurance-form
 // stories. Versioned source; bump on any prompt-affecting edit.
 import { z } from 'zod'
+import { isFilipinoRegister } from './story-craft.v1.js'
 
-export const STORY_FINISHING_JUDGE_V1_VERSION = 'story-finishing-judge.v1.0'
+export const STORY_FINISHING_JUDGE_V1_VERSION = 'story-finishing-judge.v1.1'
 
 export const FinishingIssueSchema = z.object({
   // Which finishing-craft axis the problem is on (for grouping/telemetry in the review UI).
@@ -39,10 +40,12 @@ export interface FinishingJudgeVars {
 }
 
 export function buildStoryFinishingJudgePrompt(v: FinishingJudgeVars): { system: string; userMessage: string } {
-  // Taglish gets the extra native-idiom clause (the probe caught word-for-word-translated Tagalog).
+  // The Filipino register gets the extra native-idiom clause (the probe caught word-for-word-translated
+  // Tagalog). Grouped by isFilipinoRegister so 'Filipino'/'Tagalog' channels get it too — before, only a
+  // literal 'taglish' did, and Taglish is no longer offered in the picker.
   const naturalness =
-    v.language === 'taglish'
-      ? `does every line sound like a real Filipino actually talking? Flag word-for-word-translated, bookish/literary, or garbled Taglish and wrong word choices (quote the phrase; e.g. handwriting is "sulat-kamay", not "gawa-kamay").`
+    isFilipinoRegister(v.language)
+      ? `does every line sound like a real Filipino actually talking? Flag word-for-word-translated, bookish/literary, or garbled Tagalog and wrong word choices (quote the phrase; e.g. handwriting is "sulat-kamay", not "gawa-kamay").`
       : `does every line sound like a real person actually talking (in ${v.language})? Flag stilted, bookish, translated-sounding, or garbled phrasing and wrong word choices (quote the phrase).`
 
   const system = `You are the FINISHING QA judge for the channel "${v.channelName}". Niche: ${v.nicheDescription}.

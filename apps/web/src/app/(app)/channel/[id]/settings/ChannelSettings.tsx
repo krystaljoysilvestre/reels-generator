@@ -572,7 +572,7 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
                 <Dropdown
                   value={narrativeStyle}
                   onChange={setNarrativeStyle}
-                  options={[{ value: '', label: 'Pure genre (no style)' }, ...stylesForGenre(asGenreModule(genreCategory) ?? 'general').map((s) => ({ value: s.id, label: s.label }))]}
+                  options={[{ value: '', label: 'Classic — no added style' }, ...stylesForGenre(asGenreModule(genreCategory) ?? 'general').map((s) => ({ value: s.id, label: s.label }))]}
                 />
               </label>
             )}

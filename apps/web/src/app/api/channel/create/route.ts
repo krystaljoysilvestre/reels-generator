@@ -175,6 +175,9 @@ export async function POST(req: NextRequest) {
   // DNA), and as the newest story they'd out-rank earned references in few-shot selection exactly when
   // they'd do the most shaping. The reference pool fills with EARNED examples instead (spot-check
   // approvals + performance promotions).
+  // The extras below are unconditionally source:'user' because step 2 accepts them PASTE-ONLY — the
+  // wizard offers no way to have one written. Don't add one without splitting the source per extra,
+  // or AI text would silently become a reference story.
   const primary = c.sampleScript?.trim()
   const refBodies = [
     ...(primary ? [{ body: primary, source: c.sampleSource }] : []),

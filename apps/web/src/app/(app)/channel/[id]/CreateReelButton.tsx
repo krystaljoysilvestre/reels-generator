@@ -2,10 +2,10 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
-// Creates a reel and kicks off the pipeline. On the FIRST reel (promptMode) it asks the channel's
-// generation mode (review vs fully automated); in review mode it then asks BYO-or-generate and routes
-// into the per-reel Story Studio. Auto-mode runs end-to-end → channel page. Later reels reuse the stored
-// channelMode (auto → straight to channel; review → BYO-or-generate → Story Studio).
+// Creates a reel and kicks off the pipeline. On the FIRST reel (promptMode) it shows ONE prefilled
+// screen — write-it-for-me with reviews is the primed default; BYO script and fully-automated are
+// quieter alternatives on the same screen. Later reels reuse the stored channelMode
+// (auto → straight to channel; review → BYO-or-generate → Story Studio).
 export function CreateReelButton({
   channelId,
   compact = false,
@@ -20,7 +20,7 @@ export function CreateReelButton({
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [step, setStep] = useState<'idle' | 'mode' | 'byo'>('idle')
+  const [step, setStep] = useState<'idle' | 'first' | 'byo'>('idle')
   const [showTextarea, setShowTextarea] = useState(false)
   const [byoText, setByoText] = useState('')
   const [seedText, setSeedText] = useState('')
@@ -73,7 +73,7 @@ export function CreateReelButton({
   }
 
   function onClick() {
-    if (promptMode) setStep('mode')
+    if (promptMode) setStep('first')
     else if (channelMode === 'auto') void create('auto')
     else setStep('byo')
   }
@@ -115,14 +115,47 @@ export function CreateReelButton({
       {step !== 'idle' && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-ink/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" onClick={closeModal}>
           <div className="card animate-fade-in w-full max-w-md p-6 text-left" onClick={(e) => e.stopPropagation()}>
-            {step === 'mode' ? (
+            {step === 'first' ? (
               <>
-                <h2 className="text-base font-semibold text-ink">How should we make reels for this channel?</h2>
-                <p className="mt-1 text-sm text-muted">You can change this anytime in Settings.</p>
-                <div className="mt-4 flex flex-col gap-2.5">
-                  <OptionCard title="With reviews" badge="Recommended" desc="You approve the story, edit the storyboard, and check the render before each reel is done." onClick={() => setStep('byo')} />
-                  <OptionCard title="Fully automated" desc="We make the whole reel — story, visuals, voice, and music — start to finish, no stops. You review the finished result before downloading." onClick={() => void create('auto')} />
-                </div>
+                <h2 className="text-base font-semibold text-ink">Your first reel</h2>
+                <p className="mt-1 text-sm text-muted">We&apos;ll write an original story in your channel&apos;s voice. You approve the script before the shoot starts.</p>
+                <label className="mt-3 block">
+                  <span className="mb-1 block text-xs font-medium text-muted">Got a topic in mind? Optional.</span>
+                  <input
+                    value={seedText}
+                    onChange={(e) => setSeedText(e.target.value)}
+                    placeholder="e.g. a night-shift guard at a closed mall…"
+                    maxLength={500}
+                    className="input"
+                  />
+                </label>
+                <button type="button" onClick={() => void create('review')} disabled={loading} className="btn-accent mt-4 w-full justify-center">
+                  {loading ? 'Working…' : 'Write my first story'}
+                </button>
+                {showTextarea ? (
+                  <div className="mt-3 rounded-lg border border-accent bg-accent-soft p-3">
+                    <p className="text-sm font-semibold text-ink">Paste your script</p>
+                    <textarea
+                      value={byoText}
+                      onChange={(e) => setByoText(e.target.value)}
+                      placeholder="Paste the narration exactly as you want it spoken…"
+                      autoFocus
+                      className="input mt-2 h-40 resize-y"
+                    />
+                    <button type="button" onClick={() => void createBYO()} disabled={loading} className="btn-accent btn-sm mt-2">
+                      {loading ? 'Saving…' : 'Use this script'}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="mt-3 flex flex-col gap-1 text-xs text-muted">
+                    <button type="button" onClick={() => setShowTextarea(true)} disabled={loading} className="self-start font-medium text-accent hover:underline">
+                      I have a script — paste it instead
+                    </button>
+                    <button type="button" onClick={() => void create('auto')} disabled={loading} className="self-start text-left hover:text-ink">
+                      Prefer hands-off? <span className="font-medium">Make reels start to finish, no stops.</span> You can change this anytime in Settings.
+                    </button>
+                  </div>
+                )}
               </>
             ) : (
               <>

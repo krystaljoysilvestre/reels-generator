@@ -152,6 +152,9 @@ export function NewChannelWizard({
   // it's still ours to overwrite — the moment the creator types their own, this stops matching and we
   // leave it alone.
   const [seededDescription, setSeededDescription] = useState('')
+  // Same courtesy rule for the channel name: a preset suggests one, but only over an empty
+  // field or our own earlier suggestion — never over a name the creator typed.
+  const [seededName, setSeededName] = useState('')
   const [niche, setNiche] = useState('')
   const [languages, setLanguages] = useState<string[]>(['English'])
   const [targetPlatform, setTargetPlatform] = useState<TargetPlatform>('all') // shapes caption/length derivation + render presets
@@ -229,17 +232,42 @@ export function NewChannelWizard({
     ? (stylesForGenre(genreCategory).find((s) => s.id === narrativeStyle)?.label ?? '')
     : ''
 
-  // ── sample script (step 2, optional) — manual preferred; "Write one for me" seeds it ──
-  // A draft can target the main script ('main') or one of the extra references (its index).
-  const [sampleScript, setSampleScript] = useState('')
-  const [sampleIsAi, setSampleIsAi] = useState(false)
+  // ── the channel's example (step 2) — written for them on arrival; theirs to edit or replace ──
+  // The two modes keep SEPARATE text, so toggling between them never destroys either one — the example we
+  // wrote and a script they wrote are different things and both are worth keeping. `sampleScript` /
+  // `sampleIsAi` below are derived from whichever mode is active; everything downstream reads those.
+  const [aiSample, setAiSample] = useState('') // the example we wrote for them
+  const [aiSampleEdited, setAiSampleEdited] = useState(false) // …once they touch it, it counts as theirs
+  const [ownSample, setOwnSample] = useState('') // the script they wrote or pasted
+  // Extra references are PASTE-ONLY by design: they persist as reference stories (create/route.ts marks
+  // every extra source:'user'), and a sample we wrote must never enter the reference pool — the Writer
+  // would then be learning its own output. The creator's scripts are the whole point of the extras.
   const [extraSampleScripts, setExtraSampleScripts] = useState<string[]>([]) // optional additional references (max 2)
   const [sampleMode, setSampleMode] = useState<'forme' | 'own'>('forme') // primary example: written for them vs. their own
-  const [mainSteer, setMainSteer] = useState('') // optional steer for the primary "write one for me" path
-  const [composeTarget, setComposeTarget] = useState<'main' | number | null>(null) // which extra's "write for me" box is open
-  const [composePrompt, setComposePrompt] = useState('') // optional steer the operator types before we write an extra
-  const [draftingTarget, setDraftingTarget] = useState<'main' | number | null>(null) // which field is being written right now
+  const [mainSteer, setMainSteer] = useState('') // optional idea that steers the next rewrite
+  const [drafting, setDrafting] = useState(false) // an example is being written right now
   const [sampleError, setSampleError] = useState('')
+  // Step 2 opens with an example already written. Sticky for the session (and saved in the draft) so a
+  // creator who clears it — or resumes later — is never charged for a second one they didn't ask for.
+  const [autoWroteSample, setAutoWroteSample] = useState(false)
+  // Step 1 → step 2 HOLDS until the example is written, so step 2 never opens on a spinner or on a story
+  // left over from the previous identity. The wait stays continuous — the step-1 button keeps narrating.
+  const [preparingExample, setPreparingExample] = useState(false)
+  // An example WE wrote demonstrates one channel identity. When that identity moves — a new
+  // description/language (re-derive) or a different genre/style — the example is rewritten to match.
+  // Deferred through this flag so the rewrite reads the NEW identity, not the one being replaced.
+  const [pendingSampleRewrite, setPendingSampleRewrite] = useState(false)
+
+  // The ACTIVE example — whichever mode the creator is in is the one the channel gets. Everything
+  // downstream (create, the rewrite checks, the labels) reads these two and stays mode-agnostic.
+  const sampleScript = sampleMode === 'own' ? ownSample : aiSample
+  const sampleIsAi = sampleMode === 'forme' && aiSample.trim() !== '' && !aiSampleEdited
+  // Writes go to the field belonging to the active mode; editing OUR example marks it theirs.
+  function setActiveSample(text: string) {
+    if (sampleMode === 'own') { setOwnSample(text); return }
+    setAiSample(text)
+    setAiSampleEdited(true)
+  }
 
   // ── sound (step 4) — background music ──
   const [audioMood, setAudioMood] = useState<AudioMood | null>(null)  // derived brief (drives AI render-gen + preset ranking)
@@ -291,6 +319,7 @@ export function NewChannelWizard({
         if (typeof d.committedName === 'string') setCommittedName(d.committedName)
         if (typeof d.description === 'string') setDescription(d.description)
         if (typeof d.seededDescription === 'string') setSeededDescription(d.seededDescription)
+        if (typeof d.seededName === 'string') setSeededName(d.seededName)
         if (typeof d.niche === 'string') setNiche(d.niche)
         if (Array.isArray(d.languages) && d.languages.length) setLanguages(d.languages)
         if (['tiktok', 'youtube_shorts', 'facebook_reels', 'youtube_long', 'all'].includes(d.targetPlatform)) setTargetPlatform(d.targetPlatform)
@@ -323,8 +352,16 @@ export function NewChannelWizard({
         if (d.styleInfluence === 'light' || d.styleInfluence === 'medium' || d.styleInfluence === 'full') setStyleInfluence(d.styleInfluence)
         if (typeof d.tagline === 'string') setTagline(d.tagline)
         if (typeof d.derivedSig === 'string') setDerivedSig(d.derivedSig)
-        if (typeof d.sampleScript === 'string') setSampleScript(d.sampleScript)
-        if (typeof d.sampleIsAi === 'boolean') setSampleIsAi(d.sampleIsAi)
+        if (d.sampleMode === 'forme' || d.sampleMode === 'own') setSampleMode(d.sampleMode)
+        // Drafts saved before the split stored ONE shared field — route it into the mode it belonged to
+        // so a resumed draft never loses its example.
+        if (typeof d.aiSample === 'string') setAiSample(d.aiSample)
+        else if (typeof d.sampleScript === 'string' && d.sampleMode !== 'own') setAiSample(d.sampleScript)
+        if (typeof d.aiSampleEdited === 'boolean') setAiSampleEdited(d.aiSampleEdited)
+        else if (typeof d.sampleIsAi === 'boolean') setAiSampleEdited(!d.sampleIsAi)
+        if (typeof d.ownSample === 'string') setOwnSample(d.ownSample)
+        else if (typeof d.sampleScript === 'string' && d.sampleMode === 'own') setOwnSample(d.sampleScript)
+        if (typeof d.autoWroteSample === 'boolean') setAutoWroteSample(d.autoWroteSample)
         if (Array.isArray(d.extraSampleScripts)) setExtraSampleScripts(d.extraSampleScripts.filter((s: unknown): s is string => typeof s === 'string'))
         if (d.styleProposals && Array.isArray(d.styleProposals.styles)) setStyleProposals(d.styleProposals)
         if (typeof d.selectedStyleIdx === 'number') setSelectedStyleIdx(d.selectedStyleIdx)
@@ -354,10 +391,10 @@ export function NewChannelWizard({
       if (v.imageKey) previewKeys[Number(k)] = { imageKey: v.imageKey }
     }
     return {
-      phase, name, committedName, description, seededDescription, niche, languages, targetPlatform, presetId,
+      phase, name, committedName, description, seededDescription, seededName, niche, languages, targetPlatform, presetId,
       avatarKey, costCents, tone, style, region, era, locations, objects, vocab,
       voiceMode, selectedVoices, recommended, voiceSearchKeyword, genreCategory, presentation, narrativeStyle, narrativeVoice, styleInfluence, tagline, derivedSig,
-      targetSeconds, captionStyle, sampleScript, sampleIsAi, extraSampleScripts,
+      targetSeconds, captionStyle, sampleMode, aiSample, aiSampleEdited, ownSample, autoWroteSample, extraSampleScripts,
       audioMood, musicChoice, selectedPresetIds, presetPickedManually, uploadedMusic,
       styleProposals, selectedStyleIdx, uploadedStyleIdx, stylePreviews: previewKeys,
     }
@@ -372,16 +409,17 @@ export function NewChannelWizard({
     } catch {
       /* storage full / unavailable — non-fatal */
     }
-  }, [hydrated, phase, name, committedName, description, seededDescription, niche, languages, targetPlatform, presetId, avatarKey, costCents, tone, targetSeconds, style, region, era, locations, objects, vocab, voiceMode, selectedVoices, recommended, voiceSearchKeyword, genreCategory, presentation, narrativeStyle, narrativeVoice, styleInfluence, tagline, derivedSig, captionStyle, sampleScript, sampleIsAi, extraSampleScripts, audioMood, musicChoice, selectedPresetIds, presetPickedManually, uploadedMusic, styleProposals, selectedStyleIdx, uploadedStyleIdx, stylePreviews, draftChannelId])
+  }, [hydrated, phase, name, committedName, description, seededDescription, seededName, niche, languages, targetPlatform, presetId, avatarKey, costCents, tone, targetSeconds, style, region, era, locations, objects, vocab, voiceMode, selectedVoices, recommended, voiceSearchKeyword, genreCategory, presentation, narrativeStyle, narrativeVoice, styleInfluence, tagline, derivedSig, captionStyle, sampleMode, aiSample, aiSampleEdited, ownSample, autoWroteSample, extraSampleScripts, audioMood, musicChoice, selectedPresetIds, presetPickedManually, uploadedMusic, styleProposals, selectedStyleIdx, uploadedStyleIdx, stylePreviews, draftChannelId])
 
   // ── Unsaved-progress guard ──────────────────────────────────────────────────
   // The draft autosaves, but leaving mid-flow still deserves a heads-up so the operator
   // can choose to keep it for later or discard it. The wizard is a fixed overlay that
   // covers the app sidebar, so the only in-app exit is the header "Channels" button; we
   // also guard browser Back / close / refresh.
+  // Either mode's text counts — the inactive one is still work worth keeping.
   const hasProgress =
     name.trim() !== '' || niche.trim() !== '' || derivedSig !== '' ||
-    sampleScript.trim() !== '' || avatarKey !== null
+    aiSample.trim() !== '' || ownSample.trim() !== '' || avatarKey !== null
 
   // No `beforeunload` confirm on reload / tab-close: the draft autosaves to localStorage on every
   // change and restores on return, so reloading or closing loses nothing — the native prompt would
@@ -677,7 +715,11 @@ export function NewChannelWizard({
   const derivedFresh = hasDerived && derivedSig === `${niche.trim()}|${language}|${targetPlatform}`
   // Must pick a mode; single needs a chosen voice, per-story defers to render.
   const canLeaveVoice = voiceMode === 'per_story' || (voiceMode === 'single' && selectedVoices.length > 0)
-  const canCreate = canLeaveVoice
+  // An example being rewritten is mid-flight: every step after 2 is a pre-filled confirmation, so a
+  // fast click-through can reach Create before it lands and persist the PREVIOUS genre's story as the
+  // channel's example. Hold Create until the writing settles.
+  const sampleSettling = drafting || pendingSampleRewrite
+  const canCreate = canLeaveVoice && !sampleSettling
 
   // The track POOL to persist (preset/upload only; 'ai' generates per reel, 'none' is silent).
   // >1 track → the renderer draws one at random per reel.
@@ -692,15 +734,25 @@ export function NewChannelWizard({
         : []
   const poolSize = chosenTracks.length
 
-  // Voice lists for single mode (gender-filtered). Recommended stays on top;
-  // "show all" appends the rest of the catalog below it.
+  // Voice lists for single mode (gender-filtered). The recommend route returns the model's true
+  // picks (each carrying a reason) followed by the whole browsable in-language pool (reason '').
+  // Only the true picks render under "Recommended" — the pool waits behind "Show all voices",
+  // merged with the lazily fetched catalog. Eighty rows under a "Recommended" header is a wall.
   const matchesGender = (v: { gender: string }) =>
     voiceGender === 'any' || (v.gender || '').toLowerCase() === voiceGender
-  const recommendedFiltered = recommended.filter(matchesGender)
-  const recIds = new Set(recommended.map((v) => v.id))
-  const moreFiltered = allVoices.filter((v) => !recIds.has(v.id)).filter(matchesGender)
-  const topPickId = recommended[0]?.id
-  const allVoicesLoading = showAllVoices && voicesLoading && allVoices.length === 0
+  const trueRecs = recommended.filter((v) => v.reason)
+  const recsForHeader = trueRecs.length > 0 ? trueRecs : recommended.slice(0, 5)
+  const recommendedFiltered = recsForHeader.filter(matchesGender)
+  const browsePool: VoiceOption[] = []
+  {
+    const seenIds = new Set(recsForHeader.map((v) => v.id))
+    for (const v of [...recommended, ...allVoices]) {
+      if (v.id && !seenIds.has(v.id)) { seenIds.add(v.id); browsePool.push(v) }
+    }
+  }
+  const moreFiltered = browsePool.filter(matchesGender)
+  const topPickId = recsForHeader[0]?.id
+  const allVoicesLoading = showAllVoices && voicesLoading && browsePool.length === 0
 
   // The card line is cosmetic, so a preset fills it as a courtesy — never over anything the creator
   // wrote. Blurbs can run past the input's cap (the trending schema allows 160), so clamp.
@@ -709,6 +761,36 @@ export function NewChannelWizard({
     const line = blurb.trim().slice(0, 140)
     setDescription(line)
     setSeededDescription(line)
+  }
+
+  // Called whenever the channel's identity changes under a written example. A script the CREATOR
+  // wrote is never touched: it's their voice, the one input we can't regenerate, and it stays what
+  // they want the channel to sound like. Ours is only a demo of the identity, so it follows it.
+  function refreshSampleForIdentityChange() {
+    if (!sampleIsAi || sampleScript.trim() === '') return
+    setPendingSampleRewrite(true)
+  }
+
+  // Does the example need writing before step 2 is worth showing?
+  function exampleNeedsWriting(): boolean {
+    if (sampleMode === 'own') return false            // they're writing it themselves
+    if (sampleScript.trim() !== '') return sampleIsAi  // ours is stale now; THEIRS is never touched
+    return !autoWroteSample                            // none yet, and we haven't already written one
+  }
+
+  // The single step-1 → step-2 advance. Falls through instantly when there's nothing to write (a script
+  // they wrote, one they cleared on purpose, or "I'll write my own"); otherwise holds on step 1 while the
+  // example is written. Back-navigation from step 3 does NOT come through here — going back never waits.
+  function goToScript() {
+    if (!exampleNeedsWriting()) { setPhase('script'); return }
+    setPreparingExample(true)
+  }
+
+  function seedName(suggestion: string) {
+    if (name.trim() !== '' && name !== seededName) return
+    setName(suggestion)
+    setCommittedName(suggestion)
+    setSeededName(suggestion)
   }
 
   function pickPreset(id: string) {
@@ -723,12 +805,14 @@ export function NewChannelWizard({
     setNiche(preset.description)
     setLanguages([preset.language])
     seedDescription(preset.blurb)
+    seedName(preset.suggestedName)
   }
 
   function pickCustom() {
     if (presetId !== null) {
       setNiche('') // clear the seeded preset text for a fresh start
       if (description === seededDescription) { setDescription(''); setSeededDescription('') }
+      if (name === seededName) { setName(''); setCommittedName(''); setSeededName('') }
     }
     setPresetId(null)
     nicheRef.current?.focus()
@@ -816,6 +900,8 @@ export function NewChannelWizard({
       // Fresh profile invalidates anything derived from the old one.
       setRecommended([])
       setSelectedVoices([])
+      // The step-2 example is NOT queued for rewrite here — goToScript() below writes it before it
+      // shows the step, so queuing it too would pay for two writes of the same thing.
       // New audio mood → re-rank presets from scratch; clear any prior picks/uploads.
       setSelectedPresetIds([])
       setPresetPickedManually(false)
@@ -835,7 +921,7 @@ export function NewChannelWizard({
         setClarifyAnswers({})
         setClarifyHandledText(nicheText)
       } else {
-        setPhase('script')
+        goToScript()
       }
     } catch (e) {
       // Aborted (unmount / re-fire) is intentional — not an error to show, and any newer call owns the UI now.
@@ -850,10 +936,14 @@ export function NewChannelWizard({
     }
   }
 
-  // Write a story for the operator. `target` is 'main' (the primary script) or an extra-reference index.
-  // `promptHint` is an optional steer they typed; blank means "come up with one for me".
-  async function handleSampleDraft(target: 'main' | number, promptHint: string) {
-    setDraftingTarget(target)
+  // Write the channel's example. `promptHint` is an optional idea they typed (blank = come up with one).
+  // `reviseDraft` is THEIR OWN text to rebuild in the channel's voice — passed only for a script they
+  // wrote or edited. An untouched example of ours is replaced outright, never fed back to itself.
+  // `silent` suppresses the error line for writes the creator didn't ask for (the one on arrival): a
+  // spend cap or a flaky call shouldn't greet them with a failure for something they never clicked.
+  async function handleSampleDraft(promptHint: string, opts: { reviseDraft?: string; silent?: boolean } = {}) {
+    const { reviseDraft, silent } = opts
+    setDrafting(true)
     setSampleError('')
     try {
       const res = await fetch('/api/channel/sample-script', {
@@ -873,6 +963,7 @@ export function NewChannelWizard({
           ...(narrativeVoice ? { narrativeVoice } : {}),
           styleInfluence,
           ...(promptHint.trim() ? { promptHint: promptHint.trim() } : {}),
+          ...(reviseDraft?.trim() ? { reviseDraft: reviseDraft.trim() } : {}),
         }),
       })
       const json = await res.json()
@@ -883,76 +974,46 @@ export function NewChannelWizard({
         throw new Error(detail || json.error || 'Draft failed')
       }
       const s = json.sample as { title: string; hook: string; script: string }
-      const text = s.script?.trim() || s.hook || ''
-      if (target === 'main') {
-        setSampleScript(text)
-        setSampleIsAi(true)
-      } else {
-        setExtraSampleScripts((prev) => prev.map((v, j) => (j === target ? text : v)))
-      }
+      setAiSample(s.script?.trim() || s.hook || '')
+      setAiSampleEdited(false)
       setCostCents((c) => c + (json.costCents ?? 0))
-      setComposeTarget(null)
-      setComposePrompt('')
     } catch (e) {
-      setSampleError(friendlyError(e, 'Draft failed'))
+      if (!silent) setSampleError(friendlyError(e, 'Draft failed'))
     } finally {
-      setDraftingTarget(null)
+      setDrafting(false)
     }
   }
 
-  // Corner "write for me" icon for an extra-reference field. Toggling it reveals composeBox(target) below.
-  function draftButton(target: 'main' | number, hasContent: boolean) {
-    const busy = draftingTarget === target
-    const open = composeTarget === target
-    const label = hasContent ? 'Write a new one' : 'Write one for me'
-    return (
-      <button
-        type="button"
-        onClick={() => { setComposeTarget(open ? null : target); setComposePrompt('') }}
-        disabled={draftingTarget !== null}
-        title={busy ? 'Writing…' : label}
-        aria-label={label}
-        className={`rounded-md p-1.5 transition-colors disabled:opacity-50 ${open ? 'bg-subtle text-ink' : 'text-faint hover:bg-subtle hover:text-ink'}`}
-      >
-        {busy ? (
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="animate-spin" aria-hidden>
-            <path d="M21 12a9 9 0 1 1-6.22-8.56" />
-          </svg>
-        ) : (
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <path d="M9.94 15.5A2 2 0 0 0 8.5 14.06l-6.14-1.58a.5.5 0 0 1 0-.96L8.5 9.94A2 2 0 0 0 9.94 8.5l1.58-6.14a.5.5 0 0 1 .96 0L14.06 8.5A2 2 0 0 0 15.5 9.94l6.14 1.58a.5.5 0 0 1 0 .96L15.5 14.06a2 2 0 0 0-1.44 1.44l-1.58 6.14a.5.5 0 0 1-.96 0z" />
-            <path d="M20 3v4M22 5h-4M4 17v2M5 18H3" />
-          </svg>
-        )}
-      </button>
-    )
-  }
+  // Rewrites the example after an identity change. Runs from an effect rather than inline in the
+  // change handlers because handleSampleDraft reads the genre/style/description off state — firing it
+  // in the same tick would write an example for the identity we just replaced. A failed rewrite
+  // leaves the previous example in place (surfaced by sampleError), never an empty field.
+  // Waiting on any in-flight write also COALESCES: the flag is a boolean, so ten fast genre toggles
+  // collapse into the one call in flight plus a single final rewrite, instead of ten paid calls.
+  useEffect(() => {
+    if (!pendingSampleRewrite || drafting) return
+    setPendingSampleRewrite(false)
+    void handleSampleDraft(mainSteer)
+  }, [pendingSampleRewrite, drafting])
 
-  // Optional-steer box: lets the operator type what the story should be about, or leave it blank.
-  function composeBox(target: 'main' | number) {
-    if (composeTarget !== target) return null
-    const busy = draftingTarget === target
-    return (
-      <div className="mt-3 rounded-lg border border-border bg-subtle p-3">
-        <p className="text-xs text-faint">As much or as little as you like. Leave it empty and we&apos;ll come up with one.</p>
-        <textarea
-          className="input mt-2 h-24 resize-none leading-relaxed"
-          value={composePrompt}
-          onChange={(e) => setComposePrompt(e.target.value)}
-          placeholder="Optional — a topic, or details like the characters, tone, setting, or how it ends"
-          autoFocus
-        />
-        <div className="mt-2 flex items-center gap-2">
-          <button type="button" onClick={() => handleSampleDraft(target, composePrompt)} disabled={busy} className="btn-accent btn-sm">
-            {busy ? 'Writing…' : 'Write it'}
-          </button>
-          <button type="button" onClick={() => { setComposeTarget(null); setComposePrompt('') }} disabled={busy} className="btn-ghost btn-sm">
-            Cancel
-          </button>
-        </div>
-      </div>
-    )
-  }
+  // Writes the example while the creator is STILL ON STEP 1, then advances — that ordering is the whole
+  // point: step 2 opens on a finished story, never on a spinner or the previous genre's story. Runs from
+  // an effect so the derive's state has committed and the write reads the new identity. Advances even
+  // when the write fails: a spend cap or a flaky call must never trap someone on step 1.
+  useEffect(() => {
+    if (!preparingExample) return
+    let cancelled = false
+    void (async () => {
+      if (exampleNeedsWriting()) {
+        setAutoWroteSample(true)
+        await handleSampleDraft(mainSteer, { silent: true })
+      }
+      if (cancelled) return
+      setPreparingExample(false)
+      setPhase('script')
+    })()
+    return () => { cancelled = true }
+  }, [preparingExample])
 
   // Upload one or more background tracks (Sound step). Appended to the pool; previewed like presets.
   async function handleMusicUpload(files: FileList) {
@@ -1038,7 +1099,8 @@ export function NewChannelWizard({
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Create failed')
       try { localStorage.removeItem(DRAFT_KEY) } catch { /* noop */ }
-      router.push('/dashboard')
+      // Land on the new channel, not the dashboard — the next beat is making the first reel.
+      router.push(`/channel/${json.channelId}`)
       router.refresh()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Create failed')
@@ -1065,6 +1127,19 @@ export function NewChannelWizard({
           <KendrixMark size={26} />
           <h1 className="min-w-0 flex-1 truncate font-display text-lg font-800 -tracking-[0.01em] text-ink">New channel</h1>
           <StepDots phase={phase} />
+          {/* The safe exit, in plain sight — before this it existed only inside the leave-confirm
+              modal, so saving looked like an escape hatch instead of a feature. Gated on progress
+              so an untouched wizard can't mint empty draft rows. */}
+          {hasProgress && (
+            <button
+              type="button"
+              onClick={() => void leaveKeepDraft()}
+              disabled={savingDraft}
+              className="btn-ghost btn-sm hidden flex-shrink-0 sm:inline-flex"
+            >
+              {savingDraft ? 'Saving…' : 'Save & finish later'}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => requestLeave('/dashboard')}
@@ -1175,7 +1250,10 @@ export function NewChannelWizard({
                               if (presetId === id) { setPresetId(null); return }
                               setPresetId(id)
                               setNiche(t.description)
-                              setLanguages([t.language || 'English'])
+                              // The rail's language is free text from a live search, so it can name one
+                              // we don't support (or one we deliberately removed). Only honor it if the
+                              // picker offers it — that list is the promise we can actually produce it.
+                              setLanguages([SUPPORTED_LANGUAGES.includes(t.language) ? t.language : 'English'])
                               seedDescription(t.blurb)
                             }}
                             className={`flex flex-col items-start gap-1 rounded-lg border p-3 text-left transition-all ${
@@ -1273,7 +1351,7 @@ export function NewChannelWizard({
                   </label>
                 ))}
                 <div className="flex items-center justify-end gap-3 pt-1">
-                  <button type="button" disabled={loading} onClick={() => { setClarify([]); setPhase('script') }} className="btn-ghost btn-sm">
+                  <button type="button" disabled={loading} onClick={() => { setClarify([]); goToScript() }} className="btn-ghost btn-sm">
                     Skip
                   </button>
                   <button
@@ -1289,7 +1367,7 @@ export function NewChannelWizard({
                         .filter((s): s is string => !!s)
                       setClarify([])
                       if (additions.length === 0) {
-                        setPhase('script')
+                        goToScript()
                         return
                       }
                       const newNiche = `${niche.trim()}\n${additions.join('\n')}`
@@ -1298,7 +1376,7 @@ export function NewChannelWizard({
                       void handleGenerate(newNiche, newNiche) // re-derive with the enriched description; advances after
                     }}
                   >
-                    {loading ? 'Working…' : 'Add & continue'}
+                    {loading ? <DeriveBeats /> : 'Add & continue'}
                   </button>
                 </div>
               </div>
@@ -1318,7 +1396,7 @@ export function NewChannelWizard({
               />
             </Field>
 
-            <Field label="Target platform" hint="Where these reels get posted — tunes length, caption safe-zones and aspect for that platform.">
+            <Field label="Target platform" hint="Where these reels get posted — we fit the length, framing, and captions to it.">
               <PlatformPicker value={targetPlatform} onChange={setTargetPlatform} />
             </Field>
 
@@ -1327,20 +1405,20 @@ export function NewChannelWizard({
                   Continue silently re-derives first (handleGenerate); otherwise it just advances.
                   Hidden while the follow-up questions card is up — its own buttons take over. */}
               {clarify.length === 0 && <button
-                onClick={derivedFresh ? () => setPhase('script') : () => handleGenerate()}
-                disabled={!canGenerate || loading}
+                onClick={derivedFresh ? () => goToScript() : () => handleGenerate()}
+                disabled={!canGenerate || loading || preparingExample}
                 className="btn-accent"
               >
-                {loading ? (
+                {loading || preparingExample ? (
                   <>
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin" aria-hidden>
                       <path d="M21 12a9 9 0 1 1-6.22-8.56" />
                     </svg>
-                    Working…
+                    <DeriveBeats />
                   </>
                 ) : (
                   <>
-                    {hasDerived ? 'Continue' : 'Create profile'}
+                    {hasDerived ? 'Continue' : 'Build my channel'}
                     <FwdArrow />
                   </>
                 )}
@@ -1385,6 +1463,7 @@ export function NewChannelWizard({
                         onChange={(v) => {
                           setGenreCategory(v as GenreModule)
                           setNarrativeStyle('') // styles are scoped to the genre — a switch resets to pure genre
+                          refreshSampleForIdentityChange() // the example below demonstrated the old genre
                         }}
                         options={GENRE_OPTIONS}
                       />
@@ -1394,8 +1473,8 @@ export function NewChannelWizard({
                         Style
                         <Dropdown
                           value={narrativeStyle}
-                          onChange={setNarrativeStyle}
-                          options={[{ value: '', label: 'Pure genre (no style)' }, ...stylesForGenre(genreCategory).map((s) => ({ value: s.id, label: s.label }))]}
+                          onChange={(v) => { setNarrativeStyle(v); refreshSampleForIdentityChange() }}
+                          options={[{ value: '', label: 'Classic — no added style' }, ...stylesForGenre(genreCategory).map((s) => ({ value: s.id, label: s.label }))]}
                         />
                       </label>
                     )}
@@ -1411,11 +1490,13 @@ export function NewChannelWizard({
             <div className="card p-5">
               <SectionLabel>Your channel&apos;s voice</SectionLabel>
               <p className="mt-1 text-xs text-faint">
-                Got a script that sounds like you? Paste it — it teaches your channel&apos;s voice, and every reel is written to match it.
-                No script? Skip this — your channel learns from its first approved reels. Or have an example written to preview the voice.
+                We wrote you an example. Edit it, rewrite it, or paste your own — whatever you leave here is what
+                every reel learns from.
               </p>
 
-              {/* Two clear paths: have it written, or write your own. */}
+              {/* Two clear paths: keep ours, or write your own. Each keeps its OWN text, so switching
+                  back and forth never loses either — and our example can't drift into the box they
+                  write in, which is what would launder it into a reference script. */}
               <div className="mt-3 inline-flex rounded-lg border border-border bg-subtle p-0.5">
                 {([
                   ['forme', 'Write one for me'],
@@ -1436,39 +1517,54 @@ export function NewChannelWizard({
 
               {sampleMode === 'forme' ? (
                 <div className="mt-4">
-                  <p className="text-xs text-faint">
-                    Tell us as much or as little as you like — a quick idea, or full direction. Leave it empty and
-                    we&apos;ll come up with one.
-                  </p>
-                  <textarea
-                    className="input mt-2 h-24 resize-none leading-relaxed"
-                    value={mainSteer}
-                    onChange={(e) => setMainSteer(e.target.value)}
-                    placeholder="Optional — a topic, or details like the characters, tone, setting, or how it ends"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleSampleDraft('main', mainSteer)}
-                    disabled={draftingTarget !== null}
-                    className="btn-accent btn-sm mt-2"
-                  >
-                    {draftingTarget === 'main' ? (
-                      <>
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="animate-spin" aria-hidden>
-                          <path d="M21 12a9 9 0 1 1-6.22-8.56" />
-                        </svg>
-                        Writing…
-                      </>
-                    ) : sampleScript.trim() ? 'Write a new one' : 'Write it'}
-                  </button>
-                  {sampleScript.trim() && (
+                  {/* While a write is pending or in flight the OLD example is never shown: it belongs to
+                      the genre/description that was just replaced, and a stale story reads as a wrong
+                      one. It stays in state, so a failed write falls back to it instead of an empty box. */}
+                  {sampleSettling ? (
+                    <div className="flex items-center gap-2 text-sm text-muted">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="animate-spin" aria-hidden>
+                        <path d="M21 12a9 9 0 1 1-6.22-8.56" />
+                      </svg>
+                      {sampleScript.trim() ? 'Rewriting your example…' : 'Writing an example in your channel’s voice…'}
+                    </div>
+                  ) : (
                     <>
-                      <p className="mt-4 text-xs text-faint">Your example — edit it freely.</p>
-                      <textarea
-                        className="input mt-2 h-64 resize-none leading-relaxed"
-                        value={sampleScript}
-                        onChange={(e) => { setSampleScript(e.target.value); setSampleIsAi(false) }}
-                      />
+                      {/* Honest framing: an untouched draft of ours persists for the record but is NOT a
+                          reference (circular DNA — see create/route.ts). Editing flips it to 'user',
+                          which does teach the voice, so tell the creator exactly that. */}
+                      <p className="text-xs text-faint">
+                        {!sampleScript.trim()
+                          ? 'Write an example to hear how your channel sounds — or switch to “I’ll write my own”.'
+                          : sampleIsAi
+                            ? 'How your channel could sound. Make it yours — rewrite even a few lines — and it starts teaching your channel’s voice.'
+                            : 'Your example — edit it freely. Rewrite rebuilds this same story in your channel’s voice.'}
+                      </p>
+                      {sampleScript.trim() && (
+                        <textarea
+                          className="input mt-2 h-64 resize-none leading-relaxed"
+                          value={sampleScript}
+                          onChange={(e) => setActiveSample(e.target.value)}
+                        />
+                      )}
+                      {/* One control. The idea line steers it; a script THEY wrote is rebuilt rather than
+                          replaced, so a rough draft pasted here comes back told properly. */}
+                      <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <input
+                          className="input flex-1"
+                          value={mainSteer}
+                          onChange={(e) => setMainSteer(e.target.value)}
+                          placeholder={sampleScript.trim() ? 'Optional — an idea, or a change to make' : 'Optional — what should it be about?'}
+                          maxLength={2000}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleSampleDraft(mainSteer, sampleIsAi ? {} : { reviseDraft: sampleScript })}
+                          disabled={drafting}
+                          className="btn-secondary btn-sm flex-shrink-0"
+                        >
+                          {drafting ? 'Writing…' : sampleScript.trim() ? 'Rewrite' : 'Write it'}
+                        </button>
+                      </div>
                     </>
                   )}
                 </div>
@@ -1476,33 +1572,31 @@ export function NewChannelWizard({
                 <textarea
                   className="input mt-4 h-64 resize-none leading-relaxed"
                   value={sampleScript}
-                  onChange={(e) => { setSampleScript(e.target.value); setSampleIsAi(false) }}
+                  onChange={(e) => setActiveSample(e.target.value)}
                   placeholder="Write or paste a real opening in your channel's voice — the first lines exactly as you'd want them narrated, in any niche and any language. This is what every reel will sound like, so the closer to your real voice, the better."
                 />
               )}
               {sampleError && <p className="mt-2 text-xs text-danger">{sampleError}</p>}
 
-              {/* More examples — few-shot is stronger with 2–3. Offered only once a first example exists. */}
+              {/* More examples — few-shot is stronger with 2–3. Offered only once a first example exists.
+                  Paste-only on purpose: these persist as reference stories, and an example we wrote must
+                  never teach the Writer its own output. */}
               {(sampleScript.trim() || extraSampleScripts.length > 0) && (
               <div className="mt-5 border-t border-border pt-4">
-                <p className="text-xs text-faint">More examples sharpen the match — add up to two more (optional).</p>
+                <p className="text-xs text-faint">Got more scripts of your own? Each one sharpens the match — add up to two (optional).</p>
                   {extraSampleScripts.map((s, i) => (
                     <div key={i} className="mt-3">
                       <div className="relative">
                         <textarea
-                          className="input h-28 w-full resize-none pl-3 pr-16 leading-relaxed"
+                          className="input h-28 w-full resize-none pl-3 pr-11 leading-relaxed"
                           value={s}
                           onChange={(e) => setExtraSampleScripts((prev) => prev.map((v, j) => (j === i ? e.target.value : v)))}
-                          placeholder="Another example in your channel's voice"
+                          placeholder="Paste another script of yours"
                         />
                         <div className="absolute right-1.5 top-1.5 flex items-center gap-0.5">
-                          {draftButton(i, !!s.trim())}
                           <button
                             type="button"
-                            onClick={() => {
-                              setExtraSampleScripts((prev) => prev.filter((_, j) => j !== i))
-                              setComposeTarget(null)
-                            }}
+                            onClick={() => setExtraSampleScripts((prev) => prev.filter((_, j) => j !== i))}
                             className="rounded-md p-1.5 text-faint transition-colors hover:bg-subtle hover:text-danger"
                             title="Remove this example"
                             aria-label="Remove this example"
@@ -1511,12 +1605,11 @@ export function NewChannelWizard({
                           </button>
                         </div>
                       </div>
-                      {composeBox(i)}
                     </div>
                   ))}
                   {extraSampleScripts.length < 2 && (
                     <button type="button" onClick={() => setExtraSampleScripts((prev) => [...prev, ''])} className="btn-ghost btn-sm mt-3">
-                      + Add another example
+                      + Paste another script
                     </button>
                   )}
               </div>
@@ -1681,15 +1774,15 @@ export function NewChannelWizard({
             <div className="card p-5">
               <SectionLabel>Background music</SectionLabel>
               <p className="mt-1 text-xs leading-relaxed text-muted">
-                The bed under your narration. It auto-ducks under the voice on every reel.
+                The music under your narration — it always stays soft under the voice, never over it.
               </p>
 
               {/* Radio rows — same pattern as Step 3's voice mode, for consistency. */}
               <div className="mt-4 flex flex-col gap-2">
                 {([
-                  { key: 'ai', label: 'Original score', sub: 'A fresh, original track composed for every reel — nothing to pick.', badge: 'Recommended' },
-                  { key: 'preset', label: 'Presets', sub: 'Pick from our library, fitted to your niche.', badge: '' },
-                  { key: 'upload', label: 'Upload', sub: 'Use your own tracks.', badge: '' },
+                  { key: 'ai', label: 'Original score', sub: 'A fresh track composed for every reel — nothing to pick.', badge: 'Recommended' },
+                  { key: 'preset', label: 'From our library', sub: 'Pick ready-made tracks fitted to your channel.', badge: '' },
+                  { key: 'upload', label: 'Your own music', sub: 'Upload tracks you have the rights to use.', badge: '' },
                   { key: 'none', label: 'No music', sub: 'Narration only.', badge: '' },
                 ] as const).map((opt) => (
                   <label
@@ -1773,7 +1866,7 @@ export function NewChannelWizard({
               {/* AI-generated — the effect (fresh bed per reel) is in the row sub; this adds cost + vetting detail. */}
               {musicChoice === 'ai' && (
                 <p className="mt-3 text-xs leading-relaxed text-muted">
-                  Every reel gets its own track — a few cents per reel — composed for that story&apos;s mood and your channel&apos;s sound, so no two reels share music. You&apos;ll hear it in the preview before publishing. Prefer no per-reel cost? Pick <span className="font-medium text-ink">Presets</span>.
+                  Every reel gets its own track — a few cents per reel — composed for that story&apos;s mood and your channel&apos;s sound, so no two reels share music. You&apos;ll hear it in the preview before publishing. Prefer no per-reel cost? Pick <span className="font-medium text-ink">From our library</span>.
                 </p>
               )}
 
@@ -1970,8 +2063,11 @@ export function NewChannelWizard({
               <button onClick={() => setPhase('sound')} className="btn-secondary">
                 <BackArrow /> Back
               </button>
-              <div className="flex items-center gap-3">
-                <span className="font-mono text-xs tabular-nums text-faint">spent ${(costCents / 100).toFixed(2)}</span>
+              {/* Setup spend is recorded server-side per call and claimed by the channel at create;
+                  it is deliberately not shown here — a running meter reads as a taxi meter and makes
+                  creators hesitate on every optional button. Totals live in /admin/costs. */}
+              <div className="flex flex-col items-end gap-1">
+                {sampleSettling && <p className="text-xs text-faint">Finishing your example…</p>}
                 <button onClick={handleCreate} disabled={creating || !canCreate} className="btn-accent">
                   {creating ? 'Creating…' : 'Create channel'}
                 </button>
@@ -2060,6 +2156,26 @@ function BackArrow() {
       <path d="M19 12H5M12 19l-7-7 7-7" />
     </svg>
   )
+}
+
+// Narrates the whole step-1 wait so it never reads as a hang. It covers two phases back to back — the
+// profile build, then writing the channel's first example — which is why the later beats are about the
+// story. Clamps on the last beat rather than looping, so a slow call doesn't look like it restarted.
+const DERIVE_BEATS = [
+  'Reading your idea…',
+  'Finding your genre…',
+  'Casting the narrator…',
+  'Setting the look…',
+  'Writing your first story…',
+  'Almost there…',
+]
+function DeriveBeats() {
+  const [beat, setBeat] = useState(0)
+  useEffect(() => {
+    const t = setInterval(() => setBeat((b) => Math.min(b + 1, DERIVE_BEATS.length - 1)), 2800)
+    return () => clearInterval(t)
+  }, [])
+  return <>{DERIVE_BEATS[beat]}</>
 }
 function FwdArrow() {
   return (

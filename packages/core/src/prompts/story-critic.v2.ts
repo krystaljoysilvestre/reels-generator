@@ -10,8 +10,9 @@
 
 import { z } from 'zod'
 import { asGenreModule, classifyGenre, type GenreModule } from './scenes.v1.js'
+import { isFilipinoRegister } from './story-craft.v1.js'
 
-export const STORY_CRITIC_V2_VERSION = 'story-critic.v2.17'
+export const STORY_CRITIC_V2_VERSION = 'story-critic.v2.18'
 
 export const StoryGateSchema = z.object({
   pass: z.boolean(),
@@ -246,7 +247,7 @@ A finished ${v.language} narration script is about to ship. You answer ONE quest
 
 How you judge:
 - THE CREDIBILITY TEST comes first: read it as a skeptical listener who instantly smells over-polished, constructed, or AI-flavored writing. If you would not believe a real person said this out loud, it fails.
-- LANGUAGE NATURALNESS (any language) is a hard fail: any line that reads like a sentence translated word-for-word from another language, any garbled or grammatically-wrong phrase, or a title in the wrong language, = FAIL — name the exact line in your reason so the rewrite can fix it.${v.language.toLowerCase() === 'taglish' ? '\n- For this Taglish channel specifically: textbook/literary Tagalog or forced, perfectly-balanced code-switching also fails — it should read as natural, contemporary spoken Taglish.' : ''}
+- LANGUAGE NATURALNESS (any language) is a hard fail: any line that reads like a sentence translated word-for-word from another language, any garbled or grammatically-wrong phrase, or a title in the wrong language, = FAIL — name the exact line in your reason so the rewrite can fix it.${isFilipinoRegister(v.language) ? '\n- For this Filipino channel specifically: textbook/literary Tagalog or forced, perfectly-balanced code-switching also fails — it should read as natural, contemporary spoken Filipino, code-switched the way people actually talk.' : ''}
 - SENTENCE-RHYTHM VARIETY: real speech is bursty — sentences of varied length. A uniform, templated cadence — nearly every beat a short fragment or one-beat-per-line, the same em-dash-aside → short-punch shape repeated, mechanical one/two-word punch lines — is an AI tell and fails, even when each line is individually fine. (Intentional refrains are welcome; a monotonous rhythm is not.)
 - STORY PHYSICS — where this script tells a story (someone lived something), four script-doctor checks. A clear miss on any is a fail worth naming:
   · AGENCY: does the narrator DECIDE anything, or do things merely happen to a passive witness?
