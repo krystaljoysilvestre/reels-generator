@@ -6,6 +6,7 @@ import { llmCall, listVoices, ProviderRateLimitError } from '@reels/providers'
 import { OperatorSfxSchema, cueVolumeDb, type OperatorCue } from '@reels/core'
 import { buildAddSoundPrompt, AddSoundSchema, ADD_SOUND_V1_VERSION } from '@reels/core/prompts/add-sound.v1'
 import { requireReelOwner, requireSpendBudget } from '@/lib/api-access'
+import { recordFailedSpend } from '@/lib/failed-spend'
 
 const MAX_MANUAL_CUES = 5
 
@@ -101,6 +102,8 @@ export async function POST(req: NextRequest) {
     await db.update(reels).set({ operatorSfx: [...existing, cue], updatedAt: new Date() }).where(eq(reels.id, reelId))
     return NextResponse.json({ ok: true, cue })
   } catch (err) {
+    // The call may have paid for one or more provider requests before failing — bill those, don't lose them.
+    await recordFailedSpend(err, { kind: 'reel', reelId })
     if (err instanceof ProviderRateLimitError) return NextResponse.json({ error: 'Busy right now — try again in a moment.' }, { status: 429 })
     return NextResponse.json({ error: 'Could not add that sound — try rephrasing.' }, { status: 502 })
   }

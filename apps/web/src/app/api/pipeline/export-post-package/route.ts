@@ -8,6 +8,7 @@ import { downloadBuffer, llmCall } from '@reels/providers'
 import { PostMetaSchema, PostingRulesSchema, formatPostCaption, formatImageCredits, StoryBibleSchema, nextPublishSlot, resolvePublishSlots, resolvePublishDays, type PostMeta } from '@reels/core'
 import { buildPostMetaPrompt, PostMetaLlmSchema, POST_META_V1_VERSION } from '@reels/core/prompts/post-meta.v1'
 import { requireReelOwner, requireSpendBudget } from '@/lib/api-access'
+import { recordFailedSpend } from '@/lib/failed-spend'
 
 // Minimal ZIP builder without native deps (zip is just stored entries)
 function buildZip(files: Array<{ name: string; data: Buffer }>): Buffer {
@@ -126,7 +127,9 @@ async function resolvePostMeta(
       })
       .where(eq(reels.id, reel.id))
     return meta
-  } catch {
+  } catch (err) {
+    // Falling back to the logline-only caption doesn't refund the completion this already paid for.
+    await recordFailedSpend(err, { kind: 'reel', reelId: reel.id })
     return null // fall back to the logline-only caption below
   }
 }

@@ -11,6 +11,7 @@ import {
 } from '@reels/core/prompts/rubric-miner.v1'
 import { REJECTION_REASON_LABELS } from '@reels/core/assembly/avoidlist'
 import { requireChannelOwner, requireSpendBudget } from '@/lib/api-access'
+import { recordFailedSpend } from '@/lib/failed-spend'
 
 const InputSchema = z.object({
   channelId: z.string().uuid(),
@@ -105,6 +106,8 @@ export async function POST(req: NextRequest) {
     })
     return NextResponse.json({ rubric: result.data.rubric, costCents: result.costCents })
   } catch (err) {
+    // The call may have paid for one or more provider requests before failing — bill those, don't lose them.
+    await recordFailedSpend(err, { kind: 'event', userId: gate.id, channelId: channel.id, surface: 'channel_mine_rubric', provider: 'openai' })
     console.error('[mine-rubric] failed:', err)
     return NextResponse.json({ error: 'Could not draft the rubric. Try again.' }, { status: 502 })
   }

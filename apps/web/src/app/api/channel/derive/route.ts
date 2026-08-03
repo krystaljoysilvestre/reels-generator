@@ -11,6 +11,7 @@ import {
 } from '@reels/core/prompts/channel.v1'
 import { TargetPlatformSchema } from '@reels/core'
 import { requireApiUser, requireSpendBudget } from '@/lib/api-access'
+import { recordFailedSpend } from '@/lib/failed-spend'
 
 const InputSchema = z.object({
   name: z.string().trim().min(1).max(80),
@@ -85,6 +86,8 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     // Log the provider/SDK detail server-side; return a fixed message so internals (endpoints, model
     // names, bucket keys) don't leak to the client.
+    // The call may have paid for one or more provider requests before failing — bill those, don't lose them.
+    await recordFailedSpend(err, { kind: 'event', userId: gate.id, surface: 'channel_derive', provider: 'openai' })
     console.error('[channel/derive] failed:', err)
     return NextResponse.json({ error: 'Derivation failed' }, { status: 502 })
   }

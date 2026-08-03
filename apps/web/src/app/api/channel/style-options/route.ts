@@ -10,6 +10,7 @@ import {
   STYLE_OPTIONS_V1_VERSION,
 } from '@reels/core/prompts/style-options.v1'
 import { requireApiUser, requireSpendBudget } from '@/lib/api-access'
+import { recordFailedSpend } from '@/lib/failed-spend'
 
 // Proposes a content-safe sample scene + 4 distinct visual "looks" for a channel.
 // Text-only LLM call (cheap/fast); the wizard falls back to the single derived stylePreset on failure.
@@ -58,6 +59,8 @@ export async function POST(req: NextRequest) {
       costCents: result.costCents,
     })
   } catch (err) {
+    // The call may have paid for one or more provider requests before failing — bill those, don't lose them.
+    await recordFailedSpend(err, { kind: 'event', userId: gate.id, surface: 'channel_style_options', provider: 'openai' })
     console.error('[channel/style-options] failed:', err)
     return NextResponse.json({ error: 'Style proposal failed' }, { status: 502 })
   }

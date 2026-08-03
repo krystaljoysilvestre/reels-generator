@@ -12,6 +12,7 @@ import {
   type VoiceSettings,
 } from '@reels/core'
 import { requireReelOwner, requireSpendBudget } from '@/lib/api-access'
+import { recordFailedSpend } from '@/lib/failed-spend'
 
 // Generate (or regenerate) the clip for one manual sound cue so it can be heard at the storyboard.
 // SFX → sound-effects; speech → a second voice with delivery-tuned settings. Stored under a deterministic
@@ -69,6 +70,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true, url: `/api/asset?key=${encodeURIComponent(assetKey)}`, costCents })
   } catch (err) {
+    // The call may have paid for one or more provider requests before failing — bill those, don't lose them.
+    await recordFailedSpend(err, { kind: 'reel', reelId })
     if (err instanceof ProviderRateLimitError) return NextResponse.json({ error: 'Busy right now — try again shortly.' }, { status: 429 })
     return NextResponse.json({ error: 'Could not generate that sound — try again.' }, { status: 502 })
   } finally {
