@@ -10,6 +10,7 @@ import {
   VOICE_RECOMMEND_V1_VERSION,
 } from '@reels/core/prompts/voice-recommend.v1'
 import { requireApiUser, requireSpendBudget } from '@/lib/api-access'
+import { recordFailedSpend } from '@/lib/failed-spend'
 
 const InputSchema = z.object({
   nicheDescription: z.string().trim().min(1).max(8000),
@@ -97,6 +98,8 @@ export async function POST(req: NextRequest) {
     const voices = [...recommended, ...rest]
     return NextResponse.json({ voices, costCents: result.costCents })
   } catch (err) {
+    // The call may have paid for one or more provider requests before failing — bill those, don't lose them.
+    await recordFailedSpend(err, { kind: 'event', userId: gate.id, surface: 'voice_recommend', provider: 'openai' })
     // The client only ever sees a generic message, so without this the failure leaves no trace at all.
     console.error('[voices] recommend failed:', err)
     // A rate limit is worth a calm retry; otherwise return a generic message (don't leak provider internals).

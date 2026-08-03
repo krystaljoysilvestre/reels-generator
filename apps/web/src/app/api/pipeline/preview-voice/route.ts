@@ -5,6 +5,7 @@ import { downloadBuffer } from '@reels/providers'
 import { recordSpendEvent } from '@reels/db'
 import { VoiceSettingsSchema, type VoiceSettings } from '@reels/core'
 import { requireApiUser, requireSpendBudget } from '@/lib/api-access'
+import { recordFailedSpend } from '@/lib/failed-spend'
 
 const tts = new ElevenLabsTtsProvider()
 
@@ -37,6 +38,8 @@ export async function POST(req: NextRequest) {
       headers: { 'Content-Type': 'audio/mpeg' },
     })
   } catch (err) {
+    // No real reel to bill (previewReelId is a throwaway prefix) — same event sink as the success path.
+    await recordFailedSpend(err, { kind: 'event', userId: gate.id, surface: 'voice_preview', provider: 'elevenlabs' })
     // Don't let a provider hiccup become an opaque 500 — a rate limit is a calm retry (client backs off).
     if (err instanceof ProviderRateLimitError) {
       return NextResponse.json({ error: 'Busy right now — give it a moment and try again.' }, { status: 429 })

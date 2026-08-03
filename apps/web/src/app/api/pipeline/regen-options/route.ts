@@ -5,6 +5,7 @@ import { eq, and, sql } from 'drizzle-orm'
 import { downloadBuffer, llmCall } from '@reels/providers'
 import { buildGroundedFeedbackPrompt, GroundedFeedbackSchema, GROUNDED_FEEDBACK_V1_VERSION } from '@reels/core/prompts/grounded-feedback.v1'
 import { requireReelOwner, callerMayUseStorageKey, requireSpendBudget } from '@/lib/api-access'
+import { recordFailedSpend } from '@/lib/failed-spend'
 
 // AI-grounded feedback for the regenerate flow: when the operator attaches a reference (📎), a vision model
 // reads the CURRENT scene image + the attachment and returns a few concrete, image-grounded ways to use it
@@ -83,8 +84,10 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ observation: r.data.observation ?? null, options: r.data.options })
-  } catch {
-    // Fail soft — the operator can still apply the change without the assist.
+  } catch (err) {
+    // Fail soft — the operator can still apply the change without the assist. Soft-failing does not
+    // make the spend imaginary: bill whatever the call paid for before it threw.
+    await recordFailedSpend(err, { kind: 'reel', reelId })
     return NextResponse.json({ options: [] })
   }
 }

@@ -49,7 +49,7 @@ export function RenderingState({
         <div>
           <p className="text-lg font-semibold tracking-tight text-ink">{headline}</p>
           <div className="mt-1.5 min-h-[1.25rem]">
-            <StatusTicker lines={phaseTicker(currentPhase, mood)} className="text-sm text-muted" />
+            <StatusTicker lines={phaseTicker(currentPhase, genre)} className="text-sm text-muted" />
           </div>
         </div>
 

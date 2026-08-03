@@ -80,12 +80,28 @@ function stripFences(raw: string): string {
   return raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim()
 }
 
-function tryParse<T>(raw: string, schema: z.ZodType<T>): T | null {
+// Parse + validate, KEEPING the reason on failure. A bare `catch { return null }` here used to erase the
+// only evidence of what went wrong: a schema failure reached the pipeline_steps row as 200 characters of
+// raw JSON and no field names, so the same failure could never be diagnosed after the fact.
+type ParseResult<T> = { ok: true; data: T } | { ok: false; reason: string }
+
+// Exported for tests: the failure REASON is the product here, so it's worth pinning down.
+export function tryParse<T>(raw: string, schema: z.ZodType<T>): ParseResult<T> {
+  let json: unknown
   try {
-    return schema.parse(JSON.parse(stripFences(raw)))
-  } catch {
-    return null
+    json = JSON.parse(stripFences(raw))
+  } catch (err) {
+    return { ok: false, reason: `not valid JSON (${err instanceof Error ? err.message : 'parse error'})` }
   }
+  const parsed = schema.safeParse(json)
+  if (parsed.success) return { ok: true, data: parsed.data }
+  // Name the offending paths — "scenes.4.cameraMove: invalid enum value" is actionable; "failed" is not.
+  const issues = parsed.error.issues
+    .slice(0, 5)
+    .map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`)
+    .join('; ')
+  const more = parsed.error.issues.length > 5 ? ` (+${parsed.error.issues.length - 5} more)` : ''
+  return { ok: false, reason: `schema mismatch — ${issues}${more}` }
 }
 
 let _anthropic: Anthropic | undefined
@@ -112,6 +128,10 @@ interface TransportResult {
   text: string
   inputTokens: number
   outputTokens: number
+  // The model ran out of output budget mid-sentence rather than choosing to stop. Truncated JSON fails
+  // schema validation for a reason that has nothing to do with the prompt, and the repair attempt — same
+  // ceiling, longer input — fails the same way. Worth naming instead of guessing.
+  truncated: boolean
 }
 
 function toAnthropicMessages(messages: LlmMessage[]): Anthropic.MessageParam[] {
@@ -143,6 +163,7 @@ async function callAnthropic(model: string, system: string, messages: LlmMessage
     text: res.content.find((b) => b.type === 'text')?.text ?? '',
     inputTokens: res.usage.input_tokens,
     outputTokens: res.usage.output_tokens,
+    truncated: res.stop_reason === 'max_tokens',
   }
 }
 
@@ -174,6 +195,7 @@ async function callOpenAI(model: string, system: string, messages: LlmMessage[],
     text: res.choices[0]?.message?.content ?? '',
     inputTokens: res.usage?.prompt_tokens ?? 0,
     outputTokens: res.usage?.completion_tokens ?? 0,
+    truncated: res.choices[0]?.finish_reason === 'length',
   }
 }
 
@@ -224,19 +246,24 @@ export async function llmCall<T>(opts: LlmCallOptions<T>): Promise<LlmResult<T>>
   const cost1 = calcCostCents(model, res1.inputTokens, res1.outputTokens) + searchFee
   const parsed1 = tryParse(res1.text, opts.schema)
 
-  if (parsed1 !== null) {
-    return { data: parsed1, costCents: cost1, inputHash }
+  if (parsed1.ok) {
+    return { data: parsed1.data, costCents: cost1, inputHash }
   }
 
   // ── One repair attempt ────────────────────────────────────────────────────
+  // Tell the model WHAT was wrong. Re-asking for "the corrected JSON" without naming the offending field
+  // is a coin flip; naming it makes the repair a targeted edit. When the first answer was cut off at the
+  // token ceiling there is nothing to correct — say so, and ask for a shorter answer instead.
   const repairMessages: LlmMessage[] = [
     ...opts.messages,
     { role: 'assistant', content: res1.text },
     {
       role: 'user',
-      content:
-        'Your response was not valid JSON matching the required schema. ' +
-        'Return only the corrected JSON object, nothing else.',
+      content: res1.truncated
+        ? 'Your response was cut off before it finished, so it is not valid JSON. Return the COMPLETE JSON object ' +
+          'and nothing else — keep every required field but write more briefly so the whole object fits.'
+        : `Your response did not match the required schema — ${parsed1.reason}. ` +
+          'Return only the corrected JSON object, nothing else.',
     },
   ]
 
@@ -252,14 +279,20 @@ export async function llmCall<T>(opts: LlmCallOptions<T>): Promise<LlmResult<T>>
   const totalCost = cost1 + calcCostCents(model, res2.inputTokens, res2.outputTokens) + searchFee
 
   const parsed2 = tryParse(res2.text, opts.schema)
-  if (parsed2 !== null) {
-    return { data: parsed2, costCents: totalCost, inputHash }
+  if (parsed2.ok) {
+    return { data: parsed2.data, costCents: totalCost, inputHash }
   }
 
+  // Lead with the cause, not the payload. The raw tail matters more than its head — JSON fails at the end
+  // when it's truncated — so keep both ends and drop the middle.
+  const cut = (s: string) => (s.length <= 700 ? s : `${s.slice(0, 400)} …[${s.length - 700} chars]… ${s.slice(-300)}`)
   throw attachSpend(
     new ProviderError(
       provider,
-      `Schema validation failed after repair. Raw: ${res2.text.slice(0, 200)}`,
+      `Schema validation failed after repair (${opts.templateVersion}). ` +
+        `First attempt: ${parsed1.reason}${res1.truncated ? ' [output hit the token ceiling]' : ''}. ` +
+        `Repair attempt: ${parsed2.reason}${res2.truncated ? ` [output hit the ${maxTokens}-token ceiling]` : ''}. ` +
+        `Raw: ${cut(res2.text)}`,
     ),
     totalCost,
   )

@@ -10,6 +10,7 @@ import {
   STYLE_REF_V1_VERSION,
 } from '@reels/core/prompts/style-ref.v1'
 import { requireApiUser, requireSpendBudget } from '@/lib/api-access'
+import { recordFailedSpend } from '@/lib/failed-spend'
 
 // Operator uploads 1–3 reference images; a vision pass distills their shared visual
 // STYLE into the channel's stylePreset DNA (so the text-to-image pipeline can apply it
@@ -93,6 +94,8 @@ export async function POST(req: NextRequest) {
       costCents: result.costCents,
     })
   } catch (err) {
+    // The call may have paid for one or more provider requests before failing — bill those, don't lose them.
+    await recordFailedSpend(err, { kind: 'event', userId: gate.id, surface: 'channel_style_ref', provider: 'openai' })
     const message = err instanceof Error ? err.message : 'Couldn’t read the reference image'
     return NextResponse.json({ error: message }, { status: 502 })
   }

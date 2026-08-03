@@ -7,6 +7,7 @@ import { assembleImagePrompt, assembleReferencePrompt, assembleNegativePrompt, c
 import { buildReviseScenePrompt, REVISE_SCENE_V1_VERSION, ReviseSceneSchema } from '@reels/core/prompts/revise-scene.v1'
 import { buildFilterSafePrompt, FILTER_SAFE_V1_VERSION, FilterSafeSchema } from '@reels/core/prompts/filter-safe.v1'
 import { requireReelOwner, callerMayUseStorageKey, requireSpendBudget } from '@/lib/api-access'
+import { recordFailedSpend } from '@/lib/failed-spend'
 
 export async function POST(req: NextRequest) {
   // `instruction` = an optional plain-language change ("lights off", "make them talk while walking"); it's
@@ -166,6 +167,8 @@ export async function POST(req: NextRequest) {
   try {
     result = await render(finalPrompt)
   } catch (err) {
+    // The call may have paid for one or more provider requests before failing — bill those, don't lose them.
+    await recordFailedSpend(err, { kind: 'reel', reelId })
     // Filter-safe retry: on a safety-filter rejection, rewrite the prompt (a dead / menacing / supernatural
     // PERSON → "a figure") and try ONCE more — so Regenerate / Fresh take / older person-worded prompts
     // self-heal without the operator rewording. Only fires on rejection, so no cost on the happy path.

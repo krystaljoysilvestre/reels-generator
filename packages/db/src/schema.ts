@@ -13,7 +13,7 @@ import {
   primaryKey,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core'
-import { relations } from 'drizzle-orm'
+import { relations, sql } from 'drizzle-orm'
 
 // ── Enums ─────────────────────────────────────────────────────────────────────
 
@@ -56,6 +56,15 @@ export const storySourceEnum = pgEnum('story_source', [
   'ai',          // pipeline-generated
   'remix',       // based on a saved story
   'submission',  // UGC from audience
+])
+
+// Where a story row came from — decides library visibility. The channel story library
+// (/channel/[id]/stories and the channel-page preview) shows ONLY 'setup' + 'library' rows;
+// 'pipeline' rows are reel artifacts (incl. abandoned regeneration drafts) and never appear there.
+export const storyOriginEnum = pgEnum('story_origin', [
+  'setup',    // channel-wizard sample script
+  'library',  // saved via the story library (written or generated) or pasted as a BYO script
+  'pipeline', // written by generate_story for a reel
 ])
 
 export const platformEnum = pgEnum('platform', ['fb', 'ig', 'yt', 'tiktok'])
@@ -167,6 +176,9 @@ export const stories = pgTable(
       .notNull()
       .references(() => channels.id, { onDelete: 'cascade' }),
     source: storySourceEnum('source').notNull().default('ai'),
+    // Default 'pipeline' fails closed: a forgotten insert site hides its rows from the library
+    // rather than polluting it.
+    origin: storyOriginEnum('origin').notNull().default('pipeline'),
     language: text('language').notNull().default('tagalog'),
     title: text('title').notNull(),
     body: text('body').notNull(),
@@ -256,6 +268,10 @@ export const reels = pgTable(
     idxStatus: index('idx_reels_status').on(t.status),
     // Budget/quota window predicate (usage.ts filters reels created within the day/month). Was unindexed.
     idxCreated: index('idx_reels_created').on(t.createdAt),
+    // One story ↔ one reel: scene-text edits write through to the shared stories.body, so two reels
+    // sharing a story would corrupt each other's script. DB backstop for concurrent make-reel-from-story
+    // calls that both pass the app-level existence check (pattern: uq_publications_reel_platform).
+    uqStory: uniqueIndex('uq_reels_story').on(t.storyId).where(sql`story_id IS NOT NULL`),
   }),
 )
 

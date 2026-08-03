@@ -390,6 +390,7 @@ export async function generateStory(reelId: string, channelId: string, language:
         .values({
           channelId,
           source: 'ai',
+          origin: 'pipeline', // reel artifact — never shown in the channel story library
           language,
           title: winner.title,
           body: winner.narration,

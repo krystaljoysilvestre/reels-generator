@@ -6,6 +6,7 @@ import { llmCall, ProviderRateLimitError } from '@reels/providers'
 import { animatorMotionPrompt } from '@reels/core'
 import { buildSuggestMotionPrompt, SuggestMotionSchema, MOTION_V1_VERSION } from '@reels/core/prompts/motion.v1'
 import { requireReelOwner, requireSpendBudget } from '@/lib/api-access'
+import { recordFailedSpend } from '@/lib/failed-spend'
 
 // Translate an operator's plain-language motion request into a scene's animation instruction (motion.v1),
 // then arm the scene for (re)animation: mark it video tier and drop any stale clip so the next preview or
@@ -61,6 +62,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true, motionPrompt, subjectMotion: data.subjectMotion, cameraMove: data.cameraMove })
   } catch (err) {
+    // The call may have paid for one or more provider requests before failing — bill those, don't lose them.
+    await recordFailedSpend(err, { kind: 'reel', reelId })
     if (err instanceof ProviderRateLimitError) return NextResponse.json({ error: 'Busy right now — try again in a moment.' }, { status: 429 })
     return NextResponse.json({ error: 'Could not translate that motion — try rephrasing.' }, { status: 502 })
   }

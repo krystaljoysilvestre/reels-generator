@@ -5,6 +5,7 @@ import { eq, and, sql } from 'drizzle-orm'
 import { generateVideo, FalEngineSchema, ContentFilterError, ProviderRateLimitError } from '@reels/providers'
 import { resolveMotionSettings, PLATFORM_PRESETS } from '@reels/core'
 import { requireReelOwner, requireSpendBudget } from '@/lib/api-access'
+import { recordFailedSpend } from '@/lib/failed-spend'
 
 // Best-effort in-flight guard (B5): a fast double-click would otherwise launch two paid clips before
 // either insert lands, since the have-variation check below only catches already-finished ones. An
@@ -100,6 +101,8 @@ export async function POST(req: NextRequest) {
       })
     }
   } catch (err) {
+    // The call may have paid for one or more provider requests before failing — bill those, don't lose them.
+    await recordFailedSpend(err, { kind: 'reel', reelId })
     // Map provider failures to actionable statuses instead of an opaque 500: a content-filter rejection
     // is the operator's to fix, and a rate limit is worth a calm retry (the client backs off on 429).
     if (err instanceof ContentFilterError) {

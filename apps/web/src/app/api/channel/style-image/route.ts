@@ -11,6 +11,7 @@ import {
 } from '@reels/providers'
 import { recordSpendEvent } from '@reels/db'
 import { requireApiUser, requireSpendBudget } from '@/lib/api-access'
+import { recordFailedSpend } from '@/lib/failed-spend'
 
 // On-demand preview for ONE style option. Called only when the operator clicks "Preview" on a card.
 // Not auto-retried — Retry on the card is the manual path.
@@ -51,6 +52,8 @@ export async function POST(req: NextRequest) {
     await recordSpendEvent({ userId: gate.id, surface: 'channel_style_image', provider: 'openai', costCents: result.costCents })
     return NextResponse.json({ imageKey: result.asset.storageKey, costCents: result.costCents })
   } catch (err) {
+    // The call may have paid for one or more provider requests before failing — bill those, don't lose them.
+    await recordFailedSpend(err, { kind: 'event', userId: gate.id, surface: 'channel_style_image', provider: 'openai' })
     if (err instanceof ContentFilterError) {
       return NextResponse.json(
         { error: 'This look got flagged by the image filter.', kind: 'filtered' },

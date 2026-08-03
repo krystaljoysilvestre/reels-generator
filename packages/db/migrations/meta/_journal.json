@@ -351,6 +351,13 @@
       "when": 1785131035779,
       "tag": "0049_clever_hydra",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1785313298217,
+      "tag": "0050_short_energizer",
+      "breakpoints": true
     }
   ]
 }

@@ -10,6 +10,7 @@ import {
   CHANNEL_SAMPLE_V2_VERSION,
 } from '@reels/core/prompts/channel-sample.v2'
 import { requireApiUser, requireSpendBudget } from '@/lib/api-access'
+import { recordFailedSpend } from '@/lib/failed-spend'
 
 const InputSchema = z.object({
   name: z.string().trim().min(1).max(80),
@@ -73,6 +74,8 @@ export async function POST(req: NextRequest) {
     await recordSpendEvent({ userId: gate.id, surface: 'channel_sample_script', provider: 'openai', costCents: result.costCents })
     return NextResponse.json({ sample: result.data, costCents: result.costCents })
   } catch (err) {
+    // The call may have paid for one or more provider requests before failing — bill those, don't lose them.
+    await recordFailedSpend(err, { kind: 'event', userId: gate.id, surface: 'channel_sample_script', provider: 'openai' })
     console.error('[channel/sample-script] failed:', err)
     return NextResponse.json({ error: 'Sample generation failed' }, { status: 502 })
   }
