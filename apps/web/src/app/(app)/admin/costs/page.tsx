@@ -33,6 +33,7 @@ const SURFACE_LABELS: Record<string, string> = {
   channel_style_options: 'Style proposals',
   channel_style_image: 'Style previews',
   channel_mine_rubric: 'Taste rubric (settings)',
+  story_library_generate: 'Story written for the library',
   voice_recommend: 'Voice recommendations',
   voice_preview: 'Voice previews',
 }

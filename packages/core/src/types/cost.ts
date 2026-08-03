@@ -22,6 +22,52 @@ export function budgetCapForSeconds(targetSeconds: number | null | undefined): n
   return Math.min(BUDGET_CAP_MAX_CENTS, Math.max(DEFAULT_BUDGET_CAPS_CENTS.short, BUDGET_CAP_BASE_CENTS + Math.round(t * BUDGET_CAP_PER_SEC_CENTS)))
 }
 
+// ── Pre-flight estimate: what it costs to reach the storyboard gate ──────────
+// Shown to the creator BEFORE they greenlight a reel, so the first paid step isn't an unnamed leap.
+// Scope is exactly the pre-gate chain (analyze_story → generate_post_meta → breakdown_scenes →
+// generate_images); filming/voice/music/render all sit behind the storyboard approval and are bounded
+// separately by budgetCapForSeconds.
+//
+// This is a RATE-DERIVED estimate, not a measurement: the scene count isn't known until the story is
+// written, and image/QA retries vary per scene. It is deliberately rounded UP at every step so the
+// number a creator sees is a ceiling they beat, never a floor they blow past. Never present it as exact.
+
+// Flat per-image rate of the live scene engine (fal nano-banana). Single source of truth: the provider
+// engine config imports this rather than declaring its own, so a rate change can't drift between what we
+// bill and what we quote.
+export const SCENE_IMAGE_COST_CENTS = 4
+// What a DELIVERED scene image actually costs all-in — the image itself plus its vision-QA verdict and any
+// re-roll or content-filter rephrase. Measured, not modelled: 40 images across the first completed
+// long-form breakdown averaged 5.63¢ (4–10¢), so the bare 4¢ engine rate understates a real scene by ~40%.
+const SCENE_ALL_IN_COST_CENTS = 6
+// Reference plates minted once per recurring entity, so the same face/place holds across scenes.
+const TYPICAL_REFERENCE_PLATES = 2
+// analyze_story + generate_post_meta — once per reel, regardless of length.
+const PRE_GATE_LLM_BASE_CENTS = 40
+// The per-chapter storyboard roll: best-of-N, plus the depiction gate's judge/doctor rounds on
+// informational reels, plus harness retries. The one measured run needed FOUR breakdown attempts, so a
+// single-attempt allowance is not a safe number to show a creator.
+const PRE_GATE_LLM_CENTS_PER_CHAPTER = 60
+
+// Mirrors sceneCountRange()'s upper bound in breakdown-scenes, which the prompt is told to favour, and
+// the CHAPTER_THRESHOLD_SEC split that long-form reels go through.
+const SECONDS_PER_SCENE = 9
+const MAX_SCENES_PER_CHAPTER = 14
+const MIN_SCENES_PER_CHAPTER = 3
+const CHAPTER_THRESHOLD_SEC = 180
+
+export function estimateStoryboardCents(targetSeconds: number | null | undefined): number {
+  const t = typeof targetSeconds === 'number' && targetSeconds > 0 ? targetSeconds : 75
+  const chapters = Math.max(1, Math.ceil(t / CHAPTER_THRESHOLD_SEC))
+  const scenesPerChapter = Math.min(
+    MAX_SCENES_PER_CHAPTER,
+    Math.max(MIN_SCENES_PER_CHAPTER, Math.ceil(t / chapters / SECONDS_PER_SCENE)),
+  )
+  const scenes = chapters * scenesPerChapter
+  const images = scenes + TYPICAL_REFERENCE_PLATES
+  return images * SCENE_ALL_IN_COST_CENTS + PRE_GATE_LLM_BASE_CENTS + chapters * PRE_GATE_LLM_CENTS_PER_CHAPTER
+}
+
 export class BudgetExceededError extends Error {
   constructor(
     public readonly reelId: string,

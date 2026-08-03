@@ -1,8 +1,8 @@
 import { getDb, channels, reels, stories } from '@reels/db'
-import { desc, eq } from 'drizzle-orm'
+import { and, desc, eq, inArray } from 'drizzle-orm'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { PostingRulesSchema, UNSHIPPED_REEL_STATUSES, autoProduceBacklogCap } from '@reels/core'
+import { PostingRulesSchema, UNSHIPPED_REEL_STATUSES, autoProduceBacklogCap, budgetCapForSeconds, estimateStoryboardCents } from '@reels/core'
 import { assertChannelAccess } from '@/lib/access'
 import { ChannelAvatar, avatarGradient } from '@/components/ChannelAvatar'
 import { ReelStatusPill } from '@/components/ReelStatusPill'
@@ -30,16 +30,25 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
   })
   const languages = channel.languages ?? []
 
-  // Setup sample scripts: the stories no reel points at. Every pipeline-written story is linked
-  // from its reel (reels.storyId), so the unlinked remainder is exactly what the wizard saved —
-  // `source` can't distinguish them (both paths write 'user'/'ai').
-  const storyRows = await db.query.stories.findMany({
-    where: eq(stories.channelId, id),
+  // A peek at the story shelf — setup samples and anything the creator saved since. `origin` is what
+  // decides (not a reel join): pipeline stories are reel artifacts, and every regeneration round leaves
+  // another abandoned draft behind. The full shelf, with editing, lives at /channel/<id>/scripts.
+  const savedScripts = await db.query.stories.findMany({
+    where: and(eq(stories.channelId, id), inArray(stories.origin, ['setup', 'library'])),
     orderBy: [desc(stories.createdAt)],
     columns: { id: true, title: true, body: true, source: true },
+    with: { reels: { columns: { id: true } } },
   })
-  const linkedStoryIds = new Set(reelRows.map((r) => r.storyId).filter(Boolean))
-  const sampleStories = storyRows.filter((s) => !linkedStoryIds.has(s.id))
+  // Only unused stories can start a reel (one story, one reel) — offer those in the create-reel modal.
+  const reusableScripts = savedScripts
+    .filter((s) => s.reels.length === 0)
+    .map((s) => ({ id: s.id, title: s.title, source: s.source }))
+  // The setup script the wizard left behind — the first reel's obvious starting point.
+  const firstScript = reusableScripts[0] ?? null
+  // What the creator is about to spend, named before they commit: an estimate to the storyboard gate,
+  // and the enforced ceiling for the whole reel (a cap the pipeline actually halts on, not a guess).
+  const storyboardCents = estimateStoryboardCents(channel.targetSeconds)
+  const reelCapCents = budgetCapForSeconds(channel.targetSeconds)
 
   // Production status strip: what's ready to post, and whether auto-produce is paused on backlog —
   // the same math the scheduler uses, so "paused" here is exactly when the worker skips the channel.
@@ -158,16 +167,46 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
         {/* Reels */}
         <section>
           {reelRows.length === 0 ? (
+            /* First-reel moment. When setup left a script behind, the wizard's story continues here —
+               name it and offer it as the obvious first production, rather than a generic "create". */
             <div className="card flex flex-col items-center justify-center px-6 py-12 text-center">
-              <p className="text-sm font-medium text-ink">No reels yet</p>
-              <p className="mb-4 mt-1 max-w-xs text-sm text-muted">Create your first reel — we’ll draft a story for you to approve, then build the picture and sound.</p>
-              <CreateReelButton channelId={channel.id} promptMode channelMode={channel.generationMode === 'auto' ? 'auto' : 'review'} />
+              {firstScript ? (
+                <>
+                  <p className="text-sm font-medium text-ink">Your first script is ready</p>
+                  <p className="mt-1 max-w-sm text-sm text-muted">
+                    “{firstScript.title}” — written in this channel’s voice during setup. Turn it into your first reel,
+                    or start a new one.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-medium text-ink">No reels yet</p>
+                  <p className="mt-1 max-w-xs text-sm text-muted">Create your first reel — we’ll draft a story for you to approve, then build the picture and sound.</p>
+                </>
+              )}
+              <div className="mt-4">
+                <CreateReelButton
+                  channelId={channel.id}
+                  promptMode
+                  channelMode={channel.generationMode === 'auto' ? 'auto' : 'review'}
+                  savedScripts={reusableScripts}
+                  storyboardCents={storyboardCents}
+                  reelCapCents={reelCapCents}
+                />
+              </div>
             </div>
           ) : (
             <>
               <div className="mb-3.5 flex items-center justify-between gap-3">
                 <h2 className="font-display text-[15px] font-700 text-ink">Reels</h2>
-                <CreateReelButton channelId={channel.id} compact channelMode={channel.generationMode === 'auto' ? 'auto' : 'review'} />
+                <CreateReelButton
+                  channelId={channel.id}
+                  compact
+                  channelMode={channel.generationMode === 'auto' ? 'auto' : 'review'}
+                  savedScripts={reusableScripts}
+                  storyboardCents={storyboardCents}
+                  reelCapCents={reelCapCents}
+                />
               </div>
               <div className="card overflow-hidden divide-y divide-border-soft">
                 {reelRows.map((r) => (
@@ -201,15 +240,18 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
           )}
         </section>
 
-        {/* Sample scripts — what the wizard saved at setup, so the creator can see their story landed */}
-        {sampleStories.length > 0 && (
+        {/* Saved stories — a peek at the shelf, so the creator can see their setup script landed */}
+        {savedScripts.length > 0 && (
           <section className="mt-8">
-            <div className="mb-3.5">
-              <h2 className="font-display text-[15px] font-700 text-ink">Sample scripts</h2>
-              <p className="mt-0.5 text-xs text-muted">From your channel setup — the voice this channel starts from.</p>
+            <div className="mb-3.5 flex items-end justify-between gap-3">
+              <div>
+                <h2 className="font-display text-[15px] font-700 text-ink">Saved scripts</h2>
+                <p className="mt-0.5 text-xs text-muted">The voice this channel starts from — ready to become reels.</p>
+              </div>
+              <Link href={`/channel/${channel.id}/scripts`} className="btn-secondary btn-sm">See all scripts</Link>
             </div>
             <div className="card overflow-hidden divide-y divide-border-soft">
-              {sampleStories.map((s) => (
+              {savedScripts.slice(0, 4).map((s) => (
                 <details key={s.id} className="group">
                   <summary className="flex cursor-pointer list-none items-center gap-3.5 px-[18px] py-3 transition-colors hover:bg-row-hover [&::-webkit-details-marker]:hidden">
                     <span className="min-w-0 flex-1">

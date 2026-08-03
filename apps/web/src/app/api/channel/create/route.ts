@@ -188,6 +188,7 @@ export async function POST(req: NextRequest) {
     await db.insert(stories).values({
       channelId: channel!.id,
       source: ref.source,
+      origin: 'setup', // shown in the channel story library as a setup sample
       language: c.languages[0]!.toLowerCase(),
       title: firstLine ? firstLine.slice(0, 80) : 'Reference example',
       body: ref.body,

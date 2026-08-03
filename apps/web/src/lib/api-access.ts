@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
-import { eq } from 'drizzle-orm'
+import { and, count, eq, inArray } from 'drizzle-orm'
 import { getDb, channels, reels, stories, getUserUsage, getGlobalSpendTodayCents } from '@reels/db'
-import { assertGlobalDailyBudget, GlobalBudgetExceededError, GLOBAL_DAILY_SPEND_CAP_CENTS, DEFAULT_USER_LIMITS } from '@reels/core'
+import { assertGlobalDailyBudget, GlobalBudgetExceededError, GLOBAL_DAILY_SPEND_CAP_CENTS, DEFAULT_USER_LIMITS, checkUserLimits, MAX_INFLIGHT_REELS_PER_USER, UNSHIPPED_REEL_STATUSES } from '@reels/core'
 import { getCurrentUser, type SessionUser } from '@/lib/auth'
 
 // API-route authorization. The page layer uses the redirect/notFound guards in `lib/access.ts`;
@@ -150,6 +150,35 @@ export async function requireSpendBudget(user: SessionUser): Promise<Denied | nu
     if (usage.spendCentsThisMonth >= cap) {
       return deny(429, `Monthly budget reached ($${(cap / 100).toFixed(2)}). Ask the admin to raise it.`)
     }
+  }
+  return null
+}
+
+// Cost-safety gate for CREATING a reel — the sibling of requireSpendBudget for the one action that
+// commits a whole pipeline's worth of spend rather than a single call. Two ceilings: the caller's
+// budget/daily-reel quota, then how many reels they may have building at once (a burst of creates can
+// all clear the lagging budget gate at $0 and then run past it in parallel; the mid-pipeline
+// assertUserBudget enforces the dollar total, this smooths the burst). Admins are exempt.
+//
+// Lives here, not in a route: it is the only other place besides the ownership helpers that compares
+// against channels.userId, and that comparison is the single seam a future workspace layer replaces.
+export async function requireReelCreationBudget(user: SessionUser): Promise<Denied | null> {
+  if (user.role === 'admin') return null
+  const usage = await getUserUsage(user.id)
+  if (usage) {
+    const res = checkUserLimits(usage, {
+      monthlyBudgetCents: usage.monthlyBudgetCents ?? DEFAULT_USER_LIMITS.monthlyBudgetCents,
+      dailyReelQuota: usage.dailyReelQuota ?? DEFAULT_USER_LIMITS.dailyReelQuota,
+    })
+    if (!res.ok) return deny(429, res.reason)
+  }
+  const [inflight] = await getDb()
+    .select({ n: count() })
+    .from(reels)
+    .innerJoin(channels, eq(reels.channelId, channels.id))
+    .where(and(eq(channels.userId, user.id), inArray(reels.status, [...UNSHIPPED_REEL_STATUSES])))
+  if ((inflight?.n ?? 0) >= MAX_INFLIGHT_REELS_PER_USER) {
+    return deny(429, `Too many reels in progress (max ${MAX_INFLIGHT_REELS_PER_USER}). Finish or clear some first.`)
   }
   return null
 }

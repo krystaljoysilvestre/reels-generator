@@ -1,10 +1,9 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
-import { getDb, reels, channels, getUserUsage } from '@reels/db'
-import { and, count, eq, inArray } from 'drizzle-orm'
+import { getDb, reels, channels } from '@reels/db'
+import { eq } from 'drizzle-orm'
 import { enqueueStep } from '@reels/queue'
-import { checkUserLimits, DEFAULT_USER_LIMITS, MAX_INFLIGHT_REELS_PER_USER, UNSHIPPED_REEL_STATUSES } from '@reels/core'
-import { requireApiUser } from '@/lib/api-access'
+import { requireApiUser, requireReelCreationBudget } from '@/lib/api-access'
 import { userOwnsChannel } from '@/lib/access'
 
 export async function POST(req: NextRequest) {
@@ -33,32 +32,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'This is an Evidence-Based channel — a source dossier is required to create a reel.' }, { status: 400 })
   }
 
-  // Per-user budget/quota (multi-tenant cost safety). Admins are unlimited.
-  if (user.role !== 'admin') {
-    const usage = await getUserUsage(user.id)
-    if (usage) {
-      const res = checkUserLimits(usage, {
-        monthlyBudgetCents: usage.monthlyBudgetCents ?? DEFAULT_USER_LIMITS.monthlyBudgetCents,
-        dailyReelQuota: usage.dailyReelQuota ?? DEFAULT_USER_LIMITS.dailyReelQuota,
-      })
-      if (!res.ok) return NextResponse.json({ error: res.reason }, { status: 429 })
-    }
-
-    // In-flight concurrency cap: bound how many reels this user can have building at once, so a burst of
-    // creates can't all clear the (lagging) budget gate at $0 and then run past it in parallel. The
-    // mid-pipeline assertUserBudget re-check enforces the dollar total; this smooths the burst.
-    const [inflight] = await db
-      .select({ n: count() })
-      .from(reels)
-      .innerJoin(channels, eq(reels.channelId, channels.id))
-      .where(and(eq(channels.userId, user.id), inArray(reels.status, [...UNSHIPPED_REEL_STATUSES])))
-    if ((inflight?.n ?? 0) >= MAX_INFLIGHT_REELS_PER_USER) {
-      return NextResponse.json(
-        { error: `Too many reels in progress (max ${MAX_INFLIGHT_REELS_PER_USER}). Finish or clear some first.` },
-        { status: 429 },
-      )
-    }
-  }
+  // Per-user budget/quota + in-flight cap (multi-tenant cost safety). Admins are unlimited.
+  const budgetGate = await requireReelCreationBudget(user)
+  if (budgetGate) return budgetGate
 
   // First reel sets how this channel produces reels — 'review' (stop at the human gates) or 'auto'
   // (run end-to-end to a finished render). Persisted on the channel; the worker reads it per gate.
