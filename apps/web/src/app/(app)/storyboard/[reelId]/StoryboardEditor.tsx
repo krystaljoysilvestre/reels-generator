@@ -972,7 +972,7 @@ export function StoryboardEditor({
       {/* Live BUILD progress strip — phases + scene readiness while images generate. During the RENDER
           chain the full-surface RenderingState overlay (below) takes over instead. */}
       {showProgress && !isRendering && (
-        <PipelinePhaseStepper reelStatus={live?.reelStatus ?? reel.status} steps={live?.steps ?? []} mood={channelMoodKey} sceneProgress={sceneProgress} />
+        <PipelinePhaseStepper reelStatus={live?.reelStatus ?? reel.status} steps={live?.steps ?? []} genre={genreCategory} sceneProgress={sceneProgress} />
       )}
 
       {ambient}

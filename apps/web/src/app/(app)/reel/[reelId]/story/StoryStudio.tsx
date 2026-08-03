@@ -177,7 +177,7 @@ export function StoryStudio({ reelId, channelId, channelName, mood, genre, initi
               <button onClick={retry} disabled={busy} className="btn-accent mt-1">{busy ? 'Retrying…' : 'Try again'}</button>
             </div>
           ) : (
-            <StoryGenerating mood={mood} genre={genre} lines={phaseTicker('writing', mood)} draft={draft} costCents={costCents} />
+            <StoryGenerating mood={mood} genre={genre} lines={phaseTicker('writing', genre)} draft={draft} costCents={costCents} />
           )}
         </div>
       </div>
