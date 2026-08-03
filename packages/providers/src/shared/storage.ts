@@ -14,8 +14,18 @@ function getR2Client() {
     region: 'auto',
     endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
     credentials: { accessKeyId, secretAccessKey },
-    // Resilience: retry transient failures (throttling/5xx/timeouts) and never
-    // hang — cap connection + per-request time so a blip surfaces fast.
+    // Retry transient failures (throttling / 5xx / connection errors).
+    //
+    // requestTimeout does NOT abort a slow request — without throwOnRequestTimeout the SDK only logs
+    // "a request has exceeded the configured 60000 ms requestTimeout" and keeps waiting, so maxAttempts
+    // never engages either. Do not "fix" that by flipping the flag on its own: uploadBuffer sends a whole
+    // file in ONE PutObject, and a long-form render is hundreds of MB (a measured 355 MB on 2026-08-03),
+    // which cannot finish inside 60s on a normal connection — the flag alone would turn a slow-but-working
+    // upload into a hard failure. Making the timeout real requires multipart upload (@aws-sdk/lib-storage)
+    // so the ceiling applies per part. Not done: no upload has actually failed yet.
+    //
+    // What genuinely bounds a stuck upload today is withJobTimeout in apps/worker/src/pipeline/liveness.ts
+    // (per-step ceiling) plus the boot reaper — not anything configured here.
     maxAttempts: 3,
     requestHandler: { connectionTimeout: 5_000, requestTimeout: 60_000 },
   })
