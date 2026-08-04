@@ -39,6 +39,8 @@ const InputSchema = z.object({
   ebnSpecialization: z.enum(['historical_events']).default('historical_events'),
   // Presentation identity (a separate axis from genre + mode) — analyzer context, editable in Settings.
   presentation: z.enum(['', 'voiceover', 'hosted']).default(''),
+  // Standalone fact-gate opt-in (advisory). Editable in Settings; off by default.
+  factCheck: z.boolean().default(false),
   voiceMode: VoiceModeSchema,
   voicePool: z.array(ChannelVoiceSchema).max(8), // empty allowed for per_story (chosen at render)
   sampleScript: z.string().trim().max(20000).nullish(), // Step-2 narration → first reference story.
@@ -125,6 +127,7 @@ export async function POST(req: NextRequest) {
     storyMode: c.storyMode,
     ebnSpecialization: c.ebnSpecialization,
     presentation: c.presentation, // narration presentation hint (analyzer context)
+    factCheck: c.factCheck, // standalone fact-gate opt-in
     // Prose dimensions: keep narrativeStyle only if it's actually valid for the resolved genre
     // (resolveStyle → null on mismatch); '' otherwise. Voice is genre-agnostic. Influence default 'medium'.
     narrativeStyle:

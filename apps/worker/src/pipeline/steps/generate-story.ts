@@ -155,6 +155,15 @@ interface StudioOutput {
       | { status: 'ok'; version: string; issues: EbnFidelityVerdict['issues']; summary: string }
       | { status: 'failed'; error: string }
   }
+  // FACT GATE (opt-in, STANDARD path — channels.factCheck + a reel dossier). The same Extractor +
+  // Fact-Fidelity Checker the EBN path uses, run AFTER a freely-written story instead of before it, so any
+  // channel can fact-check its scripts without inheriting EBN's rendering profile. ADVISORY: the verdict
+  // rides this output to the story_review punch-list and never blocks. Fail-safe like `ebn.fidelity`.
+  factCheck?: {
+    fidelity:
+      | { status: 'ok'; version: string; factCount: number; issues: EbnFidelityVerdict['issues']; summary: string }
+      | { status: 'failed'; error: string }
+  }
   peakResolution: 'stage' | 'writer_restored' | 'dropped'
 }
 
@@ -357,6 +366,7 @@ export async function generateStory(reelId: string, channelId: string, language:
       styleInfluence: channel.styleInfluence,
       storyMode: channel.storyMode,
       ebnSpecialization: channel.ebnSpecialization,
+      factCheck: channel.factCheck ?? false,
     },
     dossier,
     basePromptVars,
@@ -443,9 +453,12 @@ interface StudioArgs {
     // path; anything else (default 'standard') runs the untouched fiction studio chain.
     storyMode: string | null
     ebnSpecialization: string | null
+    // Fact-gate opt-in: check the finished story against this reel's sources (advisory punch-list).
+    factCheck: boolean
   }
-  // The curated dossier for THIS reel (EBN only) — the raw source the Extractor freezes into the
-  // Evidence Bible. undefined for standard channels (and required for EBN — the branch fails closed).
+  // The curated SOURCE material for THIS reel. On the EBN path it's the dossier the Extractor freezes
+  // into the Evidence Bible BEFORE writing (required there — the branch fails closed). On the standard
+  // path it's optional, and only used by the opt-in fact gate to check the story AFTER writing.
   dossier: string | undefined
   basePromptVars: {
     channelName: string
@@ -542,6 +555,16 @@ async function runStudio(a: StudioArgs) {
       ? { planCriticVersion: STORY_PLAN_CRITIC_V1_VERSION, planDoctorVersion: STORY_PLAN_DOCTOR_V1_VERSION }
       : {}),
     ...(FINISHING_QA_ENABLED ? { finishingJudgeVersion: STORY_FINISHING_JUDGE_V1_VERSION } : {}),
+    // Same discipline for the opt-in fact gate: only channels using it get the extra key material, so
+    // everyone else keeps their existing hashes. The dossier itself is hashed — editing the sources
+    // re-runs the story round (and therefore the check) instead of serving a stale verdict.
+    ...(a.channel.factCheck && a.dossier
+      ? {
+          factCheckExtractorVersion: STORY_EBN_EXTRACTOR_V1_VERSION,
+          factCheckFidelityVersion: STORY_EBN_FIDELITY_V1_VERSION,
+          factCheckDossier: a.dossier,
+        }
+      : {}),
   })
 
   return runStep<StudioOutput>({ reelId: a.reelId, stepName: 'generate_story', inputHash }, async (cost) => {
@@ -872,6 +895,53 @@ async function runStudio(a: StudioArgs) {
       }
     }
 
+    // ── FACT GATE (OPT-IN, advisory) — check the finished story against this reel's sources ──────────
+    // Runs INLINE here (not as its own pipeline step) for the same reason the plan gate and finishing QA
+    // do: it's a judgment about the story this step just produced, so it belongs to this step's output and
+    // its cost. Reuses the EBN Extractor + Fact-Fidelity Checker, but AFTER a freely-written story — so a
+    // standard channel (any language, persona, or look) can fact-check its scripts without inheriting
+    // EBN's illustrative rendering + formal-English writer. Detection only: the punch-list reaches the
+    // human at story_review; nothing blocks or regenerates.
+    let factCheck: StudioOutput['factCheck']
+    if (a.channel.factCheck && a.dossier) {
+      try {
+        const ex = buildEbnExtractorPrompt({ dossier: a.dossier })
+        const exRes = await llmCall({
+          templateVersion: STORY_EBN_EXTRACTOR_V1_VERSION,
+          schema: EvidenceBibleSchema,
+          system: ex.system,
+          messages: [{ role: 'user', content: ex.userMessage }],
+          provider: 'anthropic',
+          maxTokens: 4096,
+        })
+        cost.add(exRes.costCents)
+        const facts = exRes.data.facts
+
+        const ff = buildEbnFidelityPrompt({
+          facts: facts.map((f) => ({ id: f.id, stance: f.stance, weight: f.weight, value: f.value, attributed_to: f.attributed_to })),
+          criticalIds: facts.filter((f) => f.weight === 'Critical').map((f) => f.id),
+          narration: winner.narration,
+        })
+        const ffRes = await llmCall({
+          templateVersion: STORY_EBN_FIDELITY_V1_VERSION,
+          schema: EbnFidelitySchema,
+          system: ff.system,
+          messages: [{ role: 'user', content: ff.userMessage }],
+          provider: 'anthropic',
+          maxTokens: 2048,
+        })
+        cost.add(ffRes.costCents)
+        factCheck = {
+          fidelity: { status: 'ok', version: STORY_EBN_FIDELITY_V1_VERSION, factCount: facts.length, issues: ffRes.data.issues, summary: ffRes.data.summary ?? '' },
+        }
+        console.log(`[generate_story] fact gate: ${ffRes.data.issues.length === 0 ? 'no fidelity issues' : `${ffRes.data.issues.length} fidelity issue(s) flagged (advisory)`} against ${facts.length} sourced fact(s)`)
+      } catch (err) {
+        // Never fail the step over the fact gate — it's advisory, exactly like finishing QA above.
+        console.warn(`[generate_story] fact gate failed, story proceeds to review unchecked: ${String(err)}`)
+        factCheck = { fidelity: { status: 'failed', error: String(err) } }
+      }
+    }
+
     const output: StudioOutput = {
       v: 3,
       mode: 'studio',
@@ -886,6 +956,7 @@ async function runStudio(a: StudioArgs) {
       naturalizer: { status: natural.status, ...(natural.detail ? { detail: natural.detail } : {}) },
       gate,
       ...(finishingQA ? { finishingQA } : {}),
+      ...(factCheck ? { factCheck } : {}),
       peakResolution,
     }
     return { output, costCents: cost.total }
