@@ -5,13 +5,18 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { mkdir, writeFile, readFile, rm, copyFile } from 'node:fs/promises'
 import { getDb, reels, scenes, assets, channels } from '@reels/db'
-import { downloadBuffer, uploadBuffer, buildInputHash } from '@reels/providers'
+import { downloadBuffer, uploadBuffer, uploadFile, buildInputHash } from '@reels/providers'
 import { TimingsSchema, LutConfigSchema, CaptionStyleSchema, PLATFORM_PRESETS, PostMetaSchema, effectsFromSelection, parseMotion } from '@reels/core'
 import { renderReelWithRemotion, renderThumbnailStill } from '@reels/render/remotion/render-remotion'
 import { resolveMediaGenre } from '@reels/core/prompts/scenes.v1'
 import { runStep, setReelStatus } from '../harness.js'
+import { runPool } from '../pool.js'
 
 const execFileAsync = promisify(execFile)
+
+// Scene media (stills + clips) is pulled from R2 concurrently. Bounded because each buffer is held whole in
+// memory before it's written — 8 in flight keeps peak footprint modest on a 1080p long-form board.
+const RENDER_FETCH_CONCURRENCY = 8
 
 // The app's default watermark logo (R2 key) — burned onto every reel unless a channel overrides it.
 const DEFAULT_WATERMARK_KEY = 'app/watermark.png'
@@ -125,6 +130,11 @@ export async function renderStep(reelId: string): Promise<void> {
     async () => {
       const tmp = join(tmpdir(), `reels-render-${reelId}`)
       await mkdir(tmp, { recursive: true })
+      // Sub-phase timing. The step has three very differently-shaped costs — pulling ~40 scene assets from R2
+      // (network), the Remotion frame pass (CPU), and muxing + re-uploading a 350 MB file (network) — and the
+      // step total alone can't tell you which one moved. Each phase logs its own elapsed seconds.
+      const stepStartedMs = Date.now()
+      const sinceStart = () => ((Date.now() - stepStartedMs) / 1000).toFixed(1)
       try {
 
       // ── Audio mix (always needed for the mux) ────────────────────────────
@@ -133,6 +143,20 @@ export async function renderStep(reelId: string): Promise<void> {
 
       const visualKey = `reels/${reelId}/visual.mp4`
       const gradedPath = join(tmp, 'graded.mp4') // the final graded visual to mux (cached or freshly rendered)
+
+      // The cached-visual upload runs CONCURRENTLY with the mux + final upload below. The two only share the
+      // local graded file, which both merely READ, so there's no ordering constraint.
+      //
+      // This is the one upload change that MEASURED well: both 355 MB files went up in 257s together
+      // (~2.76 MB/s aggregate) where a single upload alone had managed 0.75–0.89 MB/s (2026-08-04). Upload
+      // throughput scales with concurrent streams here, so overlapping is worth real minutes — it is NOT
+      // merely hiding one upload behind the mux, which is a 3s stream copy and hides nothing.
+      //
+      // Kept FATAL, exactly as the sequential await was. The error is captured into a variable rather than
+      // left on the promise only because a floating promise that rejects while we're awaiting the mux would
+      // trip Node's unhandled-rejection process exit; it is rethrown at the join point below.
+      let visualUpload: Promise<unknown> | null = null
+      let visualUploadError: unknown = null
 
       // ── Reuse the cached graded visual when the fingerprint is unchanged (audio-only re-render) ──────
       // The prior render row records the fingerprint of the visual it produced. If it matches (and the
@@ -143,7 +167,7 @@ export async function renderStep(reelId: string): Promise<void> {
         try {
           await writeFile(gradedPath, await downloadBuffer(visualKey))
           reused = true
-          console.log('[render] visual unchanged — reusing cached track, re-muxing audio only')
+          console.log(`[render] visual unchanged — reusing cached track at ${sinceStart()}s, re-muxing audio only`)
         } catch {
           reused = false // cached file missing/unreadable → fall through to a full render
         }
@@ -151,57 +175,64 @@ export async function renderStep(reelId: string): Promise<void> {
 
       if (!reused) {
         // ── Build scene inputs with local file paths ───────────────────────
+        // Planned first (pure — no I/O), then every scene's media is fetched CONCURRENTLY. Worth doing, but
+        // MEASURED SMALL: a 42-scene long-form board fetches in ~5s concurrently against a frame pass of ~29
+        // minutes (2026-08-04), so this is tens of seconds saved, not minutes — don't mistake it for a render
+        // optimisation. The step's real costs are the frame pass and the two 355 MB uploads below.
+        // Order is preserved: reelScenes is already sorted by idx.
         type SceneInput = Parameters<typeof renderReelWithRemotion>[0]['scenes'][number]
-        const sceneInputs: SceneInput[] = []
 
-        for (const scene of reelScenes) {
+        const planned = reelScenes.flatMap((scene) => {
           const timing = timings.scenes.find((s) => s.idx === scene.idx)
-          if (!timing) continue
-
-          // Image
-          const imagePath = join(tmp, `scene_${scene.idx}_img.webp`)
+          if (!timing) return []
           const imageAsset = scene.imageAssetId ? allAssets.find((a) => a.id === scene.imageAssetId) : null
-          if (imageAsset) {
-            await writeFile(imagePath, await downloadBuffer(imageAsset.storageKey))
+          // Video (operator picks from 2 variations; default to variationIdx=0)
+          const videoAsset = scene.tier === 'video' ? pickVideoAsset(scene.idx) : undefined
+          const dur = videoAsset ? (videoAsset.meta as Record<string, unknown>)['durationSec'] : undefined
+          return [{
+            scene,
+            timing,
+            imageAsset,
+            videoAsset,
+            imagePath: join(tmp, `scene_${scene.idx}_img.webp`),
+            videoPath: videoAsset ? join(tmp, `scene_${scene.idx}_vid.mp4`) : null,
+            videoDurationSec: typeof dur === 'number' ? dur : null,
+          }]
+        })
+
+        await runPool(planned, RENDER_FETCH_CONCURRENCY, async (p) => {
+          if (p.imageAsset) {
+            await writeFile(p.imagePath, await downloadBuffer(p.imageAsset.storageKey))
           } else {
             // Black placeholder frame, at the platform's output dims
             await execFileAsync('ffmpeg', [
               '-f', 'lavfi', '-i', `color=black:s=${platformPreset.width}x${platformPreset.height}`,
-              '-frames:v', '1', '-y', imagePath,
+              '-frames:v', '1', '-y', p.imagePath,
             ])
           }
-
-          // Video (operator picks from 2 variations; default to variationIdx=0)
-          let videoPath: string | null = null
-          let videoDurationSec: number | null = null
-          if (scene.tier === 'video') {
-            const videoAsset = pickVideoAsset(scene.idx)
-            if (videoAsset) {
-              videoPath = join(tmp, `scene_${scene.idx}_vid.mp4`)
-              await writeFile(videoPath, await downloadBuffer(videoAsset.storageKey))
-              const dur = (videoAsset.meta as Record<string, unknown>)['durationSec']
-              videoDurationSec = typeof dur === 'number' ? dur : null
-            }
+          if (p.videoPath && p.videoAsset) {
+            await writeFile(p.videoPath, await downloadBuffer(p.videoAsset.storageKey))
           }
+        }, 'scene asset')
+        console.log(`[render] fetched ${planned.length} scene assets in ${sinceStart()}s (concurrency ${RENDER_FETCH_CONCURRENCY})`)
 
-          sceneInputs.push({
-            idx: scene.idx,
-            imagePath,
-            videoPath,
-            tier: scene.tier as 'still' | 'video',
-            startMs: timing.startMs,
-            endMs: timing.endMs,
-            mood: scene.mood,
-            onScreenText: scene.onScreenText,
-            // Still: the director's camera move (recovered from the stored motion text) drives Ken Burns.
-            cameraMove: scene.tier === 'still' ? parseMotion(scene.motionPrompt).moveKey : null,
-            videoDurationSec,
-            // Operator's explicit per-reel selection wins; null → auto-plan from mood + genre.
-            effects: Array.isArray(reel.videoEffects)
-              ? effectsFromSelection(reel.videoEffects as string[], scene.tier as 'still' | 'video')
-              : planSceneEffects(scene.mood, scene.tier as 'still' | 'video', mediaGenre),
-          })
-        }
+        const sceneInputs: SceneInput[] = planned.map((p) => ({
+          idx: p.scene.idx,
+          imagePath: p.imagePath,
+          videoPath: p.videoPath,
+          tier: p.scene.tier as 'still' | 'video',
+          startMs: p.timing.startMs,
+          endMs: p.timing.endMs,
+          mood: p.scene.mood,
+          onScreenText: p.scene.onScreenText,
+          // Still: the director's camera move (recovered from the stored motion text) drives Ken Burns.
+          cameraMove: p.scene.tier === 'still' ? parseMotion(p.scene.motionPrompt).moveKey : null,
+          videoDurationSec: p.videoDurationSec,
+          // Operator's explicit per-reel selection wins; null → auto-plan from mood + genre.
+          effects: Array.isArray(reel.videoEffects)
+            ? effectsFromSelection(reel.videoEffects as string[], p.scene.tier as 'still' | 'video')
+            : planSceneEffects(p.scene.mood, p.scene.tier as 'still' | 'video', mediaGenre),
+        }))
 
         // Roaming watermark: the APP brands every reel with its logo by default (DEFAULT_WATERMARK_KEY); a
         // channel MAY override with its own key. Inlined as a data URI so the Remotion bundle stays
@@ -220,6 +251,11 @@ export async function renderStep(reelId: string): Promise<void> {
 
         // ── Remotion renders the visual track (no audio) ─────────────────
         const visualPath = join(tmp, 'visual.mp4')
+        // Remotion fires onProgress far more often than the percentage changes — unthrottled, a long-form
+        // render emitted thousands of identical "1%" lines and buried everything useful around it. Log only
+        // when the whole percent moves (≤101 lines), with elapsed seconds so the frame rate is readable.
+        const renderStartedMs = Date.now()
+        let lastLoggedPct = -1
         await renderReelWithRemotion({
           scenes: sceneInputs,
           subtitles: timings.subtitles,
@@ -233,8 +269,15 @@ export async function renderStep(reelId: string): Promise<void> {
           watermark,
           ...(channel.storyMode === 'ebn' ? { disclosure: EBN_DISCLOSURE_LABEL } : {}),
           outputPath: visualPath,
-          onProgress: (p) => console.log(`  Remotion render: ${Math.round(p * 100)}%`),
+          onProgress: (p) => {
+            const pct = Math.round(p * 100)
+            if (pct === lastLoggedPct) return
+            lastLoggedPct = pct
+            console.log(`  Remotion render: ${pct}% (${((Date.now() - renderStartedMs) / 1000).toFixed(0)}s)`)
+          },
         })
+
+        console.log(`[render] Remotion frame pass done at ${sinceStart()}s`)
 
         // ── LUT grade (if configured) → gradedPath; else the raw visual IS the graded track ──────────
         if (lutConfig.lutPath) {
@@ -249,7 +292,11 @@ export async function renderStep(reelId: string): Promise<void> {
         }
 
         // Cache the finished visual so future audio-only renders skip everything above and just re-mux.
-        await uploadBuffer(visualKey, await readFile(gradedPath), 'video/mp4')
+        // Started, not awaited — see the visualUpload declaration above. Streams from disk so a 355 MB file
+        // never becomes a heap Buffer, which matters with the final upload running alongside it.
+        visualUpload = uploadFile(visualKey, gradedPath, 'video/mp4')
+          .then(() => console.log(`[render] cached visual uploaded at ${sinceStart()}s`))
+          .catch((err) => { visualUploadError = err })
       }
 
       // ── Mux graded visual + audio → final reel (pure stream copy; fast even on the reuse path) ────────
@@ -266,9 +313,21 @@ export async function renderStep(reelId: string): Promise<void> {
         '-y', outputPath,
       ])
 
+      console.log(`[render] muxed at ${sinceStart()}s — uploading final reel`)
+
       // ── Upload the final reel ──────────────────────────────────────────
       const storageKey = `reels/${reelId}/render.mp4`
-      await uploadBuffer(storageKey, await readFile(outputPath), 'video/mp4')
+      await uploadFile(storageKey, outputPath, 'video/mp4')
+      console.log(`[render] muxed + uploaded final reel at ${sinceStart()}s${reused ? ' (reused cached visual)' : ''}`)
+
+      // Join point for the concurrent cached-visual upload. Awaited BEFORE the asset row is written, so
+      // meta.visualFingerprint never claims a cache that failed to upload — and rethrown, so a cache-upload
+      // failure fails the step just as it did when this was a plain sequential await.
+      if (visualUpload) {
+        await visualUpload
+        if (visualUploadError) throw visualUploadError
+        console.log(`[render] all uploads settled at ${sinceStart()}s`)
+      }
 
       // Constant key per reel → upsert in place; bump createdAt (drives the preview cache-bust + render_qa
       // re-validation). meta.visualFingerprint lets the NEXT render decide whether it can reuse the visual.

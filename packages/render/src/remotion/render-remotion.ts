@@ -17,6 +17,53 @@ import type { CaptionStyle, ReelCompositionProps, ReelScene, SceneEffect, Subtit
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
+// ── Render performance knobs ────────────────────────────────────────────────────────────────────────────
+// Render wall-clock is dominated by FRAME CAPTURE — one headless-Chromium screenshot per frame, ~36k frames
+// for a 20-minute long-form reel. Encoding runs concurrently with capture, so on a small box the x264 encode
+// competes with capture for the same cores. Both knobs below are env-overridable because the right value is a
+// property of the machine, not of the code.
+
+// Parallel Chromium tabs — roughly one core each. cores/2 matches the physical cores of a hyperthreaded
+// laptop (and is Remotion's own default); OVERSUBSCRIBING A SMALL BOX MAKES RENDERS SLOWER, NOT FASTER, so
+// this is not a "turn it up" dial. A dedicated render host (WORKER_ROLE=render) should set
+// REMOTION_CONCURRENCY to its real core count — that, not this default, is where big renders get faster.
+function resolveConcurrency(): number {
+  const raw = process.env['REMOTION_CONCURRENCY']
+  const n = raw ? Number.parseInt(raw, 10) : Number.NaN
+  if (Number.isFinite(n) && n > 0) return n
+  if (raw) console.warn(`[render] ignoring invalid REMOTION_CONCURRENCY="${raw}"`)
+  return Math.max(2, Math.floor(cpus().length / 2))
+}
+
+// x264 speed/compression trade-off. DEFAULTS TO UNSET (x264's own 'medium', i.e. exactly what we shipped
+// before) — deliberately not tuned by default, for two reasons:
+//   • It is not free quality-wise. Holding CRF at Remotion's h264 default of 18 holds the quality TARGET, so
+//     a faster preset mostly buys a bigger file — but the output is not identical, and our picture is grain-
+//     heavy (GradeOverlay re-grains every frame), which is exactly what a fast preset compresses worst.
+//   • The payoff is unproven here. Encoding runs CONCURRENTLY with frame capture, and capture is the
+//     bottleneck — so a cheaper encode mostly buys back contended CPU, not a shorter critical path.
+// Left as a knob for a render host where encode genuinely competes for cores; 'veryfast' is the first stop.
+const X264_PRESETS = ['ultrafast', 'superfast', 'veryfast', 'faster', 'fast', 'medium', 'slow', 'slower', 'veryslow', 'placebo'] as const
+function resolveX264Preset(): (typeof X264_PRESETS)[number] | null {
+  const raw = process.env['REMOTION_X264_PRESET']
+  if (raw && (X264_PRESETS as readonly string[]).includes(raw)) return raw as (typeof X264_PRESETS)[number]
+  if (raw) console.warn(`[render] ignoring invalid REMOTION_X264_PRESET="${raw}"`)
+  return null
+}
+
+// Platform encoder (VideoToolbox / QuickSync) instead of x264. Off by default — Remotion's default too —
+// because a hardware encoder is BITRATE-driven rather than CRF-driven, so unlike the preset above it does
+// change the picture. It's the largest remaining render lever on a CPU-bound box (the encode leaves the CPU
+// entirely), but it needs a side-by-side render before it earns the default. 'if-possible' falls back to
+// x264 silently where no hardware encoder exists; 'required' fails the render instead.
+const HW_ACCEL_OPTIONS = ['disable', 'if-possible', 'required'] as const
+function resolveHardwareAcceleration(): (typeof HW_ACCEL_OPTIONS)[number] {
+  const raw = process.env['REMOTION_HARDWARE_ACCELERATION']
+  if (raw && (HW_ACCEL_OPTIONS as readonly string[]).includes(raw)) return raw as (typeof HW_ACCEL_OPTIONS)[number]
+  if (raw) console.warn(`[render] ignoring invalid REMOTION_HARDWARE_ACCELERATION="${raw}"`)
+  return 'disable'
+}
+
 export interface RemotionRenderInput {
   scenes: Array<{
     idx: number
@@ -164,6 +211,16 @@ export async function renderReelWithRemotion(input: RemotionRenderInput): Promis
   const fps = 30
   const totalFrames = Math.ceil((input.durationMs / 1000) * fps)
 
+  const concurrency = resolveConcurrency()
+  const x264Preset = resolveX264Preset()
+  const hardwareAcceleration = resolveHardwareAcceleration()
+  // Logged BEFORE the render: frame count is the render's size, and these three are the only settings that
+  // change how long it takes — so a slow render's log line already says what it was asked to do.
+  console.log(
+    `[render] ${totalFrames} frames @ concurrency ${concurrency}, x264 ${x264Preset ?? 'default'}` +
+      `${hardwareAcceleration === 'disable' ? '' : `, hwaccel ${hardwareAcceleration}`}`,
+  )
+
   // Videos are served over a loopback HTTP server (OffthreadVideo can't take a big data URI — see
   // startFileServer). Images are small enough to inline as data URIs.
   const videoRoutes = new Map<string, string>()
@@ -175,6 +232,7 @@ export async function renderReelWithRemotion(input: RemotionRenderInput): Promis
   // Everything from here that can throw (image data-URI reads, bundling, browser download, render) must be
   // inside the try — otherwise a failure before renderMedia would leak the loopback server + its port.
   try {
+  const prepStartedMs = Date.now()
   const scenes: ReelScene[] = await Promise.all(
     input.scenes.map(async (s) => {
       const imageSrc = await toDataUri(s.imagePath, 'image/webp')
@@ -208,6 +266,13 @@ export async function renderReelWithRemotion(input: RemotionRenderInput): Promis
     ...(input.disclosure ? { disclosure: input.disclosure } : {}),
   }
 
+  // Scene stills are inlined as base64 data URIs, which inflates them ~33% and makes the props payload scale
+  // with the board. Logged so the cost is a MEASUREMENT rather than an assumption: if this is minutes, serving
+  // the local files over the loopback server below (as video clips already are) is worth doing; if it's
+  // seconds, inlining is fine and the props payload is not where render time goes.
+  const propsBytes = scenes.reduce((n, s) => n + s.imageSrc.length, 0)
+  console.log(`[render] inlined ${scenes.length} stills as data URIs in ${((Date.now() - prepStartedMs) / 1000).toFixed(1)}s (${(propsBytes / 1048576).toFixed(1)} MB of props)`)
+
   const bundleUrl = await getBundleUrl()
   await ensureBrowserOnce()
 
@@ -236,10 +301,11 @@ export async function renderReelWithRemotion(input: RemotionRenderInput): Promis
       chromiumOptions: { disableWebSecurity: true },  // allow data URIs
       ...(browserExecutable ? { browserExecutable } : {}),
       muted: true,  // visual only — audio is muxed in separately
-      // Frames render in parallel Chromium tabs; 2 was leaving most of the CPU idle (~8fps on an 8-core
-      // machine → ~10min for a 3-minute reel). cores/2 is Remotion's own default and roughly halves the
-      // wall time; stays conservative so the dev box (web + worker + Postgres) isn't starved.
-      concurrency: Math.max(2, Math.floor(cpus().length / 2)),
+      // See the render performance knobs at the top of this file — all three are env-overridable, because
+      // the right values depend on the render host's core count, not on anything in the composition.
+      concurrency,
+      x264Preset,
+      hardwareAcceleration,
     })
   } finally {
     await fileServer.close()  // release the loopback port whether the render succeeds or throws

@@ -16,10 +16,15 @@ import {
   type VoiceSettings,
 } from '@reels/core'
 import { runStep } from '../harness.js'
+import { runPool } from '../pool.js'
 
 // generate_sfx — step 7 (docs/02 §4)
 // Generates each annotated SFX + selects ambient bed from channel audio pack.
 // Timings are already resolved in compute_timings; this step produces the audio files.
+
+// Cues are generated concurrently. Matched to the elevenlabs semaphore (providers/shared/limiter), which
+// remains the authoritative cap on in-flight calls; this only bounds how many this step puts in flight.
+const SFX_CONCURRENCY = 4
 
 export async function generateSfx(reelId: string): Promise<void> {
   const db = getDb()
@@ -69,13 +74,25 @@ export async function generateSfx(reelId: string): Promise<void> {
   // Vocal prompts are dropped (safety net behind the sound designer's non-vocal-SFX rule): a synthesized
   // gasp/laugh/whisper reads as a random stranger next to the narrator. Intentional voices go through the
   // designer's speech cues, not SFX.
-  const sfxCues = (audioPacks.sfxEnabled ? audioScript.sfx : [])
+  const designedCues = (audioPacks.sfxEnabled ? audioScript.sfx : [])
     .filter((c) => !opAnchors.has(c.anchor))
     .filter((c) => {
       if (!isVocalSfxPrompt(c.prompt)) return true
       console.log(`[sfx] dropped vocal SFX prompt "${c.prompt}" @ "${c.anchor}" (${reelId})`)
       return false
     })
+  // ONE cue per anchor. Nothing upstream enforces this — the designer may put two different sounds on the
+  // same anchor — but mix_audio premixes only the newest asset per anchor and skips the rest (usedAnchors),
+  // so a second cue on an anchor was always generated, paid for, and then discarded. Keeping the LAST cue
+  // preserves which one the mixer used to choose (newest-wins ≡ last-generated, back when cues were
+  // sequential). This also makes the winner deterministic now that cues generate concurrently, where
+  // completion order — not script order — would otherwise decide it.
+  const byAnchor = new Map<string, (typeof designedCues)[number]>()
+  for (const c of designedCues) byAnchor.set(c.anchor, c)
+  const sfxCues = [...byAnchor.values()]
+  if (sfxCues.length < designedCues.length) {
+    console.log(`[sfx] ${reelId.slice(0, 8)}: ${designedCues.length - sfxCues.length} duplicate-anchor cue(s) dropped before generation`)
+  }
   // Key on anchor+prompt+duration (not anchor alone): a new design may reuse an anchor with a DIFFERENT
   // sound or a DIFFERENT length, and either must regenerate — else the render keeps the stale clip for
   // that spot. (mix_audio then picks the newest asset per anchor.)
@@ -103,9 +120,11 @@ export async function generateSfx(reelId: string): Promise<void> {
         return `${m.anchor}\x00${m.prompt ?? ''}\x00${dur}${m.loop ? ' loop' : ''}`
       }).filter(Boolean) as string[])
 
+      // Cues generate CONCURRENTLY: each is an independent ElevenLabs round trip writing its own storage key
+      // (slugSuffix is derived from the cue), so nothing is shared but the cost tally. A designed reel carries
+      // ~10-18 cues, which serially made this step the sum of every one of those round trips.
       let totalCost = 0
-      for (const cue of sfxCues) {
-        if (done.has(cueKey(cue))) continue // same anchor+prompt already generated — don't re-pay
+      await runPool(sfxCues.filter((c) => !done.has(cueKey(c))), SFX_CONCURRENCY, async (cue) => {
         // Clip length = the designer's choice (long builds/drones) or the legacy fallback; the mixer
         // shifts a build-to-hit cue so its detected impact lands on the anchor.
         const dur = resolveDur(cue)
@@ -146,7 +165,7 @@ export async function generateSfx(reelId: string): Promise<void> {
             target: [assets.reelId, assets.storageKey],
             set: { kind: 'sfx', provider: 'elevenlabs', costCents: sfxResult.costCents, meta, createdAt: new Date() },
           })
-      }
+      }, 'sfx cue')
       return { output: { sfxCount: sfxCues.length }, costCents: totalCost }
     },
   )
@@ -158,7 +177,8 @@ export async function generateSfx(reelId: string): Promise<void> {
     const tone = ToneConfigSchema.parse(channel.toneConfig ?? {})
     const base = (reel.voiceSettings as VoiceSettings | null) ?? moodToVoiceSettings([], tone, channel.genreCategory)
 
-    for (const cue of operatorCues) {
+    // Also concurrent — one step row and one deterministic storage key per cue, so they never interact.
+    await runPool(operatorCues, SFX_CONCURRENCY, async (cue) => {
       const storageKey = `reels/${reelId}/sfx/op-${cue.id}.mp3`
       const inputHash = buildInputHash('operator_sfx.v1', {
         id: cue.id, anchor: cue.anchor, kind: cue.kind,
@@ -202,6 +222,6 @@ export async function generateSfx(reelId: string): Promise<void> {
           return { output: { anchor: cue.anchor }, costCents: cost }
         },
       )
-    }
+    }, 'operator cue')
   }
 }

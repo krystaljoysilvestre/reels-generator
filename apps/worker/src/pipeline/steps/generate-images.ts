@@ -5,6 +5,7 @@ import { assembleImagePrompt, assembleNegativePrompt, assembleReferencePrompt, c
 import { z } from 'zod'
 import { buildRephrasePrompt, REPHRASE_V1_VERSION, buildImageQAPrompt, IMAGE_QA_V1_VERSION, ImageQASchema, buildFilterSafePrompt, FILTER_SAFE_V1_VERSION, FilterSafeSchema, buildPlaceSourceDecidePrompt, buildPlaceVerifyPrompt, PlaceSourceDecisionSchema, PlaceVerifySchema, PLACE_SOURCE_V1_VERSION } from '../../prompts-bridge.js'
 import { runStep } from '../harness.js'
+import { runPool } from '../pool.js'
 
 // generate_images — step 4
 // One image per scene. Style preset injected server-side — the system owns the look, the LLM only writes
@@ -46,28 +47,6 @@ function sniffMediaType(buf: Buffer): 'image/webp' | 'image/jpeg' | 'image/png' 
   if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'image/jpeg'
   if (buf.length >= 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return 'image/png'
   return 'image/jpeg'
-}
-
-// Run `worker` over items with a rolling pool of `concurrency` runners (each pulls the next item as it
-// frees — no head-of-line blocking). Per-item errors are collected, not fatal: successful scenes still
-// persist; if any failed we throw at the end so runStep's retry resumes only the still-pending scenes.
-async function runPool<T>(items: T[], concurrency: number, worker: (item: T) => Promise<void>): Promise<void> {
-  const failures: string[] = []
-  let next = 0
-  const runner = async () => {
-    while (next < items.length) {
-      const i = next++
-      try {
-        await worker(items[i]!)
-      } catch (err) {
-        failures.push(err instanceof Error ? err.message : String(err))
-      }
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, runner))
-  if (failures.length > 0) {
-    throw new Error(`${failures.length}/${items.length} scene image(s) failed: ${failures.join(' | ')}`)
-  }
 }
 
 // Render one image on the chosen engine — gpt-image-1 (openai) via ../../providers generateImage, or a fal
@@ -463,7 +442,7 @@ export async function generateImages(reelId: string): Promise<void> {
   }
 
   // Rolling pool — fast without flooding fal, and one bad scene doesn't abort the others.
-  await runPool(pending, IMAGE_CONCURRENCY, processScene)
+  await runPool(pending, IMAGE_CONCURRENCY, processScene, 'scene image')
 }
 
 // Vision QA: does the render match the brief's checkable intent? Takes the image BYTES (the caller

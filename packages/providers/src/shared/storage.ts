@@ -1,4 +1,6 @@
-import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3'
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3'
+import { Upload } from '@aws-sdk/lib-storage'
+import { createReadStream } from 'node:fs'
 import type { Readable } from 'node:stream'
 
 // Cloudflare R2 via S3-compat API. Zero egress fees. (docs/02)
@@ -18,11 +20,13 @@ function getR2Client() {
     //
     // requestTimeout does NOT abort a slow request — without throwOnRequestTimeout the SDK only logs
     // "a request has exceeded the configured 60000 ms requestTimeout" and keeps waiting, so maxAttempts
-    // never engages either. Do not "fix" that by flipping the flag on its own: uploadBuffer sends a whole
-    // file in ONE PutObject, and a long-form render is hundreds of MB (a measured 355 MB on 2026-08-03),
-    // which cannot finish inside 60s on a normal connection — the flag alone would turn a slow-but-working
-    // upload into a hard failure. Making the timeout real requires multipart upload (@aws-sdk/lib-storage)
-    // so the ceiling applies per part. Not done: no upload has actually failed yet.
+    // never engages either.
+    //
+    // Uploads now go through multipart (see putObject below), so this 60s ceiling applies PER PART rather
+    // than to a whole hundreds-of-MB file — which is the precondition that makes throwOnRequestTimeout a
+    // viable follow-up (it would let a genuinely stuck part fail fast and be retried by maxAttempts).
+    // Deliberately still NOT enabled: it converts a slow-but-working part into a hard failure, and no
+    // upload has actually failed yet. Flip it on its own evidence, not as a side effect of this change.
     //
     // What genuinely bounds a stuck upload today is withJobTimeout in apps/worker/src/pipeline/liveness.ts
     // (per-step ceiling) plus the boot reaper — not anything configured here.
@@ -35,16 +39,54 @@ export function getBucket(): string {
   return process.env['R2_BUCKET_NAME'] ?? 'reels-assets'
 }
 
+// Multipart upload settings. A render's final mp4 is hundreds of MB (355 MB measured) and the render writes
+// TWO of them, which measured as ~32% of the whole render step (2026-08-04).
+//
+// ON SPEED, the measurements are messy and worth stating honestly rather than tidying up. A single upload
+// measured 0.75–0.89 MB/s, which first looked like a saturated uplink — but the render's TWO concurrent
+// uploads then moved 710 MB in 257s (~2.76 MB/s aggregate, 2026-08-04). So the uplink is NOT the ceiling;
+// throughput scales with concurrent streams, and the slow single-upload numbers were taken while the box was
+// CPU-starved (load ~87), which throttles TLS/stream work. Treat any upload throughput figure measured under
+// load as unreliable. The parallelism that clearly pays is at the FILE level (see the overlapped upload in
+// render-step.ts); whether partSize/queueSize tuning adds more on top is unmeasured — don't assume either way.
+//
+// What multipart buys independently of speed, and why it stays regardless:
+//   • Streaming (see uploadFile) — a 355 MB file never has to exist as a Buffer in the heap.
+//   • The 60s requestTimeout becomes a PER-PART ceiling instead of being unenforceable on a whole file.
+//   • leavePartsOnError:false cleans up after a failure instead of leaving billable orphan parts in R2.
+//
+// 8 MB parts: comfortably above S3/R2's 5 MB minimum, and ~45 parts for a 355 MB file — small enough that a
+// part finishes well inside the request timeout even on a slow link, large enough not to be all overhead.
+const UPLOAD_PART_SIZE = 8 * 1024 * 1024
+const UPLOAD_QUEUE_SIZE = 4 // parts in flight; the win comes from parallelism when one connection is the limit
+
+// Shared upload path. lib-storage's Upload sends a single PutObject when the body is smaller than one part, so
+// small assets (images, audio clips) behave exactly as before and only large files take the multipart route.
+async function putObject(key: string, body: Buffer | Readable, contentType: string): Promise<string> {
+  const upload = new Upload({
+    client: getR2Client(),
+    params: { Bucket: getBucket(), Key: key, Body: body, ContentType: contentType },
+    partSize: UPLOAD_PART_SIZE,
+    queueSize: UPLOAD_QUEUE_SIZE,
+    leavePartsOnError: false, // abort the multipart upload on failure so R2 doesn't accrue billable orphan parts
+  })
+  await upload.done()
+  return key
+}
+
 export async function uploadBuffer(
   key: string,
   body: Buffer,
   contentType: string,
 ): Promise<string> {
-  const client = getR2Client()
-  await client.send(
-    new PutObjectCommand({ Bucket: getBucket(), Key: key, Body: body, ContentType: contentType }),
-  )
-  return key
+  return putObject(key, body, contentType)
+}
+
+// Upload straight from a file on disk. Prefer this over uploadBuffer for anything large: it streams, so a
+// 355 MB render never sits in the heap as a Buffer — which matters now that the render step has two big
+// uploads in flight at once.
+export async function uploadFile(key: string, filePath: string, contentType: string): Promise<string> {
+  return putObject(key, createReadStream(filePath), contentType)
 }
 
 export async function downloadBuffer(key: string): Promise<Buffer> {

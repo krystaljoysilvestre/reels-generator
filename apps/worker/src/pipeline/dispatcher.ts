@@ -38,6 +38,12 @@ export async function dispatchPipelineJob(job: Job<PipelineJobData>): Promise<vo
   const { reelId, stepName, channelId, language } = job.data
 
   console.log(`[pipeline] ${stepName} reelId=${reelId}`)
+  // Elapsed per step. pipeline_steps already stores started_at/finished_at, but nothing reads them as a
+  // DURATION — so "which step is slow" needed a hand-written SQL query. Logging it makes the next
+  // optimisation measurable from the worker output alone, at the cost of one timestamp per job.
+  const startedAtMs = Date.now()
+  const logElapsed = (outcome: 'done' | 'failed') =>
+    console.log(`[pipeline] ${stepName} ${outcome} in ${((Date.now() - startedAtMs) / 1000).toFixed(1)}s reelId=${reelId}`)
 
   // A reel the boot reaper marked 'failed' must not be dragged back through the pipeline by an orphaned
   // job that BullMQ stalled-recovery later re-activates. A legitimate retry (retry-reel) resets the reel
@@ -102,6 +108,8 @@ export async function dispatchPipelineJob(job: Job<PipelineJobData>): Promise<vo
         throw new Error(`Unknown pipeline step: ${stepName}`)
     }
 
+    logElapsed('done')
+
     // Auto-advance the pipeline: enqueue the next step, unless this one stops at a human gate
     // (story_review / storyboard / spot_check) — resolveNextStep returns null there. Runs only on
     // success; the deterministic jobId means a BullMQ retry of THIS job won't double-enqueue.
@@ -115,6 +123,7 @@ export async function dispatchPipelineJob(job: Job<PipelineJobData>): Promise<vo
       await autoCrossGate(stepName, reelId)
     }
   } catch (err) {
+    logElapsed('failed')
     captureException(err, { reelId, stepName })
     // Terminal failures (over-budget, deterministic provider 4xx) can't be fixed by retrying and would
     // just re-bill the step — fail fast so the worker's 'failed' handler marks the reel failed. Everything

@@ -17,6 +17,7 @@ import {
 } from '@reels/core'
 import { buildFoleySpotPrompt, FOLEY_SPOT_V1_VERSION, FoleySpotSchema } from '../../prompts-bridge.js'
 import { runStep } from '../harness.js'
+import { runPool } from '../pool.js'
 
 // foley_spot — runs at the TAIL of animate_scenes (not its own pipeline step). For each video-tier scene's
 // generated clip it "spots" the picture: a cheap vision pass marks the visible motions that make a sound,
@@ -28,6 +29,11 @@ const execFileAsync = promisify(execFile)
 const FOLEY_SPOT_MODEL = 'claude-haiku-4-5-20251001' // same cheap vision model as clip QA
 const SPOT_FPS = 2       // frames per second sampled from the clip → ±250ms timestamp resolution
 const MAX_FRAMES = 20    // bound cost on a 10s clip
+// Spotting fans out two levels (scenes, then each scene's events). Kept modest at each level because they
+// MULTIPLY: the provider semaphores (anthropic 4 / elevenlabs 4) are the authoritative cap, and sizing these
+// so the product sits near those caps means calls queue in the pool instead of stalling inside the limiter.
+const FOLEY_SCENE_CONCURRENCY = 2
+const FOLEY_EVENT_CONCURRENCY = 2
 
 // Sample frames across a clip at SPOT_FPS. Returns PNG buffers + their clip-relative timestamps (seconds).
 async function extractSpotFrames(videoBuf: Buffer, reelId: string, sceneIdx: number): Promise<{ frames: Buffer[]; timestampsSec: number[] }> {
@@ -58,16 +64,19 @@ export async function spotFoleyForReel(reelId: string): Promise<void> {
 
   const videoScenes = (await db.query.scenes.findMany({ where: eq(scenes.reelId, reelId) })).filter((s) => s.tier === 'video')
 
-  for (const scene of videoScenes) {
+  // Scenes spot CONCURRENTLY: each is an independent download → frame extract → vision call → SFX batch, on
+  // its own step row and its own storage keys. Serially this ran after every clip had already finished, so it
+  // sat on the critical path as the sum of each scene's round trips.
+  await runPool(videoScenes, FOLEY_SCENE_CONCURRENCY, async (scene) => {
     const span = spanByIdx.get(scene.idx)
-    if (!span) continue
+    if (!span) return
 
     // Newest video clip for this scene (variationIdx 0 is the one render composites).
     const videoAssets = (await db.query.assets.findMany({ where: and(eq(assets.reelId, reelId), eq(assets.kind, 'video')) }))
       .filter((a) => (a.meta as Record<string, unknown>)['sceneIdx'] === scene.idx)
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
     const clip = videoAssets[0]
-    if (!clip) continue
+    if (!clip) return
 
     const clipDurationSec = Number((clip.meta as Record<string, unknown>)['durationSec']) || 5
     const sourceClipAt = clip.createdAt.toISOString()
@@ -78,7 +87,7 @@ export async function spotFoleyForReel(reelId: string): Promise<void> {
         const m = a.meta as Record<string, unknown>
         return m['foley'] === true && m['sceneIdx'] === scene.idx && m['sourceClipAt'] === sourceClipAt
       })
-    if (existingFoley.length > 0) continue
+    if (existingFoley.length > 0) return
 
     const inputHash = buildInputHash('foley.spot.v1', { clipAt: sourceClipAt, sceneIdx: scene.idx, reelId })
 
@@ -147,8 +156,10 @@ export async function spotFoleyForReel(reelId: string): Promise<void> {
             .filter((e) => e.atMs >= span.startMs && e.atMs <= visibleEnd)
           const survivors = dropEventsNear(candidates, anchoredAtMs, 1200)
 
+          // The spotted events for a scene generate CONCURRENTLY — each is a separate ElevenLabs round trip
+          // writing its own storage key, so nothing is shared but the cost tally (single-threaded += is safe).
           let generated = 0
-          for (const ev of survivors) {
+          await runPool(survivors, FOLEY_EVENT_CONCURRENCY, async (ev) => {
             const slugSuffix = createHash('sha1').update(`${scene.idx}\x00${ev.clipMs}\x00${ev.sfxPrompt}`).digest('hex').slice(0, 10)
             const res = await elGenerateSfx({
               prompt: ev.sfxPrompt,
@@ -182,7 +193,7 @@ export async function spotFoleyForReel(reelId: string): Promise<void> {
               target: [assets.reelId, assets.storageKey],
               set: { kind: 'sfx', provider: 'elevenlabs', costCents: res.costCents, meta, createdAt: new Date() },
             })
-          }
+          }, 'foley clip')
           console.log(`[foley] ${reelId.slice(0, 8)} scene${scene.idx}: ${spotted.length} spotted → ${generated} placed`)
           return { output: { sceneIdx: scene.idx, spotted: spotted.length, generated }, costCents: cost }
         } catch (err) {
@@ -195,5 +206,5 @@ export async function spotFoleyForReel(reelId: string): Promise<void> {
         }
       },
     )
-  }
+  }, 'foley scene')
 }
