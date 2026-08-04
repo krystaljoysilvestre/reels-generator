@@ -563,6 +563,42 @@ specs/evidence-based-narrative.md, dna/company/roadmap.md (Phase 1 Customer Zero
 
 ---
 
+### 2026-08-03-001
+
+Status: Accepted
+
+Title: EBN Accepts No Ungrounded Narration — One Production Entrypoint Per Story Mode
+
+Decision
+
+Every production reel on an Evidence-Based channel originates from a source dossier; no production entrypoint may introduce narration before evidence exists. Concretely: the BYO route (provide-story, both doors — pasted text and shelf scripts) fails closed on EBN channels, the same way create-reel already fails closed without a dossier, and the reel-creation UI on EBN channels collects the dossier instead. The script shelf remains a writing space on EBN channels (save/edit/duplicate/delete), but never a production door. BYO-with-dossier is a hypothesis (hypotheses/ebn-byo-fact-check.md), not a path.
+
+The corollary is a design principle stated here so future proposals resolve mechanically: **one production entrypoint per story mode** — standard channels begin from a topic, Evidence-Based channels begin from a dossier. A new dossier *source* (an upload, a URL fetcher) extends the entrypoint and is welcome; a second *entrypoint* (pasting narration) violates it and is not.
+
+Why
+
+EBN guarantees provenance, not factual similarity. Generated narration carries an explicit claim lineage back to the Evidence Bible — every sentence expands a claim, every claim cites facts, so the Fact-Fidelity Checker is a lookup, not a fuzzy comparison. Human narration has no such lineage: even if every sentence happened to be true, the architecture could not demonstrate *why* any statement is justified by the evidence. Accepting BYO would therefore not be a relaxation of EBN but a different system — semantic document comparison in place of deterministic evidence verification. Secondary: the FFC has only ever been validated on generated narration; its behaviour on human prose is unmeasured. Rejection is reversible; an unverified factual path on the reputation-critical mode is not.
+
+The gap this closes was found 2026-08-03: the entire evidence chain lives inside generate_story, which provide-story skips by design — and since the reel-creation UI never collected a dossier, the *only* clickable production path on an EBN channel was the ungrounded one. The spec was silent on BYO because it never anticipated it.
+
+Alternatives Considered
+
+Accept BYO with a required dossier, routed through generate_story so the Fact-Fidelity Checker grades the creator's prose against their sources. Filed as a hypothesis rather than built: the probe that would justify it (inject known errors into human-written narration, measure FFC catch rate) has never run, and even a perfect catch rate proves similarity, not provenance. Also noted for later: the cleaner long-term route shape is mode-aligned APIs (provide-story for fiction, provide-dossier for EBN) instead of an in-route reject — deferred because the principle, not the route topology, is the commitment; revisit if a third story mode arrives.
+
+Expected Impact
+
+EBN channels become correctly usable end-to-end in the UI for the first time (dossier in, evidence-built reel out), and the mode's core guarantee — auditable generation — can no longer be silently bypassed by the most convenient path. Standard channels are untouched.
+
+Review Trigger
+
+The FFC-on-human-prose probe (hypotheses/ebn-byo-fact-check.md) passes its bar, AND a real creator asks to bring their own script to an Evidence-Based channel. Both, not either.
+
+Related Documents
+
+specs/evidence-based-narrative.md (the invariant, §"The invariant (constitutional)"), hypotheses/ebn-byo-fact-check.md, specs/story-modes.md, dna/product/product-principles.md
+
+---
+
 ## Relationship to the Decision Framework
 
 The Decision Framework explains how decisions are made.

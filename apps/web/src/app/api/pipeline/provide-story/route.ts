@@ -8,6 +8,12 @@ import { requireChannelOwner, requireStoryOwner, requireReelCreationBudget } fro
 
 // BYO script: the operator provides their own story for this reel, so generate_story is skipped.
 //
+// Which is exactly why Evidence-Based channels are rejected here (both doors): the whole evidence chain —
+// Extractor → Evidence Bible → cited Writer → Fact-Fidelity Checker — lives inside generate_story, so a
+// script through this route reaches production with no provenance at all. Decision-log 2026-08-03-001:
+// every production reel on an EBN channel originates from a source dossier; one production entrypoint per
+// story mode. EBN reels are created via create-reel with a dossier — never here.
+//
 // Two doors, one shelf. `body` = pasted text (saved to the library on the way through). `storyId` = a
 // story already saved in the library ("Make a reel"), which is LINKED, never copied — one story row,
 // one script, so scene-text edits can't desync from a duplicate.
@@ -28,6 +34,9 @@ const SavedSchema = z.object({ storyId: z.string().uuid() })
 const InputSchema = z.union([SavedSchema, PasteSchema])
 
 const isUniqueViolation = (e: unknown) => typeof e === 'object' && e !== null && 'code' in e && (e as { code?: string }).code === '23505'
+
+// Matches the voice of create-reel's and story/generate's EBN rejections.
+const EBN_REJECTION = 'This is an Evidence-Based channel — its reels are built from a source dossier, so start a reel with one instead.'
 export async function POST(req: NextRequest) {
   const parsed = InputSchema.safeParse(await req.json().catch(() => null))
   if (!parsed.success) {
@@ -48,6 +57,16 @@ export async function POST(req: NextRequest) {
       where: and(eq(stories.id, storyId), inArray(stories.origin, ['setup', 'library'])),
     })
     if (!story) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+    // EBN: no ungrounded narration into production (see header). The shelf stays a writing space on
+    // these channels; the reel comes from create-reel with a dossier.
+    const owningChannel = await db.query.channels.findFirst({
+      where: eq(channels.id, story.channelId),
+      columns: { storyMode: true },
+    })
+    if (owningChannel?.storyMode === 'ebn') {
+      return NextResponse.json({ error: EBN_REJECTION }, { status: 400 })
+    }
 
     const existing = await db.select({ id: reels.id }).from(reels).where(eq(reels.storyId, storyId)).limit(1)
     if (existing.length > 0) {
@@ -85,6 +104,11 @@ export async function POST(req: NextRequest) {
 
   const channel = await db.query.channels.findFirst({ where: eq(channels.id, channelId) })
   if (!channel) return NextResponse.json({ error: 'Channel not found' }, { status: 404 })
+
+  // EBN: no ungrounded narration into production (see header).
+  if (channel.storyMode === 'ebn') {
+    return NextResponse.json({ error: EBN_REJECTION }, { status: 400 })
+  }
 
   const limitGate = await requireReelCreationBudget(gate)
   if (limitGate) return limitGate

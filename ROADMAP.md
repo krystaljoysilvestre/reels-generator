@@ -333,6 +333,18 @@ binding near 30 min.
 
 ### Known gaps / cleanup
 
+- **EBN + auto-produce:** the scheduler creates reels with no dossier, which
+  `generate_story` fail-closes on — an EBN channel with autoProduce enabled
+  would manufacture stuck reels. Scheduler should skip EBN channels until a
+  dossier queue exists (the UI already hides hands-off on EBN; this is the
+  worker-side guard). See decision-log 2026-08-03-001.
+- **R2 large uploads are one PutObject:** `uploadBuffer` sends whole files in a
+  single request, and the 60s `requestTimeout` only *warns* without
+  `throwOnRequestTimeout` (see the comment in
+  `packages/providers/src/shared/storage.ts`). A 355 MB long-form render
+  succeeded 2026-08-03, and `withJobTimeout` bounds a genuinely stuck upload —
+  so multipart (`@aws-sdk/lib-storage`, per-part timeout + resume) is the fix
+  **when an upload actually fails**, not before.
 - **Provider resilience (all external APIs):** each call has a per-request
   timeout + auto-retry on transient failures (connection/429/5xx):
   Anthropic (60s, 1 retry), ElevenLabs (30s metadata / 120s TTS / 60s SFX,

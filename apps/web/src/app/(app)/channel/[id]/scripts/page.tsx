@@ -73,6 +73,7 @@ export default async function ChannelScriptsPage({ params }: { params: Promise<{
                   script={{ id: s.id, title: s.title, body: s.body, source: s.source, isReference: s.isReference }}
                   channelId={channel.id}
                   reel={s.reels[0] ? { id: s.reels[0].id, status: s.reels[0].status } : null}
+                  isEbn={channel.storyMode === 'ebn'}
                 />
               ))}
             </div>
