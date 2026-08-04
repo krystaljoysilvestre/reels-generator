@@ -88,7 +88,7 @@ export function RenderingState({
             <rect x="4" y="11" width="16" height="9" rx="2" />
             <path d="M8 11V7a4 4 0 0 1 8 0v4" />
           </svg>
-          Editing is paused while your reel renders.
+          You can make changes once the cut is done.
         </p>
       </div>
     </div>
