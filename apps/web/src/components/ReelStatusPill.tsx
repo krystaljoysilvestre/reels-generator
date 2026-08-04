@@ -27,14 +27,31 @@ const STATUS_TONE: Record<string, Tone> = {
   rejected: 'broken',
 }
 
+// The one creator-facing vocabulary for reel states — never show a raw status. Working states borrow
+// the phase strip's words; waiting states read as "your move"; nothing here names an internal step.
+const STATUS_LABEL: Record<string, string> = {
+  published: 'Published',
+  scheduled: 'Scheduled',
+  approved: 'Approved',
+  rendering: 'In production',
+  render_qa: 'Final check',
+  storyboard: 'Storyboarding',
+  drafting: 'Writing',
+  story_review: 'Review the story',
+  bible_review: 'Review continuity',
+  spot_check: 'Spot-check',
+  failed: 'Failed',
+  rejected: 'Not approved',
+}
+
 export function ReelStatusPill({ status, className = '' }: { status: string; className?: string }) {
   const tone = STATUS_TONE[status] ?? 'idle'
   return (
     <span
-      className={`inline-flex flex-shrink-0 items-center gap-1.5 rounded-2xl px-2.5 py-1 text-[11px] font-600 capitalize ${TONE[tone]} ${className}`}
+      className={`inline-flex flex-shrink-0 items-center gap-1.5 rounded-2xl px-2.5 py-1 text-[11px] font-600 ${TONE[tone]} ${className}`}
     >
       <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-current" />
-      {status.replace(/_/g, ' ')}
+      {STATUS_LABEL[status] ?? status.replace(/_/g, ' ')}
     </span>
   )
 }

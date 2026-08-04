@@ -14,6 +14,14 @@ export const PHASES: Array<{ key: PhaseKey; label: string; steps: string[] }> = 
   { key: 'finishing', label: 'Finishing', steps: ['render', 'render_qa', 'spot_check'] },
 ]
 
+// Which phase a pipeline step belongs to, for creator-facing copy (e.g. the failure banner).
+// Fan-out steps record per-sub-unit rows ('generate_images:scene3') — resolve from the base name.
+export function phaseForStep(stepName: string): { key: PhaseKey; label: string } | null {
+  const base = stepName.split(':')[0]
+  const phase = PHASES.find((p) => p.steps.includes(base))
+  return phase ? { key: phase.key, label: phase.label } : null
+}
+
 export interface PhaseView {
   key: PhaseKey
   label: string
@@ -77,11 +85,12 @@ export const MOOD_TINT: Record<ChannelMood, string> = {
 // with intensity >= 6 read as horror: a hard-hitting documentary was told we were "lighting the candles"
 // and "letting the dread settle in". Intensity says how charged a channel is, never that it's haunted.
 const BASE_TICKERS: Record<PhaseKey, string[]> = {
-  writing: ['Reading your channel’s voice…', 'Studying what works on your channel…', 'Sketching the hook…', 'Finding the turn…', 'Tightening every line…'],
+  // Every line must be literally true of what the pipeline does — no implied behavior we don't perform.
+  writing: ['Reading your channel’s voice…', 'Getting into character…', 'Sketching the hook…', 'Finding the turn…', 'Tightening every line…'],
   storyboarding: ['Breaking the script into scenes…', 'Framing each shot…'],
   filming: ['Painting the scenes…', 'Recording the narration…', 'Timing every beat…', 'Layering in sound…'],
   scoring: ['Composing an original score…', 'Mixing voice and music…'],
-  finishing: ['Rendering the video…', 'Checking the final cut…'],
+  finishing: ['Putting it all together…', 'Checking the final cut…'],
 }
 
 // Per-genre overrides — only the phases where the genre genuinely changes the register. Anything not

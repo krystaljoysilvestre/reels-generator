@@ -114,7 +114,7 @@ export function StoryStudio({ reelId, channelId, channelName, mood, genre, initi
       setGenerating(true) // restart polling for the new draft
     } else {
       const body = (await res.json().catch(() => ({}))) as { error?: string }
-      setActionError(body.error ?? 'Could not regenerate this story. Refresh and try again.')
+      setActionError(body.error ?? 'Couldn’t write a new draft. Refresh and try again.')
     }
     setBusy(false)
   }

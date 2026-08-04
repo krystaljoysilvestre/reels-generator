@@ -12,7 +12,8 @@ import { PipelinePhaseStepper } from '@/components/PipelinePhaseStepper'
 import { ReelStatusPill } from '@/components/ReelStatusPill'
 import { RenderingState } from '@/components/RenderingState'
 import { primeReelAlert } from '@/lib/reel-alert'
-import { MOOD_TINT, type ChannelMood } from '@/lib/pipeline-phases'
+import { MOOD_TINT, phaseForStep, type ChannelMood } from '@/lib/pipeline-phases'
+import { stepLabel } from '@/lib/pipeline-steps'
 import { useToast } from '@/components/Toast'
 import { PostCaptionButton, LogPerformanceButton, PostToYouTubeButton } from './PublishTools'
 
@@ -262,7 +263,7 @@ export function StoryboardEditor({
   //   'vary'  (default) — condition on the CURRENT image (+ face plates) so it stays close: fix a hand, small
   //                       variation. An optional `instruction` ("lower the hand") steers the tweak.
   //   'fresh' — ignore the current image; re-roll a brand-new composition (plates only → faces still match).
-  // The plain "Regenerate" button sends 'vary' with no instruction; "Fresh take" sends 'fresh'.
+  // The plain "Reshoot" button sends 'vary' with no instruction; "Fresh take" sends 'fresh'.
   async function handleRegenImage(sceneIdx: number, opts?: { instruction?: string; mode?: 'vary' | 'fresh'; referenceKey?: string; anchor?: 'current-first' | 'reference-first' | 'reference-only' }) {
     setLoading(`regen-${sceneIdx}`)
     const res = await fetch('/api/pipeline/regen-image', {
@@ -280,7 +281,7 @@ export function StoryboardEditor({
     const rj = await res.json().catch(() => null)
     const affected: number[] = rj?.entityLook?.affectedSceneIdxs ?? []
     if (affected.length) {
-      toast(`Updated that character everywhere. Scene${affected.length > 1 ? 's' : ''} ${[...affected].sort((a, b) => a - b).join(', ')} also use her — regenerate to match.`, 'info')
+      toast(`Updated that character everywhere. Scene${affected.length > 1 ? 's' : ''} ${[...affected].sort((a, b) => a - b).join(', ')} also use her — reshoot them to match.`, 'info')
     }
     // A new image supersedes any Undo/Redo override — drop it so the fresh server image wins.
     setImageOverride((o) => { if (!(sceneIdx in o)) return o; const n = { ...o }; delete n[sceneIdx]; return n })
@@ -956,12 +957,26 @@ export function StoryboardEditor({
         </div>
       </div>
 
-      {/* Failure banner — surfaces a hard pipeline failure so the reel isn't a silent stall */}
+      {/* Failure banner — surfaces a hard pipeline failure so the reel isn't a silent stall.
+          Creators get phase-vocabulary copy; the raw step + provider error live behind the disclosure. */}
       {reel.status === 'failed' && failure && (
         <div className="flex flex-shrink-0 items-start justify-between gap-4 border-b border-danger/30 bg-danger-soft px-4 py-4 sm:px-8">
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-danger">This reel failed at “{failure.step.replace(/_/g, ' ')}”</p>
-            <p className="mt-0.5 break-words text-xs text-danger/80">{failure.error}</p>
+            <p className="text-sm font-semibold text-danger">
+              {(() => {
+                const phase = phaseForStep(failure.step)
+                return phase
+                  ? `Something went wrong while ${phase.label.toLowerCase()}.`
+                  : 'Something went wrong while making this reel.'
+              })()}
+            </p>
+            <p className="mt-0.5 text-xs text-danger/80">Nothing’s lost — everything finished so far is kept. Retry picks up from there.</p>
+            <details className="mt-1.5 text-xs text-danger/70">
+              <summary className="cursor-pointer select-none font-medium">Technical details</summary>
+              <p className="mt-1 break-words">
+                <span className="font-mono">{stepLabel(failure.step.split(':')[0])} ({failure.step})</span> — {failure.error}
+              </p>
+            </details>
           </div>
           <button onClick={handleRetry} disabled={loading === 'retry'} className="btn-secondary btn-sm flex-shrink-0">
             {loading === 'retry' ? 'Retrying…' : 'Retry'}
@@ -1123,7 +1138,7 @@ export function StoryboardEditor({
             <>
               <div className="mr-auto">
                 <p className="font-display text-[15px] font-700 text-ink">Spot-check</p>
-                <p className="text-xs text-muted">Watch the render below, then sign it off — or change the voice and re-render to apply changes.</p>
+                <p className="text-xs text-muted">Give it a watch. Love it? Approve it. Want a different voice? Swap it and re-render.</p>
               </div>
               {/* Change voice, then re-render — post-render analog of the storyboard voice pill. The picker
                   saves the pick to the reel; the next Re-render re-runs TTS with it (stills/clips are reused). */}
@@ -1172,7 +1187,7 @@ export function StoryboardEditor({
                   <ReelStatusPill status="approved" />
                   <span className="font-display text-[15px] font-700 text-ink">Ready to post</span>
                 </p>
-                <p className="mt-0.5 text-xs text-muted">Download the package, upload to your platforms, then mark it published.</p>
+                <p className="mt-0.5 text-xs text-muted">Your post package (video, thumbnail, caption) is ready — download it, post anywhere, then mark it published.</p>
               </div>
               <PostCaptionButton reelId={reel.id} />
               <a href={`/api/pipeline/export-post-package?reelId=${reel.id}`} className="btn-secondary">
@@ -1183,7 +1198,7 @@ export function StoryboardEditor({
               </a>
               {reel.youtubeConfigured && <PostToYouTubeButton reelId={reel.id} />}
               <button onClick={handlePublish} disabled={loading === 'publish'} className={`active:scale-[.98] ${reel.youtubeConfigured ? 'btn-secondary' : 'btn-accent'}`}>
-                {loading === 'publish' ? 'Publishing…' : 'Mark published'}
+                {loading === 'publish' ? 'Publishing…' : 'Mark as published'}
               </button>
             </>
           )}
@@ -1994,7 +2009,7 @@ function SceneInspector({
                 <div className="flex gap-2">
                   <button type="button" onClick={() => { if (!regenerating) onReshoot(scene.idx, { mode: 'vary' }) }} disabled={regenerating}
                     className="btn-accent btn-sm flex-1 active:scale-[.98] disabled:cursor-wait disabled:opacity-50">
-                    {regenerating ? (<><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />Regenerating…</>) : (<><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M21 12a9 9 0 1 1-2.64-6.36" /><path d="M21 3v6h-6" /></svg>Regenerate</>)}
+                    {regenerating ? (<><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />Reshooting…</>) : (<><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M21 12a9 9 0 1 1-2.64-6.36" /><path d="M21 3v6h-6" /></svg>Reshoot</>)}
                   </button>
                   <button type="button" onClick={() => { if (!regenerating) onReshoot(scene.idx, { mode: 'fresh' }) }} disabled={regenerating}
                     title="Re-imagine this shot from scratch (new composition)"
@@ -2003,7 +2018,7 @@ function SceneInspector({
                     Fresh take
                   </button>
                 </div>
-                <p className="text-[11px] leading-relaxed text-faint">Regenerate keeps it close — fixes a small thing. Fresh take re-imagines the whole shot.</p>
+                <p className="text-[11px] leading-relaxed text-faint">Reshoot keeps it close — fixes a small thing. Fresh take re-imagines the whole shot.</p>
 
                 {/* Or describe a specific change (also anchored to the current image). */}
                 <div className="flex flex-col gap-2 border-t border-border pt-3">

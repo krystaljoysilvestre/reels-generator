@@ -7,12 +7,13 @@ description: Reword user-facing UI copy into this product's house voice — shor
 
 The product is a tool for **creators making short video reels**. They are storytellers, not engineers. Copy should read like a calm, capable production assistant — never like a machine explaining itself.
 
-## The four rules
+## The five rules
 
 1. **Non-technical.** The user never needs to know there's an LLM, image model, diffusion, prompts, seeds, or a pipeline. Describe the *outcome*, not the mechanism.
 2. **Short.** Cut every word that isn't carrying meaning. Prefer one clause over two. A placeholder is a nudge, not a manual.
 3. **Clear.** Plain, concrete language a first-time user gets at a glance. If a film term is less clear than a plain word, use the plain word.
 4. **Lightly cinematic.** Where it fits naturally, reach for production vocabulary — it makes the tool feel like a film set, not a settings panel. Flavor, not jargon. Never sacrifice rule 3 for it.
+5. **True.** Never imply behavior the product doesn't actually perform; if a line isn't literally true today, replace it with one that is. A loading line, tooltip, or reassurance is a claim — creators screenshot claims ("Studying what works on your channel…" on a channel with no performance data is a lie waiting to be caught). When rewording, verify the claim against the code before keeping it.
 
 ## Never expose internals — banned words
 
