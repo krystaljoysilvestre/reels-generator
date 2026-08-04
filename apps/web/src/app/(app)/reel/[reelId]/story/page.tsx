@@ -25,6 +25,9 @@ function extractCritic(stepOutput: unknown, shownBody: string): CriticSummary | 
     finishingQA?: { status?: string; issues?: Array<{ axis?: string; problem?: string }>; summary?: string }
     // Evidence-Based Narrative: the Fact-Fidelity Checker verdict (factual axes, not craft).
     ebn?: { fidelity?: { status?: string; issues?: Array<{ axis?: string; offending?: string; detail?: string }>; summary?: string } }
+    // The opt-in FACT GATE (channels.factCheck) on the standard path — same verdict shape as ebn.fidelity,
+    // produced by the same checker, just run after a freely-written story.
+    factCheck?: { fidelity?: { status?: string; issues?: Array<{ axis?: string; offending?: string; detail?: string }>; summary?: string } }
   } | null
   if (!out) return null
   if (out.winner?.narration !== shownBody) return null // stale round or BYO story — don't mislabel it
@@ -37,19 +40,21 @@ function extractCritic(stepOutput: unknown, shownBody: string): CriticSummary | 
           .filter((i) => i.problem)
       : []
 
-  // EBN Fact-Fidelity flags — surfaced in the SAME punch-list so the operator vets faithfulness before
+  // Fact-Fidelity flags — surfaced in the SAME punch-list so the operator vets faithfulness before
   // approving. Labeled "fidelity" so factual flags read distinctly from craft ones; the offending quote
-  // is folded into the problem line.
-  const ebnIssues =
-    out.ebn?.fidelity?.status === 'ok'
-      ? (out.ebn.fidelity.issues ?? [])
+  // is folded into the problem line. Two sources, one shape: the EBN path's own checker, and the opt-in
+  // fact gate on the standard path. A reel only ever has one of them.
+  const fidelityVerdict = out.ebn?.fidelity ?? out.factCheck?.fidelity
+  const fidelityIssues =
+    fidelityVerdict?.status === 'ok'
+      ? (fidelityVerdict.issues ?? [])
           .map((i) => ({
             axis: `fidelity · ${(i.axis ?? '').replace(/_/g, ' ')}`,
             problem: [i.detail?.trim(), i.offending?.trim() ? `“${i.offending.trim()}”` : ''].filter(Boolean).join(' — '),
           }))
           .filter((i) => i.problem)
       : []
-  qaIssues.push(...ebnIssues)
+  qaIssues.push(...fidelityIssues)
 
   if (out.v === 3) {
     const rationale = out.plan?.whyThisStory?.trim() ?? ''
@@ -114,6 +119,8 @@ export default async function ReelStoryPage({ params }: { params: Promise<{ reel
         columns: { output: true },
       })
     : null
+  // The fact gate's advisory punch-list rides the generate_story output (like every other gate verdict),
+  // so extractCritic already merged it above — nothing extra to read here.
   const critic = reel.story ? extractCritic(storyStep?.output, reel.story.body) : null
 
   return (

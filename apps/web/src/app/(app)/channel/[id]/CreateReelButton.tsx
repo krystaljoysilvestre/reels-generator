@@ -17,6 +17,7 @@ export function CreateReelButton({
   storyboardCents,
   reelCapCents,
   isEbn = false,
+  factCheck = false,
 }: {
   channelId: string
   compact?: boolean
@@ -30,6 +31,9 @@ export function CreateReelButton({
   /** Evidence-Based channel: ONE door — required source material, no seed/paste/saved/hands-off.
    *  (One production entrypoint per story mode — decision-log 2026-08-03-001.) */
   isEbn?: boolean
+  /** Fact-gate channel (channels.factCheck): offer an OPTIONAL sources box — the script is written
+   *  freely, then checked against these and flagged at review. Advisory; nothing blocks. */
+  factCheck?: boolean
 }) {
   // Setup leaves a script behind; on the first reel it's the obvious thing to shoot.
   const firstScript = savedScripts[0] ?? null
@@ -55,7 +59,8 @@ export function CreateReelButton({
           ...(generationMode ? { generationMode } : {}),
           ...(seedText.trim() ? { seed: seedText.trim() } : {}),
           // EBN: the story is built strictly from this material (the API rejects EBN reels without it).
-          ...(isEbn && dossierText.trim() ? { dossier: dossierText.trim() } : {}),
+          // Fact-gate channels: the story is written freely, then checked against it (optional, advisory).
+          ...((isEbn || factCheck) && dossierText.trim() ? { dossier: dossierText.trim() } : {}),
         }),
       })
       const json = await res.json().catch(() => null)
@@ -162,6 +167,22 @@ export function CreateReelButton({
       </p>
     )
 
+  // Fact-gate channels: an optional sources box. The script is written freely either way; when sources
+  // are given, it's checked against them and any mismatches are flagged at review (advisory, never blocks).
+  const SourcesBox = () =>
+    !factCheck || isEbn ? null : (
+      <label className="mt-3 block">
+        <span className="mb-1 block text-xs font-medium text-muted">Sources to check it against — optional</span>
+        <textarea
+          value={dossierText}
+          onChange={(e) => setDossierText(e.target.value)}
+          placeholder="Paste the records, articles, or notes — we’ll flag anything in the script that doesn’t match."
+          maxLength={20000}
+          className="input h-28 resize-y"
+        />
+      </label>
+    )
+
   const OptionCard = ({ title, badge, desc, onClick: onPick }: { title: string; badge?: string; desc: string; onClick: () => void }) => (
     <button
       type="button"
@@ -254,6 +275,7 @@ export function CreateReelButton({
                         className="input"
                       />
                     </label>
+                    <SourcesBox />
                     <button type="button" onClick={() => void create('review')} disabled={loading} className="btn-accent mt-4 w-full justify-center">
                       {loading ? 'Working…' : 'Write my first story'}
                     </button>
@@ -322,6 +344,7 @@ export function CreateReelButton({
                     className="input"
                   />
                 </label>
+                <SourcesBox />
                 <div className="mt-4 flex flex-col gap-2.5">
                   <OptionCard title="Write it for me" badge="Recommended" desc="We draft an original story in your channel's voice — you review it next, and can rewrite it if it's not right." onClick={() => void create('review')} />
                   {showTextarea ? (

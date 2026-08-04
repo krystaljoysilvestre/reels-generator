@@ -193,6 +193,7 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
                   storyboardCents={storyboardCents}
                   reelCapCents={reelCapCents}
                   isEbn={channel.storyMode === 'ebn'}
+                  factCheck={channel.factCheck}
                 />
               </div>
             </div>
@@ -208,6 +209,7 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
                   storyboardCents={storyboardCents}
                   reelCapCents={reelCapCents}
                   isEbn={channel.storyMode === 'ebn'}
+                  factCheck={channel.factCheck}
                 />
               </div>
               <div className="card overflow-hidden divide-y divide-border-soft">
