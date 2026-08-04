@@ -16,6 +16,7 @@ export function CreateReelButton({
   savedScripts = [],
   storyboardCents,
   reelCapCents,
+  isEbn = false,
 }: {
   channelId: string
   compact?: boolean
@@ -26,6 +27,9 @@ export function CreateReelButton({
   /** Estimated spend to reach the storyboard gate, and the enforced ceiling for a whole reel. */
   storyboardCents?: number | undefined
   reelCapCents?: number | undefined
+  /** Evidence-Based channel: ONE door — required source material, no seed/paste/saved/hands-off.
+   *  (One production entrypoint per story mode — decision-log 2026-08-03-001.) */
+  isEbn?: boolean
 }) {
   // Setup leaves a script behind; on the first reel it's the obvious thing to shoot.
   const firstScript = savedScripts[0] ?? null
@@ -37,6 +41,7 @@ export function CreateReelButton({
   const [showSaved, setShowSaved] = useState(false)
   const [byoText, setByoText] = useState('')
   const [seedText, setSeedText] = useState('')
+  const [dossierText, setDossierText] = useState('')
 
   async function create(generationMode?: 'review' | 'auto') {
     setLoading(true)
@@ -49,6 +54,8 @@ export function CreateReelButton({
           channelId,
           ...(generationMode ? { generationMode } : {}),
           ...(seedText.trim() ? { seed: seedText.trim() } : {}),
+          // EBN: the story is built strictly from this material (the API rejects EBN reels without it).
+          ...(isEbn && dossierText.trim() ? { dossier: dossierText.trim() } : {}),
         }),
       })
       const json = await res.json().catch(() => null)
@@ -108,7 +115,8 @@ export function CreateReelButton({
 
   function onClick() {
     if (promptMode) setStep('first')
-    else if (channelMode === 'auto') void create('auto')
+    // EBN can never skip the modal: even hands-off channels need this reel's source material first.
+    else if (channelMode === 'auto' && !isEbn) void create('auto')
     else setStep('byo')
   }
 
@@ -119,6 +127,7 @@ export function CreateReelButton({
     setShowSaved(false)
     setByoText('')
     setSeedText('')
+    setDossierText('')
     setError('')
   }
 
@@ -181,7 +190,38 @@ export function CreateReelButton({
       {step !== 'idle' && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-ink/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" onClick={closeModal}>
           <div className="card animate-fade-in w-full max-w-md p-6 text-left" onClick={(e) => e.stopPropagation()}>
-            {step === 'first' ? (
+            {isEbn ? (
+              /* Evidence-Based: ONE door. The story is written strictly from what's pasted here — no topic
+                 seed (the planner orders evidence, it doesn't explore), no paste/saved-script doors (an
+                 outside script has no provenance), no hands-off (each reel needs its own material). */
+              <>
+                <h2 className="text-base font-semibold text-ink">{step === 'first' ? 'Your first reel' : 'New reel'}</h2>
+                <p className="mt-1 text-sm text-muted">
+                  This channel writes from your source material — every line of the story is drawn from what you
+                  give it. You approve the script before the shoot starts.
+                </p>
+                <label className="mt-3 block">
+                  <span className="mb-1 block text-xs font-medium text-muted">Source material</span>
+                  <textarea
+                    value={dossierText}
+                    onChange={(e) => setDossierText(e.target.value)}
+                    placeholder="Paste the records, articles, transcripts, or notes this reel should be built from…"
+                    maxLength={20000}
+                    autoFocus
+                    className="input h-44 resize-y"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => void create('review')}
+                  disabled={loading || !dossierText.trim()}
+                  className="btn-accent mt-4 w-full justify-center"
+                >
+                  {loading ? 'Working…' : step === 'first' ? 'Write my first story' : 'Write the story'}
+                </button>
+                <CostNote />
+              </>
+            ) : step === 'first' ? (
               <>
                 <h2 className="text-base font-semibold text-ink">Your first reel</h2>
                 {/* Setup already wrote them a script. Continue that story instead of restarting it — the

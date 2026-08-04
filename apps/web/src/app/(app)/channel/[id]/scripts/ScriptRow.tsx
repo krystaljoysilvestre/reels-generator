@@ -10,7 +10,7 @@ type Reel = { id: string; status: string }
 // One script on the shelf: read it, fix a line, duplicate it, or send it into production.
 // A script a reel is already building from is locked here — the reel owns the script from then on
 // (scene edits write back to it), so we point at the reel instead of offering a second place to edit.
-export function ScriptRow({ script, channelId, reel }: { script: Script; channelId: string; reel: Reel | null }) {
+export function ScriptRow({ script, channelId, reel, isEbn = false }: { script: Script; channelId: string; reel: Reel | null; isEbn?: boolean }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -172,9 +172,13 @@ export function ScriptRow({ script, channelId, reel }: { script: Script; channel
                   </>
                 ) : (
                   <>
-                    <button type="button" onClick={() => void makeReel()} disabled={busy !== null} className="btn-accent btn-sm">
-                      {busy === 'reel' ? 'Starting…' : 'Make a reel'}
-                    </button>
+                    {/* EBN: the shelf is a writing space, not a production door — reels on this channel
+                        are built from source material, never from a pasted script (2026-08-03-001). */}
+                    {!isEbn && (
+                      <button type="button" onClick={() => void makeReel()} disabled={busy !== null} className="btn-accent btn-sm">
+                        {busy === 'reel' ? 'Starting…' : 'Make a reel'}
+                      </button>
+                    )}
                     <button type="button" onClick={() => setEditing(true)} disabled={busy !== null} className="btn-secondary btn-sm">
                       Edit
                     </button>
@@ -200,6 +204,11 @@ export function ScriptRow({ script, channelId, reel }: { script: Script; channel
                     </button>
                   ))}
               </div>
+              {isEbn && !inProduction && (
+                <p className="mt-3 text-xs text-muted">
+                  Scripts here are notes — this channel&apos;s reels are built from source material when you create one.
+                </p>
+              )}
             </>
           )}
           {error && <p className="mt-3 text-xs text-danger">{error}</p>}
