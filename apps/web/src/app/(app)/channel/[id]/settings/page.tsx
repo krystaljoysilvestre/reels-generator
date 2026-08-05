@@ -2,7 +2,7 @@ import { getDb, channels } from '@reels/db'
 import { eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { assertChannelAccess } from '@/lib/access'
-import { ToneConfigSchema, WorldBibleSchema, CaptionStyleSchema, AudioPacksSchema, TargetPlatformSchema, PostingRulesSchema, resolvePublishSlots, resolvePublishDays } from '@reels/core'
+import { ToneConfigSchema, WorldBibleSchema, CaptionStyleSchema, AudioPacksSchema, TargetPlatformsSchema, PostingRulesSchema, resolvePublishSlots, resolvePublishDays } from '@reels/core'
 import { isYouTubeConfigured } from '@reels/providers'
 import { ChannelSettings } from './ChannelSettings'
 import { channelMetadata } from '@/lib/page-metadata'
@@ -31,7 +31,9 @@ export default async function ChannelSettingsPage({ params }: { params: Promise<
         description: channel.description ?? '',
         nicheDescription: channel.nicheDescription,
         tagline: channel.tagline ?? '',
-        targetPlatform: TargetPlatformSchema.catch('all').parse(channel.targetPlatform ?? 'all'),
+        // A row written before the set existed can still hold the legacy 'all' bucket — channelPlatformPreset
+        // handles that for the SPEC, but Settings edits the set itself, so widen it here too.
+        targetPlatforms: TargetPlatformsSchema.catch(['tiktok', 'youtube_shorts', 'facebook_reels']).parse(channel.targetPlatforms ?? []),
         targetSeconds: channel.targetSeconds ?? 75,
         stylePreset: channel.stylePreset ?? '',
         styleImageKey: channel.styleImageKey ?? null,

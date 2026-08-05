@@ -1,7 +1,7 @@
 import { eq, and } from 'drizzle-orm'
 import { getDb, reels, scenes, assets, channels, stories } from '@reels/db'
 import { generateImage, generateImageFal, imageEngineForGenre, FLUX_IMAGE_ENGINE, buildInputHash, ContentFilterError, llmCall, downloadBuffer, uploadBuffer, sourcePlaceImage, spendFromError, SCENE_IMAGE_MODEL, SCENE_IMAGE_QUALITY, type ImageEngine } from '@reels/providers'
-import { assembleImagePrompt, assembleNegativePrompt, assembleReferencePrompt, castNationality, reelLightingDirective, sceneEntities, slug, PLATFORM_PRESETS, StoryBibleSchema, EBN_RENDERING_PROFILE } from '@reels/core'
+import { assembleImagePrompt, assembleNegativePrompt, assembleReferencePrompt, castNationality, reelLightingDirective, sceneEntities, slug, channelPlatformPreset, StoryBibleSchema, EBN_RENDERING_PROFILE } from '@reels/core'
 import { z } from 'zod'
 import { buildRephrasePrompt, REPHRASE_V1_VERSION, buildImageQAPrompt, IMAGE_QA_V1_VERSION, ImageQASchema, buildFilterSafePrompt, FILTER_SAFE_V1_VERSION, FilterSafeSchema, buildPlaceSourceDecidePrompt, buildPlaceVerifyPrompt, PlaceSourceDecisionSchema, PlaceVerifySchema, PLACE_SOURCE_V1_VERSION } from '../../prompts-bridge.js'
 import { runStep } from '../harness.js'
@@ -154,7 +154,7 @@ export async function generateImages(reelId: string): Promise<void> {
   const storyBible = reel.storyBible ? StoryBibleSchema.parse(reel.storyBible) : null
 
   // Generate at the channel's platform aspect (9:16 reels; 16:9 long-form) so scene images fill the frame.
-  const aspect = (PLATFORM_PRESETS[(channel.targetPlatform ?? 'all') as keyof typeof PLATFORM_PRESETS] ?? PLATFORM_PRESETS.all).aspect
+  const aspect = channelPlatformPreset(channel).aspect
 
   // Reel-level lighting (from the bible's time-of-day cues). Forces night/darkness into every scene + every
   // location/object plate so a night story stops rendering in daylight. undefined for non-night reels.

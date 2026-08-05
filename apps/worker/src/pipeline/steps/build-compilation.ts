@@ -12,7 +12,7 @@ import {
   TimingsSchema,
   DEFAULT_BUDGET_CAPS_CENTS,
   assertBudget,
-  PLATFORM_PRESETS,
+  channelPlatformPreset,
 } from '@reels/core'
 import { buildCompilationPrompt, COMPILATION_V1_VERSION } from '../../prompts-bridge.js'
 
@@ -70,7 +70,9 @@ export async function buildCompilation(compilationId: string): Promise<void> {
     reelIds: compilation.reelIds,
     theme: compilation.theme,
     voiceId: (channel.voicePool as Array<{ providerId?: string }>)[0]?.providerId ?? '',
-    targetPlatform: channel.targetPlatform ?? 'all',
+    // The resolved frame, not the raw set: re-ordering the channel's platforms changes nothing about
+    // the output, whereas adding one that narrows the frame must invalidate the compilation.
+    targetPlatform: channelPlatformPreset(channel).label,
     sourceTakes: orderedReels.map((r) => `${r.id}:${r.updatedAt?.getTime() ?? 0}`).join('|'),
   })
 
@@ -132,7 +134,7 @@ export async function buildCompilation(compilationId: string): Promise<void> {
   if (!voiceId) throw new Error('No voice configured for channel')
 
   // Connective black segments must match the constituent reels' frame (the channel's platform preset).
-  const preset = PLATFORM_PRESETS[(channel.targetPlatform ?? 'all') as keyof typeof PLATFORM_PRESETS] ?? PLATFORM_PRESETS.all
+  const preset = channelPlatformPreset(channel)
   const frame = `${preset.width}x${preset.height}`
 
   const tmp = join(tmpdir(), `compilation-${compilationId}`)

@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { eq } from 'drizzle-orm'
 import { llmCall } from '@reels/providers'
 import { getDb, channels, stories, recordSpendEvent } from '@reels/db'
-import { ToneConfigSchema, WorldBibleSchema, PLATFORM_PRESETS } from '@reels/core'
+import { ToneConfigSchema, WorldBibleSchema, channelPlatformPreset } from '@reels/core'
 import {
   buildChannelSamplePrompt,
   ChannelSampleSchema,
@@ -58,8 +58,8 @@ export async function POST(req: NextRequest) {
 
   const tone = ToneConfigSchema.safeParse(channel.toneConfig)
   const world = WorldBibleSchema.safeParse(channel.worldBible)
-  // targetPlatform is free text on the row (no DB constraint), so index defensively.
-  const preset = PLATFORM_PRESETS[(channel.targetPlatform ?? 'all') as keyof typeof PLATFORM_PRESETS]
+  // The platform set is free text on the row (no DB constraint), so resolve defensively.
+  const preset = channelPlatformPreset(channel)
 
   const { system, userMessage } = buildChannelSamplePrompt({
     name: channel.name,

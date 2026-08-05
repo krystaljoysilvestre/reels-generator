@@ -11,7 +11,7 @@ import {
   type MusicMood,
   type MusicMode,
   CAPTION_PRESETS,
-  PLATFORM_PRESETS,
+  resolvePlatformPreset,
   MUSIC_MOOD_OPTIONS,
   resolveCaptionStyle,
 } from '@reels/core'
@@ -45,7 +45,7 @@ interface Initial {
   description: string
   nicheDescription: string
   tagline: string
-  targetPlatform: TargetPlatform
+  targetPlatforms: TargetPlatform[]
   targetSeconds: number
   stylePreset: string
   styleImageKey: string | null
@@ -89,7 +89,9 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
   const [description, setDescription] = useState(initial.description)
   const [niche, setNiche] = useState(initial.nicheDescription)
   const [tagline, setTagline] = useState(initial.tagline)
-  const [targetPlatform, setTargetPlatform] = useState<TargetPlatform>(initial.targetPlatform)
+  const [targetPlatforms, setTargetPlatforms] = useState<TargetPlatform[]>(initial.targetPlatforms)
+  // The one spec the set resolves to — the length cap the slider clamps to, and the caption safe-zone.
+  const platformPreset = resolvePlatformPreset(targetPlatforms)
   const [targetSeconds, setTargetSeconds] = useState(initial.targetSeconds)
   const [stylePreset, setStylePreset] = useState(initial.stylePreset)
   const [styleImageKey, setStyleImageKey] = useState<string | null>(initial.styleImageKey)
@@ -190,7 +192,7 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
       description: description.trim() || null,
       nicheDescription: niche.trim(),
       tagline: tagline.trim(),
-      targetPlatform,
+      targetPlatforms,
       toneConfig: tone,
       targetSeconds,
       stylePreset: stylePreset.trim(),
@@ -552,12 +554,14 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
 
         {/* Target platform */}
         <section className="card space-y-3 p-5">
-          <SectionLabel>Target platform</SectionLabel>
+          <SectionLabel>Where this channel posts</SectionLabel>
           <PlatformPicker
-            value={targetPlatform}
+            value={targetPlatforms}
             onChange={(v) => {
-              setTargetPlatform(v)
-              setTargetSeconds((s) => Math.min(s, PLATFORM_PRESETS[v].maxSeconds))
+              setTargetPlatforms(v)
+              // Dropping to a shorter platform must pull the length down with it, or the slider would sit
+              // above a cap the render can't honor.
+              setTargetSeconds((s) => Math.min(s, resolvePlatformPreset(v).maxSeconds))
             }}
           />
         </section>
@@ -567,13 +571,13 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
           <SectionLabel>Reel length</SectionLabel>
           <div className="flex items-center gap-3">
             <input
-              type="range" min={15} max={PLATFORM_PRESETS[targetPlatform].maxSeconds} step={5} value={targetSeconds}
+              type="range" min={15} max={platformPreset.maxSeconds} step={5} value={targetSeconds}
               onChange={(e) => setTargetSeconds(Number(e.target.value))}
               className="flex-1 accent-accent"
             />
             <span className="w-14 text-right font-mono text-xs tabular-nums text-ink">~{targetSeconds}s</span>
           </div>
-          <p className="text-xs text-faint">Capped at {PLATFORM_PRESETS[targetPlatform].maxSeconds}s for {PLATFORM_PRESETS[targetPlatform].label}.</p>
+          <p className="text-xs text-faint">Capped at {platformPreset.maxSeconds}s by {platformPreset.label}.</p>
         </section>
 
         {/* Storytelling style — the kind of story + prose tradition + narrator voice (NOT the visual look or TTS voice) */}
@@ -651,7 +655,7 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
           </label>
           {captionStyle.enabled !== false && (
             <>
-              <CaptionPreview key={captionStyle.preset} style={captionStyle} safeZonePct={PLATFORM_PRESETS[targetPlatform].safeZoneBottomPct} />
+              <CaptionPreview key={captionStyle.preset} style={captionStyle} safeZonePct={platformPreset.safeZoneBottomPct} />
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {CAPTION_ORDER.map((p) => (
                   <button

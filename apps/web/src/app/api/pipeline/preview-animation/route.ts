@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { getDb, scenes, assets, reels, channels } from '@reels/db'
 import { eq, and, sql } from 'drizzle-orm'
 import { generateVideo, FalEngineSchema, ContentFilterError, ProviderRateLimitError } from '@reels/providers'
-import { resolveMotionSettings, PLATFORM_PRESETS } from '@reels/core'
+import { resolveMotionSettings, channelPlatformPreset } from '@reels/core'
 import { requireReelOwner, requireSpendBudget } from '@/lib/api-access'
 import { recordFailedSpend } from '@/lib/failed-spend'
 
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
   const motion = resolveMotionSettings(scene.motionSettings)
   // Preview clips must match the channel's output frame — render reuses them as variation 0.
   const channel = await db.query.channels.findFirst({ where: eq(channels.id, reel.channelId) })
-  const aspect = (PLATFORM_PRESETS[(channel?.targetPlatform ?? 'all') as keyof typeof PLATFORM_PRESETS] ?? PLATFORM_PRESETS.all).aspect
+  const aspect = channelPlatformPreset(channel ?? {}).aspect
   let costAdded = 0
 
   try {

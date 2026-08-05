@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { eq } from 'drizzle-orm'
 import { getDb, channels, stories, claimSetupSpendForChannel } from '@reels/db'
-import { ToneConfigSchema, WorldBibleSchema, ChannelVoiceSchema, VoiceModeSchema, CaptionStyleSchema, TargetPlatformSchema, PLATFORM_PRESETS, MAX_TARGET_SECONDS, MusicIntensitySchema, MusicModeSchema, AudioMoodSchema, peakFracForType } from '@reels/core'
+import { ToneConfigSchema, WorldBibleSchema, ChannelVoiceSchema, VoiceModeSchema, CaptionStyleSchema, TargetPlatformsSchema, resolvePlatformPreset, MAX_TARGET_SECONDS, MusicIntensitySchema, MusicModeSchema, AudioMoodSchema, peakFracForType } from '@reels/core'
 import { classifyGenre, GENRE_MODULE_VALUES, asGenreModule } from '@reels/core/prompts/scenes.v1'
 import { STYLE_VALUES, resolveStyle } from '@reels/core/prompts/story-styles.v1'
 import { VOICE_VALUES, resolveVoice } from '@reels/core/prompts/story-voices.v1'
@@ -17,7 +17,7 @@ const InputSchema = z.object({
   nicheDescription: z.string().trim().min(1).max(8000),
   tagline: z.string().trim().max(200).default(''), // AI-derived one-line positioning
   languages: z.array(z.string().trim().min(1)).min(1).max(6),
-  targetPlatform: TargetPlatformSchema.default('all'), // shapes caption/length + render presets
+  targetPlatforms: TargetPlatformsSchema, // every feed this channel posts to — shapes caption/length + render presets
   toneConfig: ToneConfigSchema,
   voiceSearchKeyword: z.string().trim().max(80).default(''), // AI-derived genre tag for voice matching
   stylePreset: z.string().trim().min(1),
@@ -84,8 +84,9 @@ export async function POST(req: NextRequest) {
   }
   // Single keeps exactly one voice; per-story stores none (chosen per reel at render).
   const voicePool = c.voiceMode === 'single' ? c.voicePool.slice(0, 1) : []
-  // Length must fit the platform's hard cap (e.g. Shorts ≤60s) regardless of what was derived.
-  const targetSeconds = Math.min(c.targetSeconds, PLATFORM_PRESETS[c.targetPlatform].maxSeconds)
+  // Length must fit the hard cap of the NARROWEST platform picked (e.g. Shorts ≤60s pulls the whole set
+  // down to 60s) regardless of what was derived.
+  const targetSeconds = Math.min(c.targetSeconds, resolvePlatformPreset(c.targetPlatforms).maxSeconds)
 
   // Chosen track pool → the channel's musicPack ([] = no stored bed; the renderer draws one per
   // reel when >1). peakFrac is estimated from the type (generated/preset beds have no measured peak).
@@ -114,7 +115,7 @@ export async function POST(req: NextRequest) {
     nicheDescription: c.nicheDescription,
     tagline: c.tagline,
     languages: c.languages,
-    targetPlatform: c.targetPlatform,
+    targetPlatforms: c.targetPlatforms,
     toneConfig: c.toneConfig,
     stylePreset: c.stylePreset,
     styleImageKey: c.styleImageKey ?? null,

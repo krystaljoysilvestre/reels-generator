@@ -106,7 +106,13 @@ export const channels = pgTable('channels', {
   stylePreset: text('style_preset').notNull().default(''),
   styleImageKey: text('style_image_key'),  // optional R2 key for the chosen visual-style sample
   targetSeconds: integer('target_seconds').notNull().default(75),  // per-channel reel length (AI-derived per niche, operator-adjustable)
-  targetPlatform: text('target_platform').notNull().default('all'),  // tiktok | youtube_shorts | facebook_reels | all — shapes caption/length now, render presets later
+  // Every platform this channel publishes to (tiktok | youtube_shorts | facebook_reels | youtube_long).
+  // A SET, not one value: creators post the same reel to several feeds, and each one's length cap, caption
+  // safe-zone and frame differ. The render still needs ONE spec, so consumers never read this directly —
+  // they call core's channelPlatformPreset(), which collapses the set to the spec satisfying every member.
+  // youtube_long is exclusive (16:9 can't share a render with 9:16); the picker and route schema enforce it.
+  // Replaced the single `target_platform` in migration 0052, which backfilled 'all' → the three vertical feeds.
+  targetPlatforms: text('target_platforms').array().notNull().default(['tiktok', 'youtube_shorts', 'facebook_reels']),
   worldBible: jsonb('world_bible').notNull().default({}),
   // Genre bucket (horror | informational | lifestyle | drama | commentary | reddit_story | comedy |
   // general) — LLM-derived at creation (channel.v1). Picks the WRITER identity for story generation

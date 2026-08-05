@@ -365,6 +365,13 @@
       "when": 1785813200890,
       "tag": "0051_fearless_darkstar",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1785914364661,
+      "tag": "0052_multi_platform_channels",
+      "breakpoints": true
     }
   ]
 }

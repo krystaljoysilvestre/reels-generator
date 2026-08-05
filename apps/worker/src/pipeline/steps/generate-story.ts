@@ -5,7 +5,7 @@ import {
   StoryOutputSchema,
   WorldBibleSchema,
   ToneConfigSchema,
-  PLATFORM_PRESETS,
+  channelPlatformPreset,
   type StoryOutput,
 } from '@reels/core'
 import {
@@ -376,7 +376,7 @@ export async function generateStory(reelId: string, channelId: string, language:
     regenerationNonce,
     operatorFeedback,
     operatorSeed,
-    platformHookHint: PLATFORM_PRESETS[(channel.targetPlatform ?? 'all') as keyof typeof PLATFORM_PRESETS]?.hookHint,
+    platformHookHint: channelPlatformPreset(channel).hookHint,
     prevWinnerAngleId,
     recentPremises,
     recentElements,

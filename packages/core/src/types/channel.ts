@@ -41,6 +41,30 @@ export type LutConfig = z.infer<typeof LutConfigSchema>
 export const TargetPlatformSchema = z.enum(['tiktok', 'youtube_shorts', 'facebook_reels', 'youtube_long', 'all'])
 export type TargetPlatform = z.infer<typeof TargetPlatformSchema>
 
+// A channel publishes to a SET of platforms (`channels.targetPlatforms`). These are the ones a
+// creator can pick; 'all' is not among them — it is the legacy single-value bucket that predates the
+// set, kept only so old rows and old drafts still resolve (see resolvePlatformPreset).
+export const PUBLISH_PLATFORMS = ['tiktok', 'youtube_shorts', 'facebook_reels', 'youtube_long'] as const
+export type PublishPlatform = (typeof PUBLISH_PLATFORMS)[number]
+
+// Long-form is EXCLUSIVE: a 16:9 upload and a 9:16 reel are different shapes, and one render can only
+// be one shape. Picking it clears the vertical set and vice versa — the same rule as language ("want
+// the other one? make a separate channel").
+export function isExclusivePlatform(p: TargetPlatform): boolean {
+  return PLATFORM_PRESETS[p]?.aspect === '16:9'
+}
+
+// The platform SET as every route validates it: at least one, deduped, and never mixing an exclusive
+// (16:9) platform with vertical ones. Rejecting the mix here — not just in the picker — keeps a hand-rolled
+// API call from writing a row whose aspect the renderer would have to guess at.
+export const TargetPlatformsSchema = z
+  .array(z.enum(PUBLISH_PLATFORMS))
+  .min(1, 'Pick at least one platform.')
+  .transform((ps) => [...new Set(ps)])
+  .refine((ps) => !(ps.length > 1 && ps.some(isExclusivePlatform)), {
+    message: 'A widescreen upload and a vertical reel are different shapes — give long-form its own channel.',
+  })
+
 export type AspectRatio = '9:16' | '16:9'
 
 export interface PlatformPreset {
@@ -105,6 +129,68 @@ export const PLATFORM_PRESETS: Record<TargetPlatform, PlatformPreset> = {
     hookHint: 'a strong, universal hook in the first 2–3s',
     safeZoneBottomPct: 18, watermark: false,
   },
+}
+
+// ── Resolving a SET of platforms into the one spec a render can have ──────────
+// A reel is rendered once, so the pipeline needs a single frame, cap and safe zone no matter how many
+// platforms the channel publishes to. The set is the creator's intent (stored verbatim); this collapses
+// it to the spec that satisfies every member — narrowest length cap, widest safe zone, tightest sweet
+// spot — with the hints naming the binding constraint so derivation and story-gen reason from it.
+//
+// Every consumer (derivation, story-gen, scene breakdown, image + video gen, render, render QA) reads
+// THIS rather than indexing PLATFORM_PRESETS directly, so the multi-platform rule lives in one place.
+export function resolvePlatformPreset(platforms: readonly string[] | null | undefined): PlatformPreset {
+  const picked = (platforms ?? []).filter((p): p is PublishPlatform =>
+    (PUBLISH_PLATFORMS as readonly string[]).includes(p),
+  )
+  // Nothing recognizable (an empty set, or a legacy row that only ever held 'all') → the
+  // safe-everywhere bucket, exactly as before the set existed.
+  if (picked.length === 0) return PLATFORM_PRESETS.all
+  // Defensive: a 16:9 platform can't share a render with 9:16 ones. The picker prevents the mix and the
+  // route schema rejects it, but if a row ever holds both, the exclusive shape wins — a widescreen
+  // upload cropped to a Short is a broken video, whereas the reverse is merely a wasted opportunity.
+  const exclusive = picked.find(isExclusivePlatform)
+  if (exclusive) return PLATFORM_PRESETS[exclusive]
+  if (picked.length === 1) return PLATFORM_PRESETS[picked[0]!]
+
+  const presets = picked.map((p) => PLATFORM_PRESETS[p])
+  const maxSeconds = Math.min(...presets.map((p) => p.maxSeconds))
+  // Intersect the recommended ranges. If the intersection inverts (no length suits everyone), fall back
+  // to the hard cap so the sweet spot never asks for something longer than the export allows.
+  const low = Math.max(...presets.map((p) => p.sweetSpot[0]))
+  const high = Math.min(...presets.map((p) => p.sweetSpot[1]))
+  const sweetSpot: [number, number] = low <= high ? [low, high] : [Math.min(low, maxSeconds), maxSeconds]
+  // The binding platform for each constraint — named in the hints so the LLM knows WHY the ceiling is
+  // where it is instead of being handed a bare number.
+  const shortest = presets.reduce((a, b) => (b.maxSeconds < a.maxSeconds ? b : a))
+  const tallestUi = presets.reduce((a, b) => (b.safeZoneBottomPct > a.safeZoneBottomPct ? b : a))
+  const names = presets.map((p) => p.label).join(' + ')
+
+  return {
+    label: names,
+    aspect: '9:16',
+    width: 1080,
+    height: 1920,
+    maxSeconds,
+    sweetSpot,
+    captionHint: `must read well on all of ${names} — legible and high-contrast, sitting clear of the tallest bottom UI (${tallestUi.label})`,
+    lengthHint: `${sweetSpot[0]}–${sweetSpot[1]}s; ${maxSeconds}s hard cap, set by ${shortest.label}`,
+    hookHint: `a strong hook in the first 2–3s that works on all of ${names}`,
+    safeZoneBottomPct: Math.max(...presets.map((p) => p.safeZoneBottomPct)),
+    watermark: presets.some((p) => p.watermark),
+  }
+}
+
+// Convenience for the many consumers that hold a channel row: resolves the row's platform set, and
+// still understands rows written before the set existed (legacy single `targetPlatform`).
+export function channelPlatformPreset(channel: {
+  targetPlatforms?: readonly string[] | null
+  targetPlatform?: string | null
+}): PlatformPreset {
+  if (channel.targetPlatforms?.length) return resolvePlatformPreset(channel.targetPlatforms)
+  const legacy = channel.targetPlatform
+  if (legacy && legacy in PLATFORM_PRESETS) return PLATFORM_PRESETS[legacy as TargetPlatform]
+  return PLATFORM_PRESETS.all
 }
 
 // Per-channel burned-in caption style. The operator picks an expressive preset

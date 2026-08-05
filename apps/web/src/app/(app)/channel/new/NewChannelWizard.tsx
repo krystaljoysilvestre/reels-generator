@@ -1,13 +1,13 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { NICHE_PRESETS, trendingId } from './niche-presets'
+import { NICHE_PRESETS, findPreset, trendingId } from './niche-presets'
 import { SUPPORTED_LANGUAGES } from './languages'
 import { Dropdown } from '@/components/Dropdown'
 import { avatarGradient, avatarInitials } from '@/components/ChannelAvatar'
 import { CaptionPreview } from '@/components/CaptionPreview'
 import { PlatformPicker } from '@/components/PlatformPicker'
-import { type CaptionPreset, type CaptionStyle, type TargetPlatform, type AudioMood, resolveCaptionStyle, CaptionStyleSchema, PLATFORM_PRESETS, PRESET_BEDS, rankPresets, presetsForGenre, stylePresetThumbKey, sampleSceneForGenre } from '@reels/core'
+import { type CaptionPreset, type CaptionStyle, type TargetPlatform, type AudioMood, resolveCaptionStyle, CaptionStyleSchema, resolvePlatformPreset, PUBLISH_PLATFORMS, PRESET_BEDS, rankPresets, presetsForGenre, stylePresetThumbKey, sampleSceneForGenre } from '@reels/core'
 import { type GenreModule, asGenreModule } from '@reels/core/prompts/scenes.v1'
 import { stylesForGenre } from '@reels/core/prompts/story-styles.v1'
 import { GENRE_OPTIONS, genreLabel } from '@/lib/genre-labels'
@@ -30,7 +30,7 @@ type Phase = 'describe' | 'script' | 'voice' | 'sound' | 'visual'
 const PHASE_ORDER: Phase[] = ['describe', 'script', 'voice', 'sound', 'visual']
 // The display heading for each step; the step number comes from PHASE_ORDER.
 const STEP_TITLE: Record<Phase, string> = {
-  describe: 'Describe the channel',
+  describe: 'Pitch your channel',
   script: "Teach the channel's voice",
   voice: 'Pick the narrator voice',
   sound: 'Set the sound',
@@ -194,7 +194,9 @@ export function NewChannelWizard({
   const [seededName, setSeededName] = useState('')
   const [niche, setNiche] = useState('')
   const [languages, setLanguages] = useState<string[]>(['English'])
-  const [targetPlatform, setTargetPlatform] = useState<TargetPlatform>('all') // shapes caption/length derivation + render presets
+  // Every feed this channel posts to — shapes caption/length derivation + render presets. A SET, because
+  // creators cross-post; the reel is cut to the spec satisfying all of them (resolvePlatformPreset).
+  const [targetPlatforms, setTargetPlatforms] = useState<TargetPlatform[]>(['tiktok', 'youtube_shorts', 'facebook_reels'])
   const [presetId, setPresetId] = useState<string | null>(null)
   const nicheRef = useRef<HTMLTextAreaElement>(null)
 
@@ -265,6 +267,11 @@ export function NewChannelWizard({
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
   const language = languages[0] ?? 'English'
+  // The one spec the whole set resolves to — the frame, the length cap and the caption safe-zone every
+  // step downstream reasons from. Sorted for the derive signature so re-ticking the same feeds in a
+  // different order can't look like a change and charge for a fresh derive.
+  const platformPreset = resolvePlatformPreset(targetPlatforms)
+  const platformSig = [...targetPlatforms].sort().join(',')
 
   // Label for the derived prose style, shown next to the genre in step 2. '' = pure genre (nothing to name).
   const narrativeStyleLabel = genreCategory && narrativeStyle
@@ -361,7 +368,15 @@ export function NewChannelWizard({
         if (typeof d.seededName === 'string') setSeededName(d.seededName)
         if (typeof d.niche === 'string') setNiche(d.niche)
         if (Array.isArray(d.languages) && d.languages.length) setLanguages(d.languages)
-        if (['tiktok', 'youtube_shorts', 'facebook_reels', 'youtube_long', 'all'].includes(d.targetPlatform)) setTargetPlatform(d.targetPlatform)
+        // Drafts saved before the set existed carry one value (possibly the old 'all' bucket) — widen it
+        // rather than dropping the creator's choice.
+        if (Array.isArray(d.targetPlatforms)) {
+          const picked = d.targetPlatforms.filter((v: unknown): v is TargetPlatform => typeof v === 'string' && (PUBLISH_PLATFORMS as readonly string[]).includes(v))
+          if (picked.length) setTargetPlatforms(picked)
+        } else if (typeof d.targetPlatform === 'string') {
+          if ((PUBLISH_PLATFORMS as readonly string[]).includes(d.targetPlatform)) setTargetPlatforms([d.targetPlatform as TargetPlatform])
+          else if (d.targetPlatform === 'all') setTargetPlatforms(['tiktok', 'youtube_shorts', 'facebook_reels'])
+        }
         if (d.presetId === null || typeof d.presetId === 'string') setPresetId(d.presetId)
         if (typeof d.avatarKey === 'string') {
           setAvatarKey(d.avatarKey)
@@ -430,7 +445,7 @@ export function NewChannelWizard({
       if (v.imageKey) previewKeys[Number(k)] = { imageKey: v.imageKey }
     }
     return {
-      phase, name, committedName, description, seededDescription, seededName, niche, languages, targetPlatform, presetId,
+      phase, name, committedName, description, seededDescription, seededName, niche, languages, targetPlatforms, presetId,
       avatarKey, costCents, tone, style, region, era, locations, objects, vocab,
       voiceMode, selectedVoices, recommended, voiceSearchKeyword, genreCategory, presentation, narrativeStyle, narrativeVoice, styleInfluence, tagline, derivedSig,
       targetSeconds, captionStyle, sampleMode, aiSample, aiSampleEdited, ownSample, autoWroteSample, extraSampleScripts,
@@ -448,7 +463,7 @@ export function NewChannelWizard({
     } catch {
       /* storage full / unavailable — non-fatal */
     }
-  }, [hydrated, phase, name, committedName, description, seededDescription, seededName, niche, languages, targetPlatform, presetId, avatarKey, costCents, tone, targetSeconds, style, region, era, locations, objects, vocab, voiceMode, selectedVoices, recommended, voiceSearchKeyword, genreCategory, presentation, narrativeStyle, narrativeVoice, styleInfluence, tagline, derivedSig, captionStyle, sampleMode, aiSample, aiSampleEdited, ownSample, autoWroteSample, extraSampleScripts, audioMood, musicChoice, selectedPresetIds, presetPickedManually, uploadedMusic, styleProposals, selectedStyleIdx, uploadedStyleIdx, stylePreviews, draftChannelId])
+  }, [hydrated, phase, name, committedName, description, seededDescription, seededName, niche, languages, targetPlatforms, presetId, avatarKey, costCents, tone, targetSeconds, style, region, era, locations, objects, vocab, voiceMode, selectedVoices, recommended, voiceSearchKeyword, genreCategory, presentation, narrativeStyle, narrativeVoice, styleInfluence, tagline, derivedSig, captionStyle, sampleMode, aiSample, aiSampleEdited, ownSample, autoWroteSample, extraSampleScripts, audioMood, musicChoice, selectedPresetIds, presetPickedManually, uploadedMusic, styleProposals, selectedStyleIdx, uploadedStyleIdx, stylePreviews, draftChannelId])
 
   // ── Unsaved-progress guard ──────────────────────────────────────────────────
   // The draft autosaves, but leaving mid-flow still deserves a heads-up so the operator
@@ -506,7 +521,7 @@ export function NewChannelWizard({
   useEffect(() => {
     if (!hydrated || deepLinkDone.current) return
     if (niche.trim() !== '' || initialDraft) { deepLinkDone.current = true; return }
-    if (initialPresetId && NICHE_PRESETS.some((p) => p.id === initialPresetId)) {
+    if (initialPresetId && findPreset(initialPresetId)) {
       deepLinkDone.current = true
       pickPreset(initialPresetId)
       return
@@ -771,7 +786,7 @@ export function NewChannelWizard({
   // then we can Continue without re-calling the API. (Name/description/avatar don't
   // feed the creative bible, so editing them doesn't stale it.)
   const hasDerived = derivedSig !== ''
-  const derivedFresh = hasDerived && derivedSig === `${niche.trim()}|${language}|${targetPlatform}`
+  const derivedFresh = hasDerived && derivedSig === `${niche.trim()}|${language}|${platformSig}`
   // Must pick a mode; single needs a chosen voice, per-story defers to render.
   const canLeaveVoice = voiceMode === 'per_story' || (voiceMode === 'single' && selectedVoices.length > 0)
   // An example being rewritten is mid-flight: every step after 2 is a pre-filled confirmation, so a
@@ -797,13 +812,17 @@ export function NewChannelWizard({
   // Every one of these reads existing state; the poster adds no state and triggers no work. The look
   // reuses whatever preview the Visual step already rendered, so it never causes a paid render.
   const posterInitials = avatarInitials(committedName || name || 'K')
-  const posterPlatformLabel = (PLATFORM_LABELS[targetPlatform] ?? 'All').toUpperCase()
+  // The slate names the feeds, not the resolved spec: it's the creator's choice being reflected back.
+  const posterPlatformLabel = targetPlatforms.map((p) => PLATFORM_LABELS[p] ?? p).join(' · ').toUpperCase()
   const posterGenreTags = [
     genreCategory ? genreLabel(genreCategory) : '',
     narrativeStyleLabel,
     ...(audioMood?.moodTags ?? []).slice(0, 1),
   ].filter(Boolean) as string[]
-  const posterMusicLabel = musicChoice ? MUSIC_LABELS[musicChoice] : ''
+  // Gated on reaching the Sound step, not on `musicChoice` — that state starts at its recommended
+  // default, so an ungated poster ticked "Sound · Original score" on step 1 and claimed a decision the
+  // creator hadn't made yet. The poster only ever reports what the brief has actually settled.
+  const posterMusicLabel = PHASE_ORDER.indexOf(phase) >= 3 && musicChoice ? MUSIC_LABELS[musicChoice] : ''
   const posterStyleLabel =
     selectedStyleIdx !== null ? (styleProposals?.styles[selectedStyleIdx]?.label ?? '') : ''
   const posterCaptionLabel = CAPTION_OPTIONS.find((o) => o.preset === captionStyle.preset)?.label ?? ''
@@ -870,7 +889,9 @@ export function NewChannelWizard({
   }
 
   function pickPreset(id: string) {
-    const preset = NICHE_PRESETS.find((p) => p.id === id)
+    // findPreset, not the grid list: a dashboard quick-start or a resumed draft can name a curated niche
+    // that no longer has a tile, and it should still seed its text rather than silently do nothing.
+    const preset = findPreset(id)
     if (!preset) return
     if (presetId === id) {
       // toggle off
@@ -952,7 +973,7 @@ export function NewChannelWizard({
       const res = await fetch('/api/channel/derive', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), nicheDescription: nicheText, languages, targetPlatform }),
+        body: JSON.stringify({ name: name.trim(), nicheDescription: nicheText, languages, targetPlatforms }),
         signal: controller.signal,
       })
       const json = await res.json()
@@ -992,7 +1013,7 @@ export function NewChannelWizard({
       setTagline(d.tagline ?? '')
       setAudioMood(d.audioMood ?? null)
       setCostCents((c) => c + (json.costCents ?? 0)) // add — a re-derive doesn't undo earlier spend
-      setDerivedSig(`${nicheText}|${language}|${targetPlatform}`)
+      setDerivedSig(`${nicheText}|${language}|${platformSig}`)
       // Fresh profile invalidates anything derived from the old one.
       setRecommended([])
       setSelectedVoices([])
@@ -1051,7 +1072,7 @@ export function NewChannelWizard({
           languages,
           toneConfig: tone,
           targetSeconds,
-          targetPlatform,
+          targetPlatforms,
           worldBible: worldBiblePayload(),
           voiceStyle: selectedVoices[0]?.description,
           ...(genreCategory ? { genreCategory } : {}),
@@ -1163,7 +1184,7 @@ export function NewChannelWizard({
           nicheDescription: niche.trim(),
           tagline,
           languages,
-          targetPlatform,
+          targetPlatforms,
           toneConfig: tone,
           voiceSearchKeyword,
           ...(genreCategory ? { genreCategory } : {}), // omit when not derived → create route keyword-classifies
@@ -1304,7 +1325,7 @@ export function NewChannelWizard({
               </div>
             </div>
 
-            <Field label="Description" hint="Optional — a short line shown on the channel's card.">
+            <Field label="Description" hint="· optional — shown on the channel's card">
               <input
                 className="input"
                 value={description}
@@ -1315,9 +1336,9 @@ export function NewChannelWizard({
             </Field>
 
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-ink">What&apos;s your channel about?</label>
-              <p className="-mt-1 text-xs text-muted">
-                Start from what&apos;s trending, tap a classic template, or describe your own below. Either way you can edit everything.
+              <SectionLabel>What&apos;s your channel about?</SectionLabel>
+              <p className="-mt-1 text-xs leading-relaxed text-muted">
+                Start from what&apos;s trending, tap a template, or describe your own. You can edit everything.
               </p>
 
               {/* Trending now — LIVE web-searched niches with strong current payout (refreshed daily).
@@ -1325,12 +1346,18 @@ export function NewChannelWizard({
                   Quietly removed when the fetch has nothing (static presets always work). */}
               {(trendingLoading || trending.length > 0) && (
                 <div>
-                  <p className="mono-label mb-2 flex items-center gap-1.5">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-accent" aria-hidden>
-                      <path d="M23 6l-9.5 9.5-5-5L1 18" /><path d="M17 6h6v6" />
-                    </svg>
-                    Trending now — refreshed daily
-                  </p>
+                  {/* A live dot rather than an icon: the rail IS a feed, and the pulse says so
+                      without spending a word. The cadence sits on the right, out of the way. */}
+                  <div className="mb-2.5 flex items-center justify-between gap-3">
+                    <p className="flex items-center gap-2.5 text-sm font-700 text-ink">
+                      <span className="relative inline-flex h-2 w-2 flex-shrink-0">
+                        <span className="absolute inset-0 animate-ping rounded-full bg-brand-pink" />
+                        <span className="absolute inset-0 rounded-full bg-brand-pink" />
+                      </span>
+                      Trending now
+                    </p>
+                    <span className="flex-shrink-0 text-xs text-faint">Updated daily</span>
+                  </div>
                   {/* A horizontal rail, not a grid: the live feed returns 3–6 cards and a grid of six
                       pushes the brief's own fields off-screen in the narrower two-pane layout. */}
                   {trendingLoading ? (
@@ -1482,7 +1509,7 @@ export function NewChannelWizard({
               </div>
             )}
 
-            <Field label="Language" hint="Every reel on this channel is narrated in this language. Want another language? Create a separate channel.">
+            <Field label="Language" hint="Narrated in this language. Need another? Make a separate channel.">
               <Dropdown
                 className="w-full sm:w-64"
                 value={language}
@@ -1496,15 +1523,18 @@ export function NewChannelWizard({
               />
             </Field>
 
-            <Field label="Target platform" hint="Where these reels get posted — we fit the length, framing, and captions to it.">
+            <Field label="Where will you post?" hint="Pick every platform you'll publish to — we fit length, safe-zones and aspect to each. Change anytime.">
               <PlatformPicker
-                value={targetPlatform}
-                onChange={(p) => {
-                  setTargetPlatform(p)
+                value={targetPlatforms}
+                onChange={(next) => {
+                  setTargetPlatforms(next)
                   // Burned captions are a mute-autoplay answer: essential in a feed, wrong for long-form,
                   // where viewers have sound on and YouTube's own CC track is better (selectable, translatable).
                   // Only a default — the creator can flip it back on in the Captions card below.
-                  if (!captionsTouched) setCaptionStyle((cs) => ({ ...cs, enabled: p !== 'youtube_long' }))
+                  if (!captionsTouched) {
+                    const vertical = resolvePlatformPreset(next).aspect === '9:16'
+                    setCaptionStyle((cs) => ({ ...cs, enabled: vertical }))
+                  }
                 }}
               />
             </Field>
@@ -2136,7 +2166,7 @@ export function NewChannelWizard({
             <div className="card p-5">
               <SectionLabel>Captions</SectionLabel>
               <p className="mt-1 text-xs text-faint">
-                {targetPlatform === 'youtube_long'
+                {platformPreset.aspect === '16:9'
                   ? 'Long-form viewers watch with sound on, so we leave the picture clean by default. Turn this on if you want words burned into the video.'
                   : 'Burned into every reel (most are watched on mute) — playing live below, just like in the video. Suggested for your niche; switch anytime.'}
               </p>
@@ -2157,7 +2187,7 @@ export function NewChannelWizard({
                     <CaptionPreview
                       key={captionStyle.preset}
                       style={captionStyle}
-                      safeZonePct={PLATFORM_PRESETS[targetPlatform].safeZoneBottomPct}
+                      safeZonePct={platformPreset.safeZoneBottomPct}
                       backgroundImageUrl={chosenStyleImageKey ? `/api/asset?key=${encodeURIComponent(chosenStyleImageKey)}` : undefined}
                     />
                   </div>
@@ -2277,8 +2307,14 @@ const ICON_PATHS: Record<string, string> = {
     '<circle cx="12" cy="12" r="5"/><path d="M19.5 9.5c1.4.5 2.3 1.2 2.4 2 .2 1.6-3 3.8-7.4 5s-8.2 1.1-8.9-.3"/>',
   money:
     '<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01"/><path d="M18 12h.01"/>',
-  psychology:
+  drama:
     '<path d="M19 14c1.5-1.5 3-3.3 3-5.5A4.5 4.5 0 0 0 12 5.5 4.5 4.5 0 0 0 2 8.5c0 2.2 1.5 4 3 5.5l7 7Z"/>',
+  comedy:
+    '<circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9h.01"/><path d="M15 9h.01"/>',
+  lifestyle:
+    '<path d="M20 7h-9M14 17H5M17 3l3 4-3 4M7 21l-3-4 3-4"/>',
+  general:
+    '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
   custom: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
 }
 

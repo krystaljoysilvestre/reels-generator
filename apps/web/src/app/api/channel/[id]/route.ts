@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { eq } from 'drizzle-orm'
 import { getDb, channels } from '@reels/db'
-import { ToneConfigSchema, WorldBibleSchema, CaptionStyleSchema, TargetPlatformSchema, PLATFORM_PRESETS, MAX_TARGET_SECONDS, AudioPacksSchema, MusicMoodSchema, PostingRulesSchema, PublishScheduleSchema } from '@reels/core'
+import { ToneConfigSchema, WorldBibleSchema, CaptionStyleSchema, TargetPlatformsSchema, channelPlatformPreset, MAX_TARGET_SECONDS, AudioPacksSchema, MusicMoodSchema, PostingRulesSchema, PublishScheduleSchema } from '@reels/core'
 import { STYLE_VALUES } from '@reels/core/prompts/story-styles.v1'
 import { GENRE_MODULE_VALUES } from '@reels/core/prompts/scenes.v1'
 import { VOICE_VALUES } from '@reels/core/prompts/story-voices.v1'
@@ -19,7 +19,7 @@ const UpdateSchema = z
     description: z.string().trim().max(140).nullish(),
     nicheDescription: z.string().trim().min(1).max(8000),
     tagline: z.string().trim().max(200),
-    targetPlatform: TargetPlatformSchema,
+    targetPlatforms: TargetPlatformsSchema,
     toneConfig: ToneConfigSchema,
     // Ceiling = the largest platform cap (long-form YouTube); clamped to the actual platform below.
     targetSeconds: z.number().int().min(15).max(MAX_TARGET_SECONDS),
@@ -99,11 +99,10 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     updates['postingRules'] = rules
   }
 
-  // Keep length within the (possibly newly-chosen) platform's hard cap.
-  const platform = (patch.targetPlatform ?? existing.targetPlatform) as keyof typeof PLATFORM_PRESETS
-  const maxSeconds = (PLATFORM_PRESETS[platform] ?? PLATFORM_PRESETS.all).maxSeconds
+  // Keep length within the hard cap of the narrowest platform in the (possibly newly-chosen) set.
+  const maxSeconds = channelPlatformPreset({ targetPlatforms: patch.targetPlatforms ?? existing.targetPlatforms }).maxSeconds
   const effectiveSeconds = (patch.targetSeconds ?? existing.targetSeconds ?? 75)
-  if (patch.targetSeconds !== undefined || patch.targetPlatform !== undefined) {
+  if (patch.targetSeconds !== undefined || patch.targetPlatforms !== undefined) {
     updates['targetSeconds'] = Math.min(effectiveSeconds, maxSeconds)
   }
 

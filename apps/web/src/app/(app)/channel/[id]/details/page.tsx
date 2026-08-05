@@ -6,7 +6,7 @@ import { assertChannelAccess } from '@/lib/access'
 import { ChannelAvatar } from '@/components/ChannelAvatar'
 import { CaptionPreview } from '@/components/CaptionPreview'
 import type { ToneConfig, WorldBible, ChannelVoice } from '@reels/core'
-import { CaptionStyleSchema, PLATFORM_PRESETS, AudioPacksSchema } from '@reels/core'
+import { CaptionStyleSchema, channelPlatformPreset, AudioPacksSchema } from '@reels/core'
 import { channelMetadata } from '@/lib/page-metadata'
 
 export const dynamic = 'force-dynamic'
@@ -129,7 +129,7 @@ export default async function ChannelDetailsPage({ params }: { params: Promise<{
           <div className="mt-3">
             <CaptionPreview
               style={caption}
-              safeZonePct={(PLATFORM_PRESETS[(channel.targetPlatform ?? 'all') as keyof typeof PLATFORM_PRESETS] ?? PLATFORM_PRESETS.all).safeZoneBottomPct}
+              safeZonePct={channelPlatformPreset(channel).safeZoneBottomPct}
               backgroundImageUrl={channel.styleImageKey ? `/api/asset?key=${encodeURIComponent(channel.styleImageKey)}` : undefined}
             />
           </div>

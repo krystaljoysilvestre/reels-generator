@@ -18,7 +18,7 @@ async function main() {
   const { getDb, scenes, assets, channels, reels } = await import('@reels/db')
   const { eq, and, inArray, sql } = await import('drizzle-orm')
   const { generateImageFal, imageEngineForGenre } = await import('@reels/providers')
-  const { assembleImagePrompt, assembleNegativePrompt, reelLightingDirective, sceneEntities, StoryBibleSchema, PLATFORM_PRESETS } =
+  const { assembleImagePrompt, assembleNegativePrompt, reelLightingDirective, sceneEntities, StoryBibleSchema, channelPlatformPreset } =
     await import('@reels/core')
 
   const db = getDb()
@@ -32,7 +32,7 @@ async function main() {
     ? { bible: storyBible, primaryEntity: scene.primaryEntity, supportingEntities: scene.supportingEntities }
     : undefined
   const engine = imageEngineForGenre(channel.genreCategory)
-  const aspect = (PLATFORM_PRESETS[(channel.targetPlatform ?? 'all') as keyof typeof PLATFORM_PRESETS] ?? PLATFORM_PRESETS.all).aspect
+  const aspect = channelPlatformPreset(channel).aspect
   const lighting = storyBible ? reelLightingDirective(channel.genreCategory, storyBible.continuity.timeline) : undefined
   // 'fresh' re-rolls from the pristine scenes-generation prompt; 'vary' builds on the current (revised) one.
   const basePrompt = mode === 'fresh' ? scene.visualPromptBase || scene.visualPrompt : scene.visualPrompt

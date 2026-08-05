@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { mkdir, writeFile, readFile, rm, copyFile } from 'node:fs/promises'
 import { getDb, reels, scenes, assets, channels } from '@reels/db'
 import { downloadBuffer, uploadBuffer, uploadFile, buildInputHash } from '@reels/providers'
-import { TimingsSchema, LutConfigSchema, CaptionStyleSchema, PLATFORM_PRESETS, PostMetaSchema, effectsFromSelection, parseMotion } from '@reels/core'
+import { TimingsSchema, LutConfigSchema, CaptionStyleSchema, channelPlatformPreset, PostMetaSchema, effectsFromSelection, parseMotion } from '@reels/core'
 import { renderReelWithRemotion, renderThumbnailStill } from '@reels/render/remotion/render-remotion'
 import { resolveMediaGenre } from '@reels/core/prompts/scenes.v1'
 import { runStep, setReelStatus } from '../harness.js'
@@ -62,7 +62,7 @@ export async function renderStep(reelId: string): Promise<void> {
   const mediaGenre = resolveMediaGenre({ storyMode: channel.storyMode, genreCategory: channel.genreCategory, niche: channel.nicheDescription })
   const lutConfig = LutConfigSchema.parse(channel.lutConfig)
   const captionStyle = CaptionStyleSchema.parse(channel.captionStyle)
-  const platformPreset = PLATFORM_PRESETS[(channel.targetPlatform ?? 'all') as keyof typeof PLATFORM_PRESETS] ?? PLATFORM_PRESETS.all
+  const platformPreset = channelPlatformPreset(channel)
   const captionSafeZonePct = platformPreset.safeZoneBottomPct
 
   // Newest first: a re-mix or re-generated scene image/video appends a new row; render must pick the
@@ -112,7 +112,7 @@ export async function renderStep(reelId: string): Promise<void> {
     lut: lutConfig.lutPath ?? '',
     watermark: channel.watermarkKey ?? DEFAULT_WATERMARK_KEY,
     disclosure: channel.storyMode === 'ebn' ? EBN_DISCLOSURE_LABEL : '', // in the fingerprint → EBN reels re-render if it changes
-    platform: channel.targetPlatform ?? 'all',
+    platform: platformPreset.label, // the resolved spec, so set order can't churn the fingerprint
     frame: `${platformPreset.width}x${platformPreset.height}`, // output dims (belt-and-suspenders to platform)
   })
 

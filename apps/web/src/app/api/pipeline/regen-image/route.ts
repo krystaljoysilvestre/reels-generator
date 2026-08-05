@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { getDb, scenes, assets, channels, reels } from '@reels/db'
 import { eq, and, inArray, sql } from 'drizzle-orm'
 import { generateImage, generateImageFal, imageEngineForGenre, FLUX_IMAGE_ENGINE, ContentFilterError, ProviderRateLimitError, llmCall, SCENE_IMAGE_QUALITY } from '@reels/providers'
-import { assembleImagePrompt, assembleReferencePrompt, assembleNegativePrompt, castNationality, reelLightingDirective, sceneEntities, slug, StoryBibleSchema, PLATFORM_PRESETS } from '@reels/core'
+import { assembleImagePrompt, assembleReferencePrompt, assembleNegativePrompt, castNationality, reelLightingDirective, sceneEntities, slug, StoryBibleSchema, channelPlatformPreset } from '@reels/core'
 import { buildReviseScenePrompt, REVISE_SCENE_V1_VERSION, ReviseSceneSchema } from '@reels/core/prompts/revise-scene.v1'
 import { buildFilterSafePrompt, FILTER_SAFE_V1_VERSION, FilterSafeSchema } from '@reels/core/prompts/filter-safe.v1'
 import { requireReelOwner, callerMayUseStorageKey, requireSpendBudget } from '@/lib/api-access'
@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
   // render the scene off it. Same engine/plates as the pipeline → the reshoot stays consistent with the reel.
   const storyBible = reel.storyBible ? StoryBibleSchema.parse(reel.storyBible) : null
   const engine = imageEngineForGenre(channel.genreCategory)
-  const aspect = (PLATFORM_PRESETS[(channel.targetPlatform ?? 'all') as keyof typeof PLATFORM_PRESETS] ?? PLATFORM_PRESETS.all).aspect
+  const aspect = channelPlatformPreset(channel).aspect
   const lighting = storyBible ? reelLightingDirective(channel.genreCategory, storyBible.continuity.timeline) : undefined
   const cast = castNationality(channel.languages, (channel.worldBible as { region?: string } | null)?.region)
   const negativePrompt = assembleNegativePrompt({ genreCategory: channel.genreCategory })

@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { llmCall } from '@reels/providers'
 import { recordSpendEvent } from '@reels/db'
-import { ToneConfigSchema, WorldBibleSchema, TargetPlatformSchema, PLATFORM_PRESETS, MAX_TARGET_SECONDS } from '@reels/core'
+import { ToneConfigSchema, WorldBibleSchema, TargetPlatformsSchema, resolvePlatformPreset, MAX_TARGET_SECONDS } from '@reels/core'
 import {
   buildChannelSamplePrompt,
   ChannelSampleSchema,
@@ -21,7 +21,7 @@ const InputSchema = z.object({
   // Ceiling = the largest platform cap (long-form YouTube runs minutes); clamped per-platform below.
   targetSeconds: z.number().int().min(15).max(MAX_TARGET_SECONDS).default(75),
   voiceStyle: z.string().trim().optional(),
-  targetPlatform: TargetPlatformSchema.default('all'),
+  targetPlatforms: TargetPlatformsSchema,
   promptHint: z.string().trim().max(8000).optional(), // optional operator steer — can be a long, detailed brief
   // The operator's OWN draft, to be rebuilt in the channel's voice. Capped like the other free-text
   // fields since it is echoed into the prompt. Only ever their words — never a sample we wrote.
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
     toneJson: JSON.stringify(c.toneConfig),
     worldJson: JSON.stringify(c.worldBible),
     targetSeconds: c.targetSeconds,
-    hookHint: PLATFORM_PRESETS[c.targetPlatform].hookHint,
+    hookHint: resolvePlatformPreset(c.targetPlatforms).hookHint,
     ...(c.genreCategory ? { genreCategory: c.genreCategory } : {}),
     ...(c.narrativeStyle ? { narrativeStyle: c.narrativeStyle } : {}),
     ...(c.narrativeVoice ? { narrativeVoice: c.narrativeVoice } : {}),

@@ -9,7 +9,7 @@ import {
   ChannelDerivationSchema,
   CHANNEL_V1_VERSION,
 } from '@reels/core/prompts/channel.v1'
-import { TargetPlatformSchema } from '@reels/core'
+import { TargetPlatformsSchema } from '@reels/core'
 import { requireApiUser, requireSpendBudget } from '@/lib/api-access'
 import { recordFailedSpend } from '@/lib/failed-spend'
 
@@ -17,7 +17,7 @@ const InputSchema = z.object({
   name: z.string().trim().min(1).max(80),
   nicheDescription: z.string().trim().min(20).max(8000),
   languages: z.array(z.string().trim().min(1)).min(1).max(6),
-  targetPlatform: TargetPlatformSchema.default('all'),
+  targetPlatforms: TargetPlatformsSchema,
 })
 
 // Idempotency cache: a derive is a pure function of its inputs, so a retry with the SAME inputs
@@ -35,7 +35,7 @@ function cacheKey(input: z.infer<typeof InputSchema>): string {
     name: input.name.trim().toLowerCase(),
     niche: input.nicheDescription.trim().toLowerCase(),
     languages: input.languages.map((l) => l.trim().toLowerCase()).sort(),
-    platform: input.targetPlatform,
+    platforms: [...input.targetPlatforms].sort(), // sorted: the derive is the same call whichever order they were ticked
   })
   return createHash('sha256').update(norm).digest('hex')
 }
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid input', issues: parsed.error.flatten() }, { status: 400 })
   }
 
-  const { name, nicheDescription, languages, targetPlatform } = parsed.data
+  const { name, nicheDescription, languages, targetPlatforms } = parsed.data
 
   // Return a recent identical derive instead of paying for it again.
   const key = cacheKey(parsed.data)
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ derived: cached.derived, costCents: 0, cached: true })
   }
 
-  const { system, userMessage } = buildChannelDerivationPrompt({ name, nicheDescription, languages, targetPlatform })
+  const { system, userMessage } = buildChannelDerivationPrompt({ name, nicheDescription, languages, targetPlatforms })
 
   try {
     const result = await llmCall({

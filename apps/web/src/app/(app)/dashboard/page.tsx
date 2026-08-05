@@ -2,7 +2,7 @@ import { getDb, channels, reels, trendingNiches } from '@reels/db'
 import { and, desc, eq, count, gte, sum, inArray, sql } from 'drizzle-orm'
 import Link from 'next/link'
 import { TrendingNichesSchema } from '@reels/core/prompts/trending-niches.v1'
-import { NICHE_PRESETS, trendingId } from '../channel/new/niche-presets'
+import { CURATED_NICHES, trendingId } from '../channel/new/niche-presets'
 import { CreateChannelButton } from './CreateChannelButton'
 import { ChannelAvatar, avatarGlow } from '@/components/ChannelAvatar'
 import { KendrixMark } from '@/components/Wordmark'
@@ -51,7 +51,7 @@ async function loadQuickStarts(db: ReturnType<typeof getDb>): Promise<QuickStart
   } catch {
     /* cache unreadable — the curated fallback below always works */
   }
-  return NICHE_PRESETS.slice(0, 3).map((p) => ({
+  return CURATED_NICHES.slice(0, 3).map((p) => ({
     key: p.id,
     href: `/channel/new?preset=${encodeURIComponent(p.id)}`,
     label: p.label,

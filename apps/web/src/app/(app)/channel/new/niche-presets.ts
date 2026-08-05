@@ -1,8 +1,21 @@
-// Curated trending short-form / faceless-video niches. Picking one seeds the
-// niche description (still fully editable) + suggests languages. This is a
-// hand-curated list, not live TikTok data — edit freely as trends move.
+// The starting points offered on step 1 of the wizard.
+//
+// TWO lists, because they answer different questions:
+//
+// • NICHE_PRESETS — the genre grid. One tile per creator-facing genre (the same eight labels as
+//   lib/genre-labels.ts, so the wording never drifts), and each tile's `id` IS its GenreModule value —
+//   'horror', 'drama', 'reddit_story' … — so the tile is bound to the genre, never to its label text.
+//   Broad on purpose: a creator recognizes "scary stories" faster than they place themselves in
+//   "horror & folklore" vs "true crime". Each still seeds a real description, because the profile
+//   derive is only as good as the text it reads — a bare genre word produces a generic channel.
+//
+// • CURATED_NICHES — narrower, hand-written niches. NOT shown in the grid any more; they remain the
+//   dashboard's cold-start quick-start cards (when the live trending cache is empty) and they keep
+//   resolving `?preset=<id>` deep links and drafts saved while they were the grid.
+//
+// Picking either seeds the niche description (still fully editable) and suggests a name + language.
 
-// Selection id for a LIVE trending card (the rail in step 1), as opposed to the curated presets below.
+// Selection id for a LIVE trending card (the rail in step 1), as opposed to the presets below.
 // Derived from the label, not its position: the rail refreshes daily and an index-based id would
 // highlight whatever card happens to sit in that slot on a draft resume. Lives here — a plain data
 // module — so both the wizard (client) and the dashboard (server) can build the same id.
@@ -12,7 +25,7 @@ export function trendingId(label: string): string {
 
 export interface NichePreset {
   id: string
-  icon: string // key into PRESET_ICONS in NewChannelWizard.tsx
+  icon: string // key into ICON_PATHS in NewChannelWizard.tsx
   color: string // literal tailwind classes for the icon chip (bg + text)
   label: string
   blurb: string // one-line shown on the card
@@ -21,7 +34,103 @@ export interface NichePreset {
   suggestedName: string // seeds the channel-name field (editable; never over a typed name)
 }
 
+// ── The genre grid ────────────────────────────────────────────────────────────
+// Order and labels mirror GENRE_OPTIONS in lib/genre-labels.ts; the ids ARE the GenreModule values.
 export const NICHE_PRESETS: NichePreset[] = [
+  {
+    id: 'horror',
+    icon: 'horror',
+    color: 'bg-violet-50 text-violet-600',
+    label: 'Scary stories',
+    blurb: 'Eerie retellings, twist',
+    description:
+      'Horror narration channel — supernatural encounters, creatures, and local folklore set in specific real-but-fictionalized places. The telling varies (first-hand encounters, retold legends, cautionary tales, found accounts) and so does the temperature: slow-burn dread, coiled suspense, sudden kinetic scares, old rules broken and paid for. Believable mundane setups, sensory detail, endings that land within a breath of the peak.',
+    language: 'English',
+    suggestedName: 'Midnight Tales',
+  },
+  {
+    id: 'drama',
+    icon: 'drama',
+    color: 'bg-rose-50 text-rose-600',
+    label: 'Heartfelt drama',
+    blurb: 'Emotional, human stories',
+    description:
+      'Emotional short-drama channel. Ordinary people at the moment a want collides with a need and forces a choice they can\'t take back — the thing left unsaid, the apology that comes too late, the loyalty that costs something. Intimate and specific, never sentimental; the ending changes who someone is, not just what happened.',
+    language: 'English',
+    suggestedName: 'The Unsaid',
+  },
+  {
+    id: 'comedy',
+    icon: 'comedy',
+    color: 'bg-amber-50 text-amber-600',
+    label: 'Comedy',
+    blurb: 'Quick laughs & bits',
+    description:
+      'Comedy channel of short bits — observational riffs on everyday absurdity, escalating misunderstandings, and the small indignities everyone recognizes. One premise per video, pushed until it breaks, with the funniest turn saved for the last line.',
+    language: 'English',
+    suggestedName: 'Mildly Unhinged',
+  },
+  {
+    id: 'reddit_story',
+    icon: 'reddit',
+    color: 'bg-orange-50 text-orange-600',
+    label: 'Confession stories',
+    blurb: 'Reddit-style true tales',
+    description:
+      'Reddit-style confession channel. First-person reads of relationship drama, AITA, petty revenge, and workplace fights that sound like REAL posts — mundane stakes people take sides over, messy narrators who incriminate themselves a little, details too boring to invent. Hook in the first line, petty escalation, endings that stop the way real posts stop — on the question, not a bow.',
+    language: 'English',
+    suggestedName: 'Confession Threads',
+  },
+  {
+    id: 'commentary',
+    icon: 'motivation',
+    color: 'bg-red-50 text-red-600',
+    label: 'Opinions & motivation',
+    blurb: 'Takes, discipline, mindset',
+    description:
+      'Opinion and discipline channel. Hard-hitting short monologues on focus, self-improvement, and the takes most people won\'t say out loud — one hard truth per video, named without flinching, with the cost of ignoring it made real. Direct second-person address, cinematic restraint, and a closing line the viewer repeats to themselves at 6AM.',
+    language: 'English',
+    suggestedName: 'The Daily Forge',
+  },
+  {
+    id: 'informational',
+    icon: 'facts',
+    color: 'bg-sky-50 text-sky-600',
+    label: 'Facts & explainers',
+    blurb: 'Told with awe & clarity',
+    description:
+      'Curiosity channel built on one lane (for example: the deep sea, ancient Rome, the human body, aviation disasters). Each video takes something the viewer thinks they know and breaks it: one vivid "wait, what?" moment, made concrete enough to re-tell at dinner. Bright, quick, confident; ends with the idea in a shape they\'ll repeat.',
+    language: 'English',
+    suggestedName: 'Wait, What?',
+  },
+  {
+    id: 'lifestyle',
+    icon: 'lifestyle',
+    color: 'bg-emerald-50 text-emerald-600',
+    label: 'Lifestyle & how-to',
+    blurb: 'Tips, routines, recipes',
+    description:
+      'Practical lifestyle channel — routines, recipes, and how-to in one lane the channel owns. Each video delivers one thing the viewer can do today, shown start to finish with the step everyone gets wrong called out. Warm and unhurried, never a listicle; ends on the result, not a sign-off.',
+    language: 'English',
+    suggestedName: 'Small Habits',
+  },
+  {
+    id: 'general',
+    icon: 'general',
+    color: 'bg-slate-100 text-slate-600',
+    label: 'A bit of everything',
+    blurb: 'Mix it up per reel',
+    description:
+      'A general storytelling channel that follows whatever is genuinely interesting — a strange true event one day, a human moment the next. The through-line is the telling, not the subject: a strong hook, one idea per video, and an ending that lands. Each story picks the register it needs.',
+    language: 'English',
+    suggestedName: 'Worth Telling',
+  },
+]
+
+// ── Curated narrower niches ───────────────────────────────────────────────────
+// Kept for the dashboard's cold-start quick-start cards and for resolving older `?preset=` links and
+// saved drafts. Edit freely as trends move — this is a hand-curated list, not live data.
+export const CURATED_NICHES: NichePreset[] = [
   {
     id: 'true-crime',
     icon: 'crime',
@@ -101,7 +210,7 @@ export const NICHE_PRESETS: NichePreset[] = [
   },
   {
     id: 'psychology',
-    icon: 'psychology',
+    icon: 'drama',
     color: 'bg-rose-50 text-rose-600',
     label: 'Psychology & relationships',
     blurb: 'Human behavior, dating, dynamics',
@@ -111,7 +220,7 @@ export const NICHE_PRESETS: NichePreset[] = [
     suggestedName: 'Why We Do It',
   },
   {
-    id: 'horror',
+    id: 'horror-folklore',
     icon: 'horror',
     color: 'bg-violet-50 text-violet-600',
     label: 'Horror & folklore',
@@ -122,3 +231,9 @@ export const NICHE_PRESETS: NichePreset[] = [
     suggestedName: 'Mga Kwentong Gabi',
   },
 ]
+
+// Any preset id the wizard might be handed — a grid tile, a dashboard quick-start, or a draft saved
+// before the grid changed. One lookup so a legacy `?preset=` link still seeds its original text.
+export function findPreset(id: string): NichePreset | undefined {
+  return NICHE_PRESETS.find((p) => p.id === id) ?? CURATED_NICHES.find((p) => p.id === id)
+}

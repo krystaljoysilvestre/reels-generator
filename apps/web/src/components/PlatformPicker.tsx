@@ -1,11 +1,13 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { type TargetPlatform, PLATFORM_PRESETS } from '@reels/core'
+import { type TargetPlatform, isExclusivePlatform, resolvePlatformPreset } from '@reels/core'
 
-// Brand-recognizable target-platform picker using the platforms' actual logos. A live line
-// below explains what the selection tunes (length, caption safe-zone, aspect). Shared by the
-// create wizard (Step 1) and channel Settings.
+// Brand-recognizable platform picker using the platforms' actual logos. MULTI-SELECT: a creator posts
+// the same reel to several feeds, so the channel carries the whole set and the reel is cut to the spec
+// that satisfies every one of them (core's resolvePlatformPreset). A live line below names what the
+// current set tunes — length, aspect, caption safe-zone — and which platform sets the ceiling.
+// Shared by the create wizard (Step 1) and channel Settings.
 
 // TikTok — authentic glitch note (cyan + red offset behind black). simple-icons path (CC0).
 const TIKTOK_PATH =
@@ -49,15 +51,6 @@ const FacebookIcon = (
   </svg>
 )
 
-// All — the three brand colors overlapping, i.e. "everywhere".
-const AllIcon = (
-  <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden>
-    <circle cx="9" cy="9.5" r="5.5" fill="#25F4EE" fillOpacity="0.9" />
-    <circle cx="15" cy="9.5" r="5.5" fill="#FF0000" fillOpacity="0.8" />
-    <circle cx="12" cy="14.5" r="5.5" fill="#1877F2" fillOpacity="0.8" />
-  </svg>
-)
-
 interface Plat {
   value: TargetPlatform
   label: string
@@ -65,55 +58,88 @@ interface Plat {
   icon: ReactNode
 }
 
+// Only the real destinations are pickable — the old 'all' tile is gone, because "everywhere" is now
+// simply every card ticked, and the resolved spec says what that costs in length.
 const PLATFORMS: Plat[] = [
-  { value: 'tiktok', label: 'TikTok', sub: 'up to 3 min', icon: TikTokIcon },
-  { value: 'youtube_shorts', label: 'YouTube Shorts', sub: 'up to 60s', icon: YouTubeIcon },
-  { value: 'facebook_reels', label: 'Facebook Reels', sub: 'up to 90s', icon: FacebookIcon },
-  { value: 'youtube_long', label: 'YouTube long-form', sub: 'widescreen · up to 10 min', icon: YouTubeLongIcon },
-  { value: 'all', label: 'All platforms', sub: 'safe everywhere', icon: AllIcon },
+  { value: 'tiktok', label: 'TikTok', sub: '9:16 · ≤ 3 min', icon: TikTokIcon },
+  { value: 'youtube_shorts', label: 'YouTube Shorts', sub: '9:16 · ≤ 60s', icon: YouTubeIcon },
+  { value: 'facebook_reels', label: 'Facebook Reels', sub: '9:16 · ≤ 90s', icon: FacebookIcon },
+  { value: 'youtube_long', label: 'YouTube long-form', sub: '16:9 · ≤ 20 min', icon: YouTubeLongIcon },
 ]
 
 export function PlatformPicker({
   value,
   onChange,
 }: {
-  value: TargetPlatform
-  onChange: (v: TargetPlatform) => void
+  value: readonly TargetPlatform[]
+  onChange: (v: TargetPlatform[]) => void
 }) {
-  const preset = PLATFORM_PRESETS[value] ?? PLATFORM_PRESETS.all
+  const preset = resolvePlatformPreset(value)
+  const count = value.length
+
+  // Toggling never leaves an empty set — untapping the last card would leave the channel with no
+  // destination and no frame to render, so the last one stays on until another is picked.
+  function toggle(p: TargetPlatform) {
+    const on = value.includes(p)
+    if (on) {
+      if (count === 1) return
+      onChange(value.filter((v) => v !== p))
+      return
+    }
+    // A 16:9 upload and a 9:16 reel are different shapes and one render can only be one of them, so
+    // long-form REPLACES the vertical set rather than joining it (and vice versa).
+    if (isExclusivePlatform(p)) { onChange([p]); return }
+    onChange([...value.filter((v) => !isExclusivePlatform(v)), p])
+  }
+
   return (
     <div>
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
         {PLATFORMS.map((p) => {
-          const selected = value === p.value
+          const selected = value.includes(p.value)
+          // Checkbox, not radio: several can be on at once, and the role tells a screen reader so.
           return (
             <button
               key={p.value}
               type="button"
-              onClick={() => onChange(p.value)}
-              aria-pressed={selected}
-              className={`group relative flex flex-col items-center gap-2 rounded-xl border bg-surface px-2 py-4 transition-all ${
+              onClick={() => toggle(p.value)}
+              role="checkbox"
+              aria-checked={selected}
+              className={`group relative flex items-center gap-2.5 rounded-xl border px-3 py-3 text-left transition-all ${
                 selected
-                  ? 'border-accent ring-2 ring-accent'
-                  : 'border-border-strong hover:border-accent/60 hover:bg-subtle'
+                  ? 'border-accent bg-accent-soft ring-1 ring-accent'
+                  : 'border-border-strong bg-surface hover:border-accent/60 hover:bg-subtle'
               }`}
             >
-              <span className="flex h-8 items-center justify-center transition-transform group-hover:scale-110">
+              <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center transition-transform group-hover:scale-110">
                 {p.icon}
               </span>
-              <span className="text-sm font-medium leading-none text-ink">{p.label}</span>
-              <span className="text-[11px] leading-none text-faint">{p.sub}</span>
-              {selected && (
-                <span className="absolute right-1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-accent text-white shadow-sm">
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M20 6 9 17l-5-5" /></svg>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium text-ink">{p.label}</span>
+                <span className="block font-mono text-[11px] text-faint">{p.sub}</span>
+              </span>
+              {selected ? (
+                <span className="flex h-[18px] w-[18px] flex-shrink-0 items-center justify-center rounded-full bg-pair-purple-pink text-white shadow-sm">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M20 6 9 17l-5-5" /></svg>
                 </span>
+              ) : (
+                <span className="h-[18px] w-[18px] flex-shrink-0 rounded-full border-[1.5px] border-border-mid bg-surface" />
               )}
             </button>
           )
         })}
       </div>
-      <p className="mt-2.5 text-xs text-muted">
-        Up to <span className="font-medium text-ink">{preset.maxSeconds >= 120 ? `${Math.round(preset.maxSeconds / 60)} min` : `${preset.maxSeconds}s`}</span> · {preset.aspect === '16:9' ? '16:9 widescreen' : '9:16 vertical'} · captions kept clear of the {preset.label} UI.
+      {/* What the SET costs, and who set the ceiling — so a creator can see that adding Shorts is what
+          capped them at 60s, rather than wondering why their length moved. */}
+      <p className="mt-2.5 text-xs leading-relaxed text-muted">
+        Publishing to <span className="font-medium text-accent">{count === 1 ? '1 platform' : `${count} platforms`}</span> — tap a card to toggle.
+        {' '}Every reel is cut to{' '}
+        <span className="font-medium text-ink">{preset.maxSeconds >= 120 ? `${Math.round(preset.maxSeconds / 60)} min` : `${preset.maxSeconds}s`}</span>{' '}
+        · {preset.aspect === '16:9' ? '16:9 widescreen' : '9:16 vertical'}, with captions clear of the tallest bottom UI.
+        {count > 1 && ' The shortest platform sets the length.'}
+      </p>
+      <p className="mt-1 text-[11px] text-faint">
+        Long-form is a different shape, so it can&apos;t share a channel with vertical reels — give it its own.
       </p>
     </div>
   )

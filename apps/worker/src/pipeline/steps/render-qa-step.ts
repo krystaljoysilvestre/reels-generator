@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { mkdir, writeFile, rm } from 'node:fs/promises'
 import { getDb, reels, assets, channels } from '@reels/db'
 import { downloadBuffer, buildInputHash } from '@reels/providers'
-import { TimingsSchema, PLATFORM_PRESETS, AudioScriptSchema, AudioPacksSchema, musicIntensityToDb } from '@reels/core'
+import { TimingsSchema, channelPlatformPreset, AudioScriptSchema, AudioPacksSchema, musicIntensityToDb } from '@reels/core'
 import { runRenderQa } from '@reels/render/qa/render-qa'
 import { runStep, setReelStatus } from '../harness.js'
 
@@ -73,7 +73,7 @@ export async function renderQaStep(reelId: string): Promise<void> {
   // channel can produce ~134s of narration; see breakdown-scenes), and those used to pass at <180s;
   // keying the gate straight to the 60s cap would newly hard-fail them. Long-form (600s) → 660s.
   const channel = await db.query.channels.findFirst({ where: eq(channels.id, reel.channelId) })
-  const platformPreset = PLATFORM_PRESETS[(channel?.targetPlatform ?? 'all') as keyof typeof PLATFORM_PRESETS] ?? PLATFORM_PRESETS.all
+  const platformPreset = channelPlatformPreset(channel ?? {})
   const maxDurationMs = Math.max(180_000, Math.round(platformPreset.maxSeconds * 1000 * 1.1))
   // Bed-presence inputs: did the design intend a bed, and at what intensity does this channel place it?
   const audioScript = reel.audioScript ? AudioScriptSchema.parse(reel.audioScript) : null

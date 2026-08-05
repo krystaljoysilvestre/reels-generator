@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { mkdir, writeFile, readFile, rm } from 'node:fs/promises'
 import { getDb, reels, scenes, assets, channels } from '@reels/db'
 import { generateVideo, buildInputHash, FalEngineSchema, downloadBuffer, llmCall, musicCostCents } from '@reels/providers'
-import { TimingsSchema, PLATFORM_PRESETS, budgetCapForSeconds } from '@reels/core'
+import { TimingsSchema, channelPlatformPreset, budgetCapForSeconds } from '@reels/core'
 import { buildVideoQAPrompt, VIDEO_QA_V1_VERSION, VideoQASchema } from '../../prompts-bridge.js'
 import { spotFoleyForReel } from './foley-spot.js'
 import { runStep } from '../harness.js'
@@ -88,7 +88,7 @@ export async function animateScenes(reelId: string): Promise<void> {
 
   // Clip aspect must match the channel's output frame (the scene stills are already generated in it).
   const channel = await db.query.channels.findFirst({ where: eq(channels.id, reel.channelId) })
-  const aspect = (PLATFORM_PRESETS[(channel?.targetPlatform ?? 'all') as keyof typeof PLATFORM_PRESETS] ?? PLATFORM_PRESETS.all).aspect
+  const aspect = channelPlatformPreset(channel ?? {}).aspect
 
   // Scene spans (from timings) decide clip length. Null/unparseable → every clip falls back to 5s.
   const timings = reel.timings ? TimingsSchema.safeParse(reel.timings) : null
