@@ -23,3 +23,6 @@ renders/
 
 # A/B experiment output (generated; never committed)
 apps/worker/scripts/ab-out/
+
+# marketing asset sources (large binaries; deliverables live in apps/landing/public)
+assets/trailer-src/
