@@ -599,6 +599,34 @@ specs/evidence-based-narrative.md (the invariant, §"The invariant (constitution
 
 ---
 
+### 2026-08-04-001
+
+Status: Accepted
+
+Title: Kendrix's Public Home Is kendrix.io
+
+Decision
+
+Purchased kendrix.io (2026-08-04, Cloudflare Registrar, $50/yr wholesale — current .io registry price; auto-renew and transfer lock on). Cloudflare chosen deliberately as the long-term home: registrar, DNS, email forwarding (hello@kendrix.io), and Turnstile form protection consolidate into one account with no future migration. kendrix.co was deliberately skipped (add only if squatting becomes a real concern).
+
+Why
+
+The exact-match .com is registered but dormant (2001, no nameservers) — no confusion risk today, and a possible broker acquisition later; waiting on it would block the Phase-0 build-in-public page for an uncertain, costlier path. kendrix.ai was available but rejected on positioning grounds: AI is an implementation detail, and putting `.ai` in the company's address would contradict positioning.md at the front door.
+
+Expected Impact
+
+A permanent public home for the build-in-public trust anchor and follow-the-build list (marketing.md Phase-0 mandate). Landing page work is now unblocked on the domain side.
+
+Review Trigger
+
+kendrix.com becomes acquirable at a sane price (acquire and redirect), or .io renewal pricing/TLD stability materially worsens.
+
+Related Documents
+
+dna/company/positioning.md, dna/company/marketing.md (Part II, Phase-0 goals)
+
+---
+
 ## Relationship to the Decision Framework
 
 The Decision Framework explains how decisions are made.
