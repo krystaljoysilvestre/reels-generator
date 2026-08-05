@@ -1,0 +1,15 @@
+# kendrix.io contact-form inbox worker.
+
+name = "kendrix-contact-inbox"
+main = "src/index.ts"
+compatibility_date = "2026-08-01"
+compatibility_flags = ["nodejs_compat"]
+
+# No destination_address pin — the binding may send to any address already
+# verified under kendrix.io → Email Routing → Destination addresses. The
+# actual inbox is the DESTINATION secret, kept out of git on purpose.
+send_email = [{ name = "INBOX" }]
+
+# Secrets (set with `wrangler secret put`):
+#   DESTINATION   — verified inbox to deliver to (the one hello@/privacy@ forward to).
+#   CONTACT_TOKEN — shared token; must match KENDRIX_CONTACT_API_KEY in apps/landing.

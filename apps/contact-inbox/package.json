@@ -1,0 +1,19 @@
+{
+  "name": "contact-inbox",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Cloudflare Email Worker — delivers kendrix.io contact-form submissions to the studio inbox.",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo 'no lint target'"
+  },
+  "dependencies": {
+    "mimetext": "^3.0.27"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260730.1",
+    "typescript": "^5.5.4",
+    "wrangler": "^4.0.0"
+  }
+}
