@@ -113,3 +113,39 @@ describe('buildGainExpr + evalGainAt — golden tests (docs/07 §5)', () => {
     expect(attenuation).toBeGreaterThanOrEqual(5)
   })
 })
+
+describe('buildGainExpr — outro tail resolve (§4.65)', () => {
+  // The reel now holds its closing image after the last spoken word. The bed must STEP DOWN when the
+  // voice stops (the silent emotional beat) and then RESOLVE to silence — never get guillotined at peak.
+  const base = { startAnchorMs: 10_000, peakAnchorMs: 45_000, bedDb: -22, peakDb: -12, durationMs: 60_000 }
+  const tail = 2_000
+  const withTail = { ...base, outroTailMs: tail }
+  const voiceEndSec = (base.durationMs - tail) / 1000
+
+  it('holds peak until the voice stops, then steps down for the held beat', () => {
+    const expr = buildGainExpr(withTail)
+    const atPeakHold = evalGainAt(expr, voiceEndSec - 0.5)
+    const justAfterVoice = evalGainAt(expr, voiceEndSec + 0.01)
+    expect(atPeakHold).toBeCloseTo(Math.pow(10, base.peakDb / 20), 5)
+    expect(justAfterVoice).toBeLessThan(atPeakHold) // the image breathes in near-quiet
+  })
+
+  it('resolves to (near) silence by the final frame instead of cutting at full level', () => {
+    const expr = buildGainExpr(withTail)
+    const atEnd = evalGainAt(expr, base.durationMs / 1000 - 0.01)
+    expect(atEnd).toBeLessThan(evalGainAt(expr, voiceEndSec + 0.01))
+    expect(atEnd).toBeLessThan(0.01)
+  })
+
+  it('decays monotonically across the tail', () => {
+    const expr = buildGainExpr(withTail)
+    const samples = [0.1, 0.4, 0.7, 1.0, 1.4, 1.8].map((d) => evalGainAt(expr, voiceEndSec + d))
+    for (let i = 1; i < samples.length; i++) expect(samples[i]).toBeLessThanOrEqual(samples[i - 1]!)
+  })
+
+  it('is unchanged for a reel with no tail (legacy behaviour holds peak to the last sample)', () => {
+    const expr = buildGainExpr(base)
+    expect(evalGainAt(expr, base.durationMs / 1000 - 0.01)).toBeCloseTo(Math.pow(10, base.peakDb / 20), 5)
+    expect(buildGainExpr({ ...base, outroTailMs: 0 })).toBe(expr)
+  })
+})

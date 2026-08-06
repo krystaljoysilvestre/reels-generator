@@ -78,15 +78,37 @@ const dbToLin = (db: number): number => 10 ** (db / 20)
 // the quiet reads as intentional, not as an audio bug. Loop is applied BEFORE the volume expression so
 // `t` runs on the reel timeline (looping first, then a time-varying volume, avoids the dip repeating each
 // loop of the source bed).
-function ambientFilter(silenceDrop: { atMs: number; durationMs: number } | null, normGainDb: number): string {
+function ambientFilter(
+  silenceDrop: { atMs: number; durationMs: number } | null,
+  normGainDb: number,
+  // Outro tail (§4.65): under the held closing image the score has stepped back, so an abruptly
+  // truncated room tone becomes the loudest thing in the mix. Ramp it out with the picture.
+  tail?: { outroTailMs: number; durationMs: number },
+): string {
   // normGainDb brings the ambient FILE to VOICE_REF_LUFS; AMBIENT_DB is then the true offset under the voice.
   const level = normGainDb + AMBIENT_DB
-  if (!silenceDrop) return `[1]volume=${level.toFixed(2)}dB,aloop=loop=-1:size=2e9[amb]`
   const nom = dbToLin(level).toFixed(5)
+  const hasTail = !!tail && tail.outroTailMs > 0 && tail.durationMs > tail.outroTailMs
+  const voiceEnd = hasTail ? ((tail!.durationMs - tail!.outroTailMs) / 1000).toFixed(3) : '0'
+  const tailSec = hasTail ? (tail!.outroTailMs / 1000).toFixed(3) : '1'
+  // rides at nominal until the voice stops, then ramps to silence across the tail
+  const base = hasTail
+    ? `if(lt(t,${voiceEnd}),${nom},${nom}*(1-((t-${voiceEnd})/${tailSec})))`
+    : nom
+
+  if (!silenceDrop) {
+    if (!hasTail) return `[1]volume=${level.toFixed(2)}dB,aloop=loop=-1:size=2e9[amb]`
+    return `[1]aloop=loop=-1:size=2e9,volume='${base}':eval=frame[amb]`
+  }
   const dip = dbToLin(level - AMBIENT_SILENCE_DIP_DB).toFixed(5)
   const s = (silenceDrop.atMs / 1000).toFixed(3)
   const en = ((silenceDrop.atMs + silenceDrop.durationMs) / 1000).toFixed(3)
-  return `[1]aloop=loop=-1:size=2e9,volume='if(between(t,${s},${en}),${dip},${nom})':eval=frame[amb]`
+  return `[1]aloop=loop=-1:size=2e9,volume='if(between(t,${s},${en}),${dip},${base})':eval=frame[amb]`
+}
+
+// The outro-tail window for the ambient ramp, or undefined when this reel has no tail (§4.65).
+function ambientTailOf(timings: Timings): { outroTailMs: number; durationMs: number } | undefined {
+  return timings.outroTailMs ? { outroTailMs: timings.outroTailMs, durationMs: timings.durationMs } : undefined
 }
 
 function parseIntegrated(stderr: string): number | null {
@@ -208,7 +230,14 @@ export async function mixAudio(params: MixAudioParams): Promise<void> {
   if (params.timings.silenceDrop) {
     gainParams.silenceDropMs = params.timings.silenceDrop
   }
+  // The bed resolves across the outro tail rather than being hard-cut at peak by `-t` (§4.65).
+  if (params.timings.outroTailMs) {
+    gainParams.outroTailMs = params.timings.outroTailMs
+  }
   const gainExpr = buildGainExpr(gainParams)
+
+  // Room tone resolves with the picture across the outro tail (§4.65).
+  const ambientTail = ambientTailOf(params.timings)
 
   // Reference gain-stage each layer to VOICE_REF_LUFS before its offset (see VOICE_REF_LUFS). These run as
   // analysis-only ffmpeg passes (no output) before the mix, so the voice:bed ratio is deterministic.
@@ -226,7 +255,7 @@ export async function mixAudio(params: MixAudioParams): Promise<void> {
   ]
   const pre = [
     // ambient: normalize to ref, then loop to cover full duration at AMBIENT_DB under voice (dips in a drop)
-    ambientFilter(params.timings.silenceDrop, ambientGain),
+    ambientFilter(params.timings.silenceDrop, ambientGain, ambientTail),
     // music: normalize the bed to ref, loop to cover the reel, then the bedDb→peakDb volume envelope
     `[2]volume=${musicGain.toFixed(2)}dB,aloop=loop=-1:size=2e9,volume='${gainExpr}':eval=frame[mus0]`,
     // sidechain duck: music dips under the voiceover, but stays PRESENT. ratio 6 held the bed ~8–10dB down
@@ -248,7 +277,7 @@ export async function mixAudio(params: MixAudioParams): Promise<void> {
   // layer nodes are rebuilt here and each mapped to its own file in ONE ffmpeg process.
   if (params.stemPaths) {
     const stemGraph = [
-      ambientFilter(params.timings.silenceDrop, ambientGain),
+      ambientFilter(params.timings.silenceDrop, ambientGain, ambientTail),
       `[2]volume=${musicGain.toFixed(2)}dB,aloop=loop=-1:size=2e9,volume='${gainExpr}':eval=frame[mus0]`,
       `[0]volume=${voiceGain.toFixed(2)}dB,asplit=2[vox][voxkey]`,
       `[mus0][voxkey]sidechaincompress=threshold=0.04:ratio=2:attack=20:release=400[musduck]`,
@@ -274,8 +303,9 @@ async function mixNoMusic(params: MixAudioParams): Promise<void> {
   ]
   const voiceGain = await refGain(params.voiceoverPath, 'voice')
   const ambientGain = await refGain(params.ambientPath, 'ambient')
+  const ambientTail = ambientTailOf(params.timings)
   const pre = [
-    ambientFilter(params.timings.silenceDrop, ambientGain),
+    ambientFilter(params.timings.silenceDrop, ambientGain, ambientTail),
     `[2]volume=${SFX_BUS_DB}dB[sfxb]`,
     `[0]volume=${voiceGain.toFixed(2)}dB[vox]`,
     `[vox][amb]amix=inputs=2:normalize=0[base]`,
@@ -286,7 +316,7 @@ async function mixNoMusic(params: MixAudioParams): Promise<void> {
 
   if (params.stemPaths) {
     const stemGraph = [
-      ambientFilter(params.timings.silenceDrop, ambientGain),
+      ambientFilter(params.timings.silenceDrop, ambientGain, ambientTail),
       `[2]volume=${SFX_BUS_DB}dB[sfxb]`,
       `[0]volume=${voiceGain.toFixed(2)}dB[vox]`,
     ].join(';')

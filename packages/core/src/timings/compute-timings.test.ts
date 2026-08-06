@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   computeTimings,
+  outroTailMs,
   AlignmentLengthError,
   SceneCoverageError,
   type ComputeTimingsInput,
@@ -124,6 +125,62 @@ describe('F1b — sustained SFX span resolution', () => {
 })
 
 // ── F1c: Climax ring-out room (§4.7) ─────────────────────────────────────────
+describe('F1b — outro tail (§4.65)', () => {
+  const narration = 'Naglakad ako sa madilim na pasilyo. May nakatayo sa dulo.'
+  // exactOptionalPropertyTypes: only SET genreCategory when there is one
+  const baseTailInput = (genreCategory?: string): ComputeTimingsInput => ({
+    narration,
+    alignment: syntheticAlignment(narration, 10000),
+    durationMs: 10000,
+    scenes: singleScene(narration),
+    audioScript: silentAudioScript(),
+    twistAnchor: '',
+    ...(genreCategory ? { genreCategory } : {}),
+  })
+
+  it('holds the closing image past the last spoken word', () => {
+    const r = computeTimings(baseTailInput())
+    expect(r.durationMs).toBe(10000 + outroTailMs(undefined))
+    // the tail is a held FINAL FRAME: the last scene owns it, so the visual keeps playing
+    expect(r.scenes[r.scenes.length - 1]!.endMs).toBe(r.durationMs)
+  })
+
+  it('gives each genre its own room to breathe (comedy buttons out; wonder lingers)', () => {
+    const comedy = computeTimings(baseTailInput('comedy')).durationMs
+    const informational = computeTimings(baseTailInput('informational')).durationMs
+    const fairytale = computeTimings(baseTailInput('fairytale')).durationMs
+    expect(comedy).toBeLessThan(informational)
+    expect(informational).toBeLessThan(fairytale)
+    expect(outroTailMs('comedy')).toBe(800)
+  })
+
+  it('caps the tail and falls back for an unknown or empty genre', () => {
+    expect(outroTailMs('not-a-genre')).toBe(outroTailMs(undefined))
+    expect(outroTailMs('')).toBe(outroTailMs(undefined))
+    for (const g of ['horror', 'comedy', 'drama', 'fairytale', 'childrens', 'informational', 'general']) {
+      expect(outroTailMs(g)).toBeLessThanOrEqual(3000)
+      expect(outroTailMs(g)).toBeGreaterThan(0)
+    }
+  })
+
+  it('subsumes the ring-out: a normal end-hit no longer needs its own extension', () => {
+    // Same end-anchored loud hit as F1c, but on a reel long enough that tail + narration already
+    // give the hit its decay room — the ring-out must not stack a second extension on top.
+    const long = 'Naglakad ako sa madilim na pasilyo at tumigil. May nakatayo sa dulo.'
+    const r = computeTimings({
+      narration: long,
+      alignment: syntheticAlignment(long, 20000),
+      durationMs: 20000,
+      scenes: singleScene(long),
+      audioScript: { ...silentAudioScript(), sfx: [{ anchor: 'pasilyo', offsetMs: 0, prompt: 'bang', volumeDb: 6, impactAtEnd: false }] },
+      twistAnchor: '',
+      genreCategory: 'horror',
+    })
+    expect(r.durationMs).toBe(20000 + outroTailMs('horror'))
+    expect(r.warnings.some((w) => w.includes('ring-out'))).toBe(false)
+  })
+})
+
 describe('F1c — climax ring-out room', () => {
   // A loud hit anchored on the LAST word → little room after it → reel extends so the tail can decay.
   it('extends the reel when a loud climax hit lands at the very end', () => {
@@ -157,7 +214,8 @@ describe('F1c — climax ring-out room', () => {
       twistAnchor: 'putok',
     }
     const r = computeTimings(input)
-    expect(r.durationMs).toBe(12000) // plenty of room after an early hit → no change
+    // plenty of room after an early hit → no ring-out extension; the outro tail (§4.65) still applies
+    expect(r.durationMs).toBe(12000 + outroTailMs(undefined))
   })
 
   it('does NOT extend for a quiet end cue (only a real hit triggers ring-out)', () => {
@@ -172,7 +230,8 @@ describe('F1c — climax ring-out room', () => {
       twistAnchor: 'Umuwi na ako',
     }
     const r = computeTimings(input)
-    expect(r.durationMs).toBe(8000) // quiet cue, reflective ending → untouched
+    // quiet cue, reflective ending → no ring-out; only the outro tail extends it
+    expect(r.durationMs).toBe(8000 + outroTailMs(undefined))
   })
 })
 
@@ -380,8 +439,9 @@ describe('F5 — scene tiling', () => {
     expect(result.scenes[1]!.startMs).toBeGreaterThan(result.scenes[0]!.startMs)
     // Gapless: scene[0].endMs === scene[1].startMs
     expect(result.scenes[0]!.endMs).toBe(result.scenes[1]!.startMs)
-    // Last endMs === durationMs
-    expect(result.scenes[1]!.endMs).toBe(6000)
+    // Last endMs === durationMs, which now includes the outro tail (§4.65)
+    expect(result.scenes[1]!.endMs).toBe(result.durationMs)
+    expect(result.scenes[1]!.endMs).toBe(6000 + outroTailMs(undefined))
   })
 
   it('throws SceneCoverageError when scenes have a gap', () => {

@@ -50,6 +50,13 @@ function musicArc(musicType: string | undefined, peakFrac: number, loops: boolea
   }
 }
 
+// The reel holds its closing image for a beat after the last spoken word (compute-timings §4.65), and the
+// mixer resolves the bed's LEVEL across it. Ask the composition to resolve MUSICALLY there too, so the
+// ending sounds finished rather than faded: level shaping alone can smooth a cut, but only the piece
+// itself can land a final chord. Best-effort — the mixer's ramp guarantees a graceful end either way.
+const RESOLVE_CLAUSE =
+  ' In its final seconds the piece must RESOLVE — arrive somewhere and come to rest (a last sustained chord, a settled note), never stop mid-phrase as though cut off.'
+
 // Compose the full Eleven Music prompt for a reel's bed. ONE coherent bed per reel — the mixer's
 // volume envelope swells it toward the twist and SFX carry the climax hit, so the bed itself stays a
 // steady, loopable texture (no separate intro/climax beds; a crossfade between two independent Eleven
@@ -80,10 +87,13 @@ export function buildMusicPrompt(params: {
   const mood = params.moodPrompt?.trim()
     ? ` ${params.moodPrompt.trim()}`
     : params.moodTags.length ? ` Lean ${params.moodTags.join(', ')} for this story.` : ''
-  const arc = musicArc(params.musicType, params.peakFrac ?? 0.8, params.loops ?? false)
+  const loops = params.loops ?? false
+  const arc = musicArc(params.musicType, params.peakFrac ?? 0.8, loops)
+  // A looping bed must NOT resolve (it has to flow back into its own opening at the seam).
+  const resolve = loops ? '' : RESOLVE_CLAUSE
   const steer = params.instruction?.trim() ? ` ${params.instruction.trim()}` : ''
   // Operator steer stays the last, strongest directive before the hard constraints.
-  return base + mood + arc + steer + MUSIC_CONSTRAINT
+  return base + mood + arc + resolve + steer + MUSIC_CONSTRAINT
 }
 
 export function clampMusicLengthMs(lengthMs: number): number {

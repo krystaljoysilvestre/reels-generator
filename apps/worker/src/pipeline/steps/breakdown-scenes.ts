@@ -441,15 +441,21 @@ export async function breakdownScenes(reelId: string): Promise<void> {
       const globalTiling = validateSceneTiling(story.body, stitched.map((s) => s.narrationText))
       if (globalTiling) console.warn(`[scene-qa] ${reelId.slice(0, 8)} stitched tiling issue: ${globalTiling}`)
       // The per-chapter allocation already bounds each chapter; enforce the global i2v ceiling anyway —
-      // demote from the END (the opening + peak chapters sit earliest/are protected by allocation).
+      // demote from the END (the opening + peak chapters sit earliest/are protected by allocation), but
+      // spare the FINAL scene until last: it holds the outro beat after the voice stops (compute-timings
+      // §4.65), so it's the one shot most in need of motion. Demoting it first is how reels ended on a
+      // dead still frame. Order: end→front skipping the last scene, then the last scene if still over.
       let videoCount = stitched.filter((s) => s.tier === 'video').length
-      for (let i = stitched.length - 1; videoCount > globalBudget && i >= 0; i--) {
+      const lastIdx = stitched.length - 1
+      const demote = (i: number): void => {
         const s = stitched[i]!
         if (s.tier === 'video' && !(peakMoment && s.narrationText.includes(peakMoment))) {
           s.tier = 'still'
           videoCount--
         }
       }
+      for (let i = lastIdx - 1; videoCount > globalBudget && i >= 0; i--) demote(i)
+      if (videoCount > globalBudget && lastIdx >= 0) demote(lastIdx)
 
       // The depiction-gate audit rides the step output (planGate pattern) — structured scores per round,
       // so gate cost-benefit is queryable later without re-running anything.

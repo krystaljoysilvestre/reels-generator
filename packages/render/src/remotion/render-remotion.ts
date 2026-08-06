@@ -238,7 +238,13 @@ export async function renderReelWithRemotion(input: RemotionRenderInput): Promis
       const imageSrc = await toDataUri(s.imagePath, 'image/webp')
       const videoSrc = s.videoPath ? fileServer.urlFor(`/scene_${s.idx}.mp4`) : null
       const startFrame = Math.round((s.startMs / 1000) * fps)
-      const endFrame = Math.round((s.endMs / 1000) * fps)
+      // The composition's length uses ceil (below) while cut points round, so on a fractional final
+      // frame the last Sequence unmounted one frame early and the reel ended on a single black frame.
+      // The final scene therefore extends to the composition's own last frame.
+      const isLast = s.idx === input.scenes[input.scenes.length - 1]!.idx
+      const endFrame = isLast
+        ? Math.ceil((input.durationMs / 1000) * fps)
+        : Math.round((s.endMs / 1000) * fps)
       return {
         idx: s.idx,
         imageSrc,

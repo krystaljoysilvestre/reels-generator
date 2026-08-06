@@ -66,6 +66,10 @@ export const TimingsSchema = z.object({
   sfxEvents: z.array(SfxEventSchema),
   music: MusicTimingSchema.nullable(),
   silenceDrop: SilenceDropTimingSchema.nullable(),
+  // How much of durationMs is the outro tail — the held closing beat AFTER the last spoken word
+  // (compute-timings §4.65). The mixer resolves the music bed across it instead of hard-cutting at
+  // full level. Optional so timings persisted before the tail existed still parse.
+  outroTailMs: z.number().int().nonnegative().optional(),
   warnings: z.array(z.string()),
 })
 export type Timings = z.infer<typeof TimingsSchema>

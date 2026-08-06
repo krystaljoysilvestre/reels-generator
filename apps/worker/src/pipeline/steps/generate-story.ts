@@ -6,6 +6,7 @@ import {
   WorldBibleSchema,
   ToneConfigSchema,
   channelPlatformPreset,
+  outroTailMs,
   type StoryOutput,
 } from '@reels/core'
 import {
@@ -333,7 +334,11 @@ export async function generateStory(reelId: string, channelId: string, language:
   const worldBible = WorldBibleSchema.parse(channel.worldBible)
   const toneConfig = ToneConfigSchema.parse(channel.toneConfig)
   const targetSeconds = channel.targetSeconds ?? 75 // per-channel reel length (derived per niche)
-  const targetWords = Math.round(targetSeconds * 2.5) // ~2.5 words/sec narration pace
+  // ~2.5 words/sec narration pace, minus the outro beat the reel now holds after the last spoken word
+  // (compute-timings §4.65) — so narration + held ending still lands on the channel's target length
+  // instead of overrunning it by the tail.
+  const spokenSeconds = Math.max(10, targetSeconds - outroTailMs(channel.genreCategory) / 1000)
+  const targetWords = Math.round(spokenSeconds * 2.5)
   // A long-form draft (up to ~1500 words of narration + the JSON envelope) overruns the 4096 default
   // and truncates mid-story. ~4 tokens/word is generous headroom (Taglish tokenizes heavier than
   // English); 16384 is gpt-4o's output ceiling.

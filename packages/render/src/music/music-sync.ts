@@ -50,6 +50,10 @@ export interface GainEnvelopeParams {
   bedDb: number       // resting level, e.g. -22
   peakDb: number      // at twist peak, e.g. -12
   durationMs: number
+  // Outro tail (compute-timings §4.65): the closing image holds this long after the last spoken word.
+  // The bed RESOLVES across it instead of being hard-cut at full level by ffmpeg's `-t`. Omit/0 → the
+  // legacy hold-peak-to-the-last-sample behaviour.
+  outroTailMs?: number
   silenceDropMs?: { atMs: number; durationMs: number }
 }
 
@@ -58,6 +62,7 @@ export interface GainEnvelopeParams {
  *  - fades in from 0 to bedDb over 0..startAnchorMs+2s
  *  - holds bedDb from startAnchorMs to build-start
  *  - rises linearly bedDb→peakDb over startAnchorMs..peakAnchorMs
+ *  - RESOLVES across the outro tail: steps back to bedDb when the voice stops, then ramps to silence
  *  - hard-zeros during the silence drop window (highest priority)
  *
  * The expression is used with `eval=frame` so it updates per-sample.
@@ -72,7 +77,24 @@ export function buildGainExpr(p: GainEnvelopeParams): string {
   // designer's opening texture, not from ramping up out of silence.
   const fadeIn = 0.25 // seconds
 
-  // piecewise gain: fade-in → bed → linear rise → hold peak
+  // The outro tail's two stages (owner 2026-08-06 — "the reel should not just stop"):
+  //   1. the voice stops → the bed STEPS DOWN from peak to bed level, so the closing image breathes in
+  //      near-quiet instead of under a wall of score. This is the silent emotional beat.
+  //   2. across the rest of the tail the bed RAMPS to silence, so the piece resolves rather than being
+  //      guillotined by ffmpeg's `-t` at full level (which is what "it just stops" actually sounded like).
+  const tail = Math.max(0, p.outroTailMs ?? 0)
+  const voiceEnd = (p.durationMs - tail) / 1000   // last spoken word
+  const hasTail = tail > 0 && voiceEnd > pk
+
+  // piecewise gain: fade-in → bed → linear rise → hold peak [→ step down → resolve to silence]
+  const held = hasTail
+    ? `if(lt(t,${voiceEnd.toFixed(3)}),` +
+        `${db(p.peakDb)},` +
+        // stage 2: bedDb → silence across the remaining tail
+        `${db(p.bedDb)}*(1-((t-${voiceEnd.toFixed(3)})/${(tail / 1000).toFixed(3)}))` +
+      `)`
+    : `${db(p.peakDb)}`
+
   const piecewise =
     `if(lt(t,${fadeIn}),` +
       `(t/${fadeIn})*${db(p.bedDb)},` +
@@ -80,7 +102,7 @@ export function buildGainExpr(p: GainEnvelopeParams): string {
         `${db(p.bedDb)},` +
         `if(lt(t,${pk.toFixed(3)}),` +
           `${db(p.bedDb)}+(${db(p.peakDb)}-${db(p.bedDb)})*((t-${a.toFixed(3)})/(${pk.toFixed(3)}-${a.toFixed(3)})),` +
-          `${db(p.peakDb)}` +
+          held +
         `)` +
       `)` +
     `)`

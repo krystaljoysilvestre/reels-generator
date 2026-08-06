@@ -66,6 +66,37 @@ const DEFAULT_CONFIG: TimingConfig = {
 const RING_OUT_HIT_THRESHOLD_DB = 3
 const RING_OUT_MS = 7000
 
+// ── Outro tail (§4.65) ────────────────────────────────────────────────────────
+// The reel used to end on the last spoken character's timestamp — the voice stopped and the video was
+// gone in the same frame, which reads as "it just stopped" rather than "it ended" (owner finding
+// 2026-08-06). The tail is a BEAT, not padding: the closing image holds and keeps moving while the bed
+// steps down and resolves (see buildGainExpr in packages/render/src/music/music-sync.ts). Captions are
+// already finished by then — SubtitleOverlay renders nothing once the last chunk's endMs passes.
+//
+// Per-genre because how long an ending is allowed to breathe IS the genre (same reasoning as the
+// GENRE_PAUSE_PROFILES above): comedy's button must cut fast or the laugh dies, while dread and wonder
+// want to sit. Deterministic owner-set tuning, not a model decision. Unlisted genres take the default.
+const OUTRO_TAIL_DEFAULT_MS = 2000
+const OUTRO_TAIL_MAX_MS = 3000
+const OUTRO_TAIL_MS: Record<string, number> = {
+  comedy: 800,          // the tag lands and we're out — a held beat kills a punchline
+  reddit_story: 1500,   // a real poster stops talking; no lingering
+  commentary: 1500,     // the quotable line, then off
+  informational: 1800,  // a beat to let the fact settle into the viewer's own world
+  lifestyle: 2000,
+  general: 2000,
+  horror: 2200,         // hold the dread — the fear should outlast the picture
+  drama: 2600,          // the small last gesture needs room
+  fairytale: 2600,      // wonder resolves slowly
+  childrens: 2600,      // a warm, safe landing before the lights go out
+}
+
+/** How long the closing image holds after the final spoken word, per genre. */
+export function outroTailMs(genreCategory?: string): number {
+  const raw = (genreCategory ? OUTRO_TAIL_MS[genreCategory] : undefined) ?? OUTRO_TAIL_DEFAULT_MS
+  return Math.min(raw, OUTRO_TAIL_MAX_MS)
+}
+
 // ── Input ─────────────────────────────────────────────────────────────────────
 
 export interface SceneSpan {
@@ -81,6 +112,7 @@ export interface ComputeTimingsInput {
   scenes: SceneSpan[]          // ordered, contiguous, tile the whole narration
   audioScript: AudioScript
   twistAnchor: string          // story.twist_anchor — music-peak fallback target
+  genreCategory?: string       // channel genre — picks the outro tail length (§4.65)
   config?: Partial<TimingConfig>
 }
 
@@ -320,6 +352,19 @@ export function computeTimings(input: ComputeTimingsInput): Timings {
   // a genuine loud hit (realism cues are negative dB), so a reflective non-scare ending is untouched. The
   // extra time is a held final frame (last scene extends) under the decaying tail.
   let durationMs = input.durationMs
+
+  // §4.65 — Outro tail. Runs BEFORE the ring-out below so the tail is counted as room the hit already
+  // has: a normal end-scare now needs no extension at all, and only a very late hit tops up the
+  // shortfall. Held final frame + resolving bed; see outroTailMs for the per-genre reasoning.
+  const tailMs = outroTailMs(input.genreCategory)
+  let appliedTailMs = 0
+  if (tailMs > 0 && sceneTimings.length > 0) {
+    durationMs += tailMs
+    appliedTailMs = tailMs
+    const lastScene = sceneTimings[sceneTimings.length - 1]
+    if (lastScene) lastScene.endMs = durationMs
+  }
+
   if (sfxEvents.length > 0) {
     const loudest = sfxEvents.reduce((a, b) => (b.volumeDb > a.volumeDb ? b : a))
     if (loudest.volumeDb >= RING_OUT_HIT_THRESHOLD_DB) {
@@ -341,6 +386,7 @@ export function computeTimings(input: ComputeTimingsInput): Timings {
     sfxEvents,
     music: musicTiming,
     silenceDrop,
+    outroTailMs: appliedTailMs,
     warnings,
   }
 }

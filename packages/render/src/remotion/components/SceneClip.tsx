@@ -53,13 +53,31 @@ export const SceneClip: React.FC<SceneClipProps> = ({ imageSrc, videoSrc, tier, 
     const clipSec = videoDurationSec ?? sceneSec
     // Shared with the mixer's foley placement (packages/core clip-playback) so sync never drifts.
     const playbackRate = clipPlaybackRate(clipSec, sceneSec)
+    // Once the (slowed) clip runs out, OffthreadVideo holds its last frame. That's tolerable mid-reel but
+    // not on the FINAL scene, whose held outro beat (compute-timings §4.65) would land on a dead freeze —
+    // the opposite of "the visuals keep going". So keep a slow push alive on whatever is on screen: it
+    // costs nothing when the clip is still playing (scale is ~1 until then) and it turns the frozen tail
+    // into a continuing move.
+    const clipEndsAtFrame = Math.round((clipSec / playbackRate) * fps)
+    const freezeScale = interpolate(frame, [clipEndsAtFrame, durationFrames], [1, 1.06], {
+      extrapolateLeft: 'clamp',
+      extrapolateRight: 'clamp',
+    })
     return (
-      <OffthreadVideo
-        src={videoSrc}
-        playbackRate={playbackRate}
-        style={{ width, height, objectFit: 'cover' }}
-        muted  // model audio is always stripped — our mix is the audio track
-      />
+      <div style={{ width, height, overflow: 'hidden' }}>
+        <OffthreadVideo
+          src={videoSrc}
+          playbackRate={playbackRate}
+          style={{
+            width,
+            height,
+            objectFit: 'cover',
+            transform: `scale(${freezeScale})`,
+            transformOrigin: 'center center',
+          }}
+          muted  // model audio is always stripped — our mix is the audio track
+        />
+      </div>
     )
   }
 

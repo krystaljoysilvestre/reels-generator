@@ -72,7 +72,9 @@ export async function mixAudioStep(reelId: string): Promise<void> {
   // gain-staging (voice/music/ambient normalized to VOICE_REF_LUFS before offsets → bed audibly present),
   // SFX bus +2→+4, duck ratio 3→2, room-tone ambient fallback. Mixer behavior changed, so cached mixes are
   // stale even when the inputs hash the same — bump to force a re-mix.
-  const inputHash = buildInputHash('mix_audio.v10', {
+  // v11: the music bed and room tone now RESOLVE across the outro tail instead of being hard-cut at
+  // full level (§4.65) — the mix changes for any reel whose timings carry a tail.
+  const inputHash = buildInputHash('mix_audio.v11', {
     // Hash the voiceover's row identity (createdAt), not its constant storage key — the key never changes
     // across re-synthesis, so hashing it would reuse a stale mix after a voice change.
     voiceoverAt: voiceover.createdAt,

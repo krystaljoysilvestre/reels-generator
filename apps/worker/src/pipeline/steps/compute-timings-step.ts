@@ -1,5 +1,5 @@
 import { eq, and, desc } from 'drizzle-orm'
-import { getDb, reels, stories, scenes, assets } from '@reels/db'
+import { getDb, reels, stories, scenes, assets, channels } from '@reels/db'
 import { buildInputHash } from '@reels/providers'
 import {
   AudioScriptSchema,
@@ -28,6 +28,10 @@ export async function runComputeTimings(reelId: string): Promise<void> {
 
   const story = await db.query.stories.findFirst({ where: eq(stories.id, reel.storyId) })
   if (!story) throw new Error(`Story not found: ${reel.storyId}`)
+
+  // Genre picks the outro tail's length (§4.65) — same per-genre tuning as the dramatic pauses.
+  const channel = await db.query.channels.findFirst({ where: eq(channels.id, reel.channelId) })
+  if (!channel) throw new Error(`Channel not found: ${reel.channelId}`)
 
   const reelScenes = await db.query.scenes.findMany({ where: eq(scenes.reelId, reelId) })
   reelScenes.sort((a, b) => a.idx - b.idx)
@@ -66,8 +70,11 @@ export async function runComputeTimings(reelId: string): Promise<void> {
   // with the same number of cues must re-time (anchors/spans change), which a bare count missed.
   // v5: case-insensitive anchor fallback (LLM lowercases sentence-initial anchors).
   // v6: climax ring-out room (extend the reel when a loud hit lands near the end, by the shortfall only).
-  const inputHash = buildInputHash('compute_timings.v6', {
+  // v7: outro tail — the closing image holds for a per-genre beat after the last spoken word (§4.65), so
+  // genreCategory now changes the timings and must bust the cache.
+  const inputHash = buildInputHash('compute_timings.v7', {
     narration: story.body,
+    genreCategory: channel.genreCategory,
     // Alignment IS the master clock; a re-synthesized voiceover has new timestamps under a new row
     // (createdAt). Hash it so a voice/narration change busts the cache instead of reusing stale timings.
     voiceoverAt: voiceover.createdAt,
@@ -88,6 +95,7 @@ export async function runComputeTimings(reelId: string): Promise<void> {
         scenes: sceneSpans,
         audioScript,
         twistAnchor: story.twistAnchor ?? '',
+        genreCategory: channel.genreCategory,
       }
 
       const timings = computeTimings(timingsInput)
