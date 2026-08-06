@@ -627,6 +627,44 @@ dna/company/positioning.md, dna/company/marketing.md (Part II, Phase-0 goals)
 
 ---
 
+### 2026-08-06-001
+
+Status: Accepted
+
+Title: A Story Ends When the Viewer's Mental Model Changes — Endings Are Three Layers
+
+Decision
+
+Endings are treated as a designed experience with three coordinated layers, not as "the last paragraph":
+
+1. **Cinematic (time).** A reel holds its closing image for a per-genre beat after the final spoken word, while the music steps back and resolves and the room tone ramps out. Comedy buttons out at 800ms; drama, fairytale and children's linger to 2600ms. Implemented as `compute-timings` §4.65.
+2. **Narrative (text).** Every genre has an ending criterion written in its own craft terms, and the universal gate check gains a mechanical DELETION TEST: cut the closing lines — if the viewer loses nothing, the payoff already happened and the ending is decoration. `WriterIdentity` gains `closingCraft`, the missing counterpart to `openingCraft`.
+3. **Psychological (mind).** The plan now states the story's CONTRACT before its middle is planned: `hookPromise` (what the opening promises to change) and `viewerTransformation` (before → after belief). The planner decides the destination, then builds the journey that earns it.
+
+Why
+
+The founder's finding, watching two supervised laps: "we lack at endings, our reels just stop." Both halves were literally true. The reel's final frame was the last spoken character's timestamp, and the music bed — whose envelope held PEAK to the final sample — was cut off by ffmpeg at full volume; nothing in the codebase faded anything at the end. Meanwhile ending-craft coverage was wildly uneven in exactly the pattern that predicted the failures: lifestyle had no ending criterion at all, comedy tested only its punchline, informational's "carryable shape" is aced by an aphorism. Two stories the same day failed by the same mechanism — closing on a statement of meaning instead of placing the last concrete thing — which we named **terminal exposition**.
+
+The lever is deliberately judge-side. Shape law 4 already told the Writer to SHOW the change, so the standard existed and the judge was blind to it; adding another generative mandate is how the sentence-rhythm monoculture was manufactured (2026-07-20).
+
+Alternatives Considered
+
+A single universal ending rule across all genres — rejected: a comedy button, a fairytale restoration and a horror afterimage are different crafts, and one shared shape would manufacture a new monoculture. Children's was deliberately left alone: naming a moral warmly IS its register.
+
+Expected Impact
+
+Reels end rather than stop. First-attempt gate pass-rate may DIP short-term as the stricter ending criteria bite — that is the gate doing its job, and it is tracked against the 60% teeth-flip trigger.
+
+Review Trigger
+
+The falsifier is closing-kind DIVERSITY: `apps/worker/scripts/endings-audit.ts` labels what each ending places and prints a histogram. If diversity collapses (every explainer closing "…in your room right now"), we traded one AI tell for another and the criteria come back out. Also: if a blind paired read prefers the aphorism close, drop the criterion entirely.
+
+Related Documents
+
+packages/core/src/timings/compute-timings.ts (§4.65), packages/core/src/prompts/story-critic.v2.ts (v2.19), packages/core/src/prompts/writer-identities.v1.ts (closingCraft), packages/core/src/prompts/story-planner.v1.ts (the contract), apps/worker/scripts/endings-audit.ts, ARCHITECTURE.md:146 (the aftermath beat this generalizes)
+
+---
+
 ## Relationship to the Decision Framework
 
 The Decision Framework explains how decisions are made.
