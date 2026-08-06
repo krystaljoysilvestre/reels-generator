@@ -1,7 +1,7 @@
 // Remotion v4 — license: free for individuals + companies <$1M revenue. Re-evaluate at M7 SaaS launch [H6].
 import React from 'react'
 import { useCurrentFrame, useVideoConfig, interpolate, Img, OffthreadVideo } from 'remotion'
-import { clipPlaybackRate } from '@reels/core/timings'
+import { clipPlaybackRate, freezePushFrames } from '@reels/core/timings'
 
 export interface SceneClipProps {
   imageSrc: string                   // data URI or URL
@@ -55,14 +55,16 @@ export const SceneClip: React.FC<SceneClipProps> = ({ imageSrc, videoSrc, tier, 
     const playbackRate = clipPlaybackRate(clipSec, sceneSec)
     // Once the (slowed) clip runs out, OffthreadVideo holds its last frame. That's tolerable mid-reel but
     // not on the FINAL scene, whose held outro beat (compute-timings §4.65) would land on a dead freeze —
-    // the opposite of "the visuals keep going". So keep a slow push alive on whatever is on screen: it
-    // costs nothing when the clip is still playing (scale is ~1 until then) and it turns the frozen tail
-    // into a continuing move.
-    const clipEndsAtFrame = Math.round((clipSec / playbackRate) * fps)
-    const freezeScale = interpolate(frame, [clipEndsAtFrame, durationFrames], [1, 1.06], {
-      extrapolateLeft: 'clamp',
-      extrapolateRight: 'clamp',
-    })
+    // the opposite of "the visuals keep going". So keep a slow push alive across the frozen tail. The range
+    // is computed by a shared pure helper that returns null when the clip fills the scene: a zero-width
+    // interpolate range throws in Remotion and failed a real render.
+    const push = freezePushFrames(clipSec, durationFrames / fps, fps)
+    const freezeScale = push
+      ? interpolate(frame, [push.from, push.to], [1, 1.06], {
+          extrapolateLeft: 'clamp',
+          extrapolateRight: 'clamp',
+        })
+      : 1
     return (
       <div style={{ width, height, overflow: 'hidden' }}>
         <OffthreadVideo

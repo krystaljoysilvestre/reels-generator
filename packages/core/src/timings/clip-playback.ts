@@ -17,6 +17,24 @@ export function clipMsToReelMs(sceneStartMs: number, clipMs: number, rate: numbe
   return Math.round(sceneStartMs + clipMs / r)
 }
 
+// Frame range over which a video scene's FROZEN tail should keep pushing, or null when there is no frozen
+// tail to rescue. Once a stretched clip runs out, OffthreadVideo holds its last frame — tolerable mid-reel,
+// dead on the final scene, whose held outro beat (compute-timings §4.65) would land on a motionless frame.
+// So the renderer keeps a slow push alive across the freeze.
+//
+// Returns null when the clip fills the scene (no freeze) or the freeze is too short to animate. That guard
+// is the point: a zero-width range makes Remotion's interpolate() throw
+// ("inputRange must be strictly monotonically increasing"), which failed a real render — the clip finished
+// on exactly the scene's last frame, so start === end.
+export function freezePushFrames(clipSec: number, sceneSec: number, fps: number): { from: number; to: number } | null {
+  if (fps <= 0 || sceneSec <= 0 || clipSec <= 0) return null
+  const rate = clipPlaybackRate(clipSec, sceneSec)
+  const from = Math.round((clipSec / rate) * fps)
+  const to = Math.round(sceneSec * fps)
+  // need at least a few frames of freeze for a push to read as motion rather than a jolt
+  return to - from >= 3 ? { from, to } : null
+}
+
 // The reel-time point past which the clip is no longer showing NEW motion — either the stretched clip has
 // run out (its last frame freezes) or the scene itself ended. Foley placed after this would fire over a
 // frozen/absent frame, so callers drop events beyond it.

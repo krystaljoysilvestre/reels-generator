@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { clipPlaybackRate, clipMsToReelMs, clipVisibleEndMs } from './clip-playback.js'
+import { clipPlaybackRate, clipMsToReelMs, clipVisibleEndMs, freezePushFrames } from './clip-playback.js'
 
 describe('clipPlaybackRate', () => {
   it('is 1 when clip == scene (no stretch)', () => {
@@ -37,5 +37,43 @@ describe('clipVisibleEndMs', () => {
   it('is capped by the scene end (frozen-tail region excluded)', () => {
     // 5s clip at rate 1 would end at 5000, but the scene ends at 4000.
     expect(clipVisibleEndMs(0, 4000, 5, 1)).toBe(4000)
+  })
+})
+
+describe('freezePushFrames — keeping the frozen tail alive (§4.65)', () => {
+  it('returns null when the clip exactly fills the scene (the range that crashed a real render)', () => {
+    // rate clamps to 1, so the clip ends on the scene's own last frame → start === end → Remotion's
+    // interpolate() would throw "inputRange must be strictly monotonically increasing".
+    expect(freezePushFrames(5, 5, 30)).toBeNull()
+    const push = freezePushFrames(11.57, 11.57, 30)
+    expect(push).toBeNull()
+  })
+
+  it('returns a range when the scene outlasts the stretched clip', () => {
+    // 5s clip in a 12s scene: rate clamps at 0.5, so the clip covers 10s and 2s freeze remains.
+    const push = freezePushFrames(5, 12, 30)
+    expect(push).not.toBeNull()
+    expect(push!.from).toBe(300)   // 5 / 0.5 * 30
+    expect(push!.to).toBe(360)     // 12 * 30
+    expect(push!.to).toBeGreaterThan(push!.from)
+  })
+
+  it('ignores a freeze too short to read as motion', () => {
+    expect(freezePushFrames(5, 5.05, 30)).toBeNull() // ~1 frame of freeze
+  })
+
+  it('never returns an inverted or zero-width range for any plausible input', () => {
+    for (const clip of [5, 10]) {
+      for (const scene of [1, 4.9, 5, 5.1, 7.5, 10, 10.1, 20, 40]) {
+        const push = freezePushFrames(clip, scene, 30)
+        if (push) expect(push.to - push.from).toBeGreaterThanOrEqual(3)
+      }
+    }
+  })
+
+  it('is defensive about degenerate inputs', () => {
+    expect(freezePushFrames(0, 10, 30)).toBeNull()
+    expect(freezePushFrames(5, 0, 30)).toBeNull()
+    expect(freezePushFrames(5, 10, 0)).toBeNull()
   })
 })
