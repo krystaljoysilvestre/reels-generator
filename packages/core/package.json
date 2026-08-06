@@ -52,6 +52,7 @@
     "./assembly/imageprompt": "./src/assembly/imageprompt.ts",
     "./prompts/compilation.v1": "./src/prompts/compilation.v1.ts",
     "./prompts/channel.v1": "./src/prompts/channel.v1.ts",
+    "./prompts/channel-clarify.v1": "./src/prompts/channel-clarify.v1.ts",
     "./prompts/channel-sample.v1": "./src/prompts/channel-sample.v1.ts",
     "./prompts/channel-sample.v2": "./src/prompts/channel-sample.v2.ts",
     "./prompts/voice-recommend.v1": "./src/prompts/voice-recommend.v1.ts",

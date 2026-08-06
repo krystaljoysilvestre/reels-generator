@@ -26,12 +26,22 @@ export function trendingId(label: string): string {
 export interface NichePreset {
   id: string
   icon: string // key into ICON_PATHS in NewChannelWizard.tsx
-  color: string // literal tailwind classes for the icon chip (bg + text)
+  color: string // literal tailwind classes for the icon chip at rest (pale tint + saturated stroke)
+  // The icon chip once the tile is CHOSEN: the same hue, saturated into a gradient, stroke flipped to
+  // white. Literal classes because Tailwind can't build them from a variable. Per-genre rather than the
+  // one brand gradient, so the chip still says WHICH genre is active. Omitted on CURATED_NICHES — those
+  // are no longer rendered as tiles, so they'd only be dead styling.
+  selectedColor?: string
   label: string
   blurb: string // one-line shown on the card
   description: string // seeds the niche textarea
   language: string
-  suggestedName: string // seeds the channel-name field (editable; never over a typed name)
+  // Follow-up questions shown the moment the tile is picked — the dimensions this genre's seeded
+  // description deliberately leaves open. Curated (owner-set), so they're instant and free; a pitch
+  // the creator writes themselves gets its questions from /api/channel/clarify instead. Optional —
+  // answers append to the pitch under `prefix`, blank is always fine. Same shape as channel.v1's
+  // clarifyingQuestions. Omitted on CURATED_NICHES: those texts are specific enough not to ask.
+  clarify?: Array<{ question: string; examples: string; prefix: string }>
 }
 
 // ── The genre grid ────────────────────────────────────────────────────────────
@@ -41,89 +51,121 @@ export const NICHE_PRESETS: NichePreset[] = [
     id: 'horror',
     icon: 'horror',
     color: 'bg-violet-50 text-violet-600',
+    selectedColor: 'bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white',
     label: 'Scary stories',
     blurb: 'Eerie retellings, twist',
     description:
       'Horror narration channel — supernatural encounters, creatures, and local folklore set in specific real-but-fictionalized places. The telling varies (first-hand encounters, retold legends, cautionary tales, found accounts) and so does the temperature: slow-burn dread, coiled suspense, sudden kinetic scares, old rules broken and paid for. Believable mundane setups, sensory detail, endings that land within a breath of the peak.',
     language: 'English',
-    suggestedName: 'Midnight Tales',
+    clarify: [
+      { question: 'Real folklore, or legends of your own?', examples: 'mostly invented, real legends retold, a blend that feels real', prefix: 'Folklore:' },
+      { question: 'Where do these stories live?', examples: 'small-town Philippines, rural Japan, the American Midwest', prefix: 'Set in:' },
+    ],
   },
   {
     id: 'drama',
     icon: 'drama',
     color: 'bg-rose-50 text-rose-600',
+    selectedColor: 'bg-gradient-to-br from-rose-500 to-pink-500 text-white',
     label: 'Heartfelt drama',
     blurb: 'Emotional, human stories',
     description:
       'Emotional short-drama channel. Ordinary people at the moment a want collides with a need and forces a choice they can\'t take back — the thing left unsaid, the apology that comes too late, the loyalty that costs something. Intimate and specific, never sentimental; the ending changes who someone is, not just what happened.',
     language: 'English',
-    suggestedName: 'The Unsaid',
+    clarify: [
+      { question: 'Whose stories are these?', examples: 'family secrets, marriages at a breaking point, strangers whose lives collide', prefix: 'Stories center on:' },
+      { question: 'How should endings land?', examples: 'hopeful, bittersweet, unresolved', prefix: 'Endings:' },
+    ],
   },
   {
     id: 'comedy',
     icon: 'comedy',
     color: 'bg-amber-50 text-amber-600',
+    selectedColor: 'bg-gradient-to-br from-amber-400 to-orange-500 text-white',
     label: 'Comedy',
     blurb: 'Quick laughs & bits',
     description:
       'Comedy channel of short bits — observational riffs on everyday absurdity, escalating misunderstandings, and the small indignities everyone recognizes. One premise per video, pushed until it breaks, with the funniest turn saved for the last line.',
     language: 'English',
-    suggestedName: 'Mildly Unhinged',
+    clarify: [
+      { question: "What's the comedy about, mostly?", examples: 'dating, office life, family chaos, being online', prefix: 'Mostly about:' },
+      { question: 'Anything the jokes never touch?', examples: 'politics, religion, punching down', prefix: 'Off-limits:' },
+    ],
   },
   {
     id: 'reddit_story',
     icon: 'reddit',
     color: 'bg-orange-50 text-orange-600',
+    selectedColor: 'bg-gradient-to-br from-orange-500 to-rose-500 text-white',
     label: 'Confession stories',
     blurb: 'Reddit-style true tales',
     description:
       'Reddit-style confession channel. First-person reads of relationship drama, AITA, petty revenge, and workplace fights that sound like REAL posts — mundane stakes people take sides over, messy narrators who incriminate themselves a little, details too boring to invent. Hook in the first line, petty escalation, endings that stop the way real posts stop — on the question, not a bow.',
     language: 'English',
-    suggestedName: 'Confession Threads',
+    clarify: [
+      { question: 'Whose posts are these, mostly?', examples: 'twenty-somethings in relationships, office workers, new parents, a mix', prefix: 'Narrators:' },
+      { question: 'How wild can the drama get?', examples: 'mildly petty, properly unhinged, dark but never tragic', prefix: 'Drama ceiling:' },
+    ],
   },
   {
     id: 'commentary',
     icon: 'motivation',
     color: 'bg-red-50 text-red-600',
+    selectedColor: 'bg-gradient-to-br from-red-500 to-orange-500 text-white',
     label: 'Opinions & motivation',
     blurb: 'Takes, discipline, mindset',
     description:
       'Opinion and discipline channel. Hard-hitting short monologues on focus, self-improvement, and the takes most people won\'t say out loud — one hard truth per video, named without flinching, with the cost of ignoring it made real. Direct second-person address, cinematic restraint, and a closing line the viewer repeats to themselves at 6AM.',
     language: 'English',
-    suggestedName: 'The Daily Forge',
+    clarify: [
+      { question: 'What ground does the channel own?', examples: 'discipline, money habits, relationships, contrarian takes', prefix: 'The lane:' },
+      { question: 'Who are you talking to?', examples: 'young hustlers, burnt-out professionals, students, anyone drifting', prefix: 'Talking to:' },
+    ],
   },
   {
     id: 'informational',
     icon: 'facts',
     color: 'bg-sky-50 text-sky-600',
+    selectedColor: 'bg-gradient-to-br from-sky-500 to-indigo-500 text-white',
     label: 'Facts & explainers',
     blurb: 'Told with awe & clarity',
     description:
       'Curiosity channel built on one lane (for example: the deep sea, ancient Rome, the human body, aviation disasters). Each video takes something the viewer thinks they know and breaks it: one vivid "wait, what?" moment, made concrete enough to re-tell at dinner. Bright, quick, confident; ends with the idea in a shape they\'ll repeat.',
     language: 'English',
-    suggestedName: 'Wait, What?',
+    clarify: [
+      { question: 'Facts about what? One lane beats everything.', examples: 'the deep sea, ancient Rome, the human body, aviation disasters', prefix: 'The lane:' },
+      { question: "Who's watching?", examples: 'curious adults, students, science nerds', prefix: 'Audience:' },
+    ],
   },
   {
     id: 'lifestyle',
     icon: 'lifestyle',
     color: 'bg-emerald-50 text-emerald-600',
+    selectedColor: 'bg-gradient-to-br from-emerald-500 to-teal-500 text-white',
     label: 'Lifestyle & how-to',
     blurb: 'Tips, routines, recipes',
     description:
       'Practical lifestyle channel — routines, recipes, and how-to in one lane the channel owns. Each video delivers one thing the viewer can do today, shown start to finish with the step everyone gets wrong called out. Warm and unhurried, never a listicle; ends on the result, not a sign-off.',
     language: 'English',
-    suggestedName: 'Small Habits',
+    clarify: [
+      { question: 'Which corner of life does the channel own?', examples: 'quick meals, morning routines, small-space living, budget travel', prefix: 'The lane:' },
+      { question: "Who's it for?", examples: 'busy beginners, people leveling up, budget-first folks', prefix: 'Made for:' },
+    ],
   },
   {
     id: 'general',
     icon: 'general',
     color: 'bg-slate-100 text-slate-600',
+    selectedColor: 'bg-gradient-to-br from-slate-400 to-slate-600 text-white',
     label: 'A bit of everything',
     blurb: 'Mix it up per reel',
     description:
       'A general storytelling channel that follows whatever is genuinely interesting — a strange true event one day, a human moment the next. The through-line is the telling, not the subject: a strong hook, one idea per video, and an ending that lands. Each story picks the register it needs.',
     language: 'English',
-    suggestedName: 'Worth Telling',
+    clarify: [
+      { question: 'What ties the videos together, if anything?', examples: "a mood, a curiosity, one narrator's voice", prefix: 'The thread:' },
+      { question: 'Any subjects to avoid?', examples: 'politics, true crime, anything gory', prefix: 'Avoid:' },
+    ],
   },
 ]
 
@@ -140,7 +182,6 @@ export const CURATED_NICHES: NichePreset[] = [
     description:
       'True-crime narration channel. Tightly-paced retellings of real case patterns — the timeline, the evidence, the one overlooked detail that turned it — dramatized with fictionalized names and places, sober and respectful, never lurid. Strong cold-open, clear stakes, a lingering question at the end.',
     language: 'English',
-    suggestedName: 'The Case File',
   },
   {
     id: 'reddit-stories',
@@ -151,7 +192,6 @@ export const CURATED_NICHES: NichePreset[] = [
     description:
       'Reddit-style confession channel. First-person reads of relationship drama, AITA, petty revenge, and workplace fights that sound like REAL posts — mundane stakes people take sides over, messy narrators who incriminate themselves a little, details too boring to invent. Hook in the first line, petty escalation, endings that stop the way real posts stop — on the question, not a bow.',
     language: 'English',
-    suggestedName: 'Confession Threads',
   },
   {
     id: 'motivation',
@@ -162,7 +202,6 @@ export const CURATED_NICHES: NichePreset[] = [
     description:
       'Motivation and discipline channel. Hard-hitting short monologues on stoicism, focus, and self-improvement — one hard truth per video, named without flinching, with the cost of ignoring it made real. Direct second-person address, cinematic restraint, and a closing line the viewer repeats to themselves at 6AM.',
     language: 'English',
-    suggestedName: 'The Daily Forge',
   },
   {
     id: 'fun-facts',
@@ -173,7 +212,6 @@ export const CURATED_NICHES: NichePreset[] = [
     description:
       'Curiosity channel built on one lane (for example: the deep sea, ancient Rome, the human body, aviation disasters). Each video takes something the viewer thinks they know and breaks it: one vivid "wait, what?" moment, made concrete enough to re-tell at dinner. Bright, quick, confident; ends with the idea in a shape they\'ll repeat.',
     language: 'English',
-    suggestedName: 'Wait, What?',
   },
   {
     id: 'history',
@@ -184,7 +222,6 @@ export const CURATED_NICHES: NichePreset[] = [
     description:
       'History and mysteries channel. Short, atmospheric retellings of forgotten events, ancient enigmas, and "what really happened" stories — a strong narrative spine, evocative detail, an unresolved or eerie ending. Focused on one territory — an era, a region, or a thread (lost expeditions, royal scandals, vanished cities) — so the channel builds a world instead of sampling everything.',
     language: 'English',
-    suggestedName: 'Lost Chapters',
   },
   {
     id: 'space-science',
@@ -195,7 +232,6 @@ export const CURATED_NICHES: NichePreset[] = [
     description:
       'Space and science wonder channel. Awe-driven explainers of cosmic and scientific ideas — scale, time, the unknown — each built on one assumption the viewer holds that turns out to be wrong, made felt through vivid comparison. Calm narration, a sense of vastness, a thought that lingers.',
     language: 'English',
-    suggestedName: 'Beyond the Blue',
   },
   {
     id: 'money',
@@ -206,7 +242,6 @@ export const CURATED_NICHES: NichePreset[] = [
     description:
       'Personal finance channel. Practical, no-fluff money insight for young earners — habits, saving, side income, and the traps hidden in everyday money decisions. One actionable idea per video, confident and plain-spoken, a clear "do this" close.',
     language: 'English',
-    suggestedName: 'Plain Money',
   },
   {
     id: 'psychology',
@@ -217,7 +252,6 @@ export const CURATED_NICHES: NichePreset[] = [
     description:
       'Psychology channel. Bite-size insight on why people do what they do — each video opens on a relatable scene (the text left on read, the friend who always cancels), then lands one idea that reframes it. Warm but sharp, never clinical; ends with the insight in words the viewer will quote at someone.',
     language: 'English',
-    suggestedName: 'Why We Do It',
   },
   {
     id: 'horror-folklore',
@@ -228,7 +262,6 @@ export const CURATED_NICHES: NichePreset[] = [
     description:
       'Horror narration channel covering supernatural encounters, creatures, and local folklore, set in specific real-but-fictionalized places. The telling varies — first-hand encounters, retold legends, cautionary tales, found accounts — and so does the temperature: slow-burn dread, coiled suspense, sudden kinetic scares, old rules broken and paid for. Believable mundane setups, sensory detail, endings that land within a breath of the peak.',
     language: 'Filipino',
-    suggestedName: 'Mga Kwentong Gabi',
   },
 ]
 

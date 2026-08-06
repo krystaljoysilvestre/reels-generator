@@ -22,6 +22,11 @@ type StyleInfluence = 'light' | 'medium' | 'full'
 // caption look) instead of half-restoring them.
 const DRAFT_KEY = 'reels:new-channel-draft:v2'
 
+// Most LLM question-rounds the clarify loop may spend on one pitch identity (the curated genre-tile
+// round is free and uncounted). The model ending the loop by having nothing to ask is the designed
+// exit; this is the cost/patience backstop (~1¢ a round).
+const CLARIFY_MAX_ROUNDS = 3
+
 // Longest niche description the channel APIs accept — every route that takes one caps at this,
 // so raising it here alone would just move the rejection server-side.
 const NICHE_MAX = 8000
@@ -189,9 +194,11 @@ export function NewChannelWizard({
   // it's still ours to overwrite — the moment the creator types their own, this stops matching and we
   // leave it alone.
   const [seededDescription, setSeededDescription] = useState('')
-  // Same courtesy rule for the channel name: a preset suggests one, but only over an empty
-  // field or our own earlier suggestion — never over a name the creator typed.
-  const [seededName, setSeededName] = useState('')
+  // The name is the ONE field never filled in for the creator — it's their channel's identity, and a
+  // suggested name that survives to publish is a channel nobody chose. Emptiness is flagged at the
+  // moment of commitment (handleNext) instead of disabling the button: a dead button never says why.
+  const [nameMissing, setNameMissing] = useState(false)
+  const nameInputRef = useRef<HTMLInputElement>(null)
   const [niche, setNiche] = useState('')
   const [languages, setLanguages] = useState<string[]>(['English'])
   // Every feed this channel posts to — shapes caption/length derivation + render presets. A SET, because
@@ -259,6 +266,16 @@ export function NewChannelWizard({
   const [clarify, setClarify] = useState<Array<{ question: string; examples: string; prefix: string }>>([])
   const [clarifyAnswers, setClarifyAnswers] = useState<Record<number, string>>({})
   const [clarifyHandledText, setClarifyHandledText] = useState('')
+  // Follow-up-question fetch for a pitch the creator wrote themselves (genre tiles ship curated ones).
+  // The card LOOPS: "Add & continue" folds the answers into the pitch and asks for the next round of
+  // questions on the enriched text, until the model says the pitch is complete (returns none) or the
+  // round cap is hit. Skip bows out any time; the footer CTA bails out of the loop into the build.
+  const clarifyFetchRef = useRef<AbortController | null>(null) // in-flight fetch — a derive or unmount aborts it
+  const clarifyAskedRef = useRef('') // last text asked about: one ask per distinct text, even if it returned none
+  const clarifyCardRef = useRef<HTMLDivElement>(null) // scrolled into view when questions arrive post-derive
+  const clarifyRoundsRef = useRef(0) // LLM rounds spent on this pitch identity (the curated tile round is free)
+  const [clarifyLoading, setClarifyLoading] = useState(false) // a next-round fetch is in flight (card buttons lock)
+  const [clarifyDone, setClarifyDone] = useState(false) // the model had no more questions — the pitch is complete
   // "Trending now" rail — live web-searched niches (server caches for a day; hidden when empty/unavailable).
   // Sits ABOVE the static presets, so a skeleton holds its space while loading (no layout jump).
   const [trending, setTrending] = useState<TrendingNiche[]>([])
@@ -365,7 +382,6 @@ export function NewChannelWizard({
         if (typeof d.committedName === 'string') setCommittedName(d.committedName)
         if (typeof d.description === 'string') setDescription(d.description)
         if (typeof d.seededDescription === 'string') setSeededDescription(d.seededDescription)
-        if (typeof d.seededName === 'string') setSeededName(d.seededName)
         if (typeof d.niche === 'string') setNiche(d.niche)
         if (Array.isArray(d.languages) && d.languages.length) setLanguages(d.languages)
         // Drafts saved before the set existed carry one value (possibly the old 'all' bucket) — widen it
@@ -445,7 +461,7 @@ export function NewChannelWizard({
       if (v.imageKey) previewKeys[Number(k)] = { imageKey: v.imageKey }
     }
     return {
-      phase, name, committedName, description, seededDescription, seededName, niche, languages, targetPlatforms, presetId,
+      phase, name, committedName, description, seededDescription, niche, languages, targetPlatforms, presetId,
       avatarKey, costCents, tone, style, region, era, locations, objects, vocab,
       voiceMode, selectedVoices, recommended, voiceSearchKeyword, genreCategory, presentation, narrativeStyle, narrativeVoice, styleInfluence, tagline, derivedSig,
       targetSeconds, captionStyle, sampleMode, aiSample, aiSampleEdited, ownSample, autoWroteSample, extraSampleScripts,
@@ -463,7 +479,7 @@ export function NewChannelWizard({
     } catch {
       /* storage full / unavailable — non-fatal */
     }
-  }, [hydrated, phase, name, committedName, description, seededDescription, seededName, niche, languages, targetPlatforms, presetId, avatarKey, costCents, tone, targetSeconds, style, region, era, locations, objects, vocab, voiceMode, selectedVoices, recommended, voiceSearchKeyword, genreCategory, presentation, narrativeStyle, narrativeVoice, styleInfluence, tagline, derivedSig, captionStyle, sampleMode, aiSample, aiSampleEdited, ownSample, autoWroteSample, extraSampleScripts, audioMood, musicChoice, selectedPresetIds, presetPickedManually, uploadedMusic, styleProposals, selectedStyleIdx, uploadedStyleIdx, stylePreviews, draftChannelId])
+  }, [hydrated, phase, name, committedName, description, seededDescription, niche, languages, targetPlatforms, presetId, avatarKey, costCents, tone, targetSeconds, style, region, era, locations, objects, vocab, voiceMode, selectedVoices, recommended, voiceSearchKeyword, genreCategory, presentation, narrativeStyle, narrativeVoice, styleInfluence, tagline, derivedSig, captionStyle, sampleMode, aiSample, aiSampleEdited, ownSample, autoWroteSample, extraSampleScripts, audioMood, musicChoice, selectedPresetIds, presetPickedManually, uploadedMusic, styleProposals, selectedStyleIdx, uploadedStyleIdx, stylePreviews, draftChannelId])
 
   // ── Unsaved-progress guard ──────────────────────────────────────────────────
   // The draft autosaves, but leaving mid-flow still deserves a heads-up so the operator
@@ -481,7 +497,12 @@ export function NewChannelWizard({
 
   // Abort an in-flight step-1 derive if the wizard unmounts (e.g. the operator confirms leaving) so
   // the dropped request doesn't keep the model running for a result no one will receive.
-  useEffect(() => () => deriveAbortRef.current?.abort(), [])
+  useEffect(() => () => { deriveAbortRef.current?.abort(); clarifyFetchRef.current?.abort() }, [])
+
+  // Snapshot of the values the async clarify fetch re-checks at RESOLVE time — its closure's copies
+  // are frozen at call time and go stale while the request is in flight.
+  const clarifyFreshRef = useRef({ phase: 'describe' as Phase, niche: '', clarifyLen: 0, busy: false })
+  useEffect(() => { clarifyFreshRef.current = { phase, niche, clarifyLen: clarify.length, busy: loading || preparingExample } })
 
   // Browser Back (SPA history) → trap it once and route the decision through our modal.
   useEffect(() => {
@@ -781,7 +802,9 @@ export function NewChannelWizard({
   const nicheLength = niche.trim().length
   const nicheOverLimit = nicheLength > NICHE_MAX
   const canGenerateNiche = nicheLength >= 20 && !nicheOverLimit
-  const canGenerate = name.trim().length > 0 && canGenerateNiche && languages.length > 0
+  // Name is deliberately NOT here: an empty name flags + scrolls on click (handleNext) instead of
+  // silently disabling the button.
+  const canGenerate = canGenerateNiche && languages.length > 0
   // Profile is "fresh" if the niche+language haven't changed since we derived it —
   // then we can Continue without re-calling the API. (Name/description/avatar don't
   // feed the creative bible, so editing them doesn't stale it.)
@@ -881,35 +904,167 @@ export function NewChannelWizard({
     setPreparingExample(true)
   }
 
-  function seedName(suggestion: string) {
-    if (name.trim() !== '' && name !== seededName) return
-    setName(suggestion)
-    setCommittedName(suggestion)
-    setSeededName(suggestion)
+  // The single step-1 advance (the footer CTA). Validates the name — the one field never filled in
+  // for them — then folds any clarify answers into the pitch and derives, or just moves on.
+  function handleNext() {
+    if (name.trim() === '') {
+      setNameMissing(true)
+      nameInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      nameInputRef.current?.focus({ preventScroll: true })
+      return
+    }
+    const additions = clarify
+      .map((q, i) => {
+        const a = (clarifyAnswers[i] ?? '').trim()
+        return a ? `${q.prefix} ${a}` : null
+      })
+      .filter((v): v is string => !!v)
+    if (clarify.length > 0) setClarify([])
+    if (additions.length > 0) {
+      // Answers change the pitch → re-derive with the enriched text, pre-marked as asked so the
+      // derive can't loop into asking about it again.
+      const newNiche = `${niche.trim()}\n${additions.join('\n')}`
+      setNiche(newNiche)
+      setClarifyHandledText(newNiche)
+      void handleGenerate(newNiche, newNiche)
+      return
+    }
+    if (derivedFresh) { goToScript(); return }
+    void handleGenerate()
   }
+
+  // One round-trip to /api/channel/clarify. Returns the (possibly empty) question list, or null when
+  // the call failed or was aborted — callers treat null as "bow out quietly", never as an error state.
+  async function fetchClarifyQuestions(text: string, signal: AbortSignal): Promise<Array<{ question: string; examples: string; prefix: string }> | null> {
+    try {
+      const res = await fetch('/api/channel/clarify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nicheDescription: text, language }),
+        signal,
+      })
+      if (!res.ok) return null
+      const json = await res.json()
+      setCostCents((c) => c + (json.costCents ?? 0))
+      return Array.isArray(json.questions)
+        ? (json.questions as Array<{ question: string; examples: string; prefix: string }>).filter((q) => q?.question && q?.prefix)
+        : []
+    } catch {
+      return null // aborted or offline — advisory, stay quiet
+    }
+  }
+
+  // A pitch the creator wrote themselves gets its follow-ups from a small server call — fired on blur
+  // and after a typing lull. Guards keep it cheap and quiet: minimum length, one ask per distinct text
+  // (the route caches too, so even a repeat is free server-side), never while a card is already up or
+  // a derive is running. Purely advisory: any failure just means no questions.
+  function maybeFetchClarify() {
+    const text = niche.trim()
+    if (phase !== 'describe' || loading || preparingExample) return
+    if (presetId !== null) return // tile/trending picks carry their own follow-ups (or deliberately none)
+    if (clarify.length > 0) return // never replace a card that's up — answers may be mid-type
+    if (text.length < 30) return // not enough pitch yet to know what's missing
+    if (text === clarifyAskedRef.current || text === clarifyHandledText) return
+    if (clarifyRoundsRef.current >= CLARIFY_MAX_ROUNDS) return
+    clarifyAskedRef.current = text
+    clarifyRoundsRef.current += 1
+    clarifyFetchRef.current?.abort()
+    const controller = new AbortController()
+    clarifyFetchRef.current = controller
+    void fetchClarifyQuestions(text, controller.signal).then((qs) => {
+      // Only surface if the pitch hasn't moved on while we asked.
+      const fresh = clarifyFreshRef.current
+      if (qs && qs.length > 0 && fresh.phase === 'describe' && !fresh.busy && fresh.clarifyLen === 0 && fresh.niche.trim() === text) {
+        setClarify(qs.slice(0, 2))
+        setClarifyAnswers({})
+        setClarifyHandledText(text)
+      }
+    })
+  }
+
+  // "Add & continue": fold the answers into the pitch (visible immediately in the textarea above),
+  // then ask for the NEXT round of questions on the enriched text. The loop ends when the model has
+  // nothing left to ask — that's the "we have what we need" signal — or at the round cap.
+  async function handleClarifyAdd() {
+    const additions = clarify
+      .map((q, i) => {
+        const a = (clarifyAnswers[i] ?? '').trim()
+        return a ? `${q.prefix} ${a}` : null
+      })
+      .filter((v): v is string => !!v)
+    if (additions.length === 0) return // button is disabled blank — Skip is the blank path
+    const newNiche = `${niche.trim()}\n${additions.join('\n')}`
+    setNiche(newNiche)
+    setClarifyHandledText(newNiche)
+    clarifyAskedRef.current = newNiche
+    setClarifyAnswers({})
+    if (clarifyRoundsRef.current >= CLARIFY_MAX_ROUNDS) {
+      setClarify([]) // enough rounds — quietly stop asking; the answers are already folded in
+      return
+    }
+    clarifyRoundsRef.current += 1
+    setClarifyLoading(true)
+    clarifyFetchRef.current?.abort()
+    const controller = new AbortController()
+    clarifyFetchRef.current = controller
+    const qs = await fetchClarifyQuestions(newNiche, controller.signal)
+    setClarifyLoading(false)
+    if (clarifyFetchRef.current !== controller) return // superseded by a derive or unmount
+    if (qs === null) { setClarify([]); return } // fetch failed — the folded answers still count
+    if (qs.length > 0) {
+      setClarify(qs.slice(0, 2))
+    } else {
+      setClarify([])
+      setClarifyDone(true) // the model had nothing left to ask
+    }
+  }
+
+  // Skip: dismiss the card and stop asking about this text — the derive won't re-ask it either.
+  function handleClarifySkip() {
+    const text = niche.trim()
+    setClarify([])
+    setClarifyAnswers({})
+    setClarifyHandledText(text)
+    clarifyAskedRef.current = text
+  }
+
+  // The typing-lull trigger (blur on the textarea is the other). 2.5s of stillness reads as "done
+  // writing this thought"; the per-text dedupe above makes a premature fire harmless — asked once,
+  // and the route's cache makes even a true repeat free.
+  useEffect(() => {
+    if (!hydrated) return
+    const t = setTimeout(maybeFetchClarify, 2500)
+    return () => clearTimeout(t)
+  }, [niche, hydrated])
 
   function pickPreset(id: string) {
     // findPreset, not the grid list: a dashboard quick-start or a resumed draft can name a curated niche
     // that no longer has a tile, and it should still seed its text rather than silently do nothing.
     const preset = findPreset(id)
     if (!preset) return
-    if (presetId === id) {
-      // toggle off
-      setPresetId(null)
-      return
-    }
+    // This gallery is single-select, so a repeat tap is a NO-OP, not a toggle-off. Two reasons: it used to
+    // leave nothing highlighted while the textarea still held that template's text — a state that reads as
+    // a glitch — and re-seeding instead would overwrite a description the creator had since edited.
+    // "Write your own" (pickCustom) is the deliberate way out, and typing your own text deselects too.
+    if (presetId === id) return
     setPresetId(id)
     setNiche(preset.description)
     setLanguages([preset.language])
     seedDescription(preset.blurb)
-    seedName(preset.suggestedName)
+    // The genre's own follow-ups, up the moment the tile lands. Showing them marks the seeded text as
+    // asked (same rule as the derive's questions), so the derive can't re-ask about the same text.
+    setClarify(preset.clarify ?? [])
+    setClarifyAnswers({})
+    if (preset.clarify?.length) setClarifyHandledText(preset.description)
+    clarifyRoundsRef.current = 0 // fresh identity, fresh question budget
+    setClarifyDone(false)
   }
 
   // Applying a trending card. Extracted from the rail's onClick so the dashboard's quick-start cards
   // can land on the same code path via ?trending= instead of duplicating the seeding rules.
   function pickTrending(t: TrendingNiche) {
     const id = trendingId(t.label)
-    if (presetId === id) { setPresetId(null); return }
+    if (presetId === id) return // same single-select rule as the genre tiles — a repeat tap changes nothing
     setPresetId(id)
     setNiche(t.description)
     // The rail's language is free text from a live search, so it can name one we don't support (or one
@@ -917,16 +1072,24 @@ export function NewChannelWizard({
     // actually produce it.
     setLanguages([SUPPORTED_LANGUAGES.includes(t.language) ? t.language : 'English'])
     seedDescription(t.blurb)
-    seedName(t.label)
+    // No follow-ups for a trending pick: the feed's descriptions are already specific.
+    setClarify([])
+    setClarifyAnswers({})
+    clarifyRoundsRef.current = 0
+    setClarifyDone(false)
   }
 
   function pickCustom() {
     if (presetId !== null) {
       setNiche('') // clear the seeded preset text for a fresh start
       if (description === seededDescription) { setDescription(''); setSeededDescription('') }
-      if (name === seededName) { setName(''); setCommittedName(''); setSeededName('') }
     }
     setPresetId(null)
+    // The abandoned tile's questions don't apply to a blank pitch — their own arrive on blur/lull.
+    setClarify([])
+    setClarifyAnswers({})
+    clarifyRoundsRef.current = 0
+    setClarifyDone(false)
     nicheRef.current?.focus()
   }
 
@@ -963,8 +1126,9 @@ export function NewChannelWizard({
   async function handleGenerate(nicheOverride?: string, handledOverride?: string) {
     const nicheText = (nicheOverride ?? niche).trim()
     const handledText = handledOverride ?? clarifyHandledText
-    // Cancel any prior in-flight derive before starting a new one.
+    // Cancel any prior in-flight derive — and the advisory clarify fetch, which the derive supersedes.
     deriveAbortRef.current?.abort()
+    clarifyFetchRef.current?.abort()
     const controller = new AbortController()
     deriveAbortRef.current = controller
     setLoading(true)
@@ -1037,6 +1201,8 @@ export function NewChannelWizard({
         setClarify(qs.slice(0, 3))
         setClarifyAnswers({})
         setClarifyHandledText(nicheText)
+        // The creator is down at the footer when these arrive — bring the card to them.
+        setTimeout(() => clarifyCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80)
       } else {
         goToScript()
       }
@@ -1313,14 +1479,20 @@ export function NewChannelWizard({
               <div className="min-w-0 flex-1">
                 <Field label="Channel name">
                   <input
-                    className="input py-3 text-[15px]"
+                    ref={nameInputRef}
+                    className={`input py-3 text-[15px]${nameMissing ? ' input-error' : ''}`}
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    onChange={(e) => { setName(e.target.value); if (e.target.value.trim()) setNameMissing(false) }}
                     onBlur={() => setCommittedName(name.trim())}
                     placeholder="Your channel name"
                     maxLength={80}
                     autoFocus
+                    aria-invalid={nameMissing}
+                    aria-describedby={nameMissing ? 'name-error' : undefined}
                   />
+                  {nameMissing && (
+                    <p id="name-error" className="text-xs text-danger">Your channel needs a name.</p>
+                  )}
                 </Field>
               </div>
             </div>
@@ -1361,9 +1533,9 @@ export function NewChannelWizard({
                   {/* A horizontal rail, not a grid: the live feed returns 3–6 cards and a grid of six
                       pushes the brief's own fields off-screen in the narrower two-pane layout. */}
                   {trendingLoading ? (
-                    <div className="flex gap-2.5 overflow-x-auto pb-3">
+                    <div className="flex gap-2.5 overflow-x-auto px-0.5 pb-3 pt-0.5">
                       {[0, 1, 2].map((i) => (
-                        <div key={i} className="w-[180px] flex-none animate-pulse rounded-md border border-border-strong p-3">
+                        <div key={i} className="w-[180px] flex-none animate-pulse rounded-md border border-border-strong bg-surface p-3">
                           <div className="h-3.5 w-14 rounded-full bg-subtle" />
                           <div className="mt-2 h-4 w-3/4 rounded bg-subtle" />
                           <div className="mt-1.5 h-3 w-full rounded bg-subtle" />
@@ -1371,7 +1543,7 @@ export function NewChannelWizard({
                       ))}
                     </div>
                   ) : (
-                    <div className="animate-fade-in flex gap-2.5 overflow-x-auto pb-3">
+                    <div className="animate-fade-in flex gap-2.5 overflow-x-auto px-0.5 pb-3 pt-0.5">
                       {trending.map((t, i) => {
                         // Keyed by label, not position: the rail refreshes daily, and an index-based id
                         // would highlight whatever card happens to sit in that slot when a draft resumes.
@@ -1383,8 +1555,9 @@ export function NewChannelWizard({
                             type="button"
                             title={t.whyNow}
                             onClick={() => pickTrending(t)}
+                            aria-pressed={on}
                             className={`flex w-[180px] flex-none flex-col items-start gap-1.5 rounded-md border p-3 text-left transition-all ${
-                              on ? 'border-accent bg-accent-soft ring-1 ring-accent' : 'border-border-strong hover:bg-subtle'
+                              on ? 'border-accent bg-accent-soft ring-1 ring-accent' : 'border-border-strong bg-surface hover:bg-subtle'
                             }`}
                           >
                             <span className={`rounded-full px-2 py-[2px] font-mono text-[9px] font-700 uppercase tracking-micro ${t.rpm === 'high' ? 'bg-success-soft text-success' : 'bg-subtle-strong text-muted'}`}>
@@ -1408,13 +1581,16 @@ export function NewChannelWizard({
                       key={p.id}
                       type="button"
                       onClick={() => pickPreset(p.id)}
-                      className={`flex flex-col items-start gap-1 rounded-lg border p-3 text-left transition-all ${
+                      aria-pressed={on}
+                      className={`flex flex-col items-start gap-1 rounded-md border p-3 text-left transition-all ${
                         on
                           ? 'border-accent bg-accent-soft ring-1 ring-accent'
-                          : 'border-border-strong hover:bg-subtle'
+                          : 'border-border-strong bg-surface hover:bg-subtle'
                       }`}
                     >
-                      <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${p.color}`}>
+                      {/* Chosen → the chip saturates into its own hue's gradient, so the active genre is
+                          readable from the icon alone and not just from the card's border. */}
+                      <span className={`flex h-[34px] w-[34px] items-center justify-center rounded-sm transition-colors ${on ? p.selectedColor ?? 'bg-pair-purple-pink text-white' : p.color}`}>
                         <NicheIcon name={p.icon} />
                       </span>
                       <span className="text-sm font-medium text-ink">{p.label}</span>
@@ -1426,13 +1602,14 @@ export function NewChannelWizard({
                 <button
                   type="button"
                   onClick={pickCustom}
-                  className={`flex flex-col items-start gap-1 rounded-lg border border-dashed p-3 text-left transition-all ${
+                  aria-pressed={presetId === null}
+                  className={`flex flex-col items-start gap-1 rounded-md border border-dashed p-3 text-left transition-all ${
                     presetId === null
                       ? 'border-accent bg-accent-soft ring-1 ring-accent'
-                      : 'border-border-strong hover:bg-subtle'
+                      : 'border-border-strong bg-surface hover:bg-subtle'
                   }`}
                 >
-                  <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${presetId === null ? 'bg-accent-soft text-accent' : 'bg-subtle text-muted'}`}>
+                  <span className={`flex h-[34px] w-[34px] items-center justify-center rounded-sm ${presetId === null ? 'bg-accent-soft text-accent' : 'bg-subtle-strong text-accent'}`}>
                     <NicheIcon name="custom" />
                   </span>
                   <span className="text-sm font-medium text-ink">Write your own</span>
@@ -1446,7 +1623,8 @@ export function NewChannelWizard({
                 ref={nicheRef}
                 className={`input h-44 resize-none${nicheOverLimit ? ' input-error' : ''}`}
                 value={niche}
-                onChange={(e) => { setNiche(e.target.value); setPresetId(null) }}
+                onChange={(e) => { setNiche(e.target.value); setPresetId(null); setClarifyDone(false) }}
+                onBlur={maybeFetchClarify}
                 aria-invalid={nicheOverLimit}
                 aria-describedby={nicheOverLimit ? 'niche-error' : undefined}
                 placeholder="e.g. 'true-crime cases cracked by one overlooked detail, calm narration', or 'cozy 2-minute pasta recipes, warm and upbeat', or 'mind-bending space facts told with awe'. Cover the genre, audience, format, tone, and how it's narrated — the more detail, the better; we safely fill in the rest."
@@ -1459,54 +1637,62 @@ export function NewChannelWizard({
               )}
             </Field>
 
-            {/* Follow-up questions from the profile derive — only for dimensions the description left
-                open. Answers append to the description (visible above) and re-derive absorbs them. */}
+            {/* Follow-up questions — curated ones land with a genre tile, fetched ones for a pitch the
+                creator wrote (maybeFetchClarify), and the derive still returns its own for text that was
+                never asked. "Add & continue" folds answers in and LOOPS: the model reads the enriched
+                pitch and asks the next round, until it has nothing left to ask (or the round cap). Skip
+                bows out; the footer CTA stays visible throughout and bails out into the build. */}
             {clarify.length > 0 && (
-              <div className="card animate-fade-in space-y-3 border-accent/40 p-5">
-                <SectionLabel>Before we build — a couple of questions</SectionLabel>
-                <p className="text-xs text-muted">Your answers become part of the channel and sharpen every reel it makes. Blank is fine.</p>
+              // Brand-washed panel rather than a white card: it reads as the tool leaning in mid-form,
+              // not as another section of the form. Matches the mock's inline treatment.
+              <div ref={clarifyCardRef} className="animate-fade-in rounded-[14px] border border-accent/40 bg-wash-purple-pink p-[18px]">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-[8px] bg-pair-purple-pink">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                      <path d="M15 4V2M15 16v-2M8 9h2M20 9h2M17.8 11.8 19 13M15 9h.01M17.8 6.2 19 5M3 21l9-9M12.2 6.2 11 5" />
+                    </svg>
+                  </span>
+                  <h3 className="font-display text-sm font-800 text-ink">Before we build — a couple of questions</h3>
+                </div>
+                <p className="mt-1.5 text-xs leading-relaxed text-muted">Optional — blank is fine. Answers become part of the channel and sharpen every reel it makes.</p>
                 {clarify.map((q, i) => (
-                  <label key={i} className="block">
-                    <span className="mb-1 block text-xs font-medium text-ink">{q.question}</span>
+                  <label key={`${q.question}-${i}`} className="mt-3.5 block">
+                    <span className="mb-1.5 block text-[12.5px] font-600 text-ink">{q.question}</span>
                     <input
                       value={clarifyAnswers[i] ?? ''}
                       onChange={(e) => setClarifyAnswers((a) => ({ ...a, [i]: e.target.value }))}
                       placeholder={q.examples ? `e.g. ${q.examples}` : ''}
                       maxLength={200}
-                      className="input"
+                      disabled={clarifyLoading}
+                      className="input rounded-sm py-2.5 text-[13px]"
                     />
                   </label>
                 ))}
-                <div className="flex items-center justify-end gap-3 pt-1">
-                  <button type="button" disabled={loading} onClick={() => { setClarify([]); goToScript() }} className="btn-ghost">
+                <div className="mt-4 flex items-center justify-end gap-2.5">
+                  <button type="button" onClick={handleClarifySkip} disabled={clarifyLoading} className="btn-ghost btn-sm">
                     Skip
                   </button>
+                  {/* Disabled until something's answered — blank + continue IS Skip, so only one button owns it. */}
                   <button
                     type="button"
-                    disabled={loading}
-                    className="btn-accent btn-glow"
-                    onClick={() => {
-                      const additions = clarify
-                        .map((q, i) => {
-                          const a = (clarifyAnswers[i] ?? '').trim()
-                          return a ? `${q.prefix} ${a}` : null
-                        })
-                        .filter((s): s is string => !!s)
-                      setClarify([])
-                      if (additions.length === 0) {
-                        goToScript()
-                        return
-                      }
-                      const newNiche = `${niche.trim()}\n${additions.join('\n')}`
-                      setNiche(newNiche)
-                      setClarifyHandledText(newNiche) // this text's questions are answered — never re-ask it
-                      void handleGenerate(newNiche, newNiche) // re-derive with the enriched description; advances after
-                    }}
+                    onClick={() => void handleClarifyAdd()}
+                    disabled={clarifyLoading || !clarify.some((_, i) => (clarifyAnswers[i] ?? '').trim() !== '')}
+                    className="btn-accent btn-sm btn-glow"
                   >
-                    {loading ? <DeriveBeats /> : 'Add & continue'}
+                    {clarifyLoading ? 'Working…' : (<>Add &amp; continue <FwdArrow /></>)}
                   </button>
                 </div>
               </div>
+            )}
+
+            {/* The loop's landing: the model read the enriched pitch and had nothing left to ask. */}
+            {clarifyDone && clarify.length === 0 && (
+              <p className="animate-fade-in flex items-center gap-1.5 text-xs font-600 text-success">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M20 6 9 17l-5-5" />
+                </svg>
+                That&apos;s everything we need — your pitch is ready.
+              </p>
             )}
 
             <Field label="Language" hint="Narrated in this language. Need another? Make a separate channel.">
@@ -1540,11 +1726,11 @@ export function NewChannelWizard({
             </Field>
 
             <div className="flex items-center justify-end gap-3 border-t border-border pt-5">
-              {/* One consistent label. If the niche/language changed since deriving, clicking
-                  Continue silently re-derives first (handleGenerate); otherwise it just advances.
-                  Hidden while the follow-up questions card is up — its own buttons take over. */}
-              {clarify.length === 0 && <button
-                onClick={derivedFresh ? () => goToScript() : () => handleGenerate()}
+              {/* One consistent label, always visible — the follow-up card above is optional inputs,
+                  not a gate. handleNext validates the name, folds any answers into the pitch, and
+                  re-derives when the pitch changed since the last derive; otherwise it just advances. */}
+              <button
+                onClick={handleNext}
                 disabled={!canGenerate || loading || preparingExample}
                 className="btn-accent btn-lg btn-glow"
               >
@@ -1561,7 +1747,7 @@ export function NewChannelWizard({
                     <FwdArrow />
                   </>
                 )}
-              </button>}
+              </button>
             </div>
           </div>
         )}

@@ -108,6 +108,11 @@ export default {
           'linear-gradient(120deg, rgba(47,164,255,0.12), rgba(155,59,255,0.12) 45%, rgba(255,45,155,0.12))',
         'brand-wash-faint':
           'linear-gradient(120deg, rgba(47,164,255,0.06), rgba(155,59,255,0.08) 45%, rgba(255,45,155,0.06))',
+        // Two-stop purple→pink wash at 5% — the tint behind an inline brand panel that sits INSIDE a
+        // form (the wizard's follow-up questions). Warmer and quieter than brand-wash-faint, which
+        // carries a blue stop for nav/active states.
+        'wash-purple-pink':
+          'linear-gradient(150deg, rgba(155,59,255,0.05), rgba(255,45,155,0.05))',
         // vertical bar for the active nav row
         'brand-bar': 'linear-gradient(180deg, #2FA4FF, #FF2D9B)',
         // avatar / accent pairs
