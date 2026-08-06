@@ -66,6 +66,9 @@ export default {
           700: '#0D0A17',
           plum: '#1B1330',          // credits card / stage base
           'plum-lit': '#2A1650',    // credits card gradient end
+          dock: '#0F0B18',          // filmstrip dock under the stage
+          seam: '#241B36',          // hairline on the dock (top edge, cluster divider)
+          frame: '#2B2340',          // resting border of a filmstrip frame
           ink: '#FFFFFF',
           body: '#B8B0CC',
           muted: '#948CAB',

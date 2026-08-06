@@ -250,15 +250,46 @@
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
   }
 
-  /* Film sprocket holes — a repeating perforation band along a filmstrip's edge. */
+  /* Film sprocket holes — a repeating perforation band along a filmstrip's edge.
+     Recolour per surface with --sprocket (the dark dock uses the night seam). */
   .sprockets {
     background-image: repeating-linear-gradient(
       90deg,
       transparent 0 6px,
-      theme('colors.border-mid') 6px 14px
+      var(--sprocket, theme('colors.border-mid')) 6px 14px
     );
     background-size: auto 100%;
     border-radius: 2px;
+  }
+
+  /* Dock chip — a control resting on the dark filmstrip dock (voice, music, effects).
+     The dark-world twin of a `.btn-secondary`: glass fill, hairline, white label. */
+  .dock-chip {
+    @apply flex h-11 items-center gap-1.5 rounded-sm border border-white/10 bg-white/[0.06]
+           px-2.5 text-xs font-600 text-night-ink transition-colors
+           hover:border-white/20 hover:bg-white/[0.1] disabled:cursor-wait disabled:text-night-muted;
+  }
+
+  /* The state word under a filmstrip frame (STILL / MOTION / RENDERING). */
+  .frame-state {
+    @apply mt-1.5 text-center font-mono text-[9px] font-700 uppercase tracking-[0.04em];
+  }
+
+  /* The filmstrip's own sideways scroller — a dark-world scrollbar, since the page never scrolls here. */
+  .strip-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  }
+  .strip-scroll::-webkit-scrollbar {
+    height: 8px;
+  }
+  .strip-scroll::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.18);
+    border-radius: 8px;
+    border: none;
+  }
+  .strip-scroll::-webkit-scrollbar-track {
+    background: transparent;
   }
 
   /* The diagonal stripe band along a clapperboard's top edge. */
