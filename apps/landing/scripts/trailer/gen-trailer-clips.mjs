@@ -3,14 +3,20 @@
 // Motion encodes the expanding-frame arc; style-preservation is pinned in every prompt because
 // Kling will otherwise "photorealize" a painting/anime/watercolor source.
 import { readFileSync, writeFileSync } from 'node:fs'
-const env = readFileSync('/Users/krystaljoysilvestre/Workspace/app-ideas/reels-generator/.env.local', 'utf8')
+import { REPO, STILLS, CLIPS, ensureDirs } from './paths.mjs'
+
+ensureDirs()
+const env = readFileSync(`${REPO}/.env.local`, 'utf8')
 const FAL_KEY = env.match(/^FAL_KEY=(.+)$/m)?.[1]?.trim()
-const T = '/private/tmp/claude-501/-Users-krystaljoysilvestre-Workspace-app-ideas-reels-generator/64e67ce6-3b15-4ee6-b1aa-cb759148d600/scratchpad/trailer'
+const IN = STILLS, OUT = CLIPS
 const MODEL = 'fal-ai/kling-video/v2.5-turbo/pro/image-to-video'
 const HEADERS = { Authorization: `Key ${FAL_KEY}`, 'Content-Type': 'application/json' }
 
 const BEATS = [
-  { n: 1, src: 'beat1-closet.jpg', prompt: 'Held stillness, almost no movement: the pale light in the closet gap breathes slightly brighter, dust motes drift slowly through it, a curtain edge stirs once. Camera locked, the faintest push-in. Photoreal cinematic, film grain preserved. Oppressive quiet dread.' },
+  // Cut 3: the opening is no longer a horror image. Same shot, animated-feature language, wonder
+  // instead of dread — and the style clause is MANDATORY here for the same reason beats 5 and 8 carry
+  // one: Kling photorealizes a stylized source unless told not to, which would undo the whole point.
+  { n: 1, src: 'beat1-room-nano.png', prompt: 'Held stillness, almost no movement: the warm golden light in the closet gap breathes slightly brighter, fine dust motes drift slowly through the beam, a plush toy\'s ear stirs once. Camera locked, the faintest push-in. Quiet wonder and anticipation — inviting, expectant, never frightening. CRITICAL: the 3D animated feature rendering stays perfectly consistent throughout — soft global illumination, rounded stylised forms, subsurface glow in the fabrics — never photorealistic, never converted to live action.' },
   { n: 2, src: 'beat2-earth.png', prompt: 'Majestic slow motion: green and violet auroras ripple and flow across the planet, the solar flare pulses and throws light, Earth rotates almost imperceptibly, tiny satellites drift. Camera pulls back slowly, revealing more space. Photoreal space cinematography.' },
   { n: 3, src: 'beat3-alexandria-oil.png', prompt: 'The camera pushes slowly forward down the great nave. The shaft of golden light drifts, dust swims in the beam, robed scholars shift and turn pages. CRITICAL: the heavy oil-painting brushstroke texture and impasto surface stay perfectly consistent throughout — this is a moving classical painting, never photorealistic.' },
   { n: 4, src: 'beat4-neon.jpg', prompt: 'Camera races forward down the neon canyon at speed, rain streaking past the lens, hologram light flickering across wet surfaces, vehicles blurring by as light streaks. Fast, kinetic, cinematic sci-fi. Photoreal.' },
@@ -23,13 +29,20 @@ const BEATS = [
 const NEG = 'text, watermark, letterboxing, black bars, style change, photorealistic conversion, morphing, distortion, warping faces, camera shake, sudden cuts'
 
 function dataUri(p) {
-  const buf = readFileSync(`${T}/${p}`)
+  const buf = readFileSync(`${IN}/${p}`)
   const mime = p.endsWith('.png') ? 'image/png' : 'image/jpeg'
   return `data:${mime};base64,${buf.toString('base64')}`
 }
 
+// Re-shoot one beat without re-paying for the other seven (5s @ 7¢/s each):
+//   node gen-trailer-clips.mjs 1
+const ONLY = process.argv.slice(2).map(Number)
+const QUEUE = ONLY.length ? BEATS.filter((b) => ONLY.includes(b.n)) : BEATS
+if (ONLY.length && QUEUE.length !== ONLY.length) throw new Error(`unknown beat(s): ${ONLY.join(', ')}`)
+console.log(`${QUEUE.length} clip(s) at ~35¢ each: beats ${QUEUE.map((b) => b.n).join(', ')}`)
+
 const ids = []
-for (const b of BEATS) {
+for (const b of QUEUE) {
   const res = await fetch(`https://queue.fal.run/${MODEL}`, {
     method: 'POST', headers: HEADERS,
     body: JSON.stringify({ prompt: b.prompt, image_url: dataUri(b.src), duration: '5', negative_prompt: NEG }),
@@ -57,7 +70,7 @@ for (const [b, id] of ids) {
   if (!url) { console.error(`beat ${b.n}: no url`); continue }
   const vid = await fetch(url, { signal: AbortSignal.timeout(180_000) })
   const buf = Buffer.from(await vid.arrayBuffer())
-  writeFileSync(`${T}/clip-beat${b.n}.mp4`, buf)
+  writeFileSync(`${OUT}/clip-beat${b.n}.mp4`, buf)
   console.log(`beat ${b.n} → clip-beat${b.n}.mp4 (${(buf.length/1e6).toFixed(1)}MB)`)
 }
 console.log('motion pass done')

@@ -1,13 +1,14 @@
 // Trailer "Every Story Begins Here" — 8 beat stills (G-A1 contact sheet).
 // Light-signature discipline: every beat's dominant light source sits center/upper-center,
 // warm core against cool surround, exactly ONE focal point (the founder's thumbnail test).
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
+import { REPO, STILLS, ensureDirs } from './paths.mjs'
 
-const env = readFileSync('/Users/krystaljoysilvestre/Workspace/app-ideas/reels-generator/.env.local', 'utf8')
+const env = readFileSync(`${REPO}/.env.local`, 'utf8')
 const FAL_KEY = env.match(/^FAL_KEY=(.+)$/m)?.[1]?.trim()
 if (!FAL_KEY) throw new Error('FAL_KEY not found')
-const OUT = '/private/tmp/claude-501/-Users-krystaljoysilvestre-Workspace-app-ideas-reels-generator/64e67ce6-3b15-4ee6-b1aa-cb759148d600/scratchpad/trailer'
-mkdirSync(OUT, { recursive: true })
+const OUT = STILLS
+ensureDirs()
 
 const NANO = 'fal-ai/gemini-25-flash-image'
 const FLUX = 'fal-ai/flux-2-pro'
@@ -55,7 +56,31 @@ const BEATS = [
   },
 ]
 
-for (const b of BEATS) {
+// ── Beat 1, cut 3 (2026-08-06) ────────────────────────────────────────────────────────────────
+// The original beat 1 was a horror image ("oppressive quiet dread", photoreal) opening a film whose
+// first line is "Every story begins with a single question" — the register argued with the narration.
+// This is the same SHOT (closet ajar at centre, light through the crack, the glow as the only focal
+// point, so the fadewhite into beat 2 still works) in a different visual language: wonder, not dread.
+// Described by attributes rather than by naming a studio — providers filter studio names, and the
+// attributes reproduce the look more reliably.
+const ROOM =
+  "Vertical frame, a child's bedroom at night rendered as a 3D animated feature film: the tall closet door stands slightly ajar at centre and warm golden light spills through the crack — the glowing gap is the single focal point, and something wonderful is plainly on the other side. Soft global illumination, rounded stylised forms, warm rim light along the door edge, subsurface glow in the quilt and the plush toys, richly detailed wood grain and knitted bedding, shallow depth of field, gentle bloom. Cool blue moonlight in the corners against the warm core. Toys and picture books resting in soft shadow, the corner of a small bed at the frame edge. Absolute stillness, held breath, quiet wonder and anticipation — inviting, never frightening. No people, no text, no watermark"
+
+BEATS.push(
+  { n: 1, slug: 'room-flux', model: FLUX, prompt: ROOM },
+  { n: 1, slug: 'room-nano', model: NANO, prompt: ROOM },
+)
+
+// Regenerate a single shot without re-paying for the other seven:
+//   node gen-trailer-stills.mjs room-flux room-nano
+const ONLY = process.argv.slice(2)
+const QUEUE = ONLY.length ? BEATS.filter((b) => ONLY.includes(b.slug)) : BEATS
+if (ONLY.length && QUEUE.length !== ONLY.length) {
+  throw new Error(`unknown slug(s): ${ONLY.filter((s) => !BEATS.some((b) => b.slug === s)).join(', ')}`)
+}
+console.log(`generating ${QUEUE.length} of ${BEATS.length}: ${QUEUE.map((b) => b.slug).join(', ')}`)
+
+for (const b of QUEUE) {
   const input =
     b.model === FLUX
       ? { prompt: b.prompt, image_size: { width: 832, height: 1248 }, num_images: 1 }

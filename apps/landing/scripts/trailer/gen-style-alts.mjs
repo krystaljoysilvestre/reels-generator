@@ -1,9 +1,12 @@
 // Style-shifted alternates for trailer beats 3, 5, 8 — same focal point + light zone
 // as the photoreal originals so they stay drop-in swaps.
 import { readFileSync, writeFileSync } from 'node:fs'
-const env = readFileSync('/Users/krystaljoysilvestre/Workspace/app-ideas/reels-generator/.env.local', 'utf8')
+import { REPO, STILLS, ensureDirs } from './paths.mjs'
+
+ensureDirs()
+const env = readFileSync(`${REPO}/.env.local`, 'utf8')
 const FAL_KEY = env.match(/^FAL_KEY=(.+)$/m)?.[1]?.trim()
-const OUT = '/private/tmp/claude-501/-Users-krystaljoysilvestre-Workspace-app-ideas-reels-generator/64e67ce6-3b15-4ee6-b1aa-cb759148d600/scratchpad/trailer'
+const OUT = STILLS
 const NANO = 'fal-ai/gemini-25-flash-image'
 
 const ALTS = [

@@ -1,25 +1,29 @@
-import { chromium } from 'playwright'
+// The two synthetic overlays the finale composites: the cursor that presses Render, and the end card.
+// Neither depends on the app, so a re-shoot does NOT need this — only re-run it if the mark or the
+// end-card wording changes. Needs network: the end card pulls Nunito from Google Fonts.
 import { readFileSync } from 'node:fs'
-const S = '/private/tmp/claude-501/-Users-krystaljoysilvestre-Workspace-app-ideas-reels-generator/64e67ce6-3b15-4ee6-b1aa-cb759148d600/scratchpad'
-const logo = readFileSync('/Users/krystaljoysilvestre/Workspace/app-ideas/reels-generator/apps/landing/public/kendrix-k.png').toString('base64')
+import { UI, REPO, ensureDirs } from './paths.mjs'
+import { launch, sleep } from './cdp.mjs'
 
-const browser = await chromium.launch()
-const ctx = await browser.newContext({ viewport: { width: 1080, height: 1920 }, deviceScaleFactor: 1 })
-const page = await ctx.newPage()
+ensureDirs()
+const logo = readFileSync(`${REPO}/apps/landing/public/kendrix-k.png`).toString('base64')
+const page = await launch({ width: 1080, height: 1920, dsf: 1 })
 
-// 1) cursor arrow with a soft shadow, transparent bg
-await page.setContent(`<body style="margin:0;background:transparent">
+try {
+  // 1) cursor arrow with a soft shadow, transparent bg
+  await page.resize(120, 140, 1)
+  await page.setContent(`<body style="margin:0;background:transparent">
 <svg width="120" height="140" viewBox="0 0 120 140" xmlns="http://www.w3.org/2000/svg">
   <filter id="s"><feDropShadow dx="3" dy="5" stdDeviation="5" flood-color="#000" flood-opacity=".55"/></filter>
   <path filter="url(#s)" d="M18 8 L18 104 L44 80 L60 118 L82 108 L66 70 L100 66 Z" fill="#fff" stroke="#111" stroke-width="4"/>
 </svg></body>`)
-await page.setViewportSize({ width: 120, height: 140 })
-await page.screenshot({ path: `${S}/trailer/cursor.png`, omitBackground: true })
-console.log('cursor ok')
+  await sleep(500)
+  await page.shoot(`${UI}/cursor.png`, { transparent: true })
+  console.log('cursor ok')
 
-// 2) end card
-await page.setViewportSize({ width: 1080, height: 1920 })
-await page.setContent(`<html><head>
+  // 2) end card
+  await page.resize(1080, 1920, 1)
+  await page.setContent(`<html><head>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@800;900&display=swap" rel="stylesheet">
 </head><body style="margin:0;width:1080px;height:1920px;background:#07060C;display:flex;align-items:center;justify-content:center;overflow:hidden">
@@ -33,7 +37,9 @@ await page.setContent(`<html><head>
     </div>
   </div>
 </body></html>`)
-await page.waitForTimeout(2500)
-await page.screenshot({ path: `${S}/trailer/endcard.png` })
-console.log('endcard ok')
-await browser.close()
+  await sleep(2500) // the webfont has to arrive, or the card renders in the fallback face
+  await page.shoot(`${UI}/endcard.png`)
+  console.log('endcard ok')
+} finally {
+  page.close()
+}
