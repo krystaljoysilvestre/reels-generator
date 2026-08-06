@@ -12,26 +12,11 @@ import { z } from 'zod'
 import { asGenreModule, classifyGenre, type GenreModule } from './scenes.v1.js'
 import { isFilipinoRegister } from './story-craft.v1.js'
 
-// v2.19 — TERMINAL EXPOSITION, all genres. The gate now rejects endings that name their own meaning
-// instead of placing the last concrete thing. Two observed cases (2026-08-05) shared one mechanism: an
-// explainer closed on an aphorism ("that's all it takes to remind us we're not standing on solid
-// ground"), and a fairytale glossed its own closing image ("like it was saying, I see what this cost
-// you"). Both passed, because ending coverage was wildly uneven: lifestyle had NO ending test at all,
-// comedy tested only the punchline, commentary's "worth quoting" is unfalsifiable, informational's
-// "carryable shape" is aced by an aphorism, and drama's "leaves a mark" was a vibe. Horror, reddit_story
-// and childrens were already concrete and are left near-untouched.
-//
-// The lever is judge-side on purpose. The Writer's shape law 4 already demands the change be SHOWN
-// ("show the change still living"), so the standard existed and the judge was blind to it; adding another
-// generative mandate is how the sentence-rhythm monoculture was manufactured. Every genre gets its OWN
-// wording (a comedy button and a fairytale restoration are not the same landing), and the universal
-// STORY PHYSICS check gains the DELETION TEST so the failure is mechanical rather than tasteful.
-//
-// Deliberately NOT tightened: childrens — a warmly named moral IS its register ("and they lived happily
-// ever after" is not a flaw there); the fairytale line targets glossing an IMAGE, not naming a moral.
-// Falsifier to watch: if closing-kind diversity collapses (see apps/worker/scripts/endings-audit.ts —
-// the landingKind histogram), we traded one AI tell for another and these criteria come back out.
-export const STORY_CRITIC_V2_VERSION = 'story-critic.v2.19'
+// Back to v2.18 content and version: the v2.19 ending criteria (per-genre LANDING checks + the universal
+// DELETION TEST) are reverted per decision-log 2026-08-06-003. A blind read found no text-level ending
+// defect the founder can see, and these were GATE criteria — a rejection re-rolls the whole chain, so a
+// standard we cannot defend costs real spend and replaces good stories rather than fixing them.
+export const STORY_CRITIC_V2_VERSION = 'story-critic.v2.18'
 
 export const StoryGateSchema = z.object({
   pass: z.boolean(),
@@ -65,7 +50,6 @@ BUILD
 PAYOFF
 - The peak recontextualizes something planted earlier — a detail the viewer heard but misread.
 - The ending lands within seconds of the peak; no epilogue that bleeds tension.
-- The LAST thing is a thing SEEN or DONE, never a thing understood — the story ends on the image, and the fear outlives it. A closing line that interprets the dread ("and I've never felt safe since") trades the scare for a summary.
 - Predictable-twist patterns are disqualifying: narrator-was-the-creature, it-was-a-dream, it-was-just-the-wind.
 
 VOICE
@@ -90,7 +74,6 @@ BUILD
 PAYOFF
 - The turn changes what an earlier moment MEANT, not just what happens next.
 - The ending leaves a mark — no clean bow, no moral spelled out.
-- Concretely: the last beat answers the story's emotional question through an ACTION or an IMAGE — often the opening echoed back, changed — and it is small, because everything has already happened emotionally. A closing line that explains the feeling instead of showing it fails.
 
 VOICE
 - Spoken, personal, specific. The peak is CONTROLLED for its register: a quiet-ache story tells it smallest; a confrontation says it out loud and pays for it — either passes; melodrama (emotion announced, not carried) fails in both.
@@ -111,13 +94,10 @@ VOICE
 
 ENDING
 - Closes on a line worth quoting back, not a wind-down summary.
-- That line COMMITS — it is the argument's sharpest statement of where the speaker stands, not a restatement of the opening claim in softer words.
-- Test by DELETION: cut the closing lines. If nothing is lost, the piece stopped arguing before it ended.
 
 NEVER
 - Hedging that dissolves the stance ("both sides have a point" as a conclusion).
-- Volume substituting for basis.
-- Closing by naming the story's own significance instead of taking the last position ("it just goes to show…", "and that says a lot about…").`,
+- Volume substituting for basis.`,
 
   reddit_story: `THE CORE TEST — does it read like a real person's real experience you're overhearing ("did this actually happen?"), and would strangers argue in the comments (who's right, who's lying, is this even real)? If there's nothing to argue about, or it sounds authored, it fails no matter how well-written.
 
@@ -149,10 +129,6 @@ PUNCH
 - The turn is unexpected AND retroactively obvious; the funny word lands last.
 - Escalation follows its own strict logic — absurd, never random.
 
-LANDING
-- The story STOPS on the punch — or on one dry tag after it that makes the punch land twice. Nothing follows that.
-- Any line after the punch/tag that explains, softens, summarizes, or winds down is a fail: it gives the audience their laugh back.
-
 VOICE
 - Played straight; the narrator never laughs at their own joke or signals one is coming.
 
@@ -169,13 +145,8 @@ SUBSTANCE
 PAYOFF
 - Ends with the idea in a carryable shape — the viewer could re-explain it.
 
-LANDING
-- The closing lines put the idea somewhere concrete — an object, a place, a moment, or the viewer's own surroundings — so the ending hands over a thing, not a phrase.
-- Test by DELETION: cut the closing lines. Does the viewer lose any information? If nothing is lost, the ending is decoration on a payoff that already happened earlier — fail it.
-
 NEVER
-- Covering everything and landing nothing; claims the story hasn't made believable.
-- Closing by naming the story's own significance — "that's all it takes to remind us…", "shows us that…", "we're all just…". The viewer already has the idea; an aphorism takes the place of the last concrete thing they could have carried.`,
+- Covering everything and landing nothing; claims the story hasn't made believable.`,
 
   lifestyle: `HOOK
 - Leads with the payoff moment — the thing the viewer will want.
@@ -184,13 +155,8 @@ SUBSTANCE
 - One real sensory anchor and one insider detail only a practitioner would know.
 - Attainable: a viewer can see their own first step.
 
-LANDING
-- Ends by putting the FIRST STEP in the viewer's hands — small, specific, and doable now (a thing they could start before their coffee goes cold), not a general encouragement to try someday.
-- Test by DELETION: cut the closing lines. Does the viewer lose anything? If nothing is lost, the reel trailed off instead of landing.
-
 NEVER
-- Glossy perfection without texture; a feature list instead of a moment.
-- Ending on a wind-down or a vague invitation ("give it a try", "hope you enjoyed") — the reel should stop on the doable thing, not on politeness.`,
+- Glossy perfection without texture; a feature list instead of a moment.`,
 
   childrens: `GOAL
 - ONE simple, clear thing the little hero wants, easy for a small child to follow — no subplots, no two threads to track.
@@ -243,8 +209,7 @@ VOICE
 - The DEPTH is all-ages — real trials, a bittersweet cost, a moral choice — but the WORDS stay simple; never sand the meaning down to a toddler story, and never dress it up in fancy vocabulary. Concrete, archetypal images anyone across generations could picture.
 
 NEVER
-- A hero rewarded for being special instead of virtuous; magic with no rule or cost; obscure or literary words that lose a child; modern sarcasm or self-aware irony that breaks the timeless tone (unless deliberately fractured/comic); a grimdark or gory tale with no thread of hope; a world left merely saved, not healed.
-- Explaining the symbol as it lands — glossing the closing image with what it means ("like it was saying, I see what this cost you"). The tale may NAME its moral; it must never INTERPRET its own picture. If the closing image needs a gloss, extend the image instead.`,
+- A hero rewarded for being special instead of virtuous; magic with no rule or cost; obscure or literary words that lose a child; modern sarcasm or self-aware irony that breaks the timeless tone (unless deliberately fractured/comic); a grimdark or gory tale with no thread of hope; a world left merely saved, not healed.`,
 
   general: `HOOK
 - The first spoken line earns the next ten seconds: a question opened, a tension entered, a promise made — never scene-setting or a greeting.
@@ -255,14 +220,12 @@ BUILD
 
 PAYOFF
 - The ending pays off something planted earlier; the story knows why it was told.
-- Test by DELETION: cut the closing lines. Does the viewer lose any information, image, or consequence? If nothing is lost, the real payoff happened earlier and the ending is decoration.
 
 VOICE
 - Sounds like a real person talking — spoken rhythm, natural variation, a genuine point of view.
 
 NEVER
-- An opening that could start any story; a summary line where a person would just stop.
-- Closing by naming what the story means instead of placing the last concrete thing.`,
+- An opening that could start any story; a summary line where a person would just stop.`,
 }
 
 export function defaultTasteRubric(genreCategory: string | null | undefined, niche: string): string {
@@ -293,8 +256,8 @@ How you judge:
 - STORY PHYSICS — where this script tells a story (someone lived something), four script-doctor checks. A clear miss on any is a fail worth naming:
   · AGENCY: does the narrator DECIDE anything, or do things merely happen to a passive witness?
   · CAUSALITY: do the beats force each other ("therefore/but"), or just follow each other ("and then")?
-  · THE DEBT: does the ending answer the question the opening planted — or twist from nowhere? The opening writes a check; the ending must cash THAT one, not a different, easier one.
-  · THE ARRIVAL: is anything different at the end (in the narrator, their world, or the viewer's understanding) — or does it just stop? And is the difference DELIVERED rather than announced: the closing lines place a concrete thing (an image, an action, an object, the viewer's own surroundings) instead of naming what the story means. Deletion test — cut the closing lines: if the viewer loses nothing, the real payoff happened earlier and the ending is decoration on top of it.
+  · THE DEBT: does the ending answer the question the opening planted — or twist from nowhere?
+  · THE CHANGE: is anything different at the end (in the narrator, their world, or the viewer's understanding) — or does it just stop?
   (An explainer or argument answers these in its own terms: a claim advanced, a question paid off, an understanding changed. A Reddit post answers them in ITS terms: AGENCY = the narrator or their target DID something, not just felt something; THE CHANGE = the payoff landed — revenge taken, rule backfired, disaster arrived — OR, for an "am I wrong?" post, the verdict question thrown hard to the viewer. An open verdict is a real ending; a revenge or disaster story that just trails off is not.)
 - SHOW THE TURN — the beat the whole story turns on (the decision, the reversal, the near-failure, the moment of doubt that EARNS the ending) must be dramatized as a concrete, felt moment, not collapsed into a bald summary ("tapos wala", "gusto niyang sumuko", "and everything changed", "napagtanto niya"). Where the payoff depends on a low or doubting beat first, that beat must be FELT (the breath that catches then the light that dies, the trembling voice) so the turn is earned, not asserted. A hollow or summarized turn fails. This is NOT a ban on plainness or warm, directly-stated feeling — only on flattening the one beat the whole story rides on.
 - Then the channel's rubric below. A clear violation of a rubric line fails; judge against the rubric, not your personal taste.

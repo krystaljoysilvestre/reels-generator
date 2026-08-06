@@ -665,6 +665,88 @@ packages/core/src/timings/compute-timings.ts (§4.65), packages/core/src/prompts
 
 ---
 
+### 2026-08-06-002
+
+Status: Accepted
+
+Title: Bounded Edits Do Not Ship — A Blind Read Overruled Every Automated Signal
+
+Decision
+
+The bounded-edit architecture (`critic → surgeon → verifier → splice → re-index`) is NOT enabled. `STORY_ENDING_REPAIR` stays off. The mechanism is kept, documented, and left dormant; the judgment layer that drives it is rejected.
+
+Why
+
+The pass was built, tuned across two laps, and measured to what looked like a clear success: on eight independently-graded weak endings it applied six edits, and the automated judge graded **6 of 6** repaired closes as no longer weak, with zero regressions and the prefix guarantee intact across 28 stories. Then the founder read six pairs blind — same story, byte-identical prefix, only the closing lines differing, order shuffled — and preferred the REPAIRED close in **at most 2 of 6**.
+
+The automated instrument and the human ear did not merely differ in degree; they pointed in opposite directions. Every number that justified continuing came from the judge, and the judge was wrong. This is the outcome the probe was designed to be able to produce, and the interpretation was written down before the read (5–6 ship · 4 supervised · 3 dead end · 0–2 stop), so no argument about it was possible afterwards.
+
+Alternatives Considered
+
+Tuning further — rejected. Two rounds already moved the critic from over-firing to under-firing and back, and the surgeon's own fix (v1.1) induced a new failure mode that the verifier caught. Another round would tune against a judge now known not to track human preference, which is optimizing the wrong objective more precisely.
+
+Deleting the work — rejected. The MECHANISM was never what failed: the prefix held 28/28, no story was ever damaged, and all four guards proved load-bearing, each catching a different real case (peak-inside-region, replacement oversize, post-splice peak loss, and the verifier rejecting a well-formed, correctly-sized edit that smuggled in a new object and a POV shift). That is a reusable, proven chassis for any future edit region. What failed was the taste driving it.
+
+Expected Impact
+
+No production behaviour changes. The lasting deliverables are negative-result knowledge and three reusable assets: `packages/core/src/editing/bounded-edit.ts` (the primitive, 34 unit tests), `apps/worker/scripts/probe-critic-calibration.ts` (a 43-item labelled dev set that reports BOTH error rates per run), and the demonstrated discipline of pre-registering an interpretation before looking.
+
+Review Trigger
+
+**This result trips the falsifier already recorded on 2026-08-06-001.** That entry named the endings text-layer criteria's own kill condition: *"if a blind paired read prefers the aphorism close, drop the criterion entirely."* The closes the founder preferred are exactly the stated-conclusion and aphorism closes the shipped DELETION TEST condemns — so `story-critic.v2.19`, `closingCraft`, and the finishing judge's `ending` axis are now UNDER SUSPICION on main, not merely unvalidated.
+
+The blind read cannot by itself separate "the surgeon writes badly" from "the judge's notion of a weak ending is wrong", because it compared original against repaired rather than judge-weak against judge-strong. The cheap decisive test: show the founder ~16 closes blind — half graded weak by `endings-audit`, half graded strong, from different stories — and ask which merely STOP. If they cannot tell, the endings criteria are miscalibrated on main and come back out.
+
+Until that runs, treat any claim resting on `endings-audit.ts` as unverified. Its measured failings are already on record: ~8% test-retest noise overall, concentrating on borderline items (2 of 5 in one run), and both unedited controls flipping in the final scoring.
+
+Related Documents
+
+NOTE: the bounded-edit implementation is retained in the working tree and deliberately NOT committed — the decision was not to ship it. The paths below describe what was built, not what is on main.
+
+packages/core/src/editing/bounded-edit.ts, apps/worker/src/pipeline/steps/ending-repair.ts, apps/worker/scripts/probe-critic-calibration.ts, apps/worker/scripts/endings-audit.ts, packages/core/src/prompts/story-ending-critic.v1.ts (v1.4), packages/core/src/prompts/story-ending-surgeon.v1.ts (v1.2), packages/core/src/prompts/story-edit-verifier.v1.ts, decision-log 2026-08-06-001 (the falsifier this trips)
+
+---
+
+### 2026-08-06-003
+
+Status: Accepted
+
+Title: The Endings Complaint Was About TIME, Not TEXT — the Text-Layer Criteria Rest on a Misdiagnosis
+
+Decision
+
+Revert or neutralize the endings TEXT layer shipped on 2026-08-06 — the DELETION TEST additions in `story-critic.v2.19`, the per-genre `closingCraft` entries, the finishing judge's `ending` axis, and `scenes.v1.45`'s closing-shot block. **Keep the TIME layer** (`compute-timings` §4.65's outro tail, the music/ambient resolve, the final-scene demotion fix, the black-frame fix) — it is validated and is what the founder actually reported.
+
+Why
+
+A blind test settled it. Twelve unseen stories, six graded weak by `endings-audit` and six graded fine, order hidden, none repaired. The founder read all twelve and marked **every one as ending properly** — 0 of 6 versus 0 of 6, a difference of zero against a pre-registered bar of 4. The judge's agreement with the founder's ear was 6 of 12: exactly chance, and it agreed only on the items it had called fine. The ending critic, built from the same standard, flagged 3 of the 12 closes the founder reads as fine.
+
+The deeper finding is the reframe. The original complaint was *"our reels just stops. we lack at endings."* That was a complaint about WATCHING a rendered reel, and it described a real, measured defect: the reel's final frame was the last spoken character's timestamp, and the music bed held PEAK to the final sample before ffmpeg cut it at full volume — **nothing in the codebase faded anything at the end.** The TIME layer fixed exactly that, and the founder's response on watching it was *"it's so much better now."*
+
+The TEXT layer was built by generalizing that viewing complaint into a writing complaint. This test is the first time the writing was examined on its own, and on its own the founder finds nothing wrong with it. The criteria were solving a problem that had already been solved one layer down.
+
+That also explains, at a stroke, three results that were otherwise puzzling: why the text criteria never validated against anything but their own judge; why bounded-edit repair made endings WORSE in a blind read (it replaced closes that were already fine); and why the judge and the critic disagree with each other on a quarter of cases despite sharing one standard.
+
+Alternatives Considered
+
+Keeping the criteria as harmless extra rigor — rejected, because they are not inert. They are GATE criteria that can reject a story, and a rejection re-rolls the whole chain (regeneration is not revision, decision-log 2026-08-06-002). Miscalibrated ending criteria therefore cost real money and real quality: they reject stories whose endings the founder finds good, and the rewrite that follows is a fresh story rather than a fixed one. Leaving them in also keeps the 60% first-attempt pass-rate flip trigger under pressure from a standard we cannot defend.
+
+Deleting `endings-audit.ts` — rejected. As a *describer* it is still useful: the `landingKind` histogram remains a legitimate monoculture tripwire, and the instrument correctly identified the time-layer defect's symptoms. What it cannot do is JUDGE quality. Demote it from arbiter to descriptor.
+
+Expected Impact
+
+Reverting returns ending judgment to where the evidence says it belongs: the human gate, over a reel that now actually ends in time. First-attempt gate pass-rate should recover whatever the criteria were suppressing.
+
+Review Trigger
+
+This test measured TEXT read silently on a page. It does not prove these closes work in a rendered reel with voice, timing and music — the founder's original complaint lived precisely there. So the honest scope of the finding is: *there is no text-level ending defect large enough for the founder to see, and no automated instrument we own can measure one.* If a future watched reel again feels like it stops, the first suspects are timing and mix, not the writing.
+
+Related Documents
+
+packages/core/src/prompts/story-critic.v2.ts (v2.19), packages/core/src/prompts/writer-identities.v1.ts (closingCraft), packages/core/src/prompts/story-finishing-judge.v1.ts (v1.2), packages/core/src/prompts/scenes.v1.ts (v1.45), packages/core/src/timings/compute-timings.ts (§4.65 — KEEP), apps/worker/scripts/endings-audit.ts, decision-log 2026-08-06-001 (the falsifier this fires), decision-log 2026-08-06-002
+
+---
+
 ## Relationship to the Decision Framework
 
 The Decision Framework explains how decisions are made.

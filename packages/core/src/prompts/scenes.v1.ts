@@ -7,7 +7,10 @@
 // LLM-derived bucket stored at channel creation (channel.v1). `classifyGenre` is the keyword fallback,
 // used when a channel predates the column (or the value is unrecognized).
 
-export const SCENES_V1_VERSION = 'scenes.v1.45'
+// Back to v1.44: the closing-shot block ("THE LAST SCENE IS THE AFTERIMAGE") is reverted with the rest of
+// the ending TEXT layer (decision-log 2026-08-06-003). The TIME layer that makes a closing shot playable
+// at all — the outro tail in compute-timings §4.65 — is KEPT; it is the part the founder validated.
+export const SCENES_V1_VERSION = 'scenes.v1.44'
 
 export type GenreModule =
   | 'horror'
@@ -143,14 +146,6 @@ Era: ${v.era}. Region look: ${v.regionDescriptor}.`
     ? `\n\nThe PEAK of this reel is this line: "${v.peakMoment.trim()}" — give it its OWN dedicated scene (don't bury it inside a longer span) so it lands as its own shot. FRAME THE PAYOFF SO IT DOMINATES: if your GENRE section below defines "THE PEAK", that grammar governs this shot (a comedy payoff wants the whole picture; a drama payoff wants the small gesture close). Otherwise default to a tight push-in — an extreme close-up on the one thing the line pays off, filling almost the entire frame, any other person at most a partial sliver at the edge (cameraMove: push_in); a payoff seen wide with no genre reason reads small. If the payoff's real geometry (a reflection, a doorway, a comparison) needs more room, you judge the tightest frame that keeps it landing in one believable photograph.`
     : ''
 
-  // The closing shot is the reel's AFTERIMAGE. It outlives the narration: the reel holds this frame for a
-  // beat after the last spoken word while the score resolves (compute-timings §4.65), so a shot that has
-  // already said everything goes dead exactly where the viewer is deciding how they feel. Nine of ten
-  // genre modules define a PEAK and none defined a LAST SHOT, which is why reels ended on whatever frame
-  // happened to be last.
-  const closingBlock =
-    '\n\nTHE LAST SCENE IS THE AFTERIMAGE. The reel HOLDS this frame for a beat after the narration stops, so compose it to be looked at in silence: it must still be resolving when the words run out. Give it something that keeps living — a slow settle, a drift, a small continuing motion, light changing — never a flat frame that has already finished its job (prefer cameraMove pull_back or a slow push, and give it motion if the reel has any motion left to spend). Show the AFTERMATH, not a recap: the changed ordinary thing, the space someone just left, the object that means something different now. It is the one image the viewer carries out, so it must be readable on its own with no narration to explain it.'
-
   // Prefer the channel's LLM-derived category; fall back to keyword classification for older channels.
   const module = asGenreModule(v.genreCategory) ?? classifyGenre(v.nicheDescription)
   const genreModule = GENRE_MODULES[module]
@@ -205,7 +200,7 @@ Era: ${v.era}. Region look: ${v.regionDescriptor}.`
       }\n\n`
     : ''
 
-  const userMessage = `${chapterBlock}Cut the narration into scenes on its DRAMATIC BEATS — start a new scene at each real shift in location, time, focus, or tension, NOT at even time intervals. Use between ${v.minScenes} and ${v.maxScenes} scenes; let the story's structure decide the exact number. Each scene covers a contiguous span of narration with no gaps and no overlaps, in order. Keep every scene SHORT: no single scene should cover more than ~16 seconds of spoken narration (roughly 40 words) — one image or clip held longer than that goes visually DEAD on a phone (the #1 pacing failure). If a beat's narration is long, CUT IT into consecutive shots that each advance the visual (a new angle, tighter framing, the next action, a telling detail), never restating the same frame. On a longer story this means favouring the UPPER end of the ${v.minScenes}–${v.maxScenes} range so no shot drags — but NEVER produce more than ${v.maxScenes} scenes. ONE PHYSICAL MOVEMENT PER SCENE: each scene is a single beat of action in a single place — do NOT collapse an approach and the arrival into one shot. "Walking toward a room" and "inside that room" are SEPARATE scenes; give the journey (leaving one place, moving through another, entering the next) its own beats instead of jumping straight to the destination.${peakBlock}${closingBlock}
+  const userMessage = `${chapterBlock}Cut the narration into scenes on its DRAMATIC BEATS — start a new scene at each real shift in location, time, focus, or tension, NOT at even time intervals. Use between ${v.minScenes} and ${v.maxScenes} scenes; let the story's structure decide the exact number. Each scene covers a contiguous span of narration with no gaps and no overlaps, in order. Keep every scene SHORT: no single scene should cover more than ~16 seconds of spoken narration (roughly 40 words) — one image or clip held longer than that goes visually DEAD on a phone (the #1 pacing failure). If a beat's narration is long, CUT IT into consecutive shots that each advance the visual (a new angle, tighter framing, the next action, a telling detail), never restating the same frame. On a longer story this means favouring the UPPER end of the ${v.minScenes}–${v.maxScenes} range so no shot drags — but NEVER produce more than ${v.maxScenes} scenes. ONE PHYSICAL MOVEMENT PER SCENE: each scene is a single beat of action in a single place — do NOT collapse an approach and the arrival into one shot. "Walking toward a room" and "inside that room" are SEPARATE scenes; give the journey (leaving one place, moving through another, entering the next) its own beats instead of jumping straight to the destination.${peakBlock}
 
 Narration:
 """${v.narration}"""${journeyBlock}
