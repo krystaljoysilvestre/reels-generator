@@ -18,7 +18,7 @@ import { asGenreModule, classifyGenre, type GenreModule } from './scenes.v1.js'
 // Includes WRITER_IDENTITIES_V1_VERSION because the planner renders identity fields (questionsAsked,
 // taboos, registers, selectionLens) — so an identity edit must bust the planner's inputHash explicitly,
 // not rely solely on the step's full-text hashing of plannerSystem/plannerUser (review nit, 2026-07-18).
-export const STORY_PLANNER_V1_VERSION = `planner.v1.6+${STORY_MECHANICS_V1_VERSION}+${STORY_ELEMENTS_V1_VERSION}+${STORY_STYLES_V1_VERSION}+${WRITER_IDENTITIES_V1_VERSION}`
+export const STORY_PLANNER_V1_VERSION = `planner.v1.7+${STORY_MECHANICS_V1_VERSION}+${STORY_ELEMENTS_V1_VERSION}+${STORY_STYLES_V1_VERSION}+${WRITER_IDENTITIES_V1_VERSION}`
 
 // The committed idea. `mechanics` + `elements` are planner METADATA — the caller STRIPS them before
 // the Writer sees the plan (INVARIANT 1: the Writer writes from the idea, never from labels).
@@ -26,6 +26,17 @@ export const STORY_PLANNER_V1_VERSION = `planner.v1.6+${STORY_MECHANICS_V1_VERSI
 export const StoryPlanSchema = z.object({
   premise: z.string().min(1),
   conflict: z.string().min(1), // who wants what, and what's in the way — a want colliding with the world, in the genre's own terms
+  // ── The story's contract with the viewer (2026-08-06) ──────────────────────────────────────────
+  // A story doesn't end when the narration ends; it ends when the viewer's mental model has changed.
+  // These two fields make that contract explicit BEFORE the middle is planned, so the journey is built
+  // to earn a destination instead of the ending being whatever the story happens to arrive at.
+  // `emotionalDestination` below already carried the FEEL, so it stays as the third leg rather than
+  // being duplicated — the contract is: promise → transformation → feel.
+  hookPromise: z.string().min(1), // what the opening implicitly promises to change ("I will change how you see elevators")
+  viewerTransformation: z.object({
+    before: z.string().min(1), // what the viewer believes walking in
+    after: z.string().min(1),  // what they believe walking out — a BELIEF or a behaviour, never merely a new fact
+  }),
   escalation: z.string().min(1), // the middle's engine: how it tightens from premise to turn, each step caused by the last
   twist: z.string().min(1), // the turn — reveal, reversal, punchline, flip; genre decides
   ending: z.string().min(1),
@@ -126,14 +137,20 @@ STORY PHYSICS — the committed idea must hold together as drama, not as atmosph
 - CONFLICT IS A WANT. Someone wants something (even tiny — finish the shift, get home, be believed) and something is in the way. In an explainer: the viewer's assumption colliding with how it actually works. "A creepy feeling grows" is a mood, not a conflict.
 - THE MIDDLE IS CHOICES. In a lived story the protagonist DECIDES things, and each decision costs — ignoring it has a price, checking has a price, telling someone has a price; things happening TO a passive narrator is not escalation. In an explainer, each revelation forces the next question.
 - CAUSE, NEVER SEQUENCE. The beats chain with "therefore" and "but", never "and then". If your logline reads "this happened, and then this happened", reject the idea and tighten it.
+- DECIDE THE DESTINATION BEFORE THE JOURNEY. Once you have the premise and the conflict, commit to where the VIEWER ends up — the promise your opening makes, and what they believe walking out that they didn't believe walking in — and only then plan the middle that earns it. A story planned the other way round (write it, hope the ending works) arrives wherever it happens to arrive, which is why endings feel bolted on. If you cannot name a real belief the viewer leaves with, the idea has not earned an ending yet: tighten it or pick a better one.
 
 OUTPUT (JSON only) — the ONE committed idea:
 {
   "premise": "the situation, concrete and specific — who, where, what starts it",
   "conflict": "who wants what, and what stands in the way — a want colliding with the world, in this genre's own terms",
+  "hookPromise": "what your opening implicitly promises to change — the check the first line writes ('I am going to permanently change how you see elevators'). The ending must cash THIS one, not an easier one.",
+  "viewerTransformation": {
+    "before": "what the viewer believes walking in — stated as their ordinary assumption",
+    "after": "what they believe walking out. It must be something they'd now BELIEVE or DO differently, not merely a fact they now know ('mirrors are ordinary' → 'mirrors at night feel different' passes; 'didn't know X' → 'knows X' does not)."
+  },
   "escalation": "the middle's engine: the few turns between premise and the turn, chained by therefore/but — in a lived story, each caused by a choice that costs more than the last; in an explainer/argument, each revelation forcing the next question",
   "twist": "the turn — what the viewer learns/feels that reframes everything",
-  "ending": "how it lands — the final beat, one breath past the turn: what is DIFFERENT now",
+  "ending": "how it lands — the final beat, one breath past the turn: what is DIFFERENT now, delivered as a concrete image or action, never as a stated meaning. It must be capable of producing the transformation above.",
   "emotionalDestination": "what the viewer is left feeling after the last line",
   "logline": "one sentence a stranger could repeat",
   "whyThisStory": "one sentence: why THIS deserves to exist over everything you rejected — what makes it fresh for this exact channel. If you can't justify it, it's generic: go back and commit to a better one.",

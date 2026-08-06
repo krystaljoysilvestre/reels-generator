@@ -44,6 +44,16 @@ export interface WriterIdentity {
   signatureTechniques?: string[]
   /** how this genre earns the first ~3 seconds — its native hook */
   openingCraft?: string
+  /**
+   * How this genre LANDS — its native close, and where it leaves the viewer.
+   * Every genre had an openingCraft and none had this, which is a large part of why reels "just stopped"
+   * (owner finding 2026-08-06). Written per genre from that genre's own tradition, deliberately NOT one
+   * shared shape: a comedy button, a fairytale restoration and a horror afterimage are different crafts,
+   * and one universal rule across them would manufacture a monoculture (see the sentence-rhythm lap).
+   * The reel also HOLDS its closing image for a beat after the last word (compute-timings §4.65), so the
+   * final line has room to sit — write knowing the picture outlives the sentence.
+   */
+  closingCraft?: string
   // ── REGISTERS (v3) — the genre's temperatures. A genre is not one aesthetic: horror can be quiet
   // dread OR kinetic shock; drama can ache OR confront. The STORY picks its register (per-story
   // judgment, owner decision 2026-07-17) and commits fully — registers are candidates, never a
@@ -75,6 +85,7 @@ export function renderIdentity(id: WriterIdentity): string {
   if (id.typicalRhythm) telling.push(`Rhythm you tend toward: ${id.typicalRhythm}`)
   if (id.signatureTechniques?.length) telling.push(`Moves you reach for when they fit: ${id.signatureTechniques.join(' ')}`)
   if (id.openingCraft) telling.push(`How you tend to open: ${id.openingCraft}`)
+  if (id.closingCraft) telling.push(`How you land it: ${id.closingCraft}`)
   const tellingBlock = telling.length
     ? `\n\nHOW YOU TELL IT — tendencies and tools you reach for when the moment wants them; the story always outranks them, and none of these decide WHAT happens (that's already set):\n${telling.join('\n')}`
     : ''
@@ -135,6 +146,7 @@ export const WRITER_IDENTITIES: Record<GenreModule, WriterIdentity> = {
       'End on the image, not the explanation — the last line is a thing seen, never a thing understood.',
     ],
     openingCraft: 'Open on the wrong detail or mid-unease — a concrete thing already off (third night with everything locked, and still there\'s mud on the floor). Never scene-setting, never "let me tell you about the time…".',
+    closingCraft: 'Land on the last thing SEEN or DONE, never the thing understood — the door left as it is, the object back where it shouldn\'t be, the narrator doing the small ordinary act that is now impossible. End a breath after the peak, while the dread is still rising; the fear should keep going after the picture stops. Never explain what it meant, never reassure, and never say you were scared — the image already did.',
     registers: [
       'QUIET DREAD — the slow contamination of an ordinary thing; stillness a half-degree off. Fits stories where the wrongness lives at home and has time to settle in.',
       'COILED SUSPENSE — the long tightening: near-misses, held breath, a hiding place, a window closing. The viewer knows before the narrator does. Fits pursuit, being watched, almost-caught.',
@@ -193,6 +205,7 @@ export const WRITER_IDENTITIES: Record<GenreModule, WriterIdentity> = {
       'Leave one thing unsaid at the end — the door left half-closed.',
     ],
     openingCraft: 'Open inside the relationship, or on the small ordinary moment about to be lost — never biography, never "growing up, my mother…".',
+    closingCraft: 'Land small, because everything has already happened emotionally: one action, one object, one thing left unsaid. Reach for the opening image echoed back and changed by what happened between — the same kitchen, the same phone, read differently now. Leave the mark and stop; never a bow, never a line that tells them what it meant.',
     registers: [
       'QUIET ACHE — restraint, the unsaid, grief under plain words. Fits distance, slow loss, the truth arriving too late.',
       'CONFRONTATION — the conversation finally happening out loud, and what saying it costs. Fits betrayal, the overdue reckoning, the thing said that can\'t be unsaid.',
@@ -245,6 +258,7 @@ export const WRITER_IDENTITIES: Record<GenreModule, WriterIdentity> = {
       'Close on the line people will quote back, not a summary of what you said.',
     ],
     openingCraft: 'Open on the take itself, stated flat, that a stranger could repeat — the disagreement starts in sentence one.',
+    closingCraft: 'Land on the sharpest statement of where you stand — the line someone will quote to argue with you, not a summary of what you just said. Commit harder at the end than you did at the start; a close that softens or balances gives back everything the argument earned.',
     registers: [
       'COLD CASE — even-voiced, receipts stacked one by one, devastating by accumulation. Fits claims that win on evidence.',
       'OPEN FLAME — earned heat: the thing that is actually outrageous, said with the anger it deserves. Fits injustice with a name and a paper trail.',
@@ -296,6 +310,7 @@ export const WRITER_IDENTITIES: Record<GenreModule, WriterIdentity> = {
       'End the way THIS poster really would — after the consequences, landing the revenge, throwing the question, or just living with it — but never explain the moral of it.',
     ],
     openingCraft: 'Open on the PROBLEM stated plainly, inside the first breath — the dilemma the viewer will follow ("Tatlong araw nang hindi ako kinakausap ng asawa ko." / "May natagpuan ako sa attic namin."). Not necessarily a wrong someone did — it can be the narrator\'s own mess or a mystery. Then the ordinary, credible details right after. Never slow scene-setting.',
+    closingCraft: 'End the way THIS poster really would: land the payoff (the comeuppance, the backfire, the damage), or throw the verdict question hard to the reader, or simply stop when they run out of things to say — mid-mess, unresolved, because that is where they actually are. Never smooth it into a lesson, never trail off politely.',
     // Common SHAPES the format takes — NOT an exhaustive list and NOT a rotation. The format hosts any
     // subject (relationships, workplace, revenge, horror, legal, neighbors, weddings); these are the
     // recurring shapes it tells them in, each with its own AUTHENTIC ending (how a real poster of THIS
@@ -365,6 +380,7 @@ export const WRITER_IDENTITIES: Record<GenreModule, WriterIdentity> = {
       'The tag: after the punch lands, one more line — smaller, drier — that makes it land twice.',
     ],
     openingCraft: 'Open on the ordinary, reasonable premise stated straight — the funnier the ending will be, the more normal the first line should look.',
+    closingCraft: 'The funny word goes last and then you STOP. At most one dry tag after the punch — smaller, flatter — that makes it land twice. Nothing after that: no explanation, no wind-down, no "anyway". A held beat kills a laugh; cut while they are still going.',
     registers: [
       'DEADPAN — absurd events, flat telling; the gap between what\'s happening and how calmly it\'s reported IS the joke. Fits stories where the world goes insane and the narrator files a report.',
       'ESCALATING ABSURD — momentum comedy: energy climbing, each step one notch further, the narrator swept along. Fits disasters that snowball, plans that should never have worked and didn\'t.',
@@ -415,6 +431,7 @@ export const WRITER_IDENTITIES: Record<GenreModule, WriterIdentity> = {
       'End by handing over the idea in a shape they can repeat at dinner.',
     ],
     openingCraft: 'Open on the curiosity gap or the thing they believe that\'s wrong — a question they suddenly need answered.',
+    closingCraft: 'Hand the idea over as a THING, not a phrase: put it on an object, a place, a moment, or the room the viewer is sitting in right now, so an ordinary thing is recalibrated when the reel ends. The strongest close is a fact stated plainly and left alone — the viewer completes the thought. Never end by naming what it all means ("which just goes to show…", "we\'re all just…"): they already have the idea, and an aphorism takes the place of the last concrete thing they could have carried.',
     registers: [
       'WHOA — wonder-led: the scale, the age, the impossibility made felt. Fits facts that break the viewer\'s sense of proportion.',
       'CONSPIRATORIAL — leaning in: "here\'s the thing nobody tells you." Fits systems, money, the mechanics behind the curtain.',
@@ -467,6 +484,7 @@ export const WRITER_IDENTITIES: Record<GenreModule, WriterIdentity> = {
       'Leave a visible first step, so wanting turns into doing.',
     ],
     openingCraft: 'Open on the finished, wantable moment — the thing they\'ll wish they had — before any of the how.',
+    closingCraft: 'Put the first step in their hands and stop: one small specific thing they could start before their coffee goes cold — not "give it a try", not a recap. The close should feel like being handed the thing, still warm.',
     registers: [
       'SAVOR — slow and sensory: linger on the steam, the crunch, the light. Fits food, places, small rituals.',
       'SPARK — momentum: quick cuts of energy, "let\'s go" pace. Fits transformations, challenges, the first day of a new habit.',
@@ -520,6 +538,8 @@ export const WRITER_IDENTITIES: Record<GenreModule, WriterIdentity> = {
       'THE STORYBOOK CLOSE — the way children\'s stories are written. SHOW the lesson through what the hero DOES, then NAME it warmly and simply in the last beat: one gentle closing line the child carries away ("And Maya learned that even the smallest light can help someone find their way home"). This warm, named takeaway BELONGS here — it is the storybook ending, not a flaw. What to avoid is PREACHINESS: a moral the story didn\'t earn, or lecturing ("you should always be kind") instead of a felt, warm line that grows out of what the hero just did.',
       'A warm, safe closing image paired with that gentle closing message — the light on, the hug, the cozy sleep, and the small truth said softly. Let the last beat feel like a story gently closing — a cozy storybook ending, warm and complete, in the SPIRIT of "and they lived happily ever after" without the literal cliché.',
     ],
+    // No closingCraft: this genre already carries THE STORYBOOK CLOSE in signatureTechniques above, and
+    // its close is the ONE place a named moral is on-register — a second instruction would over-weight it.
     openingCraft: 'Open with a warm, storybook invitation that draws the child in — a cozy "come, listen" framing (the story\'s own language\'s version of "there was once a little one who…"), then the little hero and the spark of wonder or the small problem. Bright and inviting, never scary or heavy. In the SPIRIT of "once upon a time" — a recognizable warm opener — without the literal cliché.',
     registers: [
       'COZY BEDTIME — soft, soothing, winding down; the world tucking itself in. Fits the last story of the night.',
@@ -586,6 +606,7 @@ export const WRITER_IDENTITIES: Record<GenreModule, WriterIdentity> = {
       'SIMPLE, FAMILIAR words carrying deep feeling — the plainest word a listener (even a child) instantly knows, holding the deepest truth ("simple words, felt deeply"). Never obscure or literary vocabulary. Name a magical being with a familiar word from the story\'s own tradition (a fairy, a spirit, a sprite) or make plain what it is in the same breath — never an obscure being-name the listener must already know without saying what it is. Concrete, archetypal images anyone across generations would picture.',
     ],
     openingCraft: 'Open in the timeless ordinary and what the hero LACKS — the told-aloud voice, a hero small against an ancient world (the story\'s own "once upon a time…" or "Every winter, the forest grew one tree no one dared touch…"), a first breath of the wonder to come.',
+    closingCraft: 'Close on the world RESTORED, not merely rescued — the forest blooming, the stars back, the family whole — a luminous image that mirrors what the hero\'s choice cost. The tale may name its moral, but it must never interpret its own picture: if the closing image seems to need a gloss ("as if to say…"), extend the IMAGE one beat further instead.',
     registers: [
       'GENTLE WONDER — warm and hopeful; kindness quietly rewarded, a soft marvel. The lightest fairytale temperature.',
       'SHADOWED TRIAL — real darkness the hero must pass THROUGH (grief, fear, a cruel enchantment), but the light always returns; earns its restoration.',
