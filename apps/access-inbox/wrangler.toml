@@ -1,0 +1,22 @@
+# kendrix.io "Get access" waitlist worker.
+
+name = "kendrix-access-inbox"
+main = "src/index.ts"
+compatibility_date = "2026-08-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Same reasoning as contact-inbox: no destination_address pin, because the binding may send to
+# any address already verified under kendrix.io → Email Routing → Destination addresses, and the
+# actual inbox is the DESTINATION secret rather than a value in git.
+send_email = [{ name = "INBOX" }]
+
+# The waitlist itself. `database_id` is filled in by `wrangler d1 create` — see README.
+[[d1_databases]]
+binding = "DB"
+database_name = "kendrix-access"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+migrations_dir = "migrations"
+
+# Secrets (set with `wrangler secret put`):
+#   DESTINATION  — verified inbox to notify (the one hello@/privacy@ forward to).
+#   ACCESS_TOKEN — shared token; must match KENDRIX_LIST_API_KEY in apps/landing.

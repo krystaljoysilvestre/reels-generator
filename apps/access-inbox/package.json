@@ -1,0 +1,21 @@
+{
+  "name": "access-inbox",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Cloudflare Worker — records kendrix.io access requests in D1 and notifies the studio inbox.",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "export": "wrangler d1 execute kendrix-access --remote --command 'SELECT email, created_at FROM access_requests ORDER BY created_at'",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo 'no lint target'"
+  },
+  "dependencies": {
+    "mimetext": "^3.0.27"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260730.1",
+    "typescript": "^5.5.4",
+    "wrangler": "^4.0.0"
+  }
+}

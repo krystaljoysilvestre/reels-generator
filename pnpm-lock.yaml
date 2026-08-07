@@ -30,6 +30,22 @@ importers:
         specifier: ^5.5.4
         version: 5.9.3
 
+  apps/access-inbox:
+    dependencies:
+      mimetext:
+        specifier: ^3.0.27
+        version: 3.0.28
+    devDependencies:
+      '@cloudflare/workers-types':
+        specifier: ^5.20260730.1
+        version: 5.20260804.1
+      typescript:
+        specifier: ^5.5.4
+        version: 5.9.3
+      wrangler:
+        specifier: ^4.0.0
+        version: 4.118.0(@cloudflare/workers-types@5.20260804.1)
+
   apps/contact-inbox:
     dependencies:
       mimetext:

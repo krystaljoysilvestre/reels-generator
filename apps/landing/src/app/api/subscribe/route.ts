@@ -16,7 +16,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: 'Invalid request.' }, { status: 400 })
   }
 
-  if (typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  // Trimmed before validating: a pasted address routinely carries a trailing space, and the
+  // pattern rejects surrounding whitespace — validating first rejected good signups.
+  const address = typeof email === 'string' ? email.trim() : ''
+  if (!address || address.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) {
     return NextResponse.json({ message: 'Enter a valid email address.' }, { status: 400 })
   }
 
@@ -36,7 +39,7 @@ export async function POST(req: Request) {
     const res = await fetch(endpoint, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ email_address: email, email, tags: ['landing'] }),
+      body: JSON.stringify({ email_address: address, email: address, tags: ['landing'] }),
     })
     if (!res.ok && res.status !== 409) {
       // 409 = already subscribed — treat as success from the requester's side.
