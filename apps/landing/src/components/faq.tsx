@@ -12,6 +12,10 @@ const QA: Array<{ q: string; a: string }> = [
     a: 'Always. Rewrite the story, reshoot any scene, swap the voice, change captions and the look — every step is yours to steer.',
   },
   {
+    q: 'What kinds of stories?',
+    a: 'Scary stories, heartfelt drama, comedy, confessions, facts and explainers, lifestyle and more. Each genre plays by its own craft, and your channel gives every story its world.',
+  },
+  {
     q: 'Whose voice narrates?',
     a: 'Pick one voice for the whole channel or a different one per reel, from a library tuned to your niche. Preview before you commit.',
   },
