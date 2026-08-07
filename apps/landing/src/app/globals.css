@@ -127,8 +127,58 @@
   .kx-float {
     animation: kx-float 6.5s ease-in-out infinite;
   }
-  .kx-scan {
-    animation: kx-scan 6s ease-in-out infinite alternate;
+
+  /* ── The Director's Monitor ───────────────────────────────── */
+  /* Every beat inside a scene is a percentage of ONE animation-duration (INTERVAL_MS, set inline
+     by directors-monitor.tsx), so the choreography can never drift from the advance timer.
+
+     The base declarations below are load-bearing, not defaults: prefers-reduced-motion strips the
+     animations, and each element then falls back to its base — chosen so the frame reads as a
+     FINISHED scene (bar full, Commit. showing, revision already applied) rather than an empty one. */
+  .kx-kenburns {
+    animation: kx-kenburns 22s ease-in-out infinite alternate;
+    will-change: transform;
+  }
+  .kx-progress {
+    transform: scaleX(1);
+    transform-origin: left;
+    animation: kx-progress linear both;
+  }
+  .kx-think-a {
+    opacity: 0;
+    animation: kx-think-a linear both;
+  }
+  .kx-think-b {
+    opacity: 0;
+    animation: kx-think-b linear both;
+  }
+  .kx-commit {
+    opacity: 1;
+    animation: kx-commit linear both;
+  }
+  .kx-revise-out {
+    opacity: 0;
+    animation: kx-revise-out linear both;
+  }
+  .kx-revise-in {
+    opacity: 1;
+    animation: kx-revise-in linear both;
+  }
+  .kx-locked {
+    opacity: 0;
+    animation: kx-locked 0.3s ease-out both;
+  }
+  .kx-thumbflash {
+    opacity: 0;
+    animation: kx-thumbflash 0.35s ease-out both;
+    background-size: cover;
+    background-position: center;
+  }
+  /* Film grain over the monitor's stills — the same fractal-noise trick page.tsx uses for the page. */
+  .kx-grain {
+    opacity: 0.08;
+    mix-blend-mode: soft-light;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
   }
 }
 
@@ -161,12 +211,106 @@
     opacity: 0.2;
   }
 }
-@keyframes kx-scan {
+@keyframes kx-kenburns {
+  from {
+    transform: scale(1.04);
+  }
+  to {
+    transform: scale(1.12);
+  }
+}
+@keyframes kx-progress {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+/* The chip's arc: craft decision → craft decision → Commit. */
+@keyframes kx-think-a {
+  0%,
+  4% {
+    opacity: 0;
+  }
+  8%,
+  46% {
+    opacity: 1;
+  }
+  52%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes kx-think-b {
+  0%,
+  52% {
+    opacity: 0;
+  }
+  58%,
+  84% {
+    opacity: 1;
+  }
+  89%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes kx-commit {
+  0%,
+  88% {
+    opacity: 0;
+  }
+  92%,
+  100% {
+    opacity: 1;
+  }
+}
+/* The change of mind. The gap between out and in is deliberate — a crossfade reads as a text
+   glitch, a beat of nothing reads as a director reconsidering. No strike-through, for the same
+   reason: struck text reads as editing a document, not as changing direction. */
+@keyframes kx-revise-out {
+  0%,
+  68% {
+    opacity: 1;
+  }
+  71%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes kx-revise-in {
+  0%,
+  73% {
+    opacity: 0;
+  }
+  78%,
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes kx-locked {
   0% {
-    left: 8%;
+    opacity: 0;
+  }
+  20%,
+  70% {
+    opacity: 1;
   }
   100% {
-    left: 92%;
+    opacity: 0;
+  }
+}
+@keyframes kx-thumbflash {
+  0% {
+    opacity: 0;
+  }
+  25%,
+  55% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
   }
 }
 
