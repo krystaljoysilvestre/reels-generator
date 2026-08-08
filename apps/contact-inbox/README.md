@@ -14,7 +14,9 @@ the landing's `.env.local` carries the matching endpoint + key.
 2. In `wrangler.toml`, replace both `REPLACE_WITH_VERIFIED_DESTINATION`
    with the inbox address verified under kendrix.io → Email Routing →
    Destination addresses (the one hello@/privacy@ forward to).
-3. `pnpm deploy` — note the printed `*.workers.dev` URL.
+3. `pnpm run deploy` — note the printed `*.workers.dev` URL. (`pnpm run`, not bare `pnpm deploy`:
+   pnpm has its own built-in `deploy` command, so the bare form shadows this script and exits with
+   `ERR_PNPM_NOTHING_TO_DEPLOY` having deployed nothing.)
 4. `npx wrangler secret put CONTACT_TOKEN` — paste a long random token.
 5. In `apps/landing` env (`.env.local` locally, Vercel env in prod):
    - `KENDRIX_CONTACT_ENDPOINT=<the workers.dev URL>`

@@ -36,7 +36,10 @@ npx wrangler d1 create kendrix-access    # prints a database_id
 #   → paste it into wrangler.toml, replacing REPLACE_WITH_D1_DATABASE_ID
 npx wrangler d1 migrations apply kendrix-access --remote
 
-pnpm deploy                              # note the printed *.workers.dev URL
+# `pnpm run deploy`, NOT `pnpm deploy` — pnpm has its own built-in `deploy` command (it bundles a
+# workspace package into a directory), so the bare form shadows this script and exits with
+# ERR_PNPM_NOTHING_TO_DEPLOY without deploying anything.
+pnpm run deploy                          # note the printed *.workers.dev URL
 npx wrangler secret put ACCESS_TOKEN     # paste a long random token
 npx wrangler secret put DESTINATION      # the inbox hello@/privacy@ forward to
 ```
