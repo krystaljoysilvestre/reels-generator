@@ -11,9 +11,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # No `version:` here on purpose. The version lives in package.json's `packageManager`,
+      # which is also what corepack and Vercel read, so there is one source of truth. Setting
+      # both makes this action hard-fail with "Multiple versions of pnpm specified".
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - uses: actions/setup-node@v4
         with:
