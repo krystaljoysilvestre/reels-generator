@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { Mulish, Nunito, Space_Mono } from 'next/font/google'
+import Script from 'next/script'
 import { StructuredData } from '@/components/structured-data'
 import { META_DESCRIPTION, META_TITLE, SITE_NAME, SITE_URL } from '@/lib/site'
 import './globals.css'
@@ -56,6 +57,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={`${nunito.variable} ${mulish.variable} ${spaceMono.variable}`}>
       <head>
         <StructuredData />
+        <Script src="https://www.googletagmanager.com/gtag/js?id=G-9QZT2HK4LC" strategy="afterInteractive" />
+        <Script id="google-analytics" strategy="afterInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', 'G-9QZT2HK4LC');
+          `}
+        </Script>
       </head>
       <body>{children}</body>
     </html>
