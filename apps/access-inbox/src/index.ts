@@ -40,11 +40,13 @@ export default {
     // The whole list as CSV — the migration path onto a hosted provider whenever one is chosen.
     if (req.method === 'GET' && pathname === '/export') {
       const { results } = await env.DB.prepare(
-        'SELECT email, created_at, source FROM access_requests ORDER BY created_at',
-      ).all<{ email: string; created_at: string; source: string | null }>()
+        'SELECT email, created_at, source, channel FROM access_requests ORDER BY created_at',
+      ).all<{ email: string; created_at: string; source: string | null; channel: string | null }>()
       const csv = [
-        'email,created_at,source',
-        ...results.map((r) => [r.email, r.created_at, r.source ?? ''].map(csvCell).join(',')),
+        'email,created_at,source,channel',
+        ...results.map((r) =>
+          [r.email, r.created_at, r.source ?? '', r.channel ?? ''].map(csvCell).join(','),
+        ),
       ].join('\n')
       return new Response(csv, {
         headers: {
@@ -56,7 +58,7 @@ export default {
 
     if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 })
 
-    let payload: { email?: unknown; email_address?: unknown; tags?: unknown }
+    let payload: { email?: unknown; email_address?: unknown; tags?: unknown; channel?: unknown }
     try {
       payload = (await req.json()) as typeof payload
     } catch {
@@ -73,13 +75,16 @@ export default {
       return new Response('Bad request', { status: 400 })
     }
     const source = Array.isArray(payload.tags) ? payload.tags.filter((t) => typeof t === 'string').join(' ') : ''
+    // What the person says their channel is about. Optional, free text, never validated — it's the
+    // difference between a list of addresses and a list of qualified creators.
+    const channel = typeof payload.channel === 'string' ? payload.channel.trim().slice(0, 200) : ''
 
     let duplicate = false
     try {
       const res = await env.DB.prepare(
-        'INSERT INTO access_requests (email, source) VALUES (?, ?) ON CONFLICT(email) DO NOTHING',
+        'INSERT INTO access_requests (email, source, channel) VALUES (?, ?, ?) ON CONFLICT(email) DO NOTHING',
       )
-        .bind(email, source)
+        .bind(email, source, channel)
         .run()
       // Someone re-submitting is a success from their side, and must not send a second notification.
       duplicate = (res.meta?.changes ?? 0) === 0
@@ -96,8 +101,9 @@ export default {
         mime.addMessage({
           contentType: 'text/plain',
           data: [
-            `Email:  ${email}`,
-            `Source: ${source || 'landing'}`,
+            `Email:   ${email}`,
+            `Channel: ${channel || '(not given)'}`,
+            `Source:  ${source || 'landing'}`,
             '',
             '—',
             'Requested access via kendrix.io. Recorded in the access-requests list;',

@@ -9,12 +9,20 @@ import {
   SendIcon,
 } from './icons'
 
+/**
+ * The call sheet carries no per-role timings, deliberately.
+ *
+ * It used to read "Writer ~40 min … Publisher ~15 min" against "With Kendrix ~10 min" — unsourced
+ * figures set in mono type inside a table, which is the visual grammar of measurement. That made it
+ * a 22× speed claim about a product nobody outside the studio has used, and the kind of thing a
+ * summarizer lifts and repeats as a Kendrix benchmark. Six roles versus one role makes the same
+ * argument and is simply true. Don't reintroduce timings without real measurements behind them.
+ */
 type Role = {
   icon: ReactNode
   tint: string // rgba backgrounds/borders per row
   border: string
   name: string
-  time: string
 }
 
 const ROLES: Role[] = [
@@ -23,42 +31,36 @@ const ROLES: Role[] = [
     tint: 'rgba(47,164,255,0.14)',
     border: 'rgba(47,164,255,0.3)',
     name: 'Writer',
-    time: '~40 min',
   },
   {
     icon: <BoardIcon stroke="#9B3BFF" />,
     tint: 'rgba(155,59,255,0.14)',
     border: 'rgba(155,59,255,0.3)',
     name: 'Storyboard artist',
-    time: '~30 min',
   },
   {
     icon: <MicIcon stroke="#FF2D9B" />,
     tint: 'rgba(255,45,155,0.14)',
     border: 'rgba(255,45,155,0.3)',
     name: 'Voice actor',
-    time: '~20 min',
   },
   {
     icon: <CameraIcon stroke="#FF9A3D" />,
     tint: 'rgba(255,154,61,0.14)',
     border: 'rgba(255,154,61,0.3)',
     name: 'Editor',
-    time: '~90 min',
   },
   {
     icon: <HeadphonesIcon stroke="#43C08A" />,
     tint: 'rgba(67,192,138,0.14)',
     border: 'rgba(67,192,138,0.3)',
     name: 'Sound designer',
-    time: '~25 min',
   },
   {
     icon: <SendIcon stroke="#B8B0CC" />,
     tint: 'rgba(148,140,171,0.14)',
     border: 'rgba(148,140,171,0.3)',
     name: 'Publisher',
-    time: '~15 min',
   },
 ]
 
@@ -81,8 +83,11 @@ export function Problem() {
             editor, a sound designer and a publisher — every day, for every clip. Most channels die
             right there, buried under their own call sheet.
           </p>
+          {/* Was "takes the whole sheet off your desk", which read as the human doing none of the
+              six jobs — flatly contradicting the FAQ's answer that judgment and approval stay with
+              the creator. Two claims that disagree on one page also make a summarizer hedge. */}
           <p className="mt-4 max-w-[450px] text-base font-600 leading-[1.65] text-night-lit">
-            Kendrix takes the whole sheet off your desk.
+            Kendrix takes the crew work off your desk. The story stays yours.
           </p>
         </div>
 
@@ -108,13 +113,12 @@ export function Problem() {
                   {role.icon}
                 </span>
                 <span className="flex-1 text-sm font-600 text-night-lit">{role.name}</span>
-                <span className="mono text-xs text-night-dim">{role.time}</span>
               </div>
             ))}
           </div>
           <div className="flex items-center justify-between border-t border-white/10 bg-[linear-gradient(120deg,rgba(47,164,255,0.16),rgba(155,59,255,0.16)_50%,rgba(255,45,155,0.16))] px-5 py-[15px]">
             <span className="font-display text-sm font-800 text-white">With Kendrix</span>
-            <span className="mono text-[13px] font-700 text-white">~10 min · review &amp; approve</span>
+            <span className="mono text-[13px] font-700 text-white">ONE ROLE · DIRECTOR</span>
           </div>
         </div>
       </div>

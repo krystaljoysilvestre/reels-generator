@@ -74,8 +74,10 @@ export function Roadmap() {
         <div className="rounded-[18px] border border-white/10 bg-white/[0.02] p-6">
           <div className="mb-[18px] flex items-center gap-[9px]">
             <span className="h-2 w-2 rounded-full bg-night-ghost" />
+            {/* No quarters. A dated commitment from a solo pre-launch founder goes stale in weeks,
+                and a roadmap with last quarter on it reads as an abandoned product. */}
             <span className="mono text-[11px] tracking-[0.14em] text-night-faint">
-              ON THE SLATE · Q3–Q4
+              ON THE SLATE · NEXT
             </span>
           </div>
           <div className="flex flex-col gap-3.5">

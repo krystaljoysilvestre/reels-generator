@@ -24,8 +24,10 @@ export function Philosophy() {
             — the ones between a thought and a finished cut.
           </h2>
           <p className="mx-auto mt-6 max-w-[600px] text-base leading-[1.7] text-night-soft">
+            {/* Was "between a prompt and a publish button". "Prompt" as the input makes Kendrix a
+                prompt wrapper — the exact thing dna/START-HERE.md lists under what it is NOT. */}
             Kendrix exists to close that gap. Not to replace taste — to give it a crew. You bring
-            the idea and the judgment; the studio handles the thousand small crafts between a prompt
+            the idea and the judgment; the studio handles the thousand small crafts between a story
             and a publish button, and shows its work at every step so you always stay the director.
           </p>
           <div className="mt-7 inline-flex items-center gap-[11px]">

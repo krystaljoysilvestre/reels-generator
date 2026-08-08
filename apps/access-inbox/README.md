@@ -6,6 +6,11 @@ Cloudflare Worker behind the landing page's "Get access" form
 1. **Records** the address in a D1 table — this is the waitlist.
 2. **Notifies** the studio inbox via Email Routing, so a signup is visible immediately.
 
+Each row also carries an optional free-text **channel** ("what's your channel about?"). It's the
+difference between a list of addresses and a list of qualified creators — without it you can't tell
+a curious builder from someone with a real channel, which is the signal the Trust-Before-Growth
+assumption turns on. Optional on the form, never validated, capped at 200 characters.
+
 Free, no external vendor, same shape as [contact-inbox](../contact-inbox/README.md).
 
 **Status: built and locally verified, NOT deployed.** Deploying needs `wrangler login`
@@ -50,12 +55,12 @@ exactly as for contact-inbox.
 curl -s -X POST <workers.dev URL> \
   -H 'Content-Type: application/json' \
   -H 'Authorization: Token <token>' \
-  -d '{"email":"you@example.com","tags":["landing"]}'
+  -d '{"email":"you@example.com","tags":["landing"],"channel":"horror shorts, weekly"}'
 ```
 
-→ `{"ok":true,"duplicate":false}`, an email in the inbox, and a row in the list. Send it a second
-time: `duplicate` flips to `true` and **no second email arrives**. Then submit the real form on the
-site end to end.
+→ `{"ok":true,"duplicate":false}`, an email in the inbox naming the channel, and a row in the list.
+Send it a second time: `duplicate` flips to `true` and **no second email arrives**. Then submit the
+real form on the site end to end.
 
 ## Reading the list
 

@@ -22,7 +22,9 @@ export function Access() {
             <AccessForm />
           </div>
           <div className="mono mt-4 text-[11.5px] tracking-[0.08em] text-night-faint">
-            EARLY SEATS ARE FREE · NO CARD, EVER, DURING TESTING
+            {/* "EVER, DURING TESTING" contradicted itself in five words and skim-read as free
+                forever. Pricing after testing isn't decided, so this promises only what's true. */}
+            EARLY SEATS ARE FREE · NO CARD REQUIRED DURING TESTING
           </div>
         </div>
       </div>

@@ -131,7 +131,10 @@ export function Channels() {
     >
       <div className="mb-8 flex flex-wrap items-end justify-between gap-5">
         <div>
-          <div className="eyebrow">Now showing</div>
+          {/* "Genres and visual styles" also gives this section a heading a person might actually
+              search for — every display heading on the page is a cinema pun, which reads well and
+              indexes for nothing. The pun stays; the plain string sits above it. */}
+          <div className="eyebrow">Now showing · genres and visual styles</div>
           <h2 className="mt-3 text-[34px] font-800 tracking-[-0.03em] sm:text-[44px]">
             One studio, every genre.
           </h2>
@@ -146,8 +149,16 @@ export function Channels() {
           <ChannelTile key={tile.name} tile={tile} index={index} />
         ))}
       </div>
+      {/* Four named tiles carrying performance-shaped badges read as four real channels with real
+          audience results. They aren't: the names and looks are illustrative, and the badges cite
+          genre-level market research, not any channel's numbers. The first line is a true and
+          worth-keeping provenance claim; the second is what stops the grid reading as social proof
+          the company hasn't earned yet. Replace both when Customer Zero actually publishes. */}
       <div className="mono mt-4 text-center text-[10.5px] uppercase tracking-[0.14em] text-night-ghost">
         Every clip above was animated by the Kendrix studio
+      </div>
+      <div className="mono mt-1.5 text-center text-[10.5px] uppercase tracking-[0.14em] text-night-ghost/70">
+        Genre studies — illustrative names and looks, not live channels
       </div>
     </section>
   )

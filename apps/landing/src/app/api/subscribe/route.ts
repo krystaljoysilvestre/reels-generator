@@ -10,8 +10,9 @@ import { NextResponse } from 'next/server'
  */
 export async function POST(req: Request) {
   let email: unknown
+  let channel: unknown
   try {
-    ;({ email } = (await req.json()) as { email?: unknown })
+    ;({ email, channel } = (await req.json()) as { email?: unknown; channel?: unknown })
   } catch {
     return NextResponse.json({ message: 'Invalid request.' }, { status: 400 })
   }
@@ -39,7 +40,14 @@ export async function POST(req: Request) {
     const res = await fetch(endpoint, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ email_address: address, email: address, tags: ['landing'] }),
+      body: JSON.stringify({
+        email_address: address,
+        email: address,
+        tags: ['landing'],
+        // Optional and never validated beyond a length cap — it's free text a human will read,
+        // and rejecting a signup over the shape of this field would be the wrong trade.
+        channel: typeof channel === 'string' ? channel.trim().slice(0, 200) : '',
+      }),
     })
     if (!res.ok && res.status !== 409) {
       // 409 = already subscribed — treat as success from the requester's side.
