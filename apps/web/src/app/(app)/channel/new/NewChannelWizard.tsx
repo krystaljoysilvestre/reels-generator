@@ -86,22 +86,26 @@ const TONE_KEYS = ['intensity', 'warmth', 'energy', 'pacing', 'humor'] as const
 
 // Caption-style presets shown in Step 4. `preset` matches core's CaptionPreset.
 const CAPTION_OPTIONS: { preset: CaptionPreset; label: string; vibe: string }[] = [
-  { preset: 'pop', label: 'Pop', vibe: 'Punchy word-by-word — lifestyle, vlog, food' },
-  { preset: 'hype', label: 'Hype', vibe: 'Highlight-box hustle — business, money, motivation' },
-  { preset: 'karaoke', label: 'Karaoke', vibe: 'Words fill as spoken — music, poetry' },
-  { preset: 'neon', label: 'Neon', vibe: 'Glowing pop — gaming, tech, nightlife' },
-  { preset: 'whisper', label: 'Whisper', vibe: 'Eerie typewriter — horror, mystery, true-crime' },
-  { preset: 'impact', label: 'Impact', vibe: 'Huge punch-in — sports, drama, hot-takes' },
-  { preset: 'elegant', label: 'Elegant', vibe: 'Wide-tracked fade — luxury, beauty, ASMR' },
-  { preset: 'clean', label: 'Clean', vibe: 'Refined white — explainer, documentary' },
-  { preset: 'comic', label: 'Comic', vibe: 'Playful tilted pop — comedy, memes, reactions' },
-  { preset: 'terminal', label: 'Terminal', vibe: 'Green mono typewriter — tech, coding, crypto' },
-  { preset: 'cinematic', label: 'Cinematic', vibe: 'Subtitle bar — film, storytelling, video essays' },
-  { preset: 'breaking', label: 'Breaking', vibe: 'News lower-third — news, sports, gossip' },
-  { preset: 'marker', label: 'Marker', vibe: 'Highlighter swipe — study, tips, how-to' },
-  { preset: 'script', label: 'Script', vibe: 'Handwritten cursive — faith, quotes, wellness' },
-  { preset: 'retro', label: 'Retro', vibe: 'Chrome/synthwave glow — retro, 80s, music' },
-  { preset: 'glitch', label: 'Glitch', vibe: 'RGB datamosh — gaming, cyber, edits' },
+  { preset: 'sable', label: 'Sable', vibe: 'Editorial serif — storytelling, documentary' },
+  { preset: 'pulse', label: 'Pulse', vibe: 'Bold pop — lifestyle, vlog, food' },
+  { preset: 'marquee', label: 'Marquee', vibe: 'Warm highlight pill — business, motivation' },
+  { preset: 'lyric', label: 'Lyric', vibe: 'Words fill as spoken — music, poetry' },
+  { preset: 'signal', label: 'Signal', vibe: 'Mono chyron — tech, AI, crypto' },
+  { preset: 'halo', label: 'Halo', vibe: 'Airy fade — beauty, fashion, ASMR' },
+  { preset: 'slate', label: 'Slate', vibe: 'Modern lower-third — news, sports, updates' },
+  { preset: 'kick', label: 'Kick', vibe: 'Playful bounce — comedy, memes, reactions' },
+  { preset: 'seance', label: 'Séance', vibe: 'Cold dramatic serif — horror, mystery' },
+  { preset: 'notebook', label: 'Notebook', vibe: 'Highlighter swipe — study, tips, how-to' },
+  { preset: 'still', label: 'Still', vibe: 'Calm serif — wellness, faith, quotes' },
+  { preset: 'chrome', label: 'Chrome', vibe: 'Chrome gradient — retro, 80s, synthwave' },
+  { preset: 'volt', label: 'Volt', vibe: 'Electric glow — gaming, nightlife, hype' },
+  { preset: 'static', label: 'Static', vibe: 'Restrained RGB split — cyber, AI, edits' },
+  { preset: 'plate', label: 'Plate', vibe: 'Friendly steps — food, recipes, cooking' },
+  { preset: 'field', label: 'Field', vibe: 'Energetic italic — sports, fitness, outdoors' },
+  { preset: 'voyage', label: 'Voyage', vibe: 'Clean travel headline — places, adventure' },
+  { preset: 'paws', label: 'Paws', vibe: 'Warm playful type — pets, kids, family' },
+  { preset: 'candid', label: 'Candid', vibe: 'Clear workhorse — storytime, podcast, commentary' },
+  { preset: 'dance', label: 'Dance', vibe: 'Bold beat-driven caps — choreography, trends' },
 ]
 type ToneKey = (typeof TONE_KEYS)[number]
 type Tone = Record<ToneKey, number>
@@ -228,7 +232,7 @@ export function NewChannelWizard({
   const [targetSeconds, setTargetSeconds] = useState(75) // channel reel length (derived per niche, adjustable)
   // Resolved caption style is the single source of truth: AI picks a preset + nudges a few
   // safe knobs (accent / base color / position / size); switching chips re-resolves.
-  const [captionStyle, setCaptionStyle] = useState<CaptionStyle>(() => resolveCaptionStyle('pop'))
+  const [captionStyle, setCaptionStyle] = useState<CaptionStyle>(() => resolveCaptionStyle('candid'))
   // Once the creator sets burn-captions themselves, switching platform stops overriding their choice.
   const [captionsTouched, setCaptionsTouched] = useState(false)
   const [style, setStyle] = useState('')

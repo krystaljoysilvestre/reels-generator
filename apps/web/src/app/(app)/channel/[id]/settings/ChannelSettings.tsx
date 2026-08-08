@@ -36,8 +36,8 @@ const SETTINGS_INFLUENCE_OPTIONS = [
 
 const TONE_KEYS: Array<keyof ToneConfig> = ['intensity', 'warmth', 'energy', 'pacing', 'humor']
 const CAPTION_ORDER: CaptionPreset[] = [
-  'pop', 'hype', 'karaoke', 'neon', 'whisper', 'impact', 'elegant', 'clean',
-  'comic', 'terminal', 'cinematic', 'breaking', 'marker', 'script', 'retro', 'glitch',
+  'sable', 'pulse', 'marquee', 'lyric', 'signal', 'halo', 'slate', 'kick', 'seance', 'notebook',
+  'still', 'chrome', 'volt', 'static', 'plate', 'field', 'voyage', 'paws', 'candid', 'dance',
 ]
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 

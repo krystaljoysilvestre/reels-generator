@@ -132,6 +132,11 @@ export const SubtitleOverlay: React.FC<SubtitleOverlayProps> = ({ subtitles, cap
             const shake = isActive ? Math.sin(frame * 0.9) * (1 - t) * 2.5 : 0
             transform = `scale(${scaleV}) rotate(${shake}deg)`
             color = isActive ? style.highlightColor : style.color
+          } else if (style.animation === 'rise') {
+            opacity = started ? clamp01(t * 1.5) : 0
+            const yV = started ? (1 - easeOutCubic(t)) * style.fontSizePx * 0.28 : style.fontSizePx * 0.28
+            transform = `translateY(${yV}px)`
+            color = isActive ? style.highlightColor : style.color
           } else if (style.animation === 'karaoke') {
             color = isSpoken ? style.highlightColor : style.color
             opacity = isSpoken ? 1 : 0.5
@@ -197,6 +202,10 @@ export const SubtitleOverlay: React.FC<SubtitleOverlayProps> = ({ subtitles, cap
         ? { background: style.highlightColor, padding: `${Math.round(style.fontSizePx * 0.1)}px ${Math.round(style.fontSizePx * 0.34)}px`, borderRadius: 6 }
         : {}
 
+  const scrim = style.backplate === 'scrim'
+    ? <div style={{ position: 'absolute', inset: '-180px -60px -60px', background: 'linear-gradient(0deg, rgba(0,0,0,0.72), rgba(0,0,0,0))', pointerEvents: 'none' }} />
+    : null
+
   return (
     <div
       style={{
@@ -209,6 +218,7 @@ export const SubtitleOverlay: React.FC<SubtitleOverlayProps> = ({ subtitles, cap
         ...bandStyle(style.position, height, safeZonePct),
       }}
     >
+      {scrim}
       <div style={{ transform: `rotate(${style.rotationDeg}deg)` }}>
         <div style={{ ...plate, display: 'inline-block' }}>{content}</div>
       </div>

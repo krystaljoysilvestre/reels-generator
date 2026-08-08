@@ -19,7 +19,7 @@ export const RemotionRoot: React.FC = () => {
         defaultProps={{
           scenes: [],
           subtitles: [],
-          captionStyle: CAPTION_PRESETS.clean,
+          captionStyle: CAPTION_PRESETS.candid,
           captionSafeZonePct: 18,
           grain: 0.15,
           vignette: 0.25,

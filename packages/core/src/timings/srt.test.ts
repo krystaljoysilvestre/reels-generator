@@ -59,25 +59,25 @@ describe('resolveSidecarSrt', () => {
   }
 
   it('ships a track when captions are NOT burned', () => {
-    const srt = resolveSidecarSrt(timings, { ...CAPTION_PRESETS.clean, enabled: false })
+    const srt = resolveSidecarSrt(timings, { ...CAPTION_PRESETS.candid, enabled: false })
     expect(srt).toContain('Narration line')
   })
 
   it('ships nothing when captions ARE burned — one delivery, never both', () => {
-    expect(resolveSidecarSrt(timings, { ...CAPTION_PRESETS.clean, enabled: true })).toBeNull()
+    expect(resolveSidecarSrt(timings, { ...CAPTION_PRESETS.candid, enabled: true })).toBeNull()
   })
 
   it('treats an absent toggle as burned (existing channels are unchanged)', () => {
-    expect(resolveSidecarSrt(timings, CAPTION_PRESETS.clean)).toBeNull()
+    expect(resolveSidecarSrt(timings, CAPTION_PRESETS.candid)).toBeNull()
   })
 
   it('returns null on unusable timings or caption style rather than throwing', () => {
-    expect(resolveSidecarSrt(null, { ...CAPTION_PRESETS.clean, enabled: false })).toBeNull()
+    expect(resolveSidecarSrt(null, { ...CAPTION_PRESETS.candid, enabled: false })).toBeNull()
     expect(resolveSidecarSrt(timings, null)).toBeNull()
   })
 
   it('returns null when captions are off but there is nothing to say', () => {
     const silent = { ...timings, subtitles: [] }
-    expect(resolveSidecarSrt(silent, { ...CAPTION_PRESETS.clean, enabled: false })).toBeNull()
+    expect(resolveSidecarSrt(silent, { ...CAPTION_PRESETS.candid, enabled: false })).toBeNull()
   })
 })
