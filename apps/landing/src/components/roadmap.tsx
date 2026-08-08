@@ -1,6 +1,13 @@
 import { CheckIcon } from './icons'
 
-/** The ship log — reconciled against what actually shipped (2026-08-04 claim audit). */
+/**
+ * The ship log — reconciled against main whenever something ships (last: 2026-08-08).
+ *
+ * Standing rule, because a ship log is the one section that rots into a lie by sitting still: an
+ * item only moves to SHIPPED once it is merged to main and the capability actually works. A
+ * feature waiting on the founder's own config still counts; a feature that has never produced
+ * output does not, however finished the code looks.
+ */
 const SHIPPED = [
   'Story read-gate & finishing pass',
   'Cutting-room storyboard editor',
@@ -8,15 +15,21 @@ const SHIPPED = [
   'Music beds, foley & a four-layer mix',
   'Per-reel story bible — characters stay on-model',
   'Scheduled publishing to YouTube — Shorts & long-form',
+  // 2026-08-08 reconcile: both below were IN THE CUT and have since landed on main. Long-form
+  // also graduated, but it's already covered by the publishing line above rather than repeated.
+  'Endings that land — every genre closes, instead of stopping', // e712dbe + 22de9b9
+  'Fact-checking for real-world stories — an advisory pass before you approve', // PR#21, b523149
 ]
 
 const IN_THE_CUT = [
-  'Long-form documentary cuts',
-  'Fact-checked storytelling — an evidence gate for real events',
   'Channel-wide sound & world identity',
+  'Recurring characters and places that persist across episodes',
+  'Series — recurring story categories with their own queue',
 ]
 
 const ON_THE_SLATE = [
+  // Kendrix already RENDERS for TikTok and Reels; what's outstanding is scheduled publishing
+  // straight to them, which is why this line says publishing and not support.
   'TikTok & Instagram Reels publishing',
   'Analytics & payout insights',
   'Trend-driven ideation',
