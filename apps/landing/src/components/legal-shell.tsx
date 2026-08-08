@@ -5,6 +5,7 @@ import Link from 'next/link'
  *  Same dark marketing world as the landing, narrowed to a reading column. */
 
 const TABS = [
+  { href: '/about', label: 'About' },
   { href: '/privacy', label: 'Privacy' },
   { href: '/terms', label: 'Terms' },
   { href: '/contact', label: 'Contact' },
@@ -16,6 +17,7 @@ export function LegalShell({
   active,
   title,
   stamp,
+  eyebrow = 'The fine print · legal & contact',
   wide = false,
   children,
 }: {
@@ -23,6 +25,8 @@ export function LegalShell({
   title: string
   /** Mono line under the title, e.g. "LAST UPDATED · AUG 2026 · INVITE-ONLY BETA". */
   stamp: string
+  /** Overridable because /about shares this chrome but is not fine print. */
+  eyebrow?: string
   /** Contact uses a slightly wider column for its two-panel layout. */
   wide?: boolean
   children: React.ReactNode
@@ -59,7 +63,7 @@ export function LegalShell({
       </header>
 
       <div className={`relative z-[3] mx-auto ${column} px-6 pt-[52px] text-center sm:px-8`}>
-        <div className="eyebrow tracking-[0.2em]">The fine print · legal &amp; contact</div>
+        <div className="eyebrow tracking-[0.2em]">{eyebrow}</div>
         <h1 className="mt-4 text-4xl font-800 tracking-[-0.03em] sm:text-[44px]">{title}</h1>
         <p className="mono mt-3 text-xs tracking-[0.06em] text-night-ghost">{stamp}</p>
         <div className="mt-[26px] inline-flex gap-[3px] rounded-[13px] border border-white/10 bg-white/[0.04] p-1">

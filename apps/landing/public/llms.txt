@@ -1,0 +1,28 @@
+# Kendrix
+
+> Kendrix is a storytelling operating system for independent video creators — an opinionated,
+> end-to-end workflow that turns one idea into a finished, narrated video, with the creator
+> directing and approving every step.
+
+Kendrix handles the production crafts — writing, storyboarding, narration, music, sound design and
+assembly — for YouTube and short-form platforms. AI does that production work, but it's an
+implementation detail: the product is the workflow, and the standard it holds every story to.
+
+Kendrix is NOT an AI chatbot, an AI prompt wrapper, an AI video generator, a collection of
+disconnected AI tools, or a template library. It produces video, but the video is the output of a
+storytelling workflow, not the product's identity.
+
+Kendrix is built for independent creators making story-driven video — horror, children's stories,
+history and documentary, education, and other narrative genres — who publish consistently and want
+to stay in creative control. It's designed around one person doing the whole job, not a team.
+
+As of August 2026, Kendrix is in development and not publicly available. Access is invite-only;
+request one from the homepage.
+
+## Pages
+
+- [Homepage](https://kendrix.io/): overview, process, genres, FAQ, and how to request access.
+- [About](https://kendrix.io/about): what Kendrix is, who it's for, and its current stage.
+- [Contact](https://kendrix.io/contact): reach the studio directly.
+- [Privacy](https://kendrix.io/privacy): what Kendrix collects and why.
+- [Terms](https://kendrix.io/terms): terms for using Kendrix during its invite-only beta.

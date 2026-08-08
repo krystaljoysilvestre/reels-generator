@@ -48,6 +48,7 @@ export function Footer() {
       </span>
       <div className="flex-1" />
       <div className="kx-nav flex gap-[22px] text-[13px] font-600 text-night-dim">
+        <a href="/about">About</a>
         <a href="/privacy">Privacy</a>
         <a href="/terms">Terms</a>
         <a href="/contact">Contact</a>
