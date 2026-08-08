@@ -14,6 +14,8 @@ import {
   resolvePlatformPreset,
   MUSIC_MOOD_OPTIONS,
   resolveCaptionStyle,
+  SOURCE_POLICY_CHOICES,
+  type SourcePolicy,
 } from '@reels/core'
 import { asGenreModule } from '@reels/core/prompts/scenes.v1'
 import { GENRE_OPTIONS, PRESENTATION_OPTIONS } from '@/lib/genre-labels'
@@ -62,6 +64,8 @@ interface Initial {
   musicMood: MusicMood | null // channel-default background-music mood; null = auto (from audioMood)
   musicMode: MusicMode // only AI-music channels expose a mood control
   tasteRubric: string | null // story-critic bar; null = built-in default for the genre
+  editorialPrinciples: string // the channel's own rules, compiled from the idea; composed ONTO the bar above
+  sourcePolicy: SourcePolicy // what this channel may treat as REAL (already resolved by the loader)
   autoProduce: { enabled: boolean; reelsPerDay: number; startHourUtc: number; autoPublishYouTube: boolean } // the consistency engine cadence
   publish: { mode: 'immediate' | 'slots'; slotsUtc: number[]; daysUtc: number[] } // when a finished reel goes out
   youtubeConfigured: boolean // YOUTUBE_* env keys present → auto-publish is offerable
@@ -109,6 +113,8 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
     Object.entries(initial.worldBible.vocabulary ?? {}).map(([term, value]) => ({ term, value })),
   )
   const [tasteRubric, setTasteRubric] = useState(initial.tasteRubric ?? '')
+  const [editorialPrinciples, setEditorialPrinciples] = useState(initial.editorialPrinciples ?? '')
+  const [sourcePolicy, setSourcePolicy] = useState<SourcePolicy>(initial.sourcePolicy)
   // Genre (the kind of story) — derived by AI at creation, correctable here. Changing it re-scopes
   // everything downstream (writer, registers, scene grammar, voice delivery, styles gallery).
   const [genreCategory, setGenreCategory] = useState(initial.genreCategory)
@@ -206,12 +212,18 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
       factCheck,
       musicMood,
       tasteRubric: tasteRubric.trim() || null,
+      editorialPrinciples: editorialPrinciples.trim(),
+      sourcePolicy,
       narrativeStyle,
       narrativeVoice,
       styleInfluence,
       worldBible: {
         region: region.trim(),
         era: era.trim(),
+        // Carried through, not rebuilt: this form has no editor for recurring entities, so omitting them
+        // from the PATCH would wipe the channel's canon — and orphan every plate minted from it — on any
+        // unrelated settings save.
+        persistentEntities: initial.worldBible.persistentEntities ?? [],
         canonLocations: locations.split('\n').map((s) => s.trim()).filter(Boolean),
         canonObjects: objects.split('\n').map((s) => s.trim()).filter(Boolean),
         vocabulary: Object.fromEntries(vocab.filter((v) => v.term.trim()).map((v) => [v.term.trim(), v.value])),
@@ -534,6 +546,54 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
           {rubricError && <p className="text-xs text-danger">{rubricError}</p>}
         </section>
 
+        {/* What's real — decides whether stories may name real places and real people. Editable because
+            it was compiled from a description, and because it's the one setting whose wrong value is
+            unsafe in both directions. The platform's depiction floor sits ABOVE this and is not
+            adjustable from here: no option below can authorize staging a real party as if photographed. */}
+        <section className="card space-y-3 p-5">
+          <SectionLabel>What&rsquo;s real</SectionLabel>
+          <p className="text-xs text-muted">
+            What your stories can treat as real. This decides whether they name actual places and people, or keep everything invented.
+          </p>
+          <div className="grid gap-2">
+            {SOURCE_POLICY_CHOICES.map((c) => {
+              const active = JSON.stringify(c.value) === JSON.stringify(sourcePolicy)
+              return (
+                <button
+                  key={c.label}
+                  type="button"
+                  onClick={() => setSourcePolicy(c.value)}
+                  aria-pressed={active}
+                  className={`rounded-[10px] border px-3.5 py-2.5 text-left transition-colors ${
+                    active ? 'border-accent bg-accent/5' : 'border-line hover:border-accent/50'
+                  }`}
+                >
+                  <span className="block text-[13px] font-700 text-ink">{c.label}</span>
+                  <span className="mt-0.5 block text-[11.5px] leading-snug text-muted">{c.hint}</span>
+                </button>
+              )
+            })}
+          </div>
+        </section>
+
+        {/* Your rules — read from the channel idea at setup, and binding on top of the taste bar above.
+            Editable on purpose: this is compiled from the creator's own words by a model, so they have
+            to be able to read what it understood and correct it. */}
+        <section className="card space-y-3 p-5">
+          <SectionLabel>Your rules</SectionLabel>
+          <p className="text-xs text-muted">
+            The rules you set for this channel, taken from how you described it. These sit on top of the story taste above — they add to it, never replace it.
+          </p>
+          <textarea
+            value={editorialPrinciples}
+            onChange={(e) => setEditorialPrinciples(e.target.value)}
+            rows={6}
+            maxLength={4000}
+            placeholder="No rules of your own yet. Anything you add here applies to every script."
+            className="input resize-y font-mono text-xs leading-relaxed"
+          />
+        </section>
+
         {/* Background music — AI-music channels only. Sets the default bed mood; each reel can override it. */}
         {initial.musicMode === 'ai' && (
           <section className="card space-y-3 p-5">
@@ -680,6 +740,9 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
           worldBible={{
             region: region.trim(),
             era: era.trim(),
+            // Carried through, not rebuilt: this form doesn't edit recurring entities, and omitting them
+            // here would silently wipe a channel's canon (and orphan its minted plates) on every save.
+            persistentEntities: initial.worldBible.persistentEntities ?? [],
             canonLocations: locations.split('\n').map((s) => s.trim()).filter(Boolean),
             canonObjects: objects.split('\n').map((s) => s.trim()).filter(Boolean),
             vocabulary: Object.fromEntries(vocab.filter((v) => v.term.trim()).map((v) => [v.term.trim(), v.value])),

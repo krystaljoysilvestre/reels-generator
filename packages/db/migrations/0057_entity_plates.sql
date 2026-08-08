@@ -1,0 +1,15 @@
+-- Channel-level reference plates for RECURRING entities: { [entityId]: { key, descriptionHash, referenceOrigin } }.
+--
+-- Until now every reference plate was per-REEL. For a one-off character in one story that is correct.
+-- For a recurring entity — a creature a folklore channel is built on, a mascot, a recurring host — it
+-- meant the analyzer re-described it and the pipeline re-minted it every episode, so it looked
+-- different every time. A channel whose identity IS that entity could never hold it.
+--
+-- Evidence before build (spike-entity-canon.ts, ~48c): one plate carried identity across an extreme
+-- close-up, a distant full-body shot, a backlit silhouette and a crouched mid-shot — none of which the
+-- plate showed — for a photoreal creature on Flux AND a flat-illustration mascot on Gemini. The
+-- generality control mattered: had it held only for the creature, the abstraction was folklore-shaped.
+--
+-- descriptionHash lives in the value so editing an entity's description re-mints instead of silently
+-- serving the old look. Defaults to '{}' so every existing channel is untouched.
+ALTER TABLE "channels" ADD COLUMN IF NOT EXISTS "entity_plates" jsonb DEFAULT '{}'::jsonb NOT NULL;

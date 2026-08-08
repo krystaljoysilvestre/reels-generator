@@ -126,3 +126,31 @@ export function formatImageCredits(bible: StoryBible): string {
   })
   return `Image credits:\n${lines.join('\n')}`
 }
+
+// ── Channel-level entity plates (W2) ─────────────────────────────────────────────────────────────
+// A recurring entity's reference plate, minted ONCE per channel and reused by every reel, keyed by
+// entity id. Before this, a recurring creature/mascot/host was re-described and re-minted per reel and
+// therefore looked different in every episode.
+//
+// `descriptionHash` is what makes editing safe: the plate is only reused while the description that
+// produced it is unchanged, so correcting an entity re-mints instead of silently serving the old look.
+export const EntityPlateSchema = z.object({
+  key: z.string().min(1), // R2 key of the plate
+  descriptionHash: z.string().min(1),
+  referenceOrigin: BibleEntitySchema.shape.referenceOrigin,
+})
+export type EntityPlate = z.infer<typeof EntityPlateSchema>
+
+export const EntityPlateStoreSchema = z.record(z.string(), EntityPlateSchema).default({})
+export type EntityPlateStore = z.infer<typeof EntityPlateStoreSchema>
+
+/**
+ * Stable fingerprint of the text a plate was rendered from. Not cryptographic — it only needs to change
+ * when the description does. Normalized so trivial whitespace edits don't force a costly re-mint.
+ */
+export function entityDescriptionHash(description: string): string {
+  const norm = description.replace(/\s+/g, ' ').trim().toLowerCase()
+  let h = 5381
+  for (let i = 0; i < norm.length; i++) h = ((h << 5) + h + norm.charCodeAt(i)) | 0
+  return (h >>> 0).toString(36)
+}

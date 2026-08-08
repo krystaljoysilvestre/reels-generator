@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { eq } from 'drizzle-orm'
 import { getDb, channels } from '@reels/db'
-import { ToneConfigSchema, WorldBibleSchema, CaptionStyleSchema, TargetPlatformsSchema, channelPlatformPreset, MAX_TARGET_SECONDS, AudioPacksSchema, MusicMoodSchema, PostingRulesSchema, PublishScheduleSchema } from '@reels/core'
+import { SourcePolicySchema, ToneConfigSchema, WorldBibleSchema, CaptionStyleSchema, TargetPlatformsSchema, channelPlatformPreset, MAX_TARGET_SECONDS, AudioPacksSchema, MusicMoodSchema, PostingRulesSchema, PublishScheduleSchema } from '@reels/core'
 import { STYLE_VALUES } from '@reels/core/prompts/story-styles.v1'
 import { GENRE_MODULE_VALUES } from '@reels/core/prompts/scenes.v1'
 import { VOICE_VALUES } from '@reels/core/prompts/story-voices.v1'
@@ -30,6 +30,16 @@ const UpdateSchema = z
     generationMode: z.enum(['review', 'auto']),
     musicMood: MusicMoodSchema.nullable(), // channel-default background-music mood; null = auto (fall back to audioMood). Lives in audioPacks jsonb.
     tasteRubric: z.string().trim().max(4000).nullish(), // story-critic rubric; null/empty clears → default rubric
+    // The channel's OWN rules, compiled from the creator's channel idea. Distinct from tasteRubric:
+    // this COMPOSES onto the rubric rather than replacing it (composeTasteRubric). Editable because a
+    // compiled artifact the creator can't correct is a defect — the compiler is an LLM and gets it
+    // wrong. '' clears it and the gate falls back to the base rubric alone.
+    editorialPrinciples: z.string().trim().max(4000),
+    // What this channel may treat as REAL. Editable because a compiled artifact the creator can't
+    // correct is a defect — and because this one decides whether the engine may name real places and
+    // real people. NARRATIVE permission only: the depictive-ethics floor sits above it and no value
+    // here can relax it.
+    sourcePolicy: SourcePolicySchema,
     // Genre — the AI's creation-time classification, correctable by the operator (re-scopes the
     // writer identity, registers, scene grammar, voice delivery, and the style menus).
     genreCategory: z.enum(GENRE_MODULE_VALUES),

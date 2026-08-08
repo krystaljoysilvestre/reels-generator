@@ -2,7 +2,7 @@ import { getDb, channels } from '@reels/db'
 import { eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { assertChannelAccess } from '@/lib/access'
-import { ToneConfigSchema, WorldBibleSchema, CaptionStyleSchema, AudioPacksSchema, TargetPlatformsSchema, PostingRulesSchema, resolvePublishSlots, resolvePublishDays } from '@reels/core'
+import { resolveChannelPolicy, ToneConfigSchema, WorldBibleSchema, CaptionStyleSchema, AudioPacksSchema, TargetPlatformsSchema, PostingRulesSchema, resolvePublishSlots, resolvePublishDays } from '@reels/core'
 import { isYouTubeConfigured } from '@reels/providers'
 import { ChannelSettings } from './ChannelSettings'
 import { channelMetadata } from '@/lib/page-metadata'
@@ -50,6 +50,10 @@ export default async function ChannelSettingsPage({ params }: { params: Promise<
         musicMood: AudioPacksSchema.parse(channel.audioPacks ?? {}).musicMood ?? null,
         musicMode: AudioPacksSchema.parse(channel.audioPacks ?? {}).musicMode,
         tasteRubric: channel.tasteRubric ?? null,
+        editorialPrinciples: channel.editorialPrinciples ?? '',
+        // Resolved rather than raw: a channel that predates this dimension has NULL, and showing the
+        // creator a blank when the engine is actually running the legacy inference would be a lie.
+        sourcePolicy: resolveChannelPolicy(null, null, channel),
         autoProduce: postingRules.autoProduce,
         // Posting schedule. Slots come back resolved (a channel that never set any still has one —
         // its scheduleUtcHour) so the form shows the times the schedule would actually use.

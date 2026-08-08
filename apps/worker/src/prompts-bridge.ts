@@ -42,6 +42,7 @@ export {
   STORY_CRITIC_V2_VERSION,
   StoryGateSchema,
   defaultTasteRubric,
+  composeTasteRubric,
 } from '@reels/core/prompts/story-critic.v2'
 // Plan-level judge-and-force (OPT-IN, 2026-07-20): the plan gate + the plan doctor run BETWEEN the
 // planner and the writer when a channel opts into agency-driven planning (see generate-story.ts).
@@ -95,6 +96,24 @@ export {
   SceneDepictionRepairSchema,
   type SceneDepictionRepairs,
 } from '@reels/core/prompts/scene-depiction-doctor.v1'
+// Bounded edits — critic (locate) → surgeon (generate) → verifier (reject only). The splice and the
+// re-index are pure code in @reels/core/editing; no model ever returns the narration.
+export {
+  buildStoryEndingCriticPrompt,
+  STORY_ENDING_CRITIC_V1_VERSION,
+  EndingCriticSchema,
+  type EndingCriticVerdict,
+} from '@reels/core/prompts/story-ending-critic.v1'
+export {
+  buildStoryEndingSurgeonPrompt,
+  STORY_ENDING_SURGEON_V1_VERSION,
+  EndingSurgeonSchema,
+} from '@reels/core/prompts/story-ending-surgeon.v1'
+export {
+  buildStoryEditVerifierPrompt,
+  STORY_EDIT_VERIFIER_V1_VERSION,
+  EditVerifierSchema,
+} from '@reels/core/prompts/story-edit-verifier.v1'
 export { buildSoundDesignerPrompt, SOUND_DESIGNER_V1_VERSION, SoundDesignSchema, type DesignerScene } from '@reels/core/prompts/sound-designer.v1'
 export { buildScenesPrompt, SCENES_V1_VERSION, resolveMediaGenre } from '@reels/core/prompts/scenes.v1'
 export { buildStoryAnalyzerPrompt, STORY_ANALYZER_V1_VERSION } from '@reels/core/prompts/story-analyzer.v1'

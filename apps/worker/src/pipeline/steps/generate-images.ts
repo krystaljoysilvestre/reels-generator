@@ -1,7 +1,7 @@
 import { eq, and } from 'drizzle-orm'
 import { getDb, reels, scenes, assets, channels, stories } from '@reels/db'
 import { generateImage, generateImageFal, imageEngineForGenre, FLUX_IMAGE_ENGINE, buildInputHash, ContentFilterError, llmCall, downloadBuffer, uploadBuffer, sourcePlaceImage, spendFromError, SCENE_IMAGE_MODEL, SCENE_IMAGE_QUALITY, type ImageEngine } from '@reels/providers'
-import { assembleImagePrompt, assembleNegativePrompt, assembleReferencePrompt, castNationality, reelLightingDirective, sceneEntities, slug, channelPlatformPreset, StoryBibleSchema, EBN_RENDERING_PROFILE } from '@reels/core'
+import { normalizeCanon, WorldBibleSchema, EntityPlateStoreSchema, entityDescriptionHash, assembleImagePrompt, assembleNegativePrompt, assembleReferencePrompt, castNationality, reelLightingDirective, sceneEntities, slug, channelPlatformPreset, StoryBibleSchema, EBN_RENDERING_PROFILE, effectiveGenre, resolveChannelPolicy,} from '@reels/core'
 import { z } from 'zod'
 import { buildRephrasePrompt, REPHRASE_V1_VERSION, buildImageQAPrompt, IMAGE_QA_V1_VERSION, ImageQASchema, buildFilterSafePrompt, FILTER_SAFE_V1_VERSION, FilterSafeSchema, buildPlaceSourceDecidePrompt, buildPlaceVerifyPrompt, PlaceSourceDecisionSchema, PlaceVerifySchema, PLACE_SOURCE_V1_VERSION } from '../../prompts-bridge.js'
 import { runStep } from '../harness.js'
@@ -84,7 +84,7 @@ async function renderImage(
 
 // ── FACTUAL real-place sourcing ─────────────────────────────────────────────────────────────────────────
 // Fill a real, named PLACE's reference plate with a REAL licensed photograph (Wikimedia Commons) instead of a
-// generated one — informational genre only. Two guards keep it honest: an LLM decides the location is a
+// generated one — gated on the channel's Source Policy (realPlaces). Two guards keep it honest: an LLM decides the location is a
 // specific, named place worth sourcing (a generic setting — a bedroom, a street — falls through to a
 // generated plate), and a vision check confirms the sourced photo actually depicts it. Never throws (fails
 // soft to {sourced:false}); the Wikimedia fetch is free, the two small QA calls are cost-accounted by the
@@ -158,11 +158,20 @@ export async function generateImages(reelId: string): Promise<void> {
 
   // Reel-level lighting (from the bible's time-of-day cues). Forces night/darkness into every scene + every
   // location/object plate so a night story stops rendering in daylight. undefined for non-night reels.
-  const lighting = storyBible ? reelLightingDirective(channel.genreCategory, storyBible.continuity.timeline) : undefined
+  // Genre is per-REEL since series (specs/channel-series.md). Resolve ONCE here; every use below reads
+  // this, so a channel edit can never re-light, re-engine or re-gate an already-rendered reel.
+  const genre = effectiveGenre(reel, channel)
+  // What this reel may treat as REAL — the reel's FROZEN policy wins, so re-rendering an old reel can
+  // never start sourcing real photos it was not made with. Replaces the old `genre === 'informational'`
+  // gate, which tied a permission to a genre bucket: a folklore channel sits on `horror`, so it could
+  // never source a real photo of a real place it was literally about, while every informational channel
+  // got the permission whether or not its creator wanted it.
+  const policy = resolveChannelPolicy(reel, null, channel)
+  const lighting = storyBible ? reelLightingDirective(genre, storyBible.continuity.timeline) : undefined
 
   // Image model is chosen per genre (currently gpt-image-1 for all — owner preference). Used for both
   // reference plates and scenes so the whole reel renders on one engine.
-  const imageEngine = imageEngineForGenre(channel.genreCategory)
+  const imageEngine = imageEngineForGenre(genre)
 
   // Cast nationality from the channel's language (region as fallback) — locked into both the character
   // plates and every scene so the cast matches the channel's audience instead of the model's default look.
@@ -196,7 +205,28 @@ export async function generateImages(reelId: string): Promise<void> {
       if (!s.visualPrompt) continue
       for (const e of sceneEntities(storyBible, { primaryEntity: s.primaryEntity, supportingEntities: s.supportingEntities })) referenced.add(slug(e.id))
     }
-    const refNeg = assembleNegativePrompt({ genreCategory: channel.genreCategory })
+    const refNeg = assembleNegativePrompt({ genreCategory: genre })
+    // ── Channel-level plate reuse (W2) ──────────────────────────────────────────────────────────
+    // A RECURRING entity is minted once per channel and reused forever; a one-off story character is
+    // still minted per reel. The difference is membership of the channel's canon, so compute that set
+    // rather than tagging entities: an entity is channel-canon iff the channel's worldBible declares it.
+    const canonIds = new Set(normalizeCanon(WorldBibleSchema.parse(channel.worldBible ?? {})).map((e) => slug(e.id)))
+    const plateStore = EntityPlateStoreSchema.parse(channel.entityPlates ?? {})
+    // Attach any plate this channel already owns BEFORE deciding what to mint. The description hash is
+    // part of the match: editing an entity's description must re-mint rather than silently serve the old
+    // look. A hit costs nothing and renders this reel from the same pixels as every previous episode.
+    let reused = 0
+    for (const e of storyBible.entities) {
+      if (!canonIds.has(slug(e.id)) || e.referenceImageKey) continue
+      const hit = plateStore[slug(e.id)]
+      if (hit && hit.descriptionHash === entityDescriptionHash(e.description)) {
+        e.referenceImageKey = hit.key
+        if (hit.referenceOrigin) e.referenceOrigin = hit.referenceOrigin
+        reused++
+      }
+    }
+    if (reused > 0) console.log(`[generate-images] ${reelId.slice(0, 8)}: reused ${reused} channel entity plate(s) — not re-minted, not re-paid`)
+
     const toMint = storyBible.entities.filter((e) => !e.referenceImageKey && referenced.has(slug(e.id)))
     // Plate minting runs INSIDE runStep. It was the one paid path in the pipeline that bypassed the budget
     // gates (assertBudget / assertUserBudget / the global daily kill-switch), and its spend was recorded by a
@@ -224,14 +254,14 @@ export async function generateImages(reelId: string): Promise<void> {
               try {
                 // FACTUAL genre: for a real, named PLACE, try a REAL sourced photograph before inventing one. A
                 // generic setting, or a failed / low-confidence source, falls through to the generated plate below.
-                if (channel.genreCategory === 'informational' && entity.kind === 'location') {
+                if (policy.realPlaces && entity.kind === 'location') {
                   const sourced = await sourceLocationPlate(entity, reelId, region)
                   bill(sourced.costCents)
                   if (sourced.sourced) { entity.referenceImageKey = sourced.key; entity.referenceOrigin = sourced.origin; return }
                 }
                 // The supernatural threat mints on the grittier Flux engine for horror — Gemini beautifies faces,
                 // sanding the dread off the scare. Every other entity uses the channel's normal engine.
-                const plateEngine = channel.genreCategory === 'horror' && entity.role === 'threat' ? FLUX_IMAGE_ENGINE : imageEngine
+                const plateEngine = genre === 'horror' && entity.role === 'threat' ? FLUX_IMAGE_ENGINE : imageEngine
                 // `bill` as onSpend: on a safety-filter rejection the rephrase LLM is paid BEFORE the retry
                 // render, and that retry can itself throw — folding it into the return would lose it.
                 const res = await renderImage(plateEngine, { prompt: assembleReferencePrompt(entity, effectiveStyle, lighting, cast), negativePrompt: refNeg, reelId, storageKey: `reels/${reelId}/refs/${slug(entity.id)}.webp`, aspect }, bill)
@@ -247,6 +277,23 @@ export async function generateImages(reelId: string): Promise<void> {
           )
           // Persist the minted keys even when some plates failed — the successes must never be re-paid.
           await db.update(reels).set({ storyBible, updatedAt: new Date() }).where(eq(reels.id, reelId))
+          // Promote CHANNEL-CANON plates to the channel so the next reel reuses these exact pixels
+          // instead of minting a fresh look. Re-read the row inside the write so a concurrent reel's
+          // promotion isn't clobbered (two reels on one channel can mint different entities at once).
+          const minted = toMint.filter((e) => e.referenceImageKey && canonIds.has(slug(e.id)))
+          if (minted.length > 0) {
+            const fresh = await db.query.channels.findFirst({ where: eq(channels.id, channel.id), columns: { entityPlates: true } })
+            const store = EntityPlateStoreSchema.parse(fresh?.entityPlates ?? {})
+            for (const e of minted) {
+              store[slug(e.id)] = {
+                key: e.referenceImageKey!,
+                descriptionHash: entityDescriptionHash(e.description),
+                ...(e.referenceOrigin ? { referenceOrigin: e.referenceOrigin } : {}),
+              }
+            }
+            await db.update(channels).set({ entityPlates: store, updatedAt: new Date() }).where(eq(channels.id, channel.id))
+            console.log(`[generate-images] ${reelId.slice(0, 8)}: promoted ${minted.length} plate(s) to channel canon`)
+          }
           return { output: { minted: toMint.filter((e) => e.referenceImageKey).length }, costCents: plateCost }
         },
       )
@@ -327,7 +374,7 @@ export async function generateImages(reelId: string): Promise<void> {
       ? { bible: storyBible, primaryEntity: refPrimary, supportingEntities: refSupporting }
       : undefined
     const finalPrompt = assembleImagePrompt(scene.visualPrompt!, effectiveStyle, expansion, lighting, cast)
-    const negativePrompt = assembleNegativePrompt({ genreCategory: channel.genreCategory })
+    const negativePrompt = assembleNegativePrompt({ genreCategory: genre })
 
     const inputHash = buildInputHash('generate_images.v1', {
       finalPrompt,
@@ -367,7 +414,7 @@ export async function generateImages(reelId: string): Promise<void> {
             aspect,
             mood: scene.mood,
             stylePreset: effectiveStyle,
-            genreCategory: channel.genreCategory,
+            genreCategory: genre,
             referenceImageKeys,
             engine: sceneEngine,
           }, cost.add)

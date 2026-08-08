@@ -9,6 +9,7 @@
 // Versioned source code. Mechanics are baked into the prompt text, so their version rides along.
 
 import { z } from 'zod'
+import { type SourcePolicy, DEFAULT_SOURCE_POLICY } from '../types/source-policy.js'
 import { STORY_MECHANICS_V1_VERSION, renderMechanics } from './story-mechanics.v1.js'
 import { STORY_ELEMENTS_V1_VERSION, StoryElementsSchema, renderElementPalette, formatRecentElements, type StoryElements } from './story-elements.v1.js'
 import { STORY_STYLES_V1_VERSION, resolveStyle, renderStyleForPlanner, type StyleInfluence } from './story-styles.v1.js'
@@ -18,7 +19,7 @@ import { asGenreModule, classifyGenre, type GenreModule } from './scenes.v1.js'
 // Includes WRITER_IDENTITIES_V1_VERSION because the planner renders identity fields (questionsAsked,
 // taboos, registers, selectionLens) — so an identity edit must bust the planner's inputHash explicitly,
 // not rely solely on the step's full-text hashing of plannerSystem/plannerUser (review nit, 2026-07-18).
-export const STORY_PLANNER_V1_VERSION = `planner.v1.7+${STORY_MECHANICS_V1_VERSION}+${STORY_ELEMENTS_V1_VERSION}+${STORY_STYLES_V1_VERSION}+${WRITER_IDENTITIES_V1_VERSION}`
+export const STORY_PLANNER_V1_VERSION = `planner.v1.8+${STORY_MECHANICS_V1_VERSION}+${STORY_ELEMENTS_V1_VERSION}+${STORY_STYLES_V1_VERSION}+${WRITER_IDENTITIES_V1_VERSION}`
 
 // The committed idea. `mechanics` + `elements` are planner METADATA — the caller STRIPS them before
 // the Writer sees the plan (INVARIANT 1: the Writer writes from the idea, never from labels).
@@ -64,10 +65,46 @@ export interface StoryPlannerVars {
   recentElements?: StoryElements[] | undefined // last ~15 stories' element labels → structural avoid
   narrativeStyle?: string | undefined // the channel's storytelling tradition (story-styles); '' = pure genre
   styleInfluence?: StyleInfluence | undefined // how hard to lean into the style; default medium
+  // What this channel may treat as REAL (resolveChannelPolicy). Omitted → the historical default:
+  // fictionalize everything, which is what every channel did before this dimension existed.
+  sourcePolicy?: SourcePolicy | undefined
 }
 
 export function resolvePlannerGenre(genreCategory: string | null | undefined, niche: string): GenreModule {
   return asGenreModule(genreCategory ?? null) ?? classifyGenre(niche)
+}
+
+// The GUARDS line, driven by the channel's Source Policy.
+//
+// Until now this was unconditional, and its first clause told EVERY channel to fictionalize specific
+// real places. For a channel built on real named subjects that silently laundered the premise —
+// "White Lady of Balete Drive" became an invented street on every reel. The policy makes that a
+// creator choice instead of a global assumption.
+//
+// What NEVER varies, at any policy setting: no invented wrongdoing attributed to real named parties,
+// no graphic content, no harm to minors, no retellings of known films/books/copypastas. And this line
+// governs NARRATION only — whether a rendered frame may STAGE a real party as if photographed is the
+// depictive-ethics floor's, which sits above policy and cannot be relaxed from here.
+function renderGuards(p: SourcePolicy): string {
+  const places = p.realPlaces
+    ? 'real places may be named accurately (use their real names; do not invent a stand-in for a real place the story is actually about)'
+    : 'fictionalize specific real places (invented street/business names; a real region/era is fine)'
+  const people =
+    p.realPeople === 'public_figures'
+      ? 'real public figures may be NAMED and discussed, but never placed in invented scenes, quoted with words they did not say, or accused of anything not established by the source'
+      : p.realPeople === 'historical'
+        ? 'long-dead historical figures may be named; no living identifiable people'
+        : 'no real, identifiable people'
+  const events = p.realEvents
+    ? 'real documented events may be treated as real; never invent an event and present it as documented'
+    : 'events are invented'
+  const invention =
+    p.invention === 'none'
+      ? ' Every load-bearing specific must come from the supplied source material — invent nothing.'
+      : p.invention === 'constrained'
+        ? ' The SUBJECT is real and must stay accurate; the telling is yours.'
+        : ''
+  return `GUARDS: ${places}; ${people}; ${events}; no graphic gore or sexual content; never harm to minors as subject matter; original work only — no retellings of known films, books, or copypastas.${invention}`
 }
 
 export function buildStoryPlannerPrompt(v: StoryPlannerVars): { system: string; userMessage: string } {
@@ -109,7 +146,7 @@ ${elementPalette}
 
 You will also DESCRIBE your committed idea along those dimensions (see the output). Describe the story you chose — don't reverse-engineer a story to hit labels. But quality comes first: if the strongest idea happens to share a dimension or two with recent ones, keep the stronger idea and vary elsewhere — never bend a story into something weaker just to be different.
 
-GUARDS: fictionalize specific real places (invented street/business names; a real region/era is fine); no real, identifiable people; no graphic gore or sexual content; never harm to minors as subject matter; original work only — no retellings of known films, books, or copypastas.`
+${renderGuards(v.sourcePolicy ?? DEFAULT_SOURCE_POLICY)}`
 
   const userMessage = `Plan the next story for this channel — a ~${v.targetSeconds}-second telling.
 ${

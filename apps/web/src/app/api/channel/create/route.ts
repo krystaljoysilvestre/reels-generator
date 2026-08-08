@@ -3,8 +3,8 @@ import { NextResponse } from 'next/server'
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { eq } from 'drizzle-orm'
-import { getDb, channels, stories, claimSetupSpendForChannel } from '@reels/db'
-import { ToneConfigSchema, WorldBibleSchema, ChannelVoiceSchema, VoiceModeSchema, CaptionStyleSchema, TargetPlatformsSchema, resolvePlatformPreset, MAX_TARGET_SECONDS, MusicIntensitySchema, MusicModeSchema, AudioMoodSchema, peakFracForType } from '@reels/core'
+import { getDb, channels, stories, channelSeries, seriesTopics, claimSetupSpendForChannel } from '@reels/db'
+import { SourcePolicySchema, ToneConfigSchema, WorldBibleSchema, ChannelVoiceSchema, VoiceModeSchema, CaptionStyleSchema, TargetPlatformsSchema, resolvePlatformPreset, MAX_TARGET_SECONDS, MusicIntensitySchema, MusicModeSchema, AudioMoodSchema, peakFracForType } from '@reels/core'
 import { classifyGenre, GENRE_MODULE_VALUES, asGenreModule } from '@reels/core/prompts/scenes.v1'
 import { STYLE_VALUES, resolveStyle } from '@reels/core/prompts/story-styles.v1'
 import { VOICE_VALUES, resolveVoice } from '@reels/core/prompts/story-voices.v1'
@@ -25,6 +25,29 @@ const InputSchema = z.object({
   targetSeconds: z.number().int().min(15).max(MAX_TARGET_SECONDS).default(75), // per-channel video length (long-form allows minutes; clamped to the platform cap below)
   captionStyle: CaptionStyleSchema.default({}), // burned-in caption look
   worldBible: WorldBibleSchema,
+  // The channel's OWN rules, compiled by channel.v1 from what the creator wrote. Composed onto the
+  // gate's rubric, never replacing it (composeTasteRubric). '' is common and correct — the derivation
+  // abstains when the idea states no rule. Capped for the same reason tasteRubric is.
+  editorialPrinciples: z.string().trim().max(4000).default(''),
+  // What this channel may treat as REAL. Optional: omitted → the column stays NULL and
+  // resolveChannelPolicy infers today's behaviour from the legacy columns, so nothing changes for a
+  // caller that predates this. NARRATIVE permission only — the depictive-ethics floor sits above it and
+  // cannot be relaxed from here.
+  sourcePolicy: SourcePolicySchema.optional(),
+  // EDITORIAL PROGRAM (specs/channel-series.md): the channel's recurring series + the subjects the
+  // creator listed under each, which seed the scheduler instead of the Planner inventing every topic.
+  // [] is the common, correct answer for an anthology. genreCategory omitted = "no opinion, follow the
+  // channel" — stored as NULL so a later correction to the channel's genre carries automatically.
+  series: z
+    .array(
+      z.object({
+        name: z.string().trim().min(1).max(80),
+        genreCategory: z.enum(GENRE_MODULE_VALUES).optional(),
+        exampleTopics: z.array(z.string().trim().min(1).max(300)).max(50).default([]),
+      }),
+    )
+    .max(8)
+    .default([]),
   // Genre bucket from channel.v1; falls back to keyword classification if absent.
   genreCategory: z.enum(GENRE_MODULE_VALUES).optional(),
   // PROSE dimensions (story-styles / story-voices) — operator-selectable. Re-validated against the
@@ -122,6 +145,8 @@ export async function POST(req: NextRequest) {
     targetSeconds,
     captionStyle: c.captionStyle,
     worldBible: c.worldBible,
+    editorialPrinciples: c.editorialPrinciples, // the channel's own bar; composed onto the gate rubric
+    ...(c.sourcePolicy ? { sourcePolicy: c.sourcePolicy } : {}), // omitted → NULL → legacy inference
     // Prefer the LLM-derived bucket; fall back to keyword classification so the column is never 'general' by accident.
     genreCategory: c.genreCategory ?? classifyGenre(c.nicheDescription),
     // Story mode (fiction studio vs Evidence-Based Narrative). Specialization only meaningful when ebn.
@@ -165,6 +190,32 @@ export async function POST(req: NextRequest) {
   if (!channel) {
     const inserted = await db.insert(channels).values(values).returning()
     channel = inserted[0]
+  }
+
+  // Editorial Program: the series and their seed topics. Written only on a FRESH channel — promoting a
+  // saved draft re-runs this route, and re-inserting would duplicate every series the draft already has.
+  if (c.series.length > 0) {
+    const existingSeries = await db.select({ id: channelSeries.id }).from(channelSeries).where(eq(channelSeries.channelId, channel!.id))
+    if (existingSeries.length === 0) {
+      for (const [i, s] of c.series.entries()) {
+        const [row] = await db
+          .insert(channelSeries)
+          .values({
+            channelId: channel!.id,
+            name: s.name,
+            // undefined → NULL = "no opinion", NOT a copy of the channel's genre (see the RFC).
+            genreCategory: s.genreCategory ?? null,
+            orderIdx: i,
+          })
+          .returning()
+        if (row && s.exampleTopics.length > 0) {
+          await db.insert(seriesTopics).values(
+            s.exampleTopics.map((subject) => ({ channelId: channel!.id, seriesId: row.id, subject })),
+          )
+        }
+      }
+      console.log(`[channel/create] ${channel!.id} seeded ${c.series.length} series`)
+    }
   }
 
   // Attribute the wizard's paid work (derive / sample script / style reads / style previews) to the channel

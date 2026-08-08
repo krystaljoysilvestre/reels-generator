@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { getDb, reels, stories, channels } from '@reels/db'
 import { llmCall, buildInputHash } from '@reels/providers'
-import { PostingRulesSchema, PostMetaSchema, BudgetExceededError, type PostMeta } from '@reels/core'
+import { PostingRulesSchema, PostMetaSchema, BudgetExceededError, type PostMeta, effectiveGenre,} from '@reels/core'
 import { buildPostMetaPrompt, PostMetaLlmSchema, POST_META_V1_VERSION } from '../../prompts-bridge.js'
 import { runStep } from '../harness.js'
 
@@ -31,7 +31,7 @@ export async function generatePostMeta(reelId: string): Promise<void> {
     nicheDescription: channel.nicheDescription ?? '',
     language: reel.language,
     platforms: postingRules.platforms,
-    genreCategory: channel.genreCategory,
+    genreCategory: effectiveGenre(reel, channel),
     title: story.title,
     logline: story.logline ?? '',
     narration: story.body,

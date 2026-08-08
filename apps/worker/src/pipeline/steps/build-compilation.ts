@@ -52,6 +52,9 @@ export async function buildCompilation(compilationId: string): Promise<void> {
   const { system, userMessage } = buildCompilationPrompt({
     channelName: channel.name,
     nicheDescription: channel.nicheDescription,
+    // DELIBERATELY the CHANNEL's genre, not a per-reel one: a compilation wraps many reels that may
+    // each have run under a different series genre, and the connective tissue speaks for the channel as
+    // a whole. There is no single reel whose frozen genre would be the right answer here.
     genreCategory: channel.genreCategory,
     language: channel.languages[0] ?? 'English',
     storyEntries: orderedReels.map((r) => ({

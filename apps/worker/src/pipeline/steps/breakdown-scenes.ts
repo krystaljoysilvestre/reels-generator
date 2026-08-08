@@ -2,7 +2,7 @@ import { eq, and, gt, sql } from 'drizzle-orm'
 import type { z } from 'zod'
 import { getDb, reels, stories, scenes, channels } from '@reels/db'
 import { llmCall, buildInputHash } from '@reels/providers'
-import { ScenesOutputSchema, WorldBibleSchema, StoryBibleSchema, EMPTY_STORY_BIBLE, resolveEntities, reviewSceneBreakdown, MOTION_BUDGET, motionBudgetForSeconds, estimateNarrationSec, retileToNarration, cameraMovePrompt, animatorMotionPrompt, slug, planChapters, legsForChapter, CHAPTER_THRESHOLD_SEC, channelPlatformPreset, type StoryChapter, type StoryBible } from '@reels/core'
+import { ScenesOutputSchema, WorldBibleSchema, StoryBibleSchema, EMPTY_STORY_BIBLE, resolveEntities, reviewSceneBreakdown, MOTION_BUDGET, motionBudgetForSeconds, estimateNarrationSec, retileToNarration, cameraMovePrompt, animatorMotionPrompt, slug, planChapters, legsForChapter, CHAPTER_THRESHOLD_SEC, channelPlatformPreset, type StoryChapter, type StoryBible, effectiveGenre,} from '@reels/core'
 import { buildScenesPrompt, SCENES_V1_VERSION, buildPeakExtractPrompt, PEAK_EXTRACT_V1_VERSION, PeakExtractSchema, resolveMediaGenre, buildSceneDepictionCriticPrompt, SCENE_DEPICTION_CRITIC_V1_VERSION, SceneDepictionVerdictSchema, buildSceneDepictionDoctorPrompt, SCENE_DEPICTION_DOCTOR_V1_VERSION, SceneDepictionRepairSchema } from '../../prompts-bridge.js'
 import { runStep } from '../harness.js'
 
@@ -169,7 +169,8 @@ export async function breakdownScenes(reelId: string): Promise<void> {
 
   // Media/register genre: EBN → informational (a documentary register), not the empty `general` bucket.
   // Hoisted (was inline in the prompt vars): also gates the depiction gate below.
-  const mediaGenre = resolveMediaGenre({ storyMode: channel.storyMode, genreCategory: channel.genreCategory, niche: channel.nicheDescription })
+  // Genre is per-REEL since series — read the frozen value (specs/channel-series.md).
+  const mediaGenre = resolveMediaGenre({ storyMode: channel.storyMode, genreCategory: effectiveGenre(reel, channel), niche: channel.nicheDescription })
   const depictionGateApplies = SCENE_DEPICTION_GATE_ENABLED && mediaGenre === 'informational'
 
   // Bible folded into the hash: editing the bible (or re-analysis) re-triggers the breakdown. The chapter

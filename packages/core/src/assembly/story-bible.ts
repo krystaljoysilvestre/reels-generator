@@ -18,11 +18,18 @@ export function slug(s: string): string {
 // v1 channel canon is name-only; treat each as an entity whose description IS the name (v2 where
 // description === name). Lets the assembler see channel canon and story entities uniformly, with no
 // version fork — old channels resolve, just with a thin (name-only) description until re-derived.
-export function normalizeCanon(wb: Pick<WorldBible, 'canonLocations' | 'canonObjects'>): BibleEntity[] {
-  return [
-    ...wb.canonLocations.map((name): BibleEntity => ({ id: slug(name), kind: 'location', description: name })),
-    ...wb.canonObjects.map((name): BibleEntity => ({ id: slug(name), kind: 'object', description: name })),
-  ]
+export function normalizeCanon(
+  wb: Partial<Pick<WorldBible, 'persistentEntities' | 'canonLocations' | 'canonObjects'>>,
+): BibleEntity[] {
+  const out = new Map<string, BibleEntity>()
+  // v1 shape first: name-only, so description === name (a thin but valid entity). Old channels resolve
+  // unchanged, just without a real depictable description until they're re-derived.
+  for (const name of wb.canonLocations ?? []) out.set(slug(name), { id: slug(name), kind: 'location', description: name })
+  for (const name of wb.canonObjects ?? []) out.set(slug(name), { id: slug(name), kind: 'object', description: name })
+  // v2 shape LAST so it wins on id collision: it carries a real description and a real kind, and it is
+  // the only shape that can express a recurring CHARACTER.
+  for (const e of wb.persistentEntities ?? []) out.set(slug(e.name), { id: slug(e.name), kind: e.kind, description: e.description })
+  return [...out.values()]
 }
 
 // Lenient single-reference resolution. The continuity guarantee hinges on the scene LLM reproducing

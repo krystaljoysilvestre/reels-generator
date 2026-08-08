@@ -16,9 +16,26 @@ export const ToneConfigSchema = z.object({
 })
 export type ToneConfig = z.infer<typeof ToneConfigSchema>
 
+// A thing with a stable identity that RECURS across episodes — a creature, a mascot, a recurring host,
+// a fictional organization, a deity, a place, an object. Deliberately shaped as BibleEntity already is
+// ({id, kind, description}), so normalizeCanon becomes a straight map instead of a hand-written
+// two-array mapper that was structurally unable to emit a CHARACTER at all — which is why a channel
+// built on a recurring creature could never keep it looking the same twice.
+// `description` is required: BibleEntity.description is the canonical depictable noun phrase spliced
+// verbatim into image prompts, so a bare name is useless to the renderer.
+export const PersistentEntitySchema = z.object({
+  name: z.string().min(1),
+  kind: z.enum(['character', 'location', 'object']),
+  description: z.string().min(1),
+})
+export type PersistentEntity = z.infer<typeof PersistentEntitySchema>
+
 export const WorldBibleSchema = z.object({
   region: z.string(),
   era: z.string(),
+  // The unified list. canonLocations/canonObjects below are the v1 shape, kept readable so existing
+  // channels resolve unchanged; normalizeCanon folds both together.
+  persistentEntities: z.array(PersistentEntitySchema).default([]),
   canonLocations: z.array(z.string()).default([]),
   canonObjects: z.array(z.string()).default([]),
   vocabulary: z.record(z.string(), z.string()).default({}),

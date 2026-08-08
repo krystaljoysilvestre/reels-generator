@@ -274,6 +274,24 @@ export function resolveStyle(genre: GenreModule, style: string | null | undefine
   return STORY_STYLES[genre]?.[style] ?? null
 }
 
+// Which style id a reel should actually use, once a SERIES can carry its own genre and style
+// (specs/channel-series.md). Styles are genre-SCOPED, so the channel's style is frequently meaningless
+// under a series' genre — a `deep_dive` (informational) channel running a horror series would otherwise
+// pass an id that resolveStyle() can't find, silently dropping the planner's style block with no error
+// and no way to tell that from "this channel has no style".
+//
+// Order: the series' own style if valid here → else the channel's, but ONLY if it is valid here → else
+// pure genre (''). Returns an id (or '') rather than a StyleSpec so callers can persist/hash it.
+export function resolveStyleForGenre(
+  genre: GenreModule,
+  seriesStyle: string | null | undefined,
+  channelStyle: string | null | undefined,
+): string {
+  if (seriesStyle && resolveStyle(genre, seriesStyle)) return seriesStyle
+  if (channelStyle && resolveStyle(genre, channelStyle)) return channelStyle
+  return ''
+}
+
 const INFLUENCE_LEAD: Record<StyleInfluence, string> = {
   light: 'Lightly borrow from',
   medium: 'Work in the tradition of',

@@ -1,9 +1,10 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
-import { getDb, reels, channels } from '@reels/db'
-import { eq } from 'drizzle-orm'
+import { getDb, reels, channels, channelSeries } from '@reels/db'
+import { and, eq } from 'drizzle-orm'
 import { enqueueStep } from '@reels/queue'
-import { requireApiUser, requireReelCreationBudget } from '@/lib/api-access'
+import { resolveChannelPolicy, resolveGenreForNewReel } from '@reels/core'
+import { requireApiUser, requireReelCreationBudget, isUuid } from '@/lib/api-access'
 import { userOwnsChannel } from '@/lib/access'
 
 export async function POST(req: NextRequest) {
@@ -11,11 +12,12 @@ export async function POST(req: NextRequest) {
   if (gate instanceof NextResponse) return gate
   const user = gate
 
-  const { channelId, generationMode, seed, dossier } = (await req.json().catch(() => ({}))) as {
+  const { channelId, generationMode, seed, dossier, seriesId } = (await req.json().catch(() => ({}))) as {
     channelId?: string
     generationMode?: string
     seed?: string
     dossier?: string // Evidence-Based Narrative: the curated source material for this case (EBN channels only)
+    seriesId?: string // optional: make this reel part of one of the channel's series (specs/channel-series.md)
   }
   if (!channelId) return NextResponse.json({ error: 'channelId is required' }, { status: 400 })
 
@@ -42,6 +44,17 @@ export async function POST(req: NextRequest) {
     await db.update(channels).set({ generationMode, updatedAt: new Date() }).where(eq(channels.id, channelId))
   }
 
+  // Optional series. Scoped to THIS channel in the query itself, so a series id belonging to another
+  // tenant simply doesn't resolve — no cross-channel read, and 404 rather than confirming it exists.
+  // isUuid FIRST: a non-uuid string reaching a uuid column throws in Postgres, which would surface as a
+  // 500 on plainly bad input instead of a 400.
+  if (seriesId !== undefined && !isUuid(seriesId)) return NextResponse.json({ error: 'Invalid seriesId' }, { status: 400 })
+  const series = seriesId
+    ? await db.query.channelSeries.findFirst({ where: and(eq(channelSeries.id, seriesId), eq(channelSeries.channelId, channel.id)) })
+    : undefined
+  // 404, not 403: a series belonging to another channel must not be confirmed to exist.
+  if (seriesId && !series) return NextResponse.json({ error: 'Series not found' }, { status: 404 })
+
   const language = (channel.languages[0] ?? 'tagalog').toLowerCase()
   const [reel] = await db.insert(reels).values({
     channelId: channel.id,
@@ -51,6 +64,11 @@ export async function POST(req: NextRequest) {
     ...(typeof seed === 'string' && seed.trim() ? { seedIdea: seed.trim().slice(0, 500) } : {}),
     // EBN: freeze the curated dossier on the reel; the extractor turns it into the Evidence Bible.
     ...(cleanDossier ? { dossier: cleanDossier } : {}),
+    // Series + the genre it resolves to, FROZEN here and never re-derived (specs/channel-series.md).
+    // Freeze the resolved source policy (series override wins over the channel's), for the same reason
+    // the genre is frozen: an edit to the channel must never change what an existing reel was made under.
+    sourcePolicy: resolveChannelPolicy(null, series ?? null, channel),
+    ...(series ? { seriesId: series.id, genreCategory: resolveGenreForNewReel(series, channel) } : {}),
   }).returning()
 
   // Kick off the pipeline: generate_story runs, then the chain STOPS at the story_review gate

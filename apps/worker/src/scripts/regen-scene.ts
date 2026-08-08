@@ -18,7 +18,7 @@ async function main() {
   const { getDb, scenes, assets, channels, reels } = await import('@reels/db')
   const { eq, and, inArray, sql } = await import('drizzle-orm')
   const { generateImageFal, imageEngineForGenre } = await import('@reels/providers')
-  const { assembleImagePrompt, assembleNegativePrompt, reelLightingDirective, sceneEntities, StoryBibleSchema, channelPlatformPreset } =
+  const { assembleImagePrompt, assembleNegativePrompt, reelLightingDirective, sceneEntities, StoryBibleSchema, channelPlatformPreset, effectiveGenre } =
     await import('@reels/core')
 
   const db = getDb()
@@ -31,13 +31,17 @@ async function main() {
   const expansion = storyBible
     ? { bible: storyBible, primaryEntity: scene.primaryEntity, supportingEntities: scene.supportingEntities }
     : undefined
-  const engine = imageEngineForGenre(channel.genreCategory)
+  // The reel's FROZEN genre, not the channel's current one: this re-renders ONE scene back into an
+  // existing reel, so it must use the same engine/lighting/guards the reel's other scenes were made
+  // with. Reading the channel here would silently mismatch a regenerated scene against its siblings.
+  const genre = effectiveGenre(reel, channel)
+  const engine = imageEngineForGenre(genre)
   const aspect = channelPlatformPreset(channel).aspect
-  const lighting = storyBible ? reelLightingDirective(channel.genreCategory, storyBible.continuity.timeline) : undefined
+  const lighting = storyBible ? reelLightingDirective(genre, storyBible.continuity.timeline) : undefined
   // 'fresh' re-rolls from the pristine scenes-generation prompt; 'vary' builds on the current (revised) one.
   const basePrompt = mode === 'fresh' ? scene.visualPromptBase || scene.visualPrompt : scene.visualPrompt
   const finalPrompt = assembleImagePrompt((basePrompt || '').trim(), channel.stylePreset, expansion, lighting)
-  const negativePrompt = assembleNegativePrompt({ genreCategory: channel.genreCategory })
+  const negativePrompt = assembleNegativePrompt({ genreCategory: genre })
 
   const entityPlateKeys = storyBible
     ? sceneEntities(storyBible, { primaryEntity: scene.primaryEntity, supportingEntities: scene.supportingEntities })

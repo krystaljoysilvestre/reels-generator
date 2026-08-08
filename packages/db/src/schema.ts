@@ -168,9 +168,34 @@ export const channels = pgTable('channels', {
   // 'auto' = run end-to-end through to a finished render, no stops. Set on the first reel, editable in
   // Settings. (Publishing stays manual either way.)
   generationMode: text('generation_mode').notNull().default('review'),
-  // Operator-editable taste rubric the story critic ranks candidates against.
-  // Null = use the hand-written default (DEFAULT_TASTE_RUBRIC in story-critic.v1).
+  // Operator-editable taste rubric the story critic ranks candidates against. REPLACES the built-in
+  // rubric wholesale. Null = use the hand-written default (DEFAULT_TASTE_RUBRICS, per genre).
   tasteRubric: text('taste_rubric'),
+  // EDITORIAL PRINCIPLES — the channel's own rules, COMPILED from what the creator wrote in their
+  // channel idea (channel.v1's `editorialPrinciples`). Distinct from tasteRubric on purpose: this
+  // COMPOSES ONTO the base rubric rather than replacing it, because a creator's "no cheap jump scares"
+  // is one more bar on top of the genre's craft rubric, not a substitute for it. Replacing a ~25-line
+  // craft rubric with a 4-line house rule would make the gate weaker, which is the opposite of the
+  // point. Empty is common and correct — most channel ideas state no rule of their own.
+  // Resolved for the gate by composeTasteRubric() in core; never read directly.
+  editorialPrinciples: text('editorial_principles').notNull().default(''),
+  // SOURCE POLICY (jsonb) — what this channel's stories may treat as REAL. Consolidates four switches
+  // that already expressed this idea and were never creator-visible (storyMode, ebnSpecialization,
+  // factCheck, and the planner's unconditional "fictionalize real places" guard). NULL = never set →
+  // resolveChannelPolicy() infers today's behaviour from the legacy columns, so nothing changes for an
+  // existing channel. NEVER read directly: go through resolveChannelPolicy, the one seam. It expresses
+  // creator choice strictly WITHIN the non-overridable platform floor — it can never authorize a
+  // category the depictive-ethics floor prohibits. See packages/core/src/types/source-policy.ts.
+  sourcePolicy: jsonb('source_policy'),
+  // ENTITY PLATES — the channel-level reference plate for each RECURRING entity, minted once and reused
+  // by every reel: { [entityId]: { key, descriptionHash, referenceOrigin } }.
+  // Without this a recurring creature/mascot/host was re-described by the analyzer and RE-PLATED on
+  // every reel, so it looked different in every episode — fatal for a channel whose identity IS that
+  // entity. A spike (apps/worker/scripts/spike-entity-canon.ts) confirmed one plate carries identity
+  // across shots the plate never showed, for a photoreal creature AND a flat-illustration mascot.
+  // descriptionHash is part of the value so editing an entity's description re-mints rather than
+  // silently serving the old look. Side benefit: the plate is paid for once per channel, not per reel.
+  entityPlates: jsonb('entity_plates').notNull().default({}),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 }, (t) => ({
@@ -252,6 +277,20 @@ export const reels = pgTable(
     // Optional operator topic seed for THIS reel's story ("make one about the aswang sa palengke").
     // Read by generate_story → planner; null = the planner explores freely. Never mutated after creation.
     seedIdea: text('seed_idea'),
+    // Which SERIES this reel came from (specs/channel-series.md). Null = planner-invented, the behaviour
+    // every reel had before series existed. onDelete:'set null' — deleting a series must never cascade
+    // away the reels it produced, nor strand them.
+    seriesId: uuid('series_id').references((): AnyPgColumn => channelSeries.id, { onDelete: 'set null' }),
+    // The RESOLVED genre this reel actually ran under, FROZEN at creation by resolveGenreForNewReel()
+    // (series' genre if it has an opinion, else the channel's). Null = pre-series reel → readers fall back
+    // to the channel column via effectiveGenre(). Never rewritten: a later channel edit or series re-derive
+    // (both non-deterministic LLM output) must not retroactively change how a finished reel was judged,
+    // rendered, or cache-keyed. Nothing downstream of creation ever re-consults the series.
+    genreCategory: text('genre_category'),
+    // The RESOLVED source policy this reel ran under, FROZEN at creation alongside genreCategory. A reel
+    // generated under "fictional only" must not later be re-judged, re-rendered or re-cache-keyed under
+    // "real places allowed". NULL = pre-policy reel → resolveChannelPolicy falls back to the channel's.
+    sourcePolicy: jsonb('source_policy'),
     // Curated raw SOURCE material for THIS reel (court records, transcripts, archives, article excerpts).
     // Used by BOTH the EBN path (storyMode='ebn': the Extractor freezes it into the Evidence Bible before
     // the story is written) AND the standalone fact gate (channels.factCheck: the story is written freely,
@@ -285,6 +324,85 @@ export const reels = pgTable(
     // sharing a story would corrupt each other's script. DB backstop for concurrent make-reel-from-story
     // calls that both pass the app-level existence check (pattern: uq_publications_reel_platform).
     uqStory: uniqueIndex('uq_reels_story').on(t.storyId).where(sql`story_id IS NOT NULL`),
+  }),
+)
+
+// ── channel series — the channel's Editorial Program (specs/channel-series.md) ─────────────────────
+// A named recurring category of stories ("Mythical Creatures", "Case Studies", "Space"), compiled from
+// the content pillars creators already write into their channel idea. Before this, the only source of
+// story subjects was the Planner inventing them against an abstract structural angle that knew nothing
+// about the channel's actual subject matter.
+//
+// SCOPE BOUNDARY (enforced by review, not by types): a series owns exactly the three overrides below,
+// each meaning "this category of stories behaves differently". It is NOT a generic configuration bucket
+// — voice, language, publish schedule and thumbnail style do not belong here, however tempting
+// "series already has overrides" sounds later.
+export const channelSeries = pgTable(
+  'channel_series',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    channelId: uuid('channel_id')
+      .notNull()
+      .references(() => channels.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(), // "Mythical Creatures"
+    // Genre OVERRIDE — nullable on purpose. NULL means "this series has no opinion", NOT "copy the
+    // channel's". Storing a duplicate of the channel's genre would silently rot the moment the channel's
+    // own genre is corrected (a real case: channel.v1 misclassifies, the operator fixes it in settings,
+    // and every "neutral" series is left holding the stale value with nothing to flag it).
+    genreCategory: text('genre_category'),
+    // Prose overrides, both nullable = inherit. narrativeStyle is genre-scoped (STORY_STYLES), so a
+    // channel-level style may be invalid under a series' genre — resolution falls back to pure genre
+    // rather than passing an invalid id through (see resolveSeriesStyle).
+    narrativeStyle: text('narrative_style'),
+    tasteRubric: text('taste_rubric'),
+    // Per-series policy override (rare): a "Historical Mysteries" series may name real places while the
+    // rest of a folklore channel stays invented. NULL = inherit the channel's.
+    sourcePolicy: jsonb('source_policy'),
+    orderIdx: integer('order_idx').notNull().default(0), // round-robin order; NOT a creator-facing sort feature
+    enabled: boolean('enabled').notNull().default(true), // pause a series without deleting its topics
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    idxChannel: index('idx_channel_series_channel').on(t.channelId),
+  }),
+)
+
+// ── series topics — the seed queue ────────────────────────────────────────────────────────────────
+// Named subjects the creator already listed ("The Yamashita Treasure"). The scheduler pops one per
+// tick instead of leaving the Planner to invent, which is the wrong default for a channel whose
+// subjects are real, pre-existing things.
+//
+// `used` is a HISTORICAL RECORD, not a lock: it answers "which reel came from this topic" via
+// usedByReelId. Retelling a subject later is a NEW queued row with the same text, never a status
+// transition on the old one — the same choice stories/avoidList already make, where old entries stay
+// as readable history and freshness is enforced by comparison at use-time rather than by a constraint.
+// Deliberately NOT unique on (seriesId, subject).
+export const seriesTopics = pgTable(
+  'series_topics',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    // Denormalized from the series for cheap tenant-scoped queries; seriesId is the real parent.
+    channelId: uuid('channel_id')
+      .notNull()
+      .references(() => channels.id, { onDelete: 'cascade' }),
+    seriesId: uuid('series_id')
+      .notNull()
+      .references(() => channelSeries.id, { onDelete: 'cascade' }),
+    subject: text('subject').notNull(),
+    // Who put this here: 'creator' = compiled from what they actually wrote (or typed later);
+    // 'generated' = the engine replenished a dry queue on their behalf. Kept distinguishable because
+    // for a real-subject channel a generated topic is the one thing that could be FABRICATED, and
+    // "which of these did we make up?" must stay answerable — both for review and for measuring it.
+    origin: text('origin').notNull().default('creator'),
+    status: text('status').notNull().default('queued'), // 'queued' | 'used' | 'skipped'
+    usedByReelId: uuid('used_by_reel_id').references((): AnyPgColumn => reels.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    idxChannel: index('idx_series_topics_channel').on(t.channelId),
+    // The scheduler's hot path: next queued topic for a series, oldest first.
+    idxSeriesStatus: index('idx_series_topics_series_status').on(t.seriesId, t.status, t.createdAt),
   }),
 )
 

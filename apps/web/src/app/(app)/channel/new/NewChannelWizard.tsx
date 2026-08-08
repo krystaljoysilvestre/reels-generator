@@ -8,6 +8,7 @@ import { avatarGradient, avatarInitials } from '@/components/ChannelAvatar'
 import { CaptionPreview } from '@/components/CaptionPreview'
 import { PlatformPicker } from '@/components/PlatformPicker'
 import { type CaptionPreset, type CaptionStyle, type TargetPlatform, type AudioMood, resolveCaptionStyle, CaptionStyleSchema, resolvePlatformPreset, PUBLISH_PLATFORMS, PRESET_BEDS, rankPresets, presetsForGenre, stylePresetThumbKey, sampleSceneForGenre } from '@reels/core'
+import { SOURCE_POLICY_CHOICES, mustAskSourcePolicy, type SourcePolicy } from '@reels/core'
 import { type GenreModule, asGenreModule } from '@reels/core/prompts/scenes.v1'
 import { stylesForGenre } from '@reels/core/prompts/story-styles.v1'
 import { GENRE_OPTIONS, genreLabel } from '@/lib/genre-labels'
@@ -141,6 +142,10 @@ interface Derived {
     vocabulary: Record<string, string>
   }
   voiceSearchKeyword: string
+  // The channel's own rules, compiled from the creator's own words. '' when the idea states none.
+  editorialPrinciples?: string
+  // Absent when the pitch left it genuinely ambiguous — the wizard then ASKS (mustAskSourcePolicy).
+  sourcePolicy?: SourcePolicy
   genreCategory: GenreModule
   presentation?: '' | 'voiceover' | 'hosted'
   narrativeStyle?: string
@@ -247,6 +252,17 @@ export function NewChannelWizard({
   const [showAllVoices, setShowAllVoices] = useState(false)
   const [voiceGender, setVoiceGender] = useState<'any' | 'female' | 'male'>('any')
   const [voiceSearchKeyword, setVoiceSearchKeyword] = useState('')
+  // The channel's OWN rules, compiled by channel.v1 from rules the creator actually wrote. Composed
+  // onto the editorial gate's rubric (never replacing it). '' whenever the idea states no rule — the
+  // common, correct case — and the gate then uses its built-in bar for the genre.
+  const [editorialPrinciples, setEditorialPrinciples] = useState('')
+  // SOURCE POLICY — what this channel may treat as REAL. Derived when the pitch makes it clear; when it
+  // doesn't, we ASK, because guessing is unsafe in both directions (invent where the channel is about
+  // real documented things, or name real people where the creator wanted pure fiction).
+  // Pre-selected to the safest option rather than left blank: this must never be a silent default, and
+  // it must never be required work either — so skipping means accepting a choice they can SEE.
+  const [sourcePolicy, setSourcePolicy] = useState<SourcePolicy>(SOURCE_POLICY_CHOICES[0]!.value)
+  const [askPolicy, setAskPolicy] = useState(false)
   // AI-derived genre bucket → picks the writer identity + scene-prompt genre module. '' until derived;
   // the create route keyword-classifies the niche as a fallback when this is empty.
   const [genreCategory, setGenreCategory] = useState<'' | GenreModule>('')
@@ -415,6 +431,8 @@ export function NewChannelWizard({
         if (Array.isArray(d.selectedVoices)) setSelectedVoices(d.selectedVoices)
         if (Array.isArray(d.recommended)) setRecommended(d.recommended)
         if (typeof d.voiceSearchKeyword === 'string') setVoiceSearchKeyword(d.voiceSearchKeyword)
+        if (typeof d.editorialPrinciples === 'string') setEditorialPrinciples(d.editorialPrinciples)
+        if (d.sourcePolicy && typeof d.sourcePolicy === 'object') setSourcePolicy(d.sourcePolicy as SourcePolicy)
         { const g = asGenreModule(typeof d.genreCategory === 'string' ? d.genreCategory : null); if (g) setGenreCategory(g) }
         if (d.presentation === '' || d.presentation === 'voiceover' || d.presentation === 'hosted') setPresentation(d.presentation)
         if (typeof d.narrativeStyle === 'string') setNarrativeStyle(d.narrativeStyle)
@@ -463,7 +481,7 @@ export function NewChannelWizard({
     return {
       phase, name, committedName, description, seededDescription, niche, languages, targetPlatforms, presetId,
       avatarKey, costCents, tone, style, region, era, locations, objects, vocab,
-      voiceMode, selectedVoices, recommended, voiceSearchKeyword, genreCategory, presentation, narrativeStyle, narrativeVoice, styleInfluence, tagline, derivedSig,
+      voiceMode, selectedVoices, recommended, voiceSearchKeyword, editorialPrinciples, sourcePolicy, genreCategory, presentation, narrativeStyle, narrativeVoice, styleInfluence, tagline, derivedSig,
       targetSeconds, captionStyle, sampleMode, aiSample, aiSampleEdited, ownSample, autoWroteSample, extraSampleScripts,
       audioMood, musicChoice, selectedPresetIds, presetPickedManually, uploadedMusic,
       styleProposals, selectedStyleIdx, uploadedStyleIdx, stylePreviews: previewKeys,
@@ -479,7 +497,7 @@ export function NewChannelWizard({
     } catch {
       /* storage full / unavailable — non-fatal */
     }
-  }, [hydrated, phase, name, committedName, description, seededDescription, niche, languages, targetPlatforms, presetId, avatarKey, costCents, tone, targetSeconds, style, region, era, locations, objects, vocab, voiceMode, selectedVoices, recommended, voiceSearchKeyword, genreCategory, presentation, narrativeStyle, narrativeVoice, styleInfluence, tagline, derivedSig, captionStyle, sampleMode, aiSample, aiSampleEdited, ownSample, autoWroteSample, extraSampleScripts, audioMood, musicChoice, selectedPresetIds, presetPickedManually, uploadedMusic, styleProposals, selectedStyleIdx, uploadedStyleIdx, stylePreviews, draftChannelId])
+  }, [hydrated, phase, name, committedName, description, seededDescription, niche, languages, targetPlatforms, presetId, avatarKey, costCents, tone, targetSeconds, style, region, era, locations, objects, vocab, voiceMode, selectedVoices, recommended, voiceSearchKeyword, editorialPrinciples, sourcePolicy, genreCategory, presentation, narrativeStyle, narrativeVoice, styleInfluence, tagline, derivedSig, captionStyle, sampleMode, aiSample, aiSampleEdited, ownSample, autoWroteSample, extraSampleScripts, audioMood, musicChoice, selectedPresetIds, presetPickedManually, uploadedMusic, styleProposals, selectedStyleIdx, uploadedStyleIdx, stylePreviews, draftChannelId])
 
   // ── Unsaved-progress guard ──────────────────────────────────────────────────
   // The draft autosaves, but leaving mid-flow still deserves a heads-up so the operator
@@ -1170,6 +1188,12 @@ export function NewChannelWizard({
       setObjects(d.worldBible.canonObjects ?? [])
       setVocab(Object.entries(d.worldBible.vocabulary ?? {}).map(([term, value]) => ({ term, value })))
       setVoiceSearchKeyword(d.voiceSearchKeyword ?? '')
+      setEditorialPrinciples(d.editorialPrinciples ?? '')
+      // mustAskSourcePolicy is CODE, not prompt compliance: a live derivation once omitted the policy
+      // (correctly — the pitch was genuinely ambiguous) and emitted no question either, which would have
+      // left the channel silently on the restrictive default with the creator never asked.
+      if (d.sourcePolicy) { setSourcePolicy(d.sourcePolicy); setAskPolicy(false) }
+      else { setSourcePolicy(SOURCE_POLICY_CHOICES[0]!.value); setAskPolicy(mustAskSourcePolicy(d)) }
       setGenreCategory(d.genreCategory ?? '')
       setPresentation(d.presentation === 'voiceover' || d.presentation === 'hosted' ? d.presentation : '')
       setNarrativeStyle(d.narrativeStyle ?? '')
@@ -1353,6 +1377,8 @@ export function NewChannelWizard({
           targetPlatforms,
           toneConfig: tone,
           voiceSearchKeyword,
+          editorialPrinciples, // '' when the idea stated no rule of its own — the gate keeps its genre default
+          sourcePolicy, // what this channel may treat as REAL; frozen onto every reel it makes
           ...(genreCategory ? { genreCategory } : {}), // omit when not derived → create route keyword-classifies
           ...(presentation ? { presentation } : {}), // omit when no lean → create route defaults to ''
           ...(narrativeStyle ? { narrativeStyle } : {}),
@@ -1681,6 +1707,40 @@ export function NewChannelWizard({
                   >
                     {clarifyLoading ? 'Working…' : (<>Add &amp; continue <FwdArrow /></>)}
                   </button>
+                </div>
+              </div>
+            )}
+
+            {/* SOURCE POLICY — the one question the engine must never guess at.
+                Separate from the clarify loop above on purpose: that loop takes free text, folds it into
+                the pitch and re-derives. This one writes a STRUCTURED field directly, because
+                round-tripping a settled answer back through prose and hoping the next derivation
+                re-extracts it is the exact lossiness this dimension exists to remove.
+                Never blocks: an option is always selected, so "skip" means accepting a visible choice. */}
+            {askPolicy && (
+              <div className="animate-fade-in mt-3 rounded-[14px] border border-accent/40 bg-wash-purple-pink p-[18px]">
+                <h3 className="font-display text-sm font-800 text-ink">What can this channel treat as real?</h3>
+                <p className="mt-1.5 text-xs leading-relaxed text-muted">
+                  This decides whether your stories can name real places and real people, or keep everything invented. You can change it later in settings.
+                </p>
+                <div className="mt-3 grid gap-2">
+                  {SOURCE_POLICY_CHOICES.map((c) => {
+                    const active = JSON.stringify(c.value) === JSON.stringify(sourcePolicy)
+                    return (
+                      <button
+                        key={c.label}
+                        type="button"
+                        onClick={() => setSourcePolicy(c.value)}
+                        aria-pressed={active}
+                        className={`rounded-[10px] border px-3.5 py-2.5 text-left transition-colors ${
+                          active ? 'border-accent bg-white shadow-sm' : 'border-line bg-white/60 hover:border-accent/50'
+                        }`}
+                      >
+                        <span className="block text-[13px] font-700 text-ink">{c.label}</span>
+                        <span className="mt-0.5 block text-[11.5px] leading-snug text-muted">{c.hint}</span>
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
             )}

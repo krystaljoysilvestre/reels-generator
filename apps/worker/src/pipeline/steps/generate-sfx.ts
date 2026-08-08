@@ -14,6 +14,7 @@ import {
   moodToVoiceSettings,
   isVocalSfxPrompt,
   type VoiceSettings,
+  effectiveGenre,
 } from '@reels/core'
 import { runStep } from '../harness.js'
 import { runPool } from '../pool.js'
@@ -175,7 +176,7 @@ export async function generateSfx(reelId: string): Promise<void> {
   // asset row per cue (delete-then-insert) keeps the mixer's anchor→asset match unambiguous on re-runs.
   if (operatorCues.length > 0) {
     const tone = ToneConfigSchema.parse(channel.toneConfig ?? {})
-    const base = (reel.voiceSettings as VoiceSettings | null) ?? moodToVoiceSettings([], tone, channel.genreCategory)
+    const base = (reel.voiceSettings as VoiceSettings | null) ?? moodToVoiceSettings([], tone, effectiveGenre(reel, channel))
 
     // Also concurrent — one step row and one deterministic storage key per cue, so they never interact.
     await runPool(operatorCues, SFX_CONCURRENCY, async (cue) => {

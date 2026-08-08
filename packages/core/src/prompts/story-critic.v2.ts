@@ -232,6 +232,33 @@ export function defaultTasteRubric(genreCategory: string | null | undefined, nic
   return DEFAULT_TASTE_RUBRICS[asGenreModule(genreCategory ?? null) ?? classifyGenre(niche)]
 }
 
+// The ONE seam that resolves what the gate judges against. Two channel fields feed it and they mean
+// different things, which is the whole reason this function exists:
+//
+//   · tasteRubric        — an operator-authored rubric that REPLACES the built-in one wholesale.
+//                          Long-standing behaviour; a human who writes a full rubric means it.
+//   · editorialPrinciples — the channel's own rules, COMPILED from the creator's channel idea
+//                          (channel.v1). These COMPOSE ONTO whichever base rubric applies.
+//
+// Composing rather than replacing is load-bearing. A compiled principles block is a handful of house
+// rules ("no cheap jump scares", "always cite sources"); the base rubric is ~25 lines of genre craft.
+// Letting the former replace the latter would quietly make the gate *weaker* for exactly the channels
+// that bothered to state a bar — the opposite of the point. Principles go last so they read as the
+// channel's additional word on top of the craft standard.
+export function composeTasteRubric(
+  opts: {
+    tasteRubric?: string | null | undefined
+    editorialPrinciples?: string | null | undefined
+    genreCategory?: string | null | undefined
+    niche: string
+  },
+): string {
+  const base = opts.tasteRubric?.trim() || defaultTasteRubric(opts.genreCategory, opts.niche)
+  const principles = opts.editorialPrinciples?.trim()
+  if (!principles) return base
+  return `${base}\n\nTHIS CHANNEL'S OWN RULES — set by the creator, and binding on top of everything above:\n${principles}`
+}
+
 export interface StoryGateVars {
   channelName: string
   nicheDescription: string

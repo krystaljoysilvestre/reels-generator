@@ -9,6 +9,7 @@ import {
   computeTimings,
   isVocalSfxPrompt,
   dropEventsNear,
+  effectiveGenre,
   type ComputeTimingsInput,
   type SceneSpan,
   type AlignedChar,
@@ -32,6 +33,10 @@ export async function runComputeTimings(reelId: string): Promise<void> {
   // Genre picks the outro tail's length (§4.65) — same per-genre tuning as the dramatic pauses.
   const channel = await db.query.channels.findFirst({ where: eq(channels.id, reel.channelId) })
   if (!channel) throw new Error(`Channel not found: ${reel.channelId}`)
+  // Genre is per-REEL since series (specs/channel-series.md): read the frozen value, never the channel's
+  // current one. It feeds both the outro tail AND the cache key below, so reading the channel here would
+  // let a later channel edit silently re-time a finished reel.
+  const genre = effectiveGenre(reel, channel)
 
   const reelScenes = await db.query.scenes.findMany({ where: eq(scenes.reelId, reelId) })
   reelScenes.sort((a, b) => a.idx - b.idx)
@@ -72,9 +77,12 @@ export async function runComputeTimings(reelId: string): Promise<void> {
   // v6: climax ring-out room (extend the reel when a loud hit lands near the end, by the shortfall only).
   // v7: outro tail — the closing image holds for a per-genre beat after the last spoken word (§4.65), so
   // genreCategory now changes the timings and must bust the cache.
-  const inputHash = buildInputHash('compute_timings.v7', {
+  // v8: genre resolves PER REEL (series). Hashing the channel column would collide two reels on the same
+  // channel that ran under different genres — identical narration + scenes, different outro tail, one
+  // cache entry. The version bump also re-times every existing reel once, deliberately.
+  const inputHash = buildInputHash('compute_timings.v8', {
     narration: story.body,
-    genreCategory: channel.genreCategory,
+    genreCategory: genre,
     // Alignment IS the master clock; a re-synthesized voiceover has new timestamps under a new row
     // (createdAt). Hash it so a voice/narration change busts the cache instead of reusing stale timings.
     voiceoverAt: voiceover.createdAt,
@@ -95,7 +103,7 @@ export async function runComputeTimings(reelId: string): Promise<void> {
         scenes: sceneSpans,
         audioScript,
         twistAnchor: story.twistAnchor ?? '',
-        genreCategory: channel.genreCategory,
+        genreCategory: genre,
       }
 
       const timings = computeTimings(timingsInput)

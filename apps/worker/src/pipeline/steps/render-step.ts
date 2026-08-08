@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { mkdir, writeFile, readFile, rm, copyFile } from 'node:fs/promises'
 import { getDb, reels, scenes, assets, channels } from '@reels/db'
 import { downloadBuffer, uploadBuffer, uploadFile, buildInputHash } from '@reels/providers'
-import { TimingsSchema, LutConfigSchema, CaptionStyleSchema, channelPlatformPreset, PostMetaSchema, effectsFromSelection, parseMotion } from '@reels/core'
+import { TimingsSchema, LutConfigSchema, CaptionStyleSchema, channelPlatformPreset, PostMetaSchema, effectsFromSelection, parseMotion, effectiveGenre,} from '@reels/core'
 import { renderReelWithRemotion, renderThumbnailStill } from '@reels/render/remotion/render-remotion'
 import { resolveMediaGenre } from '@reels/core/prompts/scenes.v1'
 import { runStep, setReelStatus } from '../harness.js'
@@ -59,7 +59,9 @@ export async function renderStep(reelId: string): Promise<void> {
   if (!channel) throw new Error('Channel not found')
   // Media/register genre for the grade: EBN → informational, so a documentary isn't graded like a
   // catastrophe. Mood (now register-appropriate from the fixed breakdown) still drives most of it. (resolveMediaGenre)
-  const mediaGenre = resolveMediaGenre({ storyMode: channel.storyMode, genreCategory: channel.genreCategory, niche: channel.nicheDescription })
+  // Frozen per-reel genre, not the channel's current one — a re-derived channel must not change how an
+  // already-made reel renders (specs/channel-series.md).
+  const mediaGenre = resolveMediaGenre({ storyMode: channel.storyMode, genreCategory: effectiveGenre(reel, channel), niche: channel.nicheDescription })
   const lutConfig = LutConfigSchema.parse(channel.lutConfig)
   const captionStyle = CaptionStyleSchema.parse(channel.captionStyle)
   const platformPreset = channelPlatformPreset(channel)

@@ -7,11 +7,13 @@ import {
   ToneConfigSchema,
   channelPlatformPreset,
   outroTailMs,
+  effectiveGenre,
   type StoryOutput,
 } from '@reels/core'
 import {
   buildInputHash,
 } from '@reels/providers'
+import { runEndingRepair, type EndingRepairAudit } from './ending-repair.js'
 import {
   // story.v1 kept only as the planner-failure fallback draft (a single direct draft on the angle).
   STORY_V1_VERSION,
@@ -34,7 +36,7 @@ import {
   buildStoryGatePrompt,
   STORY_CRITIC_V2_VERSION,
   StoryGateSchema,
-  defaultTasteRubric,
+  composeTasteRubric,
   type StyleInfluence,
   buildStoryPlanCriticPrompt,
   STORY_PLAN_CRITIC_V1_VERSION,
@@ -113,6 +115,16 @@ const PLAN_DOCTOR_MAX_REPAIRS = 2
 // fixing stays human-in-the-loop. Fail-safe: any error just records nothing. Enable via STORY_FINISHING_QA=1.
 const FINISHING_QA_ENABLED = process.env.STORY_FINISHING_QA === '1'
 
+// ENDING REPAIR — the first BOUNDED EDIT (OPT-IN, 2026-08-06). The endings lap shipped detection that
+// works, and exposed that we own no way to ACT on it: the gate's rewrite re-rolls the whole chain, because
+// regeneration is not revision. This is the answer — critic (locate) → surgeon (generate) → verifier
+// (reject only) → splice → re-index, where no model ever returns the narration and the prefix is
+// preserved by construction rather than by instruction. See packages/core/src/editing/bounded-edit.ts.
+// Runs after the naturalizer and BEFORE the gate, so the gate simply reads the better version.
+// Fail-closed everywhere: any invalid region, any verifier rejection, any guard, any error ⇒ the original
+// ending ships unchanged. Repair is optional; an incorrect repair is expensive.
+const ENDING_REPAIR_ENABLED = process.env.STORY_ENDING_REPAIR === '1'
+
 type RewriteStatus = 'ok' | 'failed' | 'discarded_wordcount' | 'discarded_peak' | 'discarded_formatting'
 
 // Persisted as pipeline_steps.output (studio mode) — the full attribution trail. Any bad story
@@ -143,6 +155,10 @@ interface StudioOutput {
   finishingQA?:
     | { status: 'ok'; version: string; issues: FinishingIssue[]; summary: string }
     | { status: 'failed'; error: string }
+  // Bounded-edit audit for the ending (only present when STORY_ENDING_REPAIR is enabled). Every attempt
+  // is recorded whether or not it was applied, so "how often does the verifier reject" and "which guard
+  // trips" are queryable without re-running anything. `status:'failed'` ⇒ the original ending shipped.
+  endingRepair?: EndingRepairAudit
   // Evidence-Based Narrative audit (only present on the EBN factual path). The Evidence Bible itself is
   // persisted on the reel (reels.evidenceBible); this carries the per-story citation map + Fact-Fidelity
   // Checker verdict. `fidelity` is fail-safe like the fiction gate: 'failed' still ships the story to
@@ -215,9 +231,17 @@ export async function generateStory(reelId: string, channelId: string, language:
 
   // The operator's per-reel topic request ("make one about …"), set at reel creation. Optional.
   // dossier: the curated source material for EBN (factual) channels; undefined otherwise.
-  const reelRow = await db.query.reels.findFirst({ where: eq(reels.id, reelId), columns: { seedIdea: true, dossier: true } })
+  // genreCategory: the genre FROZEN onto this reel at creation (specs/channel-series.md) — a series
+  // reel carries its own, a planner-invented one is null and falls back to the channel's.
+  const reelRow = await db.query.reels.findFirst({
+    where: eq(reels.id, reelId),
+    columns: { seedIdea: true, dossier: true, genreCategory: true },
+  })
   const operatorSeed = reelRow?.seedIdea?.trim() || undefined
   const dossier = reelRow?.dossier?.trim() || undefined
+  // Resolve ONCE. Everything below — the outro tail, the writer identity, the gate rubric, the studio
+  // cache key — reads this, so a later channel edit can never re-judge a story already written.
+  const genre = effectiveGenre(reelRow, channel)
 
   // ── Few-shot pool ────────────────────────────────────────────────────────
   const refStories = await db.query.stories.findMany({
@@ -337,7 +361,7 @@ export async function generateStory(reelId: string, channelId: string, language:
   // ~2.5 words/sec narration pace, minus the outro beat the reel now holds after the last spoken word
   // (compute-timings §4.65) — so narration + held ending still lands on the channel's target length
   // instead of overrunning it by the tail.
-  const spokenSeconds = Math.max(10, targetSeconds - outroTailMs(channel.genreCategory) / 1000)
+  const spokenSeconds = Math.max(10, targetSeconds - outroTailMs(genre) / 1000)
   const targetWords = Math.round(spokenSeconds * 2.5)
   // A long-form draft (up to ~1500 words of narration + the JSON envelope) overruns the 4096 default
   // and truncates mid-story. ~4 tokens/word is generous headroom (Taglish tokenizes heavier than
@@ -365,7 +389,9 @@ export async function generateStory(reelId: string, channelId: string, language:
       name: channel.name,
       nicheDescription: channel.nicheDescription,
       tasteRubric: channel.tasteRubric,
-      genreCategory: channel.genreCategory,
+      editorialPrinciples: channel.editorialPrinciples,
+      genreCategory: genre, // the reel's frozen genre, not the channel column
+
       narrativeStyle: channel.narrativeStyle,
       narrativeVoice: channel.narrativeVoice,
       styleInfluence: channel.styleInfluence,
@@ -450,6 +476,10 @@ interface StudioArgs {
     name: string
     nicheDescription: string
     tasteRubric: string | null
+    // The channel's own compiled rules (channel.v1). COMPOSES onto the rubric — see composeTasteRubric.
+    editorialPrinciples: string | null
+    // The RESOLVED genre for THIS reel (effectiveGenre — series' genre if it had one, else the
+    // channel's), already frozen before the studio runs. Not the raw channels.genre_category column.
     genreCategory: string | null
     narrativeStyle: string | null
     narrativeVoice: string | null
@@ -502,7 +532,14 @@ async function runStudio(a: StudioArgs) {
 
   const v = a.basePromptVars
   const genreCategory = a.channel.genreCategory ?? undefined
-  const tasteRubric = a.channel.tasteRubric?.trim() || defaultTasteRubric(genreCategory, a.channel.nicheDescription)
+  // Base rubric (operator override or the genre default) PLUS the channel's own compiled principles.
+  // Composition, not replacement: a channel's house rules add a bar, they never remove the craft one.
+  const tasteRubric = composeTasteRubric({
+    tasteRubric: a.channel.tasteRubric,
+    editorialPrinciples: a.channel.editorialPrinciples,
+    genreCategory,
+    niche: a.channel.nicheDescription,
+  })
   // PROSE dimensions (story-styles / story-voices). '' → pure genre / identity-default voice.
   const narrativeStyle = a.channel.narrativeStyle || undefined
   const narrativeVoice = a.channel.narrativeVoice || undefined
@@ -825,12 +862,39 @@ async function runStudio(a: StudioArgs) {
       return res.data
     }
 
+    // ── 4.5 ENDING REPAIR — the first bounded edit ───────────────────────────
+    // critic (locate) → surgeon (generate) → verifier (reject only) → splice → re-index. The
+    // orchestration lives in ./ending-repair.ts so the probe that validates it runs THE SAME CODE.
+    const repairEnding = (story: { title: string }, narration: string, peakMoment: string) =>
+      runEndingRepair({
+        title: story.title,
+        narration,
+        peakMoment,
+        genreCategory,
+        nicheDescription: v.nicheDescription,
+        language: v.language,
+        audienceDescriptor: v.audienceDescriptor,
+        hookPromise: plan?.hookPromise,
+        viewerTransformation: plan?.viewerTransformation,
+        onCost: (cents) => cost.add(cents),
+        resolvePeak,
+      })
+
+
     // ── Run the chain (with at most ONE gate-steered rewrite) ────────────────
+    let endingRepair: StudioOutput['endingRepair']
     const runChain = async (qaFeedback?: string) => {
       const raw = await writeOnce(qaFeedback)
       const edited = await refine('editor', raw.narration, raw.peakMoment, 0.25) // prompt asks ±15%; guard is looser so borderline passes aren't wasted
       const natural = await refine('naturalizer', edited.narration, edited.peakMoment, 0.15) // prompt asks ±10%
-      return { raw, edited, natural }
+      if (!ENDING_REPAIR_ENABLED) return { raw, edited, natural }
+      // The bounded edit runs on the finished text, before the gate reads it. The naturalizer's own
+      // audit status is left untouched — this is a separate stage with its own trail.
+      // On a gate-steered retry this records the SECOND chain's repair, because that is the chain that
+      // shipped — the same convention as raw/edited/natural, which also describe the winning chain only.
+      const repaired = await repairEnding(raw, natural.narration, natural.peakMoment)
+      endingRepair = repaired.audit
+      return { raw, edited, natural: { ...natural, narration: repaired.narration } }
     }
 
     let { raw, edited, natural } = await runChain()
@@ -961,6 +1025,7 @@ async function runStudio(a: StudioArgs) {
       naturalizer: { status: natural.status, ...(natural.detail ? { detail: natural.detail } : {}) },
       gate,
       ...(finishingQA ? { finishingQA } : {}),
+      ...(endingRepair ? { endingRepair } : {}),
       ...(factCheck ? { factCheck } : {}),
       peakResolution,
     }

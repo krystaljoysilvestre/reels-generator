@@ -15,8 +15,9 @@
 import { and, eq, gte, inArray } from 'drizzle-orm'
 import { count } from 'drizzle-orm'
 import { getDb, channels, reels, getUserUsage } from '@reels/db'
-import { PostingRulesSchema, UNSHIPPED_REEL_STATUSES, autoProduceBacklogCap, checkUserLimits, DEFAULT_USER_LIMITS, MAX_INFLIGHT_REELS_PER_USER } from '@reels/core'
+import { PostingRulesSchema, UNSHIPPED_REEL_STATUSES, autoProduceBacklogCap, checkUserLimits, DEFAULT_USER_LIMITS, MAX_INFLIGHT_REELS_PER_USER, resolveGenreForNewReel, resolveChannelPolicy } from '@reels/core'
 import { makeQueue, enqueueStep, QUEUE } from '@reels/queue'
+import { pickNextSeriesTopic, claimSeriesTopic } from './series-queue.js'
 
 export const AUTO_PRODUCE_JOB = 'auto_produce_tick'
 
@@ -90,11 +91,41 @@ export async function runAutoProduceTick(): Promise<void> {
 
     // Create ONE reel this tick (mirrors the create-reel route).
     const language = (channel.languages[0] ?? 'tagalog').toLowerCase()
+
+    // The channel's Editorial Program, if it has one (specs/channel-series.md). null = no series, or
+    // every series out of topics → the Planner invents, exactly as it did before series existed.
+    const pick = await pickNextSeriesTopic(channel.id, channel)
+    // Resolve the genre ONCE, here, and freeze it on the row. Never re-derived downstream.
+    const genreCategory = pick ? resolveGenreForNewReel({ genreCategory: pick.genreCategory }, channel) : null
+    // FREEZE the resolved source policy on every reel, series or not — the same discipline as the genre.
+    // A reel made under "fictional only" must never be re-judged, re-rendered or re-sourced later under
+    // "real places allowed", and the channel's policy is editable at any time.
+    const sourcePolicy = resolveChannelPolicy(null, null, channel)
+
     const [reel] = await db
       .insert(reels)
-      .values({ channelId: channel.id, status: 'drafting', language })
+      .values({
+        channelId: channel.id,
+        status: 'drafting',
+        language,
+        sourcePolicy,
+        ...(pick ? { seedIdea: pick.subject, seriesId: pick.seriesId, genreCategory } : {}),
+      })
       .returning()
+
+    // Claim the topic only AFTER the reel exists, and only if it is still queued. If another tick took
+    // it in between, drop the seed rather than shipping a duplicate subject — the reel still produces a
+    // planner-invented story, which is a strictly better outcome than two reels on the same topic.
+    if (pick) {
+      const claimed = await claimSeriesTopic(pick.topicId, reel!.id)
+      if (!claimed) {
+        await db.update(reels).set({ seedIdea: null, seriesId: null, genreCategory: null }).where(eq(reels.id, reel!.id))
+        console.warn(`${tag} topic "${pick.subject}" was claimed concurrently — reel ${reel!.id.slice(0, 8)} falls back to planner-invented`)
+      }
+    }
+
     await enqueueStep({ reelId: reel!.id, stepName: 'generate_story', channelId: channel.id, language })
-    console.log(`${tag} created reel ${reel!.id.slice(0, 8)} (${(madeToday?.value ?? 0) + 1}/${reelsPerDay} today, mode=${channel.generationMode})`)
+    const from = pick ? ` from "${pick.seriesName}" → ${pick.subject}` : ''
+    console.log(`${tag} created reel ${reel!.id.slice(0, 8)}${from} (${(madeToday?.value ?? 0) + 1}/${reelsPerDay} today, mode=${channel.generationMode})`)
   }
 }

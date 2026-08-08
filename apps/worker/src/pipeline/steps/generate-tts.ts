@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getDb, reels, stories, scenes, assets, channels } from '@reels/db'
 import { ElevenLabsTtsProvider, buildInputHash, downloadBuffer, uploadBuffer } from '@reels/providers'
-import { moodToVoiceSettings, ToneConfigSchema, planNarrationPauses, resolvePauses, applyPausesToAlignment, type VoiceSettings } from '@reels/core'
+import { moodToVoiceSettings, ToneConfigSchema, planNarrationPauses, resolvePauses, applyPausesToAlignment, type VoiceSettings, effectiveGenre,} from '@reels/core'
 import { insertSilences } from '@reels/render'
 import { runStep } from '../harness.js'
 
@@ -41,14 +41,14 @@ export async function generateTts(reelId: string): Promise<void> {
   // horror story must not be read like quiet dread. Null for BYO/legacy stories → plain genre envelope.
   const storyRegister = (story.elements as { register?: string } | null)?.register
   const voiceSettings =
-    override ?? moodToVoiceSettings(moodTags, ToneConfigSchema.parse(channel.toneConfig ?? {}), channel.genreCategory, storyRegister)
+    override ?? moodToVoiceSettings(moodTags, ToneConfigSchema.parse(channel.toneConfig ?? {}), effectiveGenre(reel, channel), storyRegister)
 
   // Dramatic pauses (per-genre profiles — horror's dread holds, comedy's hang-before-the-snap, drama's
   // breath at the wound): silence is spliced into the voiceover AFTER synthesis and the alignment
   // shifts to match — the narration text stays verbatim, so nothing downstream re-rolls. Beats are planned
   // up front (positions + TARGET total silence) so the cache busts when pacing changes; the actual top-up
   // is resolved against the real alignment below. [M10-safe: alignment length is preserved]
-  const pauseBeats = planNarrationPauses(story.body, reelScenes.map((s) => s.narrationText), channel.genreCategory)
+  const pauseBeats = planNarrationPauses(story.body, reelScenes.map((s) => s.narrationText), effectiveGenre(reel, channel))
 
   const inputHash = buildInputHash('tts.elevenlabs.v3', {
     narration: story.body,   // hash of the exact text to catch any upstream mutation

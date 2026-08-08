@@ -1,0 +1,17 @@
+-- Editorial Principles — the first of the five "compiled creator intent" dimensions.
+--
+-- A creator's channel idea usually states rules of its own ("no cheap jump scares", "never sensational
+-- clickbait", "present competing theories without claiming certainty", "always cite sources"). Until now
+-- those had nowhere to go: the whole idea was pasted into the planner/writer/gate as one unweighted
+-- `Niche:` line, and the editorial gate judged every script against the built-in GENRE default rubric
+-- instead of the channel's own bar. channel.v1.6 now compiles them into this column.
+--
+-- Deliberately NOT reusing `taste_rubric`. That column REPLACES the built-in rubric wholesale (an operator
+-- who hand-writes a full rubric means it). A compiled principles block is a handful of house rules, so
+-- letting it replace a ~25-line genre craft rubric would make the gate WEAKER for exactly the channels
+-- that bothered to state a bar. This column COMPOSES on top instead — see composeTasteRubric() in core,
+-- the only place either field is read.
+--
+-- Additive and empty-by-default: every existing channel keeps today's behaviour byte for byte, and the
+-- derivation abstains (returns '') whenever the creator's text states no rule of its own.
+ALTER TABLE "channels" ADD COLUMN IF NOT EXISTS "editorial_principles" text DEFAULT '' NOT NULL;
