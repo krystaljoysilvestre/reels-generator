@@ -5,7 +5,7 @@ import type { PostMeta } from '@reels/core'
 import { useToast } from '@/components/Toast'
 
 // Publish-side tools for the storyboard footer once a reel is approved:
-//  - PostCaptionButton: view/edit/copy the reel's post package (title/hook/caption/hashtags)
+//  - PostCaptionButton: view/edit/copy the reel's post package (title/thumbnail text/hook/caption/hashtags)
 //  - LogPerformanceButton: paste platform numbers after posting (feeds what the channel learns from)
 
 export function PostCaptionButton({ reelId }: { reelId: string }) {
@@ -92,6 +92,27 @@ export function PostCaptionButton({ reelId }: { reelId: string }) {
                 <label className="block">
                   <span className="mb-1 block text-xs font-medium text-muted">Title</span>
                   <input value={meta.title} onChange={(e) => update('title', e.target.value)} className="input" maxLength={120} />
+                </label>
+                {/* The words burned onto the thumbnail — a SEPARATE field from the title, and editable
+                    for two reasons. It compiles into something the creator would otherwise never see,
+                    which the resolution discipline calls a defect rather than a convenience. And the
+                    generator is measurably unreliable here: asked for the load-bearing specific, it
+                    still reaches for the mood around it (post-meta.v1.3, n=4). This is the override. */}
+                <label className="block">
+                  <span className="mb-1 block text-xs font-medium text-muted">
+                    Thumbnail text — the 3–5 huge words on the image, not the title again
+                  </span>
+                  <input
+                    value={meta.thumbnailText}
+                    onChange={(e) => update('thumbnailText', e.target.value)}
+                    className="input"
+                    maxLength={60}
+                    placeholder={meta.title.slice(0, 40)}
+                  />
+                  <span className="mt-1 block text-xs text-muted">
+                    Leave empty and the whole title gets burned on instead. Carry over the concrete
+                    detail — the number, the name, the object.
+                  </span>
                 </label>
                 <label className="block">
                   <span className="mb-1 block text-xs font-medium text-muted">Hook — the first line a scroller reads</span>

@@ -320,13 +320,27 @@ export async function renderReelWithRemotion(input: RemotionRenderInput): Promis
 
 // Post thumbnail — one still of the Thumbnail composition (hero frame + composited title, 1280×720).
 // Reuses the process-level bundle + browser; a data-URI image needs no file server.
+// Re-exported so callers that RENDER thumbnails can enumerate the treatments without importing the
+// composition module directly — keeps the package's public surface to the render entrypoints.
+
 export async function renderThumbnailStill(input: {
   imagePath: string // local hero frame (webp from the image step)
-  title: string
+  title: string // the OVERLAY words (post-meta.thumbnailText, falling back to the title)
   outputPath: string // .jpeg
+  accent?: string // channel accent colour (captionStyle.highlightColor)
+  // Is the SOURCE frame portrait? Drives the fitting: a portrait frame is never cropped into 16:9,
+  // because a centre crop keeps only 32% of its height and routinely discards the subject. Callers pass
+  // the platform preset's aspect rather than measuring the file — it is the authority on what the scene
+  // images were rendered at, and it needs no image library on the worker.
+  sourceVertical?: boolean
 }): Promise<void> {
   const imageSrc = await toDataUri(input.imagePath, 'image/webp')
-  const props = { imageSrc, title: input.title }
+  const props = {
+    imageSrc,
+    title: input.title,
+    ...(input.accent ? { accent: input.accent } : {}),
+    ...(input.sourceVertical ? { sourceVertical: true } : {}),
+  }
 
   const bundleUrl = await getBundleUrl()
   await ensureBrowserOnce()

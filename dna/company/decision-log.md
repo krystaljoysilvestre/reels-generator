@@ -747,6 +747,61 @@ packages/core/src/prompts/story-critic.v2.ts (v2.19), packages/core/src/prompts/
 
 ---
 
+### 2026-08-10-001
+
+Status: Accepted
+
+Title: The Bottleneck Was Packaging, Not Story — Two of Three Disqualifiers Are Outside the Video
+
+Decision
+
+Retire *story quality* as the stated bottleneck and replace it with **packaging and surface**. Scope the current lap to exactly the three things the founder named — thumbnail, title, caption styling — and build nothing for endings.
+
+Why
+
+The publish-bar audit ran on 2026-08-10, seven weeks after the first reel was rendered and three days after it became Priority 1. The founder watched all three rendered reels and named the disqualifiers unprompted, without a rubric:
+
+1. *"The thumbnails are not post-worthy. We need to look how current content creators do it. Same goes with their titles."*
+2. *"The burned caption styles look so old."*
+3. *"These 3 reels just ended."*
+
+**Nothing named is story quality.** Not premise, not writing, not believability, not the ending criteria — which is what every automated judge, probe and gate we own had been measuring. And two of the three items are **not inside the video at all**: the thumbnail and the title are the packaging a viewer reads before deciding to watch. The engine was producing publishable stories wrapped in unpublishable packaging, and no instrument we own looks at packaging.
+
+Each named item had a specific, verifiable cause, and in every case the cause was one layer deeper than "it looks dated":
+
+* **Thumbnail** — wrong at the CONCEPT level. The composition burned the entire video title at 64-92px in `system-ui` over a bottom scrim. That is a caption, not a thumbnail: creators put 3-5 huge words on the image and let the title say something else. Fixed by a separate `thumbnailText` field plus one chosen treatment.
+* **A worse defect, found only by rendering candidates.** A vertical reel's hero frame is 768x1344; the 16:9 thumbnail fitted it with `objectFit: cover`, keeping **32% of the height, centred**. Vertical composition does not put its subject in the middle — Emberlight's hero frame is a child standing atop a glowing ladder in the upper 6%, and the shipped thumbnail discarded them entirely, keeping three anonymous rungs on beige. Invisible in the code; obvious the moment real frames were rendered.
+* **Title** — `post-meta.v1` instructed *"No clickbait caps, no emoji spam — intrigue comes from the story, not punctuation."* Restraint optimised on the one surface that rewards a curiosity gap, producing filenames: *"the one second thing"*, *"the rungs he left behind"*.
+* **Caption** — `352f3a1` replaced every preset, but the remap moved only the preset **id**. The render step parses the stored **resolved** style, so all three channels kept their old `fontFamily`, `fontSizePx`, `animation`, `stroke` and `letterSpacing`. The new presets reached only channels created after the commit — none of the ones that prompted the change.
+* **Ending** — already fixed. `e712dbe` (08-06) added the held outro beat and all three reels predate it. This is the one item with evidence *against* building more: an additional text-layer ending fix was built and reverted the same week (2026-08-06-003).
+
+Alternatives Considered
+
+**Treating "not post-worthy" as a styling problem and restyling the thumbnail.** Rejected — it would have left the whole title burned on the image, which is the actual defect. The remedy had to change what text goes there, not how it looks.
+
+**Choosing the thumbnail treatment myself.** Rejected. This document's own standing risk is that our automated instruments do not track the founder's ear, demonstrated twice in one week in opposite directions. Four treatments x two fittings were rendered from the founder's own hero frames — 28 real 1280x720 candidates, $0 — and the founder's marks decided it. The losers were **deleted, not kept behind a prop**: four variants left in the codebase would have shipped the indecision as configuration.
+
+**Researching current thumbnail conventions live, as the founder asked.** Attempted and **abandoned**. The search model fabricated its citations, returning placeholder URLs like `watch?v=video_id1`, because a text-search model cannot see images. The script was deleted rather than its schema loosened. The treatments therefore rest on durable fundamentals plus the founder's pick, and this gap is recorded rather than papered over.
+
+**A SQL migration to re-resolve the three channels' caption styles.** Rejected in favour of upgrading on read. A legacy preset id in a stored row *is* the marker for "predates the new presets", so re-resolving at the schema boundary fixes every channel in every environment, needs no jsonb SQL across sixteen retired presets, and cannot destructively mis-write a row. Genuine creator tweaks are separated from old preset defaults by diffing against a frozen snapshot of the retired table — Crossroads' `#0057b8` brand blue survives; the two channels storing untouched defaults adopt their replacement whole.
+
+Expected Impact
+
+The first honest shot at Stories Published 0 → 1, which is the Phase 0 → Phase 1 gate. The lap ends by re-asking the founder *"would you publish this now?"* on re-rendered reels — the same instrument, pointed at a changed artifact.
+
+Review Trigger
+
+**The audit is repeatable, and this decision does not assume packaging was the whole of it.** If the founder still declines after the repair, the new reasons get named the same way rather than guessed at. Two scope limits are known in advance: the treatment was chosen on three reels, two of them the same 55s vertical format, so it is unproven for the 7:38 long-form; and packaging is now measured by nothing and owned by no coworker seat, which is how it went unexamined for seven weeks in the first place.
+
+One negative result is recorded here so it is not re-litigated: **naming the exact failure in a prompt did not fix it.** `post-meta.v1.3` states verbatim that `"AI Takes Over?"` is wrong under *"What If AI Replaces Half of All Office Jobs?"* and that `"HALF THE JOBS"` is right; the same reel still returned `AI Takes Over Offices`. Two of four reels improved and one was a clear win, so the change is kept — but this is the fourth independent instance of soft guidance being satisficed, and **no gate was built**: n=4 does not clear the bar for new machinery.
+
+Related Documents
+
+packages/core/src/types/post-meta.ts (`thumbnailText`, `thumbnailOverlay`, `thumbnailDuplicatesTitle`), packages/core/src/prompts/post-meta.v1.ts (v1.3), packages/render/src/remotion/compositions/ThumbnailComposition.tsx, packages/core/src/types/channel.ts (`upgradeLegacyCaptionStyle`, `LEGACY_CAPTION_DEFAULTS`), packages/core/src/types/caption-upgrade.test.ts, apps/worker/scripts/thumbnail-candidates.ts, apps/worker/scripts/packaging-preview.ts, dna/company/current-metrics.md, decision-log 2026-08-06-003 (the ending evidence this defers to), 352f3a1, e712dbe
+
+---
+
+
 ## Relationship to the Decision Framework
 
 The Decision Framework explains how decisions are made.

@@ -50,6 +50,9 @@ export async function generatePostMeta(reelId: string): Promise<void> {
   const minimalMeta: PostMeta = {
     v: 1,
     title: story.title.slice(0, 120),
+    // Empty on the fallback path, which is correct: thumbnailOverlay() then uses the title, exactly as
+    // the thumbnail behaved before this field existed. Inventing an overlay here would be guessing.
+    thumbnailText: '',
     hook: (story.logline ?? '').slice(0, 200),
     caption: '',
     hashtags: [],

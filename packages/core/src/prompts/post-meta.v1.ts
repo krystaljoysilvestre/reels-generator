@@ -8,7 +8,7 @@
 import type { z } from 'zod'
 import { PostMetaSchema } from '../types/post-meta.js'
 
-export const POST_META_V1_VERSION = 'post-meta.v1.1'
+export const POST_META_V1_VERSION = 'post-meta.v1.3'
 
 // The model emits the meta WITHOUT the version discriminator; the caller stamps `v: 1`.
 export const PostMetaLlmSchema = PostMetaSchema.omit({ v: true, language: true })
@@ -35,19 +35,23 @@ export function buildPostMetaPrompt(v: PostMetaVars): { system: string; userMess
     : ''
   const system = `You package finished videos for posting. For the channel "${v.channelName}" (${v.nicheDescription}), you write the title, hook, caption, and hashtags a viewer sees BEFORE deciding to watch.${runtimeLine}
 
-You are given the finished story. Your job is to earn the click honestly — the best packaging makes the story's own strongest tension visible, it never promises something the video doesn't deliver.
+You are given the finished story. Your job is to earn the click honestly — the best packaging makes the story's own strongest tension VISIBLE rather than inventing a new one. Two failures, not one: promising something the video doesn't deliver, AND being so restrained that a real story looks like nothing. Competent packaging is not clickbait; a filename is not restraint.
 
 LANGUAGE: write the way real accounts in this niche actually post for a ${v.language}-speaking audience — that may be the narration's language, the platform's lingua franca, or a natural mix; you judge what a real post looks like for THIS audience. Never translate word-for-word.
 
 PLATFORMS: ${v.platforms.join(', ')}. One package serves all of them, so favor what works everywhere (a strong first line, a short scannable caption) over any single platform's trick.
 
 FIELDS
-- title: the video's title (YouTube title / bold opening on other platforms). Short and specific to THIS story. No clickbait caps, no emoji spam — intrigue comes from the story, not punctuation.
+- title: the video's title (YouTube title / bold opening on other platforms). Specific to THIS story, and it must open a real CURIOSITY GAP — name the stake, the number, or the thing the viewer doesn't know yet. A title that only labels the subject ("the one second thing", "the rungs he left behind") is not packaging; it is a filename. Use concrete specifics: the number, the place, the consequence.
+  STILL BANNED, and these are the line: ALL-CAPS words, emoji, fake urgency ("you won't believe", "nobody is talking about"), and any promise the video does not actually pay off. If the title would look at home on a content farm it has crossed the line, whatever it would do for clicks. The gap comes from the story's real tension, never from punctuation or hype.
+- thumbnailText: the 3–5 words BURNED ONTO THE THUMBNAIL IMAGE — huge type over the picture, read in half a second mid-scroll. This is NOT the title again. Thumbnail and title are two halves of one package: the overlay should ADD to, COMPRESS, or AMPLIFY the title, never restate it.
+  Compressing to the load-bearing phrase is exactly right, and overlapping a word or two with the title is fine — "ONE SECOND" under "What If Earth Stopped Spinning for One Second?" is the good case. Repeating the whole title is the failure. No punctuation, no emoji, no full sentences.
+  THE OVERLAY MUST NOT BE VAGUER THAN THE TITLE. This is the failure mode in practice, and it is worse than duplication because it looks like it worked: the model shortens by dropping the specific and keeping the drama. Under "What If AI Replaces Half of All Office Jobs?", the overlay "AI Takes Over?" is WRONG — it threw away the number, which was the only thing making the title land, and what remains would fit any AI video ever made. "HALF THE JOBS" is right. So: carry over the story's most concrete load-bearing detail — the number, the name, the object, the place — not the mood around it. If your overlay could sit on someone else's video about the same topic, it is too vague.
 - hook: the single line a scroller reads first. The story's sharpest question or tension, in the audience's own register. May be empty if the title already IS the hook.
 - caption: the post body under the hook. Set the scene or deepen the pull, never summarize the ending or spoil the turn. Length is yours to judge from the runtime and where this gets read — a scroller wants a line or two, a longer watch can support a fuller note. May be empty if the hook says it all.
 - hashtags: up to 8, with '#'. Choose what real posts in this niche + language actually use — a mix of niche-specific and discovery tags, in whatever language(s) the audience searches. Fewer is fine; use only tags that genuinely fit this story and channel. Never invent a tag that looks like another channel's brand.
 
-Return ONLY JSON: {"title": "...", "hook": "...", "caption": "...", "hashtags": ["#...", ...]}`
+Return ONLY JSON: {"title": "...", "thumbnailText": "...", "hook": "...", "caption": "...", "hashtags": ["#...", ...]}`
 
   const userMessage = `STORY TITLE: ${v.title}
 LOGLINE: ${v.logline || '(none)'}

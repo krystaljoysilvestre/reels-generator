@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { mkdir, writeFile, readFile, rm, copyFile } from 'node:fs/promises'
 import { getDb, reels, scenes, assets, channels } from '@reels/db'
 import { downloadBuffer, uploadBuffer, uploadFile, buildInputHash } from '@reels/providers'
-import { TimingsSchema, LutConfigSchema, CaptionStyleSchema, channelPlatformPreset, PostMetaSchema, effectsFromSelection, parseMotion, effectiveGenre,} from '@reels/core'
+import { thumbnailOverlay, TimingsSchema, LutConfigSchema, CaptionStyleSchema, channelPlatformPreset, PostMetaSchema, effectsFromSelection, parseMotion, effectiveGenre,} from '@reels/core'
 import { renderReelWithRemotion, renderThumbnailStill } from '@reels/render/remotion/render-remotion'
 import { resolveMediaGenre } from '@reels/core/prompts/scenes.v1'
 import { runStep, setReelStatus } from '../harness.js'
@@ -355,14 +355,25 @@ export async function renderStep(reelId: string): Promise<void> {
         const heroScene =
           reelScenes.find((s) => s.isHero && s.imageAssetId) ?? reelScenes.find((s) => s.imageAssetId)
         const heroAsset = heroScene?.imageAssetId ? allAssets.find((a) => a.id === heroScene.imageAssetId) : null
-        if (postMeta.success && postMeta.data.title && heroAsset) {
+        // The OVERLAY, not the title. thumbnailOverlay() falls back to the title so reels written before
+        // `thumbnailText` existed still render exactly as before (publish-bar audit, 2026-08-10).
+        const overlay = postMeta.success ? thumbnailOverlay(postMeta.data) : ''
+        if (postMeta.success && overlay && heroAsset) {
           const heroPath = join(tmp, 'thumb_hero.webp')
           await writeFile(heroPath, await downloadBuffer(heroAsset.storageKey))
           const thumbPath = join(tmp, 'thumbnail.jpg')
-          await renderThumbnailStill({ imagePath: heroPath, title: postMeta.data.title, outputPath: thumbPath })
+          await renderThumbnailStill({
+            imagePath: heroPath,
+            title: overlay,
+            outputPath: thumbPath,
+            ...(captionStyle.highlightColor ? { accent: captionStyle.highlightColor } : {}),
+            // The platform preset is the authority on the hero frame's aspect — the scene images were
+            // rendered at exactly these dimensions. A portrait frame must not be cropped into 16:9.
+            sourceVertical: platformPreset.height > platformPreset.width,
+          })
           const thumbKey = `reels/${reelId}/thumbnail.jpg`
           await uploadBuffer(thumbKey, await readFile(thumbPath), 'image/jpeg')
-          const thumbMeta = { role: 'thumbnail', title: postMeta.data.title }
+          const thumbMeta = { role: 'thumbnail', title: overlay }
           await db.insert(assets).values({
             reelId,
             channelId: reel.channelId,

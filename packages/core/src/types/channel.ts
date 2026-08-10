@@ -220,12 +220,87 @@ export const CaptionPresetSchema = z.enum([
 ])
 export type CaptionPreset = z.infer<typeof CaptionPresetSchema>
 
-// Existing channels persist a resolved style in JSON. Keep those records readable while moving their
-// preset identity to the closest replacement; their stored, intentional color/size tweaks are retained.
+// Existing channels persist a fully RESOLVED style in JSON, so a legacy row names its closest
+// replacement here and is re-resolved through it on read — see `upgradeLegacyCaptionStyle`.
 const LEGACY_CAPTION_PRESET_MAP: Record<string, CaptionPreset> = {
   clean: 'candid', pop: 'pulse', hype: 'marquee', karaoke: 'lyric', neon: 'volt', whisper: 'seance',
   impact: 'dance', elegant: 'halo', comic: 'kick', terminal: 'signal', cinematic: 'sable', breaking: 'slate',
   marker: 'notebook', script: 'still', retro: 'chrome', glitch: 'static',
+}
+
+// The four creator-tweakable knobs of each RETIRED preset, frozen at the commit that replaced them
+// (352f3a1). Not decoration and not history: this is the only way to tell a creator's deliberate override
+// apart from the old preset's own default. Crossroads stores `highlightColor: '#0057b8'` under legacy
+// `marker`, whose default was '#ffe11a' — so the blue is the creator's brand accent and must survive the
+// upgrade, while Emberlight stores `elegant`'s defaults unchanged and must adopt its replacement whole.
+// Diffing against the NEW preset instead would preserve every old default as if it were a choice, which
+// is exactly the bug: the channel would keep the look it is supposed to be leaving.
+const LEGACY_CAPTION_DEFAULTS: Record<string, { fontSizePx: number; color: string; highlightColor: string; position: CaptionStyle['position'] }> = {
+  clean: { fontSizePx: 50, color: '#ffffff', highlightColor: '#7fd1ff', position: 'bottom' },
+  pop: { fontSizePx: 62, color: '#ffffff', highlightColor: '#ffd400', position: 'bottom' },
+  hype: { fontSizePx: 66, color: '#ffffff', highlightColor: '#22e06b', position: 'center' },
+  karaoke: { fontSizePx: 56, color: '#ffffff', highlightColor: '#ff4d8d', position: 'bottom' },
+  neon: { fontSizePx: 58, color: '#eafffb', highlightColor: '#19f0c3', position: 'center' },
+  whisper: { fontSizePx: 46, color: '#e9e7ea', highlightColor: '#c01616', position: 'bottom' },
+  impact: { fontSizePx: 74, color: '#ffffff', highlightColor: '#ff2e2e', position: 'center' },
+  elegant: { fontSizePx: 40, color: '#ffffff', highlightColor: '#d9b46a', position: 'bottom' },
+  comic: { fontSizePx: 60, color: '#ffffff', highlightColor: '#ff5fa2', position: 'bottom' },
+  terminal: { fontSizePx: 42, color: '#35ff9e', highlightColor: '#35ff9e', position: 'bottom' },
+  cinematic: { fontSizePx: 44, color: '#f2f2f2', highlightColor: '#cfd6e6', position: 'bottom' },
+  breaking: { fontSizePx: 48, color: '#ffffff', highlightColor: '#e10600', position: 'bottom' },
+  marker: { fontSizePx: 56, color: '#ffffff', highlightColor: '#ffe11a', position: 'bottom' },
+  script: { fontSizePx: 52, color: '#fff7ef', highlightColor: '#ffd9a0', position: 'center' },
+  retro: { fontSizePx: 56, color: '#ffffff', highlightColor: '#f471b5', position: 'center' },
+  glitch: { fontSizePx: 60, color: '#ffffff', highlightColor: '#00e5ff', position: 'center' },
+}
+
+// Re-resolve a stored style that still names a retired preset (publish-bar audit, 2026-08-10).
+//
+// THE BUG THIS CLOSES. `352f3a1` replaced every caption preset because the founder's own verdict on three
+// finished reels was "the burned caption styles look so old" — one of three reasons no reel had ever been
+// published. But the remap only ever moved the preset ID: the render step parses the STORED RESOLVED
+// STYLE verbatim, so all three channels kept their old fontFamily, fontSizePx, animation, stroke and
+// letterSpacing. The new presets reached only channels created after the commit — i.e. none of the ones
+// that prompted the change.
+//
+// WHY HERE AND NOT IN A MIGRATION. A legacy preset id in a stored row IS the marker for "predates the new
+// presets", so upgrading on read fixes every channel in every environment at once, needs no per-preset
+// jsonb SQL over sixteen retired presets, and cannot destructively mis-write a row — the stored value
+// stays intact and readable. The upgrade stops applying the moment settings are saved again, because that
+// writes a current preset id.
+//
+// Deliberately NOT a general "re-resolve from preset" on every read: a current preset's stored style is
+// left exactly as it is. Resolution happens once, at the point the creator chooses, and this function
+// only catches rows that were resolved against a table that no longer exists.
+function upgradeLegacyCaptionStyle(value: unknown): unknown {
+  if (typeof value !== 'object' || value === null) return value
+  const stored = value as Record<string, unknown>
+  const legacy = typeof stored['preset'] === 'string' ? stored['preset'] : null
+  if (!legacy) return value
+  const replacement = LEGACY_CAPTION_PRESET_MAP[legacy]
+  const old = LEGACY_CAPTION_DEFAULTS[legacy]
+  if (!replacement || !old) return value // already a current preset, or unknown — leave it alone
+
+  // Only a value that DIFFERS from the retired preset's default was the creator's own choice.
+  const tweaks: CaptionTweaks = {}
+  if (typeof stored['highlightColor'] === 'string' && stored['highlightColor'] !== old.highlightColor) {
+    tweaks.highlightColor = stored['highlightColor']
+  }
+  if (typeof stored['color'] === 'string' && stored['color'] !== old.color) {
+    tweaks.color = stored['color']
+  }
+  if (typeof stored['position'] === 'string' && stored['position'] !== old.position) {
+    tweaks.position = stored['position'] as CaptionStyle['position']
+  }
+  // Size carries over as a RATIO, never as a pixel count: the replacement preset has its own base size,
+  // and a creator who scaled type up by a third meant the third, not the pixels.
+  if (typeof stored['fontSizePx'] === 'number' && stored['fontSizePx'] !== old.fontSizePx) {
+    tweaks.fontScale = stored['fontSizePx'] / old.fontSizePx
+  }
+
+  // `enabled` is a first-class creator switch rather than part of any preset's look — carry it verbatim.
+  const enabled = typeof stored['enabled'] === 'boolean' ? { enabled: stored['enabled'] } : {}
+  return { ...resolveCaptionStyle(replacement, tweaks), ...enabled }
 }
 
 // Signature motion of a preset. The renderer + the in-app preview both read this.
@@ -249,7 +324,7 @@ export type CaptionAnimation = z.infer<typeof CaptionAnimationSchema>
 export const CaptionShadowSchema = z.enum(['none', 'soft', 'hard', 'glow'])
 export type CaptionShadow = z.infer<typeof CaptionShadowSchema>
 
-export const CaptionStyleSchema = z.object({
+const CaptionStyleObjectSchema = z.object({
   // First-class captions-off toggle: false burns NO subtitles (the renderer skips the overlay). Some
   // formats/channels want clean visuals + narration only — previously this required emptying
   // timings.subtitles by hand (see the News Today PH production). Optional so absent/undefined = ON (every
@@ -286,7 +361,13 @@ export const CaptionStyleSchema = z.object({
   // Optional gradient text fill (chrome / synthwave). When set, overrides the flat color.
   gradient: z.object({ from: z.string(), to: z.string() }).optional(),
 })
-export type CaptionStyle = z.infer<typeof CaptionStyleSchema>
+
+// A stored style naming a RETIRED preset is re-resolved through its replacement before validation, so
+// every reader — render step, settings screen, preview — sees the current look rather than a snapshot of
+// a preset table that no longer exists. The field-level `preset` preprocess above still stands on its own
+// for a bare preset string.
+export const CaptionStyleSchema = z.preprocess(upgradeLegacyCaptionStyle, CaptionStyleObjectSchema)
+export type CaptionStyle = z.infer<typeof CaptionStyleObjectSchema>
 
 // Concrete params per preset. `highlightColor` may be overridden (e.g. AI-derived per niche).
 // Font stacks end in a generic family so the headless render host always has a fallback.
