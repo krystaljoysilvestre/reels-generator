@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { getDb, reels, channels, channelSeries } from '@reels/db'
 import { and, eq } from 'drizzle-orm'
 import { enqueueStep } from '@reels/queue'
-import { resolveChannelPolicy, resolveGenreForNewReel } from '@reels/core'
+import { requiresEvidence, resolveChannelPolicy, resolveGenreForNewReel } from '@reels/core'
 import { requireApiUser, requireReelCreationBudget, isUuid } from '@/lib/api-access'
 import { userOwnsChannel } from '@/lib/access'
 
@@ -30,6 +30,14 @@ export async function POST(req: NextRequest) {
   // source material, so a reel without one has no evidence to work from (the generator fails closed
   // anyway — reject here for a clear, immediate error). 20k mirrors the provide-story ceiling.
   const cleanDossier = typeof dossier === 'string' ? dossier.trim().slice(0, 20000) : ''
+  // Evidence-required by POLICY (not just EBN): a factual script may not be written without sources.
+  // Same fail-closed shape as the EBN check below, driven by the creator's declared policy.
+  if (!cleanDossier && requiresEvidence(resolveChannelPolicy(null, null, channel))) {
+    return NextResponse.json(
+      { error: 'This channel needs sources — paste the articles, records or notes this video should be built from.' },
+      { status: 400 },
+    )
+  }
   if (channel.storyMode === 'ebn' && !cleanDossier) {
     return NextResponse.json({ error: 'This is an Evidence-Based channel — a source dossier is required to create a reel.' }, { status: 400 })
   }

@@ -93,6 +93,11 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     else if (v !== undefined) updates[k] = v
   }
 
+  // Source policy sets factCheck, never storyMode (W6). Turning evidence ON turns the fidelity check on
+  // with it; turning it off leaves an explicitly-set factCheck alone — the creator may still want the
+  // advisory pass without requiring sources.
+  if (patch.sourcePolicy?.evidenceRequired === true) updates['factCheck'] = true
+
   // Channel-default music mood → merge into audioPacks (null clears it → reels fall back to audioMood).
   if (patch.musicMood !== undefined) {
     const packs = AudioPacksSchema.parse(existing.audioPacks ?? {})

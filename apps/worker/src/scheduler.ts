@@ -15,9 +15,9 @@
 import { and, eq, gte, inArray } from 'drizzle-orm'
 import { count } from 'drizzle-orm'
 import { getDb, channels, reels, getUserUsage } from '@reels/db'
-import { PostingRulesSchema, UNSHIPPED_REEL_STATUSES, autoProduceBacklogCap, checkUserLimits, DEFAULT_USER_LIMITS, MAX_INFLIGHT_REELS_PER_USER, resolveGenreForNewReel, resolveChannelPolicy } from '@reels/core'
+import { PostingRulesSchema, UNSHIPPED_REEL_STATUSES, autoProduceBacklogCap, checkUserLimits, DEFAULT_USER_LIMITS, MAX_INFLIGHT_REELS_PER_USER, resolveGenreForNewReel, resolveChannelPolicy, requiresEvidence } from '@reels/core'
 import { makeQueue, enqueueStep, QUEUE } from '@reels/queue'
-import { pickNextSeriesTopic, claimSeriesTopic } from './series-queue.js'
+import { pickNextSeriesTopic, claimSeriesTopic, skipSeriesTopic, acquireEvidence } from './series-queue.js'
 
 export const AUTO_PRODUCE_JOB = 'auto_produce_tick'
 
@@ -102,6 +102,33 @@ export async function runAutoProduceTick(): Promise<void> {
     // "real places allowed", and the channel's policy is editable at any time.
     const sourcePolicy = resolveChannelPolicy(null, null, channel)
 
+    // ── THE INVARIANT: no factual script is ever written without evidence ─────────────────────────
+    // On an evidence-required channel, acquire source material BEFORE any reel exists. Not after, and
+    // not "write it and let a human catch the errors" — that makes review a hallucination-catching
+    // chore and puts generation one step ahead of its own inputs. The fact gate cannot cover this
+    // either: it is `factCheck && dossier`, so with no dossier it does not run at all.
+    //
+    // Two outcomes, and NEITHER of them is "write anyway":
+    //   evidence found → the reel is created WITH the dossier, so the fidelity checker actually fires
+    //   no evidence    → NO REEL. The topic is skipped (we tried; the sources aren't there) and this
+    //                    tick produces nothing. A missing post is strictly better than a fabricated one.
+    let acquiredDossier: string | null = null
+    if (requiresEvidence(sourcePolicy)) {
+      if (!pick) {
+        // Evidence-required, but nothing names the subject — there is nothing to research, and letting
+        // the Planner invent one is exactly the failure this guard exists for.
+        console.warn(`${tag} evidence required but no queued topic — nothing to research, skipping this tick`)
+        continue
+      }
+      const evidence = await acquireEvidence(channel, pick.subject)
+      if (!evidence) {
+        await skipSeriesTopic(pick.topicId, 'no usable sources found')
+        console.warn(`${tag} "${pick.subject}" could not be sourced — no reel created (evidence required)`)
+        continue
+      }
+      acquiredDossier = evidence.dossier
+    }
+
     const [reel] = await db
       .insert(reels)
       .values({
@@ -109,6 +136,9 @@ export async function runAutoProduceTick(): Promise<void> {
         status: 'drafting',
         language,
         sourcePolicy,
+        // The acquired sources ARE the substrate the studio writes from, and their presence is what
+        // makes the fact gate (`factCheck && dossier`) able to run at all on this reel.
+        ...(acquiredDossier ? { dossier: acquiredDossier } : {}),
         ...(pick ? { seedIdea: pick.subject, seriesId: pick.seriesId, genreCategory } : {}),
       })
       .returning()
@@ -119,6 +149,16 @@ export async function runAutoProduceTick(): Promise<void> {
     if (pick) {
       const claimed = await claimSeriesTopic(pick.topicId, reel!.id)
       if (!claimed) {
+        if (requiresEvidence(sourcePolicy)) {
+          // Falling back to planner-invented is NOT available here — that is precisely a factual script
+          // with no evidence. The dossier we already paid for belongs to a subject another tick took, so
+          // this reel has no honest subject: fail it closed rather than let it write something.
+          await db.update(reels)
+            .set({ status: 'failed', alertNote: 'Another reel took this subject first — nothing was written.', updatedAt: new Date() })
+            .where(eq(reels.id, reel!.id))
+          console.warn(`${tag} topic "${pick.subject}" claimed concurrently on an evidence-required channel — reel ${reel!.id.slice(0, 8)} failed closed`)
+          continue
+        }
         await db.update(reels).set({ seedIdea: null, seriesId: null, genreCategory: null }).where(eq(reels.id, reel!.id))
         console.warn(`${tag} topic "${pick.subject}" was claimed concurrently — reel ${reel!.id.slice(0, 8)} falls back to planner-invented`)
       }

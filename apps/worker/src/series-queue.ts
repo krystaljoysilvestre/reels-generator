@@ -14,6 +14,7 @@ import { getDb, channelSeries, seriesTopics, reels, recordSpendEvent } from '@re
 import { llmCall } from '@reels/providers'
 import { buildSeriesTopicsPrompt, SeriesTopicsSchema, SERIES_TOPICS_V1_VERSION } from '@reels/core/prompts/series-topics.v1'
 import { resolveChannelPolicy, requiresRealSubjects } from '@reels/core'
+import { buildEvidenceAcquirePrompt, EvidenceAcquireSchema, EVIDENCE_ACQUIRE_V1_VERSION, renderDossier } from '@reels/core/prompts/evidence-acquire.v1'
 
 /**
  * The channel fields this module needs. `sourcePolicy` is declared explicitly even though it is only
@@ -120,6 +121,66 @@ export async function pickNextSeriesTopic(
 // batch rather than one-at-a-time keeps this to roughly one small call per N reels.
 const REPLENISH_BATCH = 8
 
+export interface AcquiredEvidence {
+  dossier: string
+  sources: { title: string; url: string; outlet: string }[]
+}
+
+/**
+ * Gather live source material for ONE subject, so an evidence-required channel never writes a factual
+ * script from model memory. Returns null when the evidence isn't there — and the caller MUST then
+ * create no reel. "No evidence, no story" is the whole point; a null here is a correct outcome.
+ *
+ * Live web search, never model recall (the trending-refresh discipline). Paid call outside runStep — no
+ * reel exists yet — so spend goes through the spend_events funnel like series replenishment does.
+ */
+export async function acquireEvidence(
+  channel: SeriesChannel & { languages?: string[] },
+  subject: string,
+): Promise<AcquiredEvidence | null> {
+  try {
+    const policy = resolveChannelPolicy(null, null, channel)
+    const p = buildEvidenceAcquirePrompt({
+      subject,
+      channelName: channel.name,
+      nicheDescription: channel.nicheDescription,
+      language: channel.languages?.[0] ?? 'english',
+      allowPeople: policy.realPeople !== 'none',
+    })
+    const r = await llmCall({
+      templateVersion: EVIDENCE_ACQUIRE_V1_VERSION,
+      schema: EvidenceAcquireSchema,
+      webSearch: true, // live results — never answer a factual brief from model memory
+      system: p.system,
+      messages: [{ role: 'user', content: p.userMessage }],
+      maxTokens: 2500,
+    })
+    if (channel.userId) {
+      await recordSpendEvent({ userId: channel.userId, channelId: channel.id, surface: 'evidence_acquire', provider: 'openai', costCents: r.costCents })
+    }
+    const d = r.data
+    // `.default([])` on an optional zod field still types as possibly-undefined under
+    // exactOptionalPropertyTypes; normalize once so the guards below read plainly.
+    // Normalize once: `.default('')` on a nested field still infers as possibly-undefined under
+    // exactOptionalPropertyTypes, and every consumer below wants a plain string.
+    const sources = (d.sources ?? []).map((x) => ({ title: x.title, url: x.url, outlet: x.outlet ?? '' }))
+    const dossier = renderDossier(d.dossier ?? '')
+    if (!d.sufficient || !dossier || sources.length === 0) {
+      console.warn(`[evidence] "${subject}" — insufficient: ${d.reason || 'no usable sources'} (${r.costCents}¢)`)
+      return null
+    }
+    // Provenance rides in the dossier text: the extractor and Fact-Fidelity Checker already read it,
+    // and it is what lets the published description attribute what the script was built from.
+    const sourceBlock = sources.map((s) => `- ${s.title}${s.outlet ? ` (${s.outlet})` : ''} — ${s.url}`).join('\n')
+    console.log(`[evidence] "${subject}" — ${sources.length} source(s) (${r.costCents}¢)`)
+    return { dossier: `${dossier}\n\nSOURCES:\n${sourceBlock}`, sources }
+  } catch (err) {
+    // Fail CLOSED: an acquisition error must never fall through to writing from memory.
+    console.warn(`[evidence] "${subject}" failed: ${err instanceof Error ? err.message : String(err)}`)
+    return null
+  }
+}
+
 /**
  * Refill a series whose queue has run dry, so the creator never has to sit and type a topic list —
  * they described the channel once; the engine keeps it fed.
@@ -211,6 +272,22 @@ export async function replenishSeriesTopics(
  * update matches nothing and the caller is told, rather than silently producing a duplicate episode.
  * Returns false if the topic was already taken.
  */
+/**
+ * Retire a topic we could not source. `'skipped'` already exists in the status enum and this is exactly
+ * what it is for: we tried and the evidence isn't there. Conditional on `queued` for the same reason the
+ * claim is — and it stops a permanently-unsourceable subject burning a paid search call on every tick.
+ */
+export async function skipSeriesTopic(topicId: string, reason: string): Promise<boolean> {
+  const db = getDb()
+  const skipped = await db
+    .update(seriesTopics)
+    .set({ status: 'skipped' })
+    .where(and(eq(seriesTopics.id, topicId), eq(seriesTopics.status, 'queued')))
+    .returning({ id: seriesTopics.id })
+  if (skipped.length > 0) console.warn(`[series-queue] topic ${topicId.slice(0, 8)} skipped — ${reason}`)
+  return skipped.length > 0
+}
+
 export async function claimSeriesTopic(topicId: string, reelId: string): Promise<boolean> {
   const db = getDb()
   const claimed = await db

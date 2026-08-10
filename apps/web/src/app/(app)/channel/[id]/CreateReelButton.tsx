@@ -18,6 +18,7 @@ export function CreateReelButton({
   reelCapCents,
   isEbn = false,
   factCheck = false,
+  requiresSources = false,
 }: {
   channelId: string
   compact?: boolean
@@ -34,6 +35,10 @@ export function CreateReelButton({
   /** Fact-gate channel (channels.factCheck): offer an OPTIONAL sources box — the script is written
    *  freely, then checked against these and flagged at review. Advisory; nothing blocks. */
   factCheck?: boolean
+  /** Source Policy requires evidence (requiresEvidence): the sources box is REQUIRED, not advisory —
+   *  the API refuses to create the reel without it, because a factual script is never written from
+   *  model memory. Distinct from `factCheck`, which stays optional (checked only when sources exist). */
+  requiresSources?: boolean
 }) {
   // Setup leaves a script behind; on the first reel it's the obvious thing to shoot.
   const firstScript = savedScripts[0] ?? null
@@ -60,7 +65,7 @@ export function CreateReelButton({
           ...(seedText.trim() ? { seed: seedText.trim() } : {}),
           // EBN: the story is built strictly from this material (the API rejects EBN reels without it).
           // Fact-gate channels: the story is written freely, then checked against it (optional, advisory).
-          ...((isEbn || factCheck) && dossierText.trim() ? { dossier: dossierText.trim() } : {}),
+          ...((isEbn || factCheck || requiresSources) && dossierText.trim() ? { dossier: dossierText.trim() } : {}),
         }),
       })
       const json = await res.json().catch(() => null)
@@ -167,16 +172,22 @@ export function CreateReelButton({
       </p>
     )
 
-  // Fact-gate channels: an optional sources box. The script is written freely either way; when sources
-  // are given, it's checked against them and any mismatches are flagged at review (advisory, never blocks).
+  // Two different things share this box. Fact-gate channels get an OPTIONAL one: the script is written
+  // freely and only checked when sources happen to be given. An evidence-required channel
+  // (requiresSources) gets a MANDATORY one — the API refuses without it, because on those channels no
+  // factual script is written without evidence at all.
   const SourcesBox = () =>
-    !factCheck || isEbn ? null : (
+    !(factCheck || requiresSources) || isEbn ? null : (
       <label className="mt-3 block">
-        <span className="mb-1 block text-xs font-medium text-muted">Sources to check it against — optional</span>
+        <span className="mb-1 block text-xs font-medium text-muted">
+          {requiresSources ? 'Sources — required for this channel' : 'Sources to check it against — optional'}
+        </span>
         <textarea
           value={dossierText}
           onChange={(e) => setDossierText(e.target.value)}
-          placeholder="Paste the records, articles, or notes — we’ll flag anything in the script that doesn’t match."
+          placeholder={requiresSources
+            ? 'Paste the articles, records or notes this video should be built from — nothing is written without them.'
+            : 'Paste the records, articles, or notes — we’ll flag anything in the script that doesn’t match.'}
           maxLength={20000}
           className="input h-28 resize-y"
         />

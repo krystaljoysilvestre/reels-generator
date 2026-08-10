@@ -2,7 +2,7 @@ import { getDb, channels, reels, stories } from '@reels/db'
 import { and, desc, eq, inArray } from 'drizzle-orm'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { PostingRulesSchema, UNSHIPPED_REEL_STATUSES, autoProduceBacklogCap, budgetCapForSeconds, estimateStoryboardCents } from '@reels/core'
+import { requiresEvidence, resolveChannelPolicy, PostingRulesSchema, UNSHIPPED_REEL_STATUSES, autoProduceBacklogCap, budgetCapForSeconds, estimateStoryboardCents } from '@reels/core'
 import { assertChannelAccess } from '@/lib/access'
 import { ChannelAvatar, avatarGradient } from '@/components/ChannelAvatar'
 import { ReelStatusPill } from '@/components/ReelStatusPill'
@@ -194,6 +194,7 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
                   reelCapCents={reelCapCents}
                   isEbn={channel.storyMode === 'ebn'}
                   factCheck={channel.factCheck}
+                  requiresSources={requiresEvidence(resolveChannelPolicy(null, null, channel))}
                 />
               </div>
             </div>
@@ -210,6 +211,7 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
                   reelCapCents={reelCapCents}
                   isEbn={channel.storyMode === 'ebn'}
                   factCheck={channel.factCheck}
+                  requiresSources={requiresEvidence(resolveChannelPolicy(null, null, channel))}
                 />
               </div>
               <div className="card overflow-hidden divide-y divide-border-soft">

@@ -6,7 +6,7 @@
 // Cost: Resend free tier is 100 emails/day — one digest/day is comfortably inside it (0¢ marginal).
 
 import { and, eq, count, gte, inArray } from 'drizzle-orm'
-import { getDb, channels, reels, stories } from '@reels/db'
+import { getDb, channels, reels, stories, seriesTopics } from '@reels/db'
 import { PostingRulesSchema, UNSHIPPED_REEL_STATUSES, autoProduceBacklogCap } from '@reels/core'
 import { makeQueue, QUEUE } from '@reels/queue'
 
@@ -29,6 +29,8 @@ interface ChannelDigest {
   needsAttention: number
   failed: number
   paused: boolean
+  /** Subjects the engine could not source, so no reel was made. Silence here reads as a dead channel. */
+  unsourced: number
 }
 
 export async function runDailyDigest(): Promise<void> {
@@ -51,6 +53,16 @@ export async function runDailyDigest(): Promise<void> {
       columns: { status: true, alertNote: true },
     })
     const needsAttention = rows.filter((r) => r.alertNote).length
+    // Topics retired for want of evidence in the last day. On an evidence-required channel this is the
+    // difference between "nothing to report" and "we tried and the sources weren't there" — without it,
+    // a channel correctly refusing to fabricate looks identical to one that silently stopped working.
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000)
+    const unsourced =
+      (await db
+        .select({ n: count() })
+        .from(seriesTopics)
+        .where(and(eq(seriesTopics.channelId, channel.id), eq(seriesTopics.status, 'skipped'), gte(seriesTopics.createdAt, since))))[0]?.n ?? 0
+
     const rules = PostingRulesSchema.safeParse(channel.postingRules ?? {})
     const unshipped = rows.filter((r) => (UNSHIPPED_REEL_STATUSES as readonly string[]).includes(r.status)).length
     const paused =
@@ -58,8 +70,8 @@ export async function runDailyDigest(): Promise<void> {
 
     // Queued-for-a-slot reels are shown but never a reason to send: a channel quietly working its
     // schedule is not news, and the digest's contract is that a quiet portfolio sends nothing.
-    if (ready || failed || needsAttention || paused) {
-      digests.push({ name: channel.name, ready, scheduled, needsAttention, failed, paused })
+    if (ready || failed || needsAttention || paused || unsourced) {
+      digests.push({ name: channel.name, ready, scheduled, needsAttention, failed, paused, unsourced })
     }
   }
 
@@ -93,6 +105,7 @@ export async function runDailyDigest(): Promise<void> {
       d.ready ? `${d.ready} ready to post` : null,
       d.scheduled ? `${d.scheduled} waiting for their posting time` : null,
       d.paused ? 'production paused — post or clear the backlog' : null,
+      d.unsourced ? `${d.unsourced} subject${d.unsourced === 1 ? '' : 's'} skipped — no sources found` : null,
       d.needsAttention ? `${d.needsAttention} need${d.needsAttention === 1 ? 's' : ''} attention` : null,
       d.failed ? `${d.failed} failed` : null,
     ].filter(Boolean)

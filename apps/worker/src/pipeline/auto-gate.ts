@@ -1,5 +1,5 @@
 import { eq, and, gt, isNotNull } from 'drizzle-orm'
-import { getDb, reels, channels, stories, assets, publications } from '@reels/db'
+import { getDb, reels, channels, stories, assets, publications, pipelineSteps } from '@reels/db'
 import { enqueueStep } from '@reels/queue'
 import { listVoices, downloadBuffer, uploadToYouTube, isYouTubeConfigured, toElevenLabsLang } from '@reels/providers'
 import { PostingRulesSchema, PostMetaSchema, formatPostCaption, formatImageCredits, StoryBibleSchema, matchNarratorVoice, nextPublishSlot, resolvePublishSlots, resolvePublishDays, resolveSidecarSrt, type PostingRules, type ChannelVoice, type NarratorVoice } from '@reels/core'
@@ -8,6 +8,30 @@ import { setReelStatus } from './harness.js'
 // The three steps where the pipeline normally STOPS for human review (resolveNextStep returns null):
 // generate_story → story_review, generate_images → storyboard, render_qa → spot_check.
 const GATE_STEPS = new Set(['generate_story', 'generate_images', 'render_qa'])
+
+/**
+ * Did the FINAL story-gate verdict fail for this reel?
+ *
+ * Reads the persisted generate_story step output rather than re-running the gate: the verdicts are
+ * already there (`gate.verdicts`, in order, the last one being the outcome after any steered rewrite),
+ * so this costs nothing and cannot disagree with what actually happened.
+ *
+ * Fails OPEN on purpose — a missing/unreadable output must not strand every auto reel at story_review.
+ * The risk being managed here is publishing a REJECTED story unread, not publishing an unmeasurable one.
+ */
+async function storyGateRejected(reelId: string): Promise<boolean> {
+  try {
+    const step = await getDb().query.pipelineSteps.findFirst({
+      where: and(eq(pipelineSteps.reelId, reelId), eq(pipelineSteps.stepName, 'generate_story')),
+      orderBy: (t, { desc }) => [desc(t.finishedAt)],
+    })
+    const verdicts = (step?.output as { gate?: { verdicts?: { pass?: boolean }[] } } | null)?.gate?.verdicts
+    if (!Array.isArray(verdicts) || verdicts.length === 0) return false
+    return verdicts[verdicts.length - 1]?.pass === false
+  } catch {
+    return false
+  }
+}
 
 // In 'auto' generation mode, cross a human gate automatically — mirroring the approve-story /
 // trigger-render / approve-spot-check routes — so the reel runs end-to-end to a finished render with no
@@ -25,6 +49,25 @@ export async function autoCrossGate(stepName: string, reelId: string): Promise<v
 
   if (stepName === 'generate_story') {
     if (reel.status !== 'story_review') return // already crossed
+
+    // THE EDITORIAL GATE'S BACKSTOP IS REAL ONLY IN REVIEW MODE.
+    // generate_story treats the story gate as ADVISORY: on a fail it runs at most one steered rewrite
+    // and then passes the story through regardless, on the stated grounds that "the story_review human
+    // gate is the backstop" (generate-story.ts). That backstop does not exist on an auto channel — this
+    // function is what removes it — so a story the gate REJECTED would render and, with
+    // autoPublishYouTube, publish itself unread.
+    //
+    // This does NOT give the gate teeth globally (that is a founder decision with its own 60%
+    // first-attempt pass-rate trigger — see minimal-review-gate-policy). It only stops auto mode from
+    // silently deleting the backstop the advisory policy explicitly depends on. Autopublish removes
+    // human approval; it must not remove the gate.
+    if (await storyGateRejected(reelId)) {
+      console.warn(`[auto] ${reelId.slice(0, 8)} story gate did not pass — holding at story_review for review`)
+      await db.update(reels)
+        .set({ alertNote: 'The story did not clear the editorial bar — read it before this one goes out.', updatedAt: new Date() })
+        .where(eq(reels.id, reelId))
+      return
+    }
     // (EBN reels render safely via the forced illustrative profile — Slice 2 — so they self-advance like
     // any other auto-mode reel; the Slice-1 hold has been lifted.)
     // = approve-story: story_review → storyboard, build Story Bible → scene breakdown → image generation.

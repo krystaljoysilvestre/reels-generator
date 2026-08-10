@@ -147,13 +147,16 @@ export async function POST(req: NextRequest) {
     worldBible: c.worldBible,
     editorialPrinciples: c.editorialPrinciples, // the channel's own bar; composed onto the gate rubric
     ...(c.sourcePolicy ? { sourcePolicy: c.sourcePolicy } : {}), // omitted → NULL → legacy inference
+    // The policy SETS the existing switch rather than replacing it. Deliberately NOT storyMode: 'ebn'
+    // is welded to a never-photoreal rendering profile, so auto-selecting it would silently overwrite
+    // the channel's visual identity (W6, finding 1). EBN stays an explicit creator choice.
+    factCheck: c.factCheck || c.sourcePolicy?.evidenceRequired === true,
     // Prefer the LLM-derived bucket; fall back to keyword classification so the column is never 'general' by accident.
     genreCategory: c.genreCategory ?? classifyGenre(c.nicheDescription),
     // Story mode (fiction studio vs Evidence-Based Narrative). Specialization only meaningful when ebn.
     storyMode: c.storyMode,
     ebnSpecialization: c.ebnSpecialization,
     presentation: c.presentation, // narration presentation hint (analyzer context)
-    factCheck: c.factCheck, // standalone fact-gate opt-in
     // Prose dimensions: keep narrativeStyle only if it's actually valid for the resolved genre
     // (resolveStyle → null on mismatch); '' otherwise. Voice is genre-agnostic. Influence default 'medium'.
     narrativeStyle:

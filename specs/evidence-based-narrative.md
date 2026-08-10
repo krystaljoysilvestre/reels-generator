@@ -194,6 +194,29 @@ The second sentence (Review 6) is the durable principle — it covers future cap
 
 **Probe-validated (2026-07-21, `apps/worker/scripts/probe-ebn-visuals.ts`).** Confirmed both halves: the existing photoreal `documentary` style preset on crime content **violates** the guardrail (it produced a photoreal "suspect" face and fake-evidence documents); the **illustrative modes comply and render well** (money-flow infographic, timeline, court-style sketch, editorial-symbolic, architectural illustration). The court-sketch mode is the key result — it shows a courtroom with people *without* a photoreal deepfake. So EBN needs its **own rendering profile** — that small set of illustrative modes — plus a hard ban on the photoreal preset for reconstructions. The *technical* guardrail is thus achievable; the remaining question is the product one below.
 
+### ⚠ The coupling this spec created, and what must not deepen it
+
+**Evidence-backed generation is a narrative property, not a rendering mode.** `storyMode: 'ebn'` today
+bundles two orthogonal concerns: the **evidence discipline** (dossier → Evidence Bible → cited writer →
+Fact-Fidelity Checker) AND the **never-photoreal illustrative rendering profile** welded at
+[generate-images.ts:185](../apps/worker/src/pipeline/steps/generate-images.ts#L185). That weld was
+correct for True Crime, where fabricated evidence photos are the harm. It is not correct in general.
+
+A real channel exposed it (2026-08-08, NewsTodayPH — a Filipino current-events explainer): it wants the
+evidence discipline in full and explicitly does not want the rendering — its brief asks for "modern and
+cinematic … realistic or editorial imagery, maps, diagrams, data visualization". Routing it into `ebn`
+to get the evidence guarantees would have silently overwritten the creator's stated visual identity.
+
+So **Source Policy deliberately routes `evidenceRequired` → `factCheck` and NEVER → `storyMode`**
+([source-policy.ts](../packages/core/src/types/source-policy.ts)). Evidence discipline for a non-EBN
+channel is delivered by requiring a dossier and acquiring one when autopilot runs
+([evidence-acquire.v1](../packages/core/src/prompts/evidence-acquire.v1.ts)) — not by adopting EBN.
+
+**Nothing may deepen this weld.** Splitting EBN into `evidence discipline × rendering profile` is a
+separate lap; until then, do not design as though the bundling were intended. The visual guardrail above
+remains absolutely correct for EBN — the point is only that it is a *rendering* decision that happens to
+live inside a *narrative* mode flag.
+
 ## Two checkers, cleanly separated
 
 The existing gate conflates craft and correctness. EBN splits them:

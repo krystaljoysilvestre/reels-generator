@@ -52,6 +52,11 @@ export const SourcePolicySchema = z.object({
   // comes from evidence.
   invention: z.enum(['free', 'constrained', 'none']).default('free'),
 })
+  // NORMALIZE, don't merely validate: `invention: 'none'` means every load-bearing claim must come from
+  // somewhere, so it IMPLIES evidenceRequired. A UI guard would only hold in the one screen that
+  // implements it; normalizing here makes the contradictory pair unrepresentable — no route, no
+  // derivation and no hand-written jsonb can produce `{invention:'none', evidenceRequired:false}`.
+  .transform((p) => (p.invention === 'none' && !p.evidenceRequired ? { ...p, evidenceRequired: true } : p))
 export type SourcePolicy = z.infer<typeof SourcePolicySchema>
 
 /** Today's behaviour for every channel that predates this dimension: invent everything, name nobody. */
@@ -116,6 +121,22 @@ export function resolveChannelPolicy(
  */
 export function requiresRealSubjects(p: SourcePolicy): boolean {
   return p.invention !== 'free' || p.evidenceRequired || p.realEvents || p.realPlaces
+}
+
+/**
+ * Whether a script on this channel may be written AT ALL without source material.
+ *
+ * THE INVARIANT THIS EXISTS FOR: on an evidence-required channel, no factual script is ever written
+ * without evidence. Not "no unsourced script is auto-published" — evidence has to be the SUBSTRATE of
+ * generation, not an audit bolted on afterwards, because the alternative makes human review a
+ * hallucination-catching chore and puts generation one step ahead of its own inputs.
+ *
+ * The protection has to be structural rather than a checker: the fact gate is
+ * `if (channel.factCheck && dossier)`, so with no dossier it does not run at all. It is not a weak net
+ * in that configuration; it is an absent one.
+ */
+export function requiresEvidence(p: SourcePolicy): boolean {
+  return p.evidenceRequired || p.invention === 'none'
 }
 
 // ── The question the wizard asks when the description doesn't settle the policy ──────────────────
