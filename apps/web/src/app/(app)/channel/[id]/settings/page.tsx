@@ -1,8 +1,10 @@
-import { getDb, channels } from '@reels/db'
+import { getDb, channels, platformConnections } from '@reels/db'
 import { eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { assertChannelAccess } from '@/lib/access'
 import { resolveChannelPolicy, ToneConfigSchema, WorldBibleSchema, CaptionStyleSchema, AudioPacksSchema, TargetPlatformsSchema, PostingRulesSchema, resolvePublishSlots, resolvePublishDays } from '@reels/core'
+import { publishingCredentialsConfigured } from '@/lib/publishing-credentials'
+import { youtubeOAuthConfigured } from '@/lib/youtube-oauth'
 import { isYouTubeConfigured } from '@reels/providers'
 import { ChannelSettings } from './ChannelSettings'
 import { channelMetadata } from '@/lib/page-metadata'
@@ -19,6 +21,10 @@ export default async function ChannelSettingsPage({ params }: { params: Promise<
   const db = getDb()
   const channel = await db.query.channels.findFirst({ where: eq(channels.id, id) })
   if (!channel) notFound()
+  const connections = await db.query.platformConnections.findMany({
+    where: eq(platformConnections.channelId, id),
+    columns: { platform: true, providerAccountName: true, status: true },
+  })
 
   // Parse through the same schemas as creation so the form always starts from valid values.
   const postingRules = PostingRulesSchema.parse(channel.postingRules ?? {})
@@ -63,6 +69,12 @@ export default async function ChannelSettingsPage({ params }: { params: Promise<
           daysUtc: resolvePublishDays(postingRules),
         },
         youtubeConfigured: isYouTubeConfigured(),
+        youtubeConnectConfigured: youtubeOAuthConfigured() && publishingCredentialsConfigured(),
+        platformConnections: connections.map((c) => ({
+          platform: c.platform,
+          accountName: c.providerAccountName,
+          status: c.status,
+        })),
       }}
     />
   )

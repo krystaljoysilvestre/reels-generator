@@ -37,6 +37,8 @@ export interface YouTubeUploadParams {
   captionsSrt?: string
   // BCP-47 tag for the caption track (e.g. 'en', 'fil'). Defaults to 'en'.
   captionsLanguage?: string
+  // Per-channel OAuth credentials. Omit only for the legacy operator-wide env-token path.
+  auth?: { clientId: string; clientSecret: string; refreshToken: string }
 }
 
 export interface YouTubeUploadResult {
@@ -51,14 +53,14 @@ export function isYouTubeConfigured(): boolean {
   )
 }
 
-async function getAccessToken(): Promise<string> {
+async function getAccessToken(auth?: YouTubeUploadParams['auth']): Promise<string> {
   const res = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
-      client_id: process.env['YOUTUBE_CLIENT_ID']!,
-      client_secret: process.env['YOUTUBE_CLIENT_SECRET']!,
-      refresh_token: process.env['YOUTUBE_REFRESH_TOKEN']!,
+      client_id: auth?.clientId ?? process.env['YOUTUBE_CLIENT_ID']!,
+      client_secret: auth?.clientSecret ?? process.env['YOUTUBE_CLIENT_SECRET']!,
+      refresh_token: auth?.refreshToken ?? process.env['YOUTUBE_REFRESH_TOKEN']!,
       grant_type: 'refresh_token',
     }),
   })
@@ -69,8 +71,8 @@ async function getAccessToken(): Promise<string> {
 }
 
 export async function uploadToYouTube(params: YouTubeUploadParams): Promise<YouTubeUploadResult> {
-  if (!isYouTubeConfigured()) throw new Error('YouTube is not connected (YOUTUBE_* env vars missing)')
-  const accessToken = await getAccessToken()
+  if (!params.auth && !isYouTubeConfigured()) throw new Error('YouTube is not connected')
+  const accessToken = await getAccessToken(params.auth)
 
   // YouTube rejects titles containing angle brackets; clamp lengths to the API's documented limits.
   const metadata = {

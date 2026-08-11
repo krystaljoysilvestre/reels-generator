@@ -15,7 +15,56 @@ sequenced this way — lives in `dna/company/roadmap.md` (company DNA starts at
 
 ---
 
+## Now — publish, observe, repeat (2026-08-11)
+
+Everything below this section is backlog. This is the only active item.
+
+**Stories Published moved 0 → 1.** Edge of Everything was posted publicly to YouTube from the
+Storyboard through Kendrix's real per-channel authorization path on 2026-08-11. YouTube reports the
+upload processed, public, embeddable, and public-stats-viewable. The Phase 0 → Phase 1 gate has been
+crossed once; consistency is not proven.
+
+**Open action — publish the next reel through the same path, then read the first audience signal.**
+Do not turn one successful upload into a platform-integration lap. The next proof is that Customer
+Zero can repeat the workflow without setup assistance and begin collecting retention/performance
+evidence from actual viewers. Packaging and watched-artifact judgment remain the quality gate.
+
+**What changed:**
+
+- Channel creation's selected destinations now reach Settings and the approved-reel gate.
+- Publishing accounts are owned per channel (`platform_connections → channels.userId`), OAuth-bound
+  to the signed-in owner, and encrypted at rest. One creator can connect different brand accounts to
+  different channels without a global refresh token.
+- YouTube direct publish is live: video, title/description, hashtags, disclosure, best-effort custom
+  thumbnail, and native captions. A YouTube-only reel becomes `published`; a multi-platform reel stays
+  `approved` until its remaining destinations are confirmed.
+- TikTok and Facebook Reels remain honest manual destinations through the post package. Direct TikTok
+  requires Content Posting API audit; Facebook requires Meta Page publishing review. Neither blocks
+  Customer Zero from publishing now.
+
+**Launch boundary — implemented is not the same as generally available:**
+
+- The Google OAuth app is in **Testing**. Listed test users can connect, but grants expire after seven
+  days and arbitrary Kendrix users cannot use the path reliably.
+- Before external users: deploy the production callback, publish homepage/privacy/terms on the verified
+  domain, move the OAuth app to Production, submit scope justifications and an end-to-end demo, and pass
+  Google verification for `youtube.upload`, `youtube.force-ssl`, and `youtube.readonly`.
+- This verification is **not the active bottleneck while Customer Zero is proving repeat publishing**.
+  Promote it to Now when inviting external creators becomes the next committed action.
+
+**Still worth knowing:** `STORY_PLAN_GATE` is on main and unset. The three original declined reels were
+made without it; the first public upload does not establish whether enabling it improves watched output.
+
+---
+
 ## Done
+
+- **Per-channel YouTube authorization + direct publish (2026-08-11)** — selected channel destinations
+  are acknowledged in Settings and Storyboard; Google OAuth uses signed expiring state + HTTP-only nonce;
+  provider tokens are AES-256-GCM encrypted; disconnect revokes the grant best-effort; direct upload is
+  idempotent at the publication boundary and preserves partial multi-platform completion. Migration 0060
+  is applied locally. Live proof: one processed, publicly viewable YouTube upload. General-user availability
+  remains gated by Google production verification, tracked under Now's launch boundary rather than called done.
 
 - **UI redesign** — modern design system (Stripe/Linear/Apple/Notion peg);
   primitives in `apps/web/src/app/globals.css`, tokens in `tailwind.config.ts`.

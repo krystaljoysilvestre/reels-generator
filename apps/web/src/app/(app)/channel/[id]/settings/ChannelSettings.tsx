@@ -10,7 +10,6 @@ import {
   type TargetPlatform,
   type MusicMood,
   type MusicMode,
-  CAPTION_PRESETS,
   resolvePlatformPreset,
   MUSIC_MOOD_OPTIONS,
   resolveCaptionStyle,
@@ -69,6 +68,8 @@ interface Initial {
   autoProduce: { enabled: boolean; reelsPerDay: number; startHourUtc: number; autoPublishYouTube: boolean } // the consistency engine cadence
   publish: { mode: 'immediate' | 'slots'; slotsUtc: number[]; daysUtc: number[] } // when a finished reel goes out
   youtubeConfigured: boolean // YOUTUBE_* env keys present → auto-publish is offerable
+  youtubeConnectConfigured: boolean
+  platformConnections: Array<{ platform: 'fb' | 'ig' | 'yt' | 'tiktok'; accountName: string; status: string }>
 }
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -138,6 +139,15 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
   const [confirmName, setConfirmName] = useState('')
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
+  const youtubeConnection = initial.platformConnections.find((c) => c.platform === 'yt' && c.status === 'active')
+
+  async function disconnectYouTube() {
+    const res = await fetch('/api/publishing/youtube/disconnect', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ channelId: id }),
+    })
+    if (res.ok) router.refresh()
+    else setError('Could not disconnect YouTube — try again.')
+  }
 
   async function handleMineRubric() {
     setMining(true)
@@ -361,6 +371,35 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
         {/* Publishing — WHEN a finished reel goes out (the section above is when reels get MADE) */}
         <section className="card space-y-3 p-5">
           <SectionLabel>Publishing</SectionLabel>
+          <div className="space-y-2 border-b border-border pb-4">
+            {targetPlatforms.map((platform) => {
+              const isYouTube = platform === 'youtube_shorts' || platform === 'youtube_long'
+              const label = platform === 'tiktok' ? 'TikTok' : isYouTube ? 'YouTube' : 'Facebook Reels'
+              return (
+                <div key={platform} className="flex items-center justify-between gap-3 rounded-lg border border-border-mid p-3">
+                  <div>
+                    <p className="text-sm font-600 text-ink">{label}</p>
+                    <p className="mt-0.5 text-xs text-muted">
+                      {isYouTube && youtubeConnection
+                        ? `Connected to ${youtubeConnection.accountName}`
+                        : isYouTube
+                          ? 'Connect the account this channel should publish to.'
+                          : 'Direct publishing is coming. Your post package is ready for upload now.'}
+                    </p>
+                  </div>
+                  {isYouTube && youtubeConnection ? (
+                    <button type="button" className="btn-ghost btn-sm" onClick={() => void disconnectYouTube()}>Disconnect</button>
+                  ) : isYouTube && initial.youtubeConnectConfigured ? (
+                    <a className="btn-secondary btn-sm" href={`/api/publishing/youtube/connect?channelId=${id}`}>Connect</a>
+                  ) : isYouTube ? (
+                    <span className="text-xs text-muted">Not ready</span>
+                  ) : (
+                    <span className="text-xs text-muted">Manual</span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
           <p className="text-xs text-muted">
             {autoProduce.autoPublishYouTube && initial.youtubeConfigured && generationMode === 'auto'
               ? 'Finished reels are posted for you — the schedule below decides when.'

@@ -1,9 +1,8 @@
-import { getDb, reels, scenes, assets, channels, pipelineSteps, publications } from '@reels/db'
+import { getDb, reels, assets, channels, pipelineSteps, publications, platformConnections } from '@reels/db'
 import { and, desc, eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { assertReelAccess } from '@/lib/access'
 import { type ChannelVoice, type VoiceSettings, moodToVoiceSettings, ToneConfigSchema, AudioPacksSchema, OperatorSfxSchema, PostMetaSchema, ReelCoverSchema, channelPlatformPreset, PRESET_BEDS } from '@reels/core'
-import { isYouTubeConfigured } from '@reels/providers'
 import { channelMood, MOOD_TINT } from '@/lib/pipeline-phases'
 import { StoryboardEditor } from './StoryboardEditor'
 import { reelMetadata } from '@/lib/page-metadata'
@@ -39,6 +38,10 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
   })
 
   const reelAssets = await db.query.assets.findMany({ where: eq(assets.reelId, reelId) })
+  const connections = channel ? await db.query.platformConnections.findMany({
+    where: eq(platformConnections.channelId, channel.id),
+    columns: { platform: true, providerAccountName: true, status: true },
+  }) : []
 
   // Map scene idx → image URL (R2 public URL or storage key)
   const sceneImages: Record<number, string> = {}
@@ -192,7 +195,12 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
         operatorMinutes: reel.operatorMinutes,
         language: reel.language,
         metricsViews: (reel.metrics as { views?: number } | null)?.views ?? null,
-        youtubeConfigured: isYouTubeConfigured(),
+        channelId: reel.channelId,
+        publishDestinations: (channel?.targetPlatforms ?? []).map((target) => {
+          const platform = target === 'youtube_shorts' || target === 'youtube_long' ? 'yt' : target === 'facebook_reels' ? 'fb' : 'tiktok'
+          const connection = connections.find((c) => c.platform === platform && c.status === 'active')
+          return { target, connected: Boolean(connection), accountName: connection?.providerAccountName ?? null }
+        }),
         scheduledAt,
       }}
       story={reel.story ?? null}

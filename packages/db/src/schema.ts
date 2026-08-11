@@ -572,6 +572,35 @@ export const publications = pgTable(
   }),
 )
 
+// A channel's authorized destination account. Credentials are encrypted by the web app before they
+// reach this table; the DB never stores provider tokens in plaintext. Keeping the connection on the
+// channel (rather than the user) lets one creator run several brand accounts and preserves the single
+// ownership chain through channels.userId for a future workspace migration.
+export const platformConnections = pgTable(
+  'platform_connections',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    channelId: uuid('channel_id')
+      .notNull()
+      .references(() => channels.id, { onDelete: 'cascade' }),
+    platform: platformEnum('platform').notNull(),
+    providerAccountId: text('provider_account_id').notNull(),
+    providerAccountName: text('provider_account_name').notNull(),
+    accessTokenEncrypted: text('access_token_encrypted'),
+    refreshTokenEncrypted: text('refresh_token_encrypted'),
+    accessTokenExpiresAt: timestamp('access_token_expires_at'),
+    scopes: text('scopes').array().notNull().default([]),
+    status: text('status').notNull().default('active'),
+    lastError: text('last_error'),
+    connectedAt: timestamp('connected_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    idxChannel: index('idx_platform_connections_channel').on(t.channelId),
+    uqChannelPlatform: uniqueIndex('uq_platform_connections_channel_platform').on(t.channelId, t.platform),
+  }),
+)
+
 // ── metrics ───────────────────────────────────────────────────────────────────
 
 export const metrics = pgTable(
@@ -763,6 +792,7 @@ export const channelsRelations = relations(channels, ({ one, many }) => ({
   stories: many(stories),
   reels: many(reels),
   compilations: many(compilations),
+  platformConnections: many(platformConnections),
 }))
 
 export const storiesRelations = relations(stories, ({ one, many }) => ({
@@ -797,6 +827,10 @@ export const assetsRelations = relations(assets, ({ one }) => ({
 export const publicationsRelations = relations(publications, ({ one, many }) => ({
   reel: one(reels, { fields: [publications.reelId], references: [reels.id] }),
   metrics: many(metrics),
+}))
+
+export const platformConnectionsRelations = relations(platformConnections, ({ one }) => ({
+  channel: one(channels, { fields: [platformConnections.channelId], references: [channels.id] }),
 }))
 
 export const metricsRelations = relations(metrics, ({ one }) => ({

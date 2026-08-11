@@ -31,7 +31,7 @@ type PickerVoice = ChannelVoice & { reason?: string | undefined }
 const fmtSecs = (secs: number) => `${Math.round(secs * 10) / 10}s`
 
 interface StoryboardEditorProps {
-  reel: { id: string; status: string; voiceId: string | null; costCents: number; operatorMinutes: number; language: string; metricsViews: number | null; youtubeConfigured: boolean; scheduledAt?: string | null }
+  reel: { id: string; channelId: string; status: string; voiceId: string | null; costCents: number; operatorMinutes: number; language: string; metricsViews: number | null; publishDestinations: Array<{ target: string; connected: boolean; accountName: string | null }>; scheduledAt?: string | null }
   story: Story | null
   scenes: Scene[]
   voicePool: Voice[]
@@ -1254,6 +1254,12 @@ export function StoryboardEditor({
                   <span className="font-display text-[15px] font-700 text-ink">Ready to post</span>
                 </p>
                 <p className="mt-0.5 text-xs text-muted">Your post package (video, thumbnail, caption) is ready — download it, post anywhere, then mark it published.</p>
+                <p className="mt-1 text-xs text-muted">
+                  Destinations: {reel.publishDestinations.map((d) => {
+                    const label = d.target === 'tiktok' ? 'TikTok' : d.target === 'facebook_reels' ? 'Facebook Reels' : 'YouTube'
+                    return `${label}${d.connected && d.accountName ? ` · ${d.accountName}` : ''}`
+                  }).join('  ·  ')}
+                </p>
               </div>
               <PostCaptionButton reelId={reel.id} />
               <a href={`/api/pipeline/export-post-package?reelId=${reel.id}`} className="btn-secondary">
@@ -1262,8 +1268,11 @@ export function StoryboardEditor({
                 </svg>
                 Download post package
               </a>
-              {reel.youtubeConfigured && <PostToYouTubeButton reelId={reel.id} />}
-              <button onClick={handlePublish} disabled={loading === 'publish'} className={`active:scale-[.98] ${reel.youtubeConfigured ? 'btn-secondary' : 'btn-accent'}`}>
+              {reel.publishDestinations.some((d) => (d.target === 'youtube_shorts' || d.target === 'youtube_long') && d.connected) && <PostToYouTubeButton reelId={reel.id} />}
+              {reel.publishDestinations.some((d) => (d.target === 'youtube_shorts' || d.target === 'youtube_long') && !d.connected) && (
+                <a href={`/channel/${reel.channelId}/settings`} className="btn-accent">Connect YouTube</a>
+              )}
+              <button onClick={handlePublish} disabled={loading === 'publish'} className="btn-secondary active:scale-[.98]">
                 {loading === 'publish' ? 'Publishing…' : 'Mark as published'}
               </button>
             </>
