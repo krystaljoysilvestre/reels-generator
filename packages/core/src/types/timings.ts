@@ -25,6 +25,10 @@ export const SubtitleWordSchema = z.object({
   text: z.string().min(1),
   startMs: z.number().int().nonnegative(),
   endMs: z.number().int().nonnegative(),
+  // The word this line lands on — the one a caption preset accents, highlights or glows.
+  // Optional and normally absent: the renderer derives it from delivery (see pickEmphasis).
+  // Setting it here OVERRIDES that, which is the seam a creator edit or a marking pass uses.
+  emphasis: z.boolean().optional(),
 })
 export type SubtitleWord = z.infer<typeof SubtitleWordSchema>
 

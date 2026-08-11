@@ -14,6 +14,7 @@ import { cpus } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { CaptionStyle, ReelCompositionProps, ReelScene, SceneEffect, SubtitleChunk } from './types.js'
+import { adaptCaptionToFootage } from './caption-legibility.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -261,10 +262,20 @@ export async function renderReelWithRemotion(input: RemotionRenderInput): Promis
     }),
   )
 
+  // Adapt the caption to the footage it is about to be burned onto — the accent swaps to the
+  // nearest palette colour that survives these frames, and a plateless preset gets a wash when
+  // the picture is too bright to hold the type. Measured from the reel's own stills; free.
+  const legibility = await adaptCaptionToFootage({
+    captionStyle: input.captionStyle,
+    imagePaths: input.scenes.map((s) => s.imagePath),
+    safeZonePct: input.captionSafeZonePct,
+  })
+  for (const note of legibility.notes) console.log(note)
+
   const props: ReelCompositionProps = {
     scenes,
     subtitles: input.subtitles,
-    captionStyle: input.captionStyle,
+    captionStyle: legibility.style,
     captionSafeZonePct: input.captionSafeZonePct,
     grain: input.grain,
     vignette: input.vignette,
@@ -316,6 +327,69 @@ export async function renderReelWithRemotion(input: RemotionRenderInput): Promis
   } finally {
     await fileServer.close()  // release the loopback port whether the render succeeds or throws
   }
+}
+
+// One still of the Reel composition showing a single caption over a single frame — the proof
+// surface for caption work. It goes through the real composition, the real SubtitleOverlay and
+// the real embedded typefaces, so what it produces is what a finished reel burns in. Used by
+// scripts/caption-preset-stills.ts to render the whole preset table for review.
+export async function renderCaptionPresetStill(input: {
+  imagePath: string
+  captionStyle: CaptionStyle
+  subtitle: { text: string; startMs: number; endMs: number; words: { text: string; startMs: number; endMs: number }[] }
+  atMs: number            // where in the chunk to freeze
+  width: number
+  height: number
+  safeZonePct: number
+  outputPath: string      // .jpeg
+}): Promise<void> {
+  const imageSrc = await toDataUri(input.imagePath, 'image/webp')
+  const fps = 30
+  const durationInFrames = Math.max(1, Math.ceil((input.subtitle.endMs / 1000) * fps) + 1)
+
+  const props: ReelCompositionProps = {
+    scenes: [{
+      idx: 0,
+      imageSrc,
+      videoSrc: null,
+      tier: 'still',
+      startFrame: 0,
+      durationFrames: durationInFrames,
+      mood: [],
+      onScreenText: null,
+      effects: [],
+      cameraMove: null,
+      videoDurationSec: null,
+    }],
+    subtitles: [input.subtitle],
+    captionStyle: input.captionStyle,
+    captionSafeZonePct: input.safeZonePct,
+    grain: 0.15,
+    vignette: 0.25,
+    watermark: null,
+  }
+
+  const bundleUrl = await getBundleUrl()
+  await ensureBrowserOnce()
+
+  const composition = await selectComposition({
+    serveUrl: bundleUrl,
+    id: 'Reel',
+    inputProps: props,
+    ...(browserExecutable ? { browserExecutable } : {}),
+  })
+
+  await renderStill({
+    composition: { ...composition, durationInFrames, width: input.width, height: input.height },
+    serveUrl: bundleUrl,
+    output: input.outputPath,
+    inputProps: props,
+    frame: Math.round((input.atMs / 1000) * fps),
+    imageFormat: 'jpeg',
+    jpegQuality: 92,
+    chromiumOptions: { disableWebSecurity: true },
+    ...(browserExecutable ? { browserExecutable } : {}),
+  })
 }
 
 // Post thumbnail — one still of the Thumbnail composition (hero frame + composited title, 1280×720).

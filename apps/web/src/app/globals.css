@@ -5,6 +5,11 @@
 /* Fonts (Nunito / Mulish / Space Mono) are loaded via next/font in layout.tsx,
    which defines --font-nunito, --font-mulish and --font-space-mono on <html>. */
 
+/* The caption presets' eight typefaces, for CaptionPreview. Generated alongside the copy the
+   renderer embeds (scripts/fetch-caption-fonts.mjs), so the style a creator picks in the wizard
+   is the one that gets burned into the video — not Arial standing in for all of them. */
+@import url('/caption-fonts.css');
+
 @layer base {
   :root {
     /* Brand accent, exposed to CSS for the tint-able animations below. */

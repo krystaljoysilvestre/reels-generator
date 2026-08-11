@@ -314,10 +314,11 @@ function upgradeLegacyCaptionStyle(value: unknown): unknown {
 //   marker      — a highlighter stroke wipes in behind the spoken word (word)
 //   glitch      — spoken word gets an RGB-split datamosh jitter (word)
 //   comic       — words pop in with a playful alternating tilt (word)
+//   flicker     — the line fades up slowly, then gutters like a failing bulb (block)
 //   none        — static
 export const CaptionAnimationSchema = z.enum([
   'fade', 'pop', 'bounce', 'karaoke', 'typewriter', 'highlight_box', 'punch',
-  'marker', 'glitch', 'comic', 'rise', 'none',
+  'marker', 'glitch', 'comic', 'rise', 'flicker', 'none',
 ])
 export type CaptionAnimation = z.infer<typeof CaptionAnimationSchema>
 
@@ -343,9 +344,22 @@ const CaptionStyleObjectSchema = z.object({
   uppercase: z.boolean().default(false),
   italic: z.boolean().default(false),
   letterSpacingEm: z.number().min(-0.05).max(0.5).default(0),
+  // Per-preset leading. A single hardcoded 1.25 was flattening the set: the design runs from
+  // 1.02 (Anton lower-third, caps packed tight) to 1.7 (Halo's airy wide-tracked light caps),
+  // and that spread is most of what separates one preset's voice from another's.
+  lineHeight: z.number().min(0.9).max(2).default(1.2),
   color: z.string().default('#ffffff'),          // base / not-yet-spoken words
   activeColor: z.string().default('#ffffff'),     // spoken word text (e.g. dark on a box)
   highlightColor: z.string().default('#ffe34d'),  // accent: box fill / karaoke fill / glow
+  // ── How the ONE accent word is treated, beyond its colour ──────────────────────────────
+  // Several presets do more than recolour the word the line lands on, and treating colour as
+  // the whole of "accent" flattened them into each other.
+  accentItalic: z.boolean().optional(),  // sable italicises its accent word — an editorial aside
+  accentScale: z.number().min(1).max(2).optional(), // kick's punchline is set larger than the line
+  // Block-mode presets normally carry no per-word treatment at all: their accent colour goes to a
+  // flourish (halo's middot, still's closing period) rather than to a word. seance is the exception
+  // — a cold serif with one word in brick — so it opts in and its line is laid out per word.
+  accentWord: z.boolean().optional(),
   stroke: z
     .object({
       color: z.string().default('#000000'),
@@ -353,13 +367,41 @@ const CaptionStyleObjectSchema = z.object({
     })
     .default({}),
   shadow: CaptionShadowSchema.default('hard'),
+  // How dark the glyph shadow sits. The design's value is 0.45 and that is the default; the
+  // render-time legibility pass raises it per reel on bright footage. A shadow is LOCAL — it
+  // darkens a few pixels around each letter and is invisible as a shape — so it is always tried
+  // before the scrim, which darkens a region of the picture. Not a stroke: the design rejects
+  // "12px black outlines choking every glyph", and this is the soft device it uses instead.
+  shadowAlpha: z.number().min(0.2).max(0.9).optional(),
   position: z.enum(['bottom', 'center', 'top']).default('bottom'),
+  // How far a BOTTOM caption sits above the frame's bottom edge, as % of frame height. Most
+  // presets leave this unset and take the platform safe zone. A preset sets it when its
+  // placement is a design choice rather than a UI clearance — pulse rides at 34%, well above
+  // the clutter, which is a different look from a subtitle hugging the bottom. The safe zone
+  // still wins if it is larger, so this can never push a caption INTO the platform UI.
+  bottomInsetPct: z.number().min(0).max(60).optional(),
   rotationDeg: z.number().min(-8).max(8).default(0), // slight tilt for energy
-  // Optional panel behind the whole line: 'bar' = translucent dark plate (cinematic /
-  // terminal), 'block' = solid highlightColor lower-third (breaking-news). Absent = none.
+  // Optional panel behind the line. 'bar' = translucent plate with an accent rule down its
+  // left edge (the mono chyron), 'block' = full-bleed lower third under a hairline accent rule
+  // (the news slate), 'scrim' = a frame-wide gradient wash rising from the BOTTOM EDGE of the
+  // frame. Absent = none.
   backplate: z.enum(['none', 'bar', 'block', 'scrim']).optional(),
-  // Optional gradient text fill (chrome / synthwave). When set, overrides the flat color.
-  gradient: z.object({ from: z.string(), to: z.string() }).optional(),
+  // How far up the frame the scrim wash reaches, as a % of frame height. Only read when
+  // backplate === 'scrim'. The wash is always pinned to the bottom edge — see SubtitleOverlay.
+  scrimPct: z.number().min(20).max(70).optional(),
+  // How dark the wash gets at the frame edge. The design's value is 0.62 and that is the default;
+  // the render-time legibility pass raises it per reel when the footage is bright enough to swallow
+  // the type (see packages/render/src/remotion/caption-legibility.ts). Deepening the ground is how
+  // the design buys contrast — the alternative, repainting the accent, deletes the palette.
+  scrimAlpha: z.number().min(0.3).max(0.95).optional(),
+  // Optional gradient text fill (chrome). `mid`/`midStop` add the third stop the design uses
+  // to turn the ramp from cool to warm through a held middle, rather than a flat two-stop blend.
+  gradient: z.object({
+    from: z.string(),
+    to: z.string(),
+    mid: z.string().optional(),
+    midStop: z.number().min(0).max(100).optional(),
+  }).optional(),
 })
 
 // A stored style naming a RETIRED preset is re-resolved through its replacement before validation, so
@@ -371,27 +413,63 @@ export type CaptionStyle = z.infer<typeof CaptionStyleObjectSchema>
 
 // Concrete params per preset. `highlightColor` may be overridden (e.g. AI-derived per niche).
 // Font stacks end in a generic family so the headless render host always has a fallback.
+//
+// TRANSCRIBED FROM THE DESIGN, NOT ESTIMATED. Every number below was measured off the caption
+// system reference ("Kendrix Caption Styles", the twenty-card gallery) by reading each card's
+// computed styles in a browser and normalising to a 1080-wide frame: the reference cards render
+// at 374px wide, so `fontSizePx = round(refPx × 1080/374)`. The first transcription eyeballed
+// these and landed ~1.4× small across the board (sable 52 where the design says 95, kick 68
+// where it says 81), which is why the shipped captions read as timid, generic subtitles rather
+// than as the twenty distinct voices that were drawn.
+//
+// The reference's own four rules, for anyone tuning these later:
+//   1. contrast comes from the scrim wash, never from a heavy stroke  (every stroke here is 0)
+//   2. the typeface carries the niche                                 (8 families, 20 voices)
+//   3. motion settles — words rise and rest, nothing shakes or spins
+//   4. one muted accent per preset, all sharing one chroma
 export const CAPTION_PRESETS: Record<CaptionPreset, CaptionStyle> = {
-  sable: { preset: 'sable', mode: 'word', animation: 'rise', fontFamily: '"Instrument Serif", Georgia, serif', fontWeight: 400, fontSizePx: 52, uppercase: false, italic: false, letterSpacingEm: 0, color: '#F5F3EE', activeColor: '#F5F3EE', highlightColor: '#E8B04B', stroke: { color: '#000', widthPx: 0 }, shadow: 'none', position: 'bottom', rotationDeg: 0, backplate: 'scrim' },
-  pulse: { preset: 'pulse', mode: 'word', animation: 'pop', fontFamily: 'Archivo, Arial, sans-serif', fontWeight: 800, fontSizePx: 64, uppercase: false, italic: false, letterSpacingEm: -0.02, color: '#fff', activeColor: '#fff', highlightColor: '#C4E070', stroke: { color: '#000', widthPx: 0 }, shadow: 'soft', position: 'bottom', rotationDeg: 0, backplate: 'scrim' },
-  marquee: { preset: 'marquee', mode: 'word', animation: 'highlight_box', fontFamily: 'Archivo, Arial, sans-serif', fontWeight: 900, fontSizePx: 68, uppercase: true, italic: false, letterSpacingEm: -0.01, color: '#fff', activeColor: '#151006', highlightColor: '#F4C24E', stroke: { color: '#000', widthPx: 0 }, shadow: 'soft', position: 'center', rotationDeg: 0 },
-  lyric: { preset: 'lyric', mode: 'word', animation: 'karaoke', fontFamily: '"Hanken Grotesk", Arial, sans-serif', fontWeight: 700, fontSizePx: 54, uppercase: false, italic: false, letterSpacingEm: 0, color: '#E6E7EA', activeColor: '#E6E7EA', highlightColor: '#F0806E', stroke: { color: '#000', widthPx: 0 }, shadow: 'soft', position: 'center', rotationDeg: 0 },
-  signal: { preset: 'signal', mode: 'block', animation: 'typewriter', fontFamily: '"JetBrains Mono", monospace', fontWeight: 500, fontSizePx: 40, uppercase: false, italic: false, letterSpacingEm: 0, color: '#EAF0F5', activeColor: '#EAF0F5', highlightColor: '#7FB2E8', stroke: { color: '#000', widthPx: 0 }, shadow: 'none', position: 'bottom', rotationDeg: 0, backplate: 'bar' },
-  halo: { preset: 'halo', mode: 'block', animation: 'fade', fontFamily: '"Space Grotesk", Arial, sans-serif', fontWeight: 300, fontSizePx: 46, uppercase: true, italic: false, letterSpacingEm: 0.16, color: '#F4F1EB', activeColor: '#F4F1EB', highlightColor: '#E8B04B', stroke: { color: '#000', widthPx: 0 }, shadow: 'none', position: 'bottom', rotationDeg: 0, backplate: 'scrim' },
-  slate: { preset: 'slate', mode: 'block', animation: 'fade', fontFamily: 'Anton, Impact, sans-serif', fontWeight: 400, fontSizePx: 54, uppercase: true, italic: false, letterSpacingEm: 0.03, color: '#fff', activeColor: '#fff', highlightColor: '#C05149', stroke: { color: '#000', widthPx: 0 }, shadow: 'soft', position: 'bottom', rotationDeg: 0, backplate: 'block' },
-  kick: { preset: 'kick', mode: 'word', animation: 'bounce', fontFamily: '"Bricolage Grotesque", Arial, sans-serif', fontWeight: 800, fontSizePx: 68, uppercase: true, italic: false, letterSpacingEm: -0.03, color: '#fff', activeColor: '#151006', highlightColor: '#F4D24E', stroke: { color: '#000', widthPx: 0 }, shadow: 'soft', position: 'center', rotationDeg: 0 },
-  seance: { preset: 'seance', mode: 'block', animation: 'typewriter', fontFamily: '"DM Serif Display", Georgia, serif', fontWeight: 400, fontSizePx: 50, uppercase: false, italic: false, letterSpacingEm: 0.01, color: '#E6E7EA', activeColor: '#E6E7EA', highlightColor: '#C05149', stroke: { color: '#000', widthPx: 0 }, shadow: 'none', position: 'bottom', rotationDeg: 0, backplate: 'scrim' },
-  notebook: { preset: 'notebook', mode: 'word', animation: 'marker', fontFamily: '"Hanken Grotesk", Arial, sans-serif', fontWeight: 700, fontSizePx: 54, uppercase: false, italic: false, letterSpacingEm: 0, color: '#fff', activeColor: '#fff', highlightColor: '#F4D24E', stroke: { color: '#000', widthPx: 0 }, shadow: 'soft', position: 'bottom', rotationDeg: 0, backplate: 'scrim' },
-  still: { preset: 'still', mode: 'block', animation: 'fade', fontFamily: '"Instrument Serif", Georgia, serif', fontWeight: 400, fontSizePx: 50, uppercase: false, italic: true, letterSpacingEm: 0.01, color: '#F3EFEA', activeColor: '#F3EFEA', highlightColor: '#A9C4A0', stroke: { color: '#000', widthPx: 0 }, shadow: 'soft', position: 'center', rotationDeg: 0 },
-  chrome: { preset: 'chrome', mode: 'block', animation: 'fade', fontFamily: '"Space Grotesk", Arial, sans-serif', fontWeight: 700, fontSizePx: 60, uppercase: true, italic: false, letterSpacingEm: 0.03, color: '#fff', activeColor: '#fff', highlightColor: '#F0806E', stroke: { color: '#000', widthPx: 0 }, shadow: 'glow', position: 'center', rotationDeg: 0, gradient: { from: '#4CC5FF', to: '#F0806E' } },
-  volt: { preset: 'volt', mode: 'word', animation: 'pop', fontFamily: 'Archivo, Arial, sans-serif', fontWeight: 900, fontSizePx: 68, uppercase: true, italic: false, letterSpacingEm: -0.02, color: '#fff', activeColor: '#fff', highlightColor: '#6FCF8E', stroke: { color: '#000', widthPx: 0 }, shadow: 'glow', position: 'center', rotationDeg: 0 },
-  static: { preset: 'static', mode: 'word', animation: 'glitch', fontFamily: 'Archivo, Arial, sans-serif', fontWeight: 800, fontSizePx: 62, uppercase: true, italic: false, letterSpacingEm: -0.01, color: '#fff', activeColor: '#fff', highlightColor: '#4CC5FF', stroke: { color: '#000', widthPx: 0 }, shadow: 'soft', position: 'center', rotationDeg: 0 },
-  plate: { preset: 'plate', mode: 'word', animation: 'rise', fontFamily: '"Hanken Grotesk", Arial, sans-serif', fontWeight: 800, fontSizePx: 56, uppercase: false, italic: false, letterSpacingEm: 0, color: '#fff', activeColor: '#fff', highlightColor: '#F2A177', stroke: { color: '#000', widthPx: 0 }, shadow: 'soft', position: 'bottom', rotationDeg: 0, backplate: 'scrim' },
-  field: { preset: 'field', mode: 'word', animation: 'pop', fontFamily: 'Archivo, Arial, sans-serif', fontWeight: 900, fontSizePx: 66, uppercase: true, italic: true, letterSpacingEm: -0.02, color: '#fff', activeColor: '#fff', highlightColor: '#B8E04B', stroke: { color: '#000', widthPx: 0 }, shadow: 'soft', position: 'bottom', rotationDeg: 0, backplate: 'scrim' },
-  voyage: { preset: 'voyage', mode: 'word', animation: 'rise', fontFamily: '"Space Grotesk", Arial, sans-serif', fontWeight: 600, fontSizePx: 54, uppercase: false, italic: false, letterSpacingEm: 0, color: '#F4F7F6', activeColor: '#F4F7F6', highlightColor: '#5FB6A6', stroke: { color: '#000', widthPx: 0 }, shadow: 'soft', position: 'bottom', rotationDeg: 0, backplate: 'scrim' },
-  paws: { preset: 'paws', mode: 'word', animation: 'pop', fontFamily: '"Bricolage Grotesque", Arial, sans-serif', fontWeight: 700, fontSizePx: 58, uppercase: false, italic: false, letterSpacingEm: 0, color: '#fff', activeColor: '#fff', highlightColor: '#F2A177', stroke: { color: '#000', widthPx: 0 }, shadow: 'soft', position: 'bottom', rotationDeg: 0, backplate: 'scrim' },
-  candid: { preset: 'candid', mode: 'word', animation: 'rise', fontFamily: '"Hanken Grotesk", Arial, sans-serif', fontWeight: 800, fontSizePx: 56, uppercase: false, italic: false, letterSpacingEm: -0.01, color: '#fff', activeColor: '#fff', highlightColor: '#7FB2E8', stroke: { color: '#000', widthPx: 0 }, shadow: 'soft', position: 'bottom', rotationDeg: 0, backplate: 'scrim' },
-  dance: { preset: 'dance', mode: 'word', animation: 'pop', fontFamily: 'Archivo, Arial, sans-serif', fontWeight: 900, fontSizePx: 70, uppercase: true, italic: false, letterSpacingEm: -0.02, color: '#fff', activeColor: '#fff', highlightColor: '#F0806E', stroke: { color: '#000', widthPx: 0 }, shadow: 'soft', position: 'center', rotationDeg: 0 },
+  // Storytelling · video essays · documentary — calm editorial serif, words rise once and hold
+  sable: { preset: 'sable', mode: 'word', animation: 'rise', fontFamily: '"Instrument Serif", Georgia, serif', fontWeight: 400, fontSizePx: 95, uppercase: false, italic: false, letterSpacingEm: 0, lineHeight: 1.14, color: '#F5F3EE', activeColor: '#F5F3EE', highlightColor: '#E8B04B', accentItalic: true, stroke: { color: '#000', widthPx: 0 }, shadow: 'none', position: 'bottom', rotationDeg: 0, backplate: 'scrim', scrimPct: 52 },
+  // General · lifestyle · vlog — bold word pop, the keyword breathes in a single accent
+  pulse: { preset: 'pulse', mode: 'word', animation: 'pop', fontFamily: 'Archivo, Arial, sans-serif', fontWeight: 800, fontSizePx: 84, uppercase: true, italic: false, letterSpacingEm: -0.015, lineHeight: 1.06, color: '#fff', activeColor: '#fff', highlightColor: '#C4E070', stroke: { color: '#000', widthPx: 0 }, shadow: 'soft', position: 'bottom', bottomInsetPct: 34, rotationDeg: 0, backplate: 'scrim', scrimPct: 46 },
+  // Business · motivation — the highlight pill done right: one warm chip, deep ink text
+  marquee: { preset: 'marquee', mode: 'word', animation: 'highlight_box', fontFamily: 'Archivo, Arial, sans-serif', fontWeight: 900, fontSizePx: 87, uppercase: true, italic: false, letterSpacingEm: 0, lineHeight: 1.08, color: '#fff', activeColor: '#151006', highlightColor: '#F4C24E', stroke: { color: '#000', widthPx: 0 }, shadow: 'soft', position: 'center', rotationDeg: 0 },
+  // Music · lyric · poetry — upcoming words dim, the sung word fills and sweeps
+  lyric: { preset: 'lyric', mode: 'word', animation: 'karaoke', fontFamily: '"Hanken Grotesk", Arial, sans-serif', fontWeight: 700, fontSizePx: 78, uppercase: false, italic: false, letterSpacingEm: 0, lineHeight: 1.22, color: '#fff', activeColor: '#fff', highlightColor: '#F0806E', stroke: { color: '#000', widthPx: 0 }, shadow: 'soft', position: 'center', rotationDeg: 0 },
+  // Tech · AI · crypto — a mono chyron on a thin left-ruled plate, typewriter reveal
+  signal: { preset: 'signal', mode: 'block', animation: 'typewriter', fontFamily: '"JetBrains Mono", monospace', fontWeight: 500, fontSizePx: 55, uppercase: false, italic: false, letterSpacingEm: 0, lineHeight: 1.4, color: '#EAF0F5', activeColor: '#EAF0F5', highlightColor: '#7FB2E8', stroke: { color: '#000', widthPx: 0 }, shadow: 'none', position: 'bottom', rotationDeg: 0, backplate: 'bar' },
+  // Beauty · fashion · luxury · ASMR — airy wide-tracked light caps that fade
+  halo: { preset: 'halo', mode: 'block', animation: 'fade', fontFamily: '"Space Grotesk", Arial, sans-serif', fontWeight: 300, fontSizePx: 49, uppercase: true, italic: false, letterSpacingEm: 0.34, lineHeight: 1.7, color: '#F7F3F0', activeColor: '#F7F3F0', highlightColor: '#F0A79B', stroke: { color: '#000', widthPx: 0 }, shadow: 'soft', position: 'bottom', rotationDeg: 0, backplate: 'scrim', scrimPct: 40 },
+  // News · sports · updates — a modern lower third under a hairline accent rule
+  slate: { preset: 'slate', mode: 'block', animation: 'fade', fontFamily: 'Anton, Impact, sans-serif', fontWeight: 400, fontSizePx: 66, uppercase: true, italic: false, letterSpacingEm: 0.01, lineHeight: 1.02, color: '#fff', activeColor: '#fff', highlightColor: '#E8564B', stroke: { color: '#000', widthPx: 0 }, shadow: 'none', position: 'bottom', rotationDeg: 0, backplate: 'block' },
+  // Comedy · memes · reactions — playful display face, the punchline settles
+  kick: { preset: 'kick', mode: 'word', animation: 'bounce', fontFamily: '"Bricolage Grotesque", Arial, sans-serif', fontWeight: 800, fontSizePx: 81, uppercase: false, italic: false, letterSpacingEm: 0, lineHeight: 1.05, color: '#fff', activeColor: '#fff', highlightColor: '#C4E070', accentScale: 1.43, stroke: { color: '#000', widthPx: 0 }, shadow: 'soft', position: 'bottom', rotationDeg: 0, backplate: 'scrim', scrimPct: 44 },
+  // Horror · mystery · true crime — a cold dramatic serif that reveals slowly and flickers, barely.
+  // NOT a typewriter: that reveal (with its blinking caret) belongs to signal, and giving it to
+  // seance as well made the two read as the same idea in different fonts.
+  seance: { preset: 'seance', mode: 'block', animation: 'flicker', fontFamily: '"DM Serif Display", Georgia, serif', fontWeight: 400, fontSizePx: 89, uppercase: false, italic: false, letterSpacingEm: 0.01, lineHeight: 1.2, color: '#E6E7EA', activeColor: '#E6E7EA', highlightColor: '#C05149', accentWord: true, stroke: { color: '#000', widthPx: 0 }, shadow: 'none', position: 'bottom', rotationDeg: 0, backplate: 'scrim', scrimPct: 50 },
+  // Study · tips · how-to — clean sans with a highlighter swipe under the takeaway
+  notebook: { preset: 'notebook', mode: 'word', animation: 'marker', fontFamily: '"Hanken Grotesk", Arial, sans-serif', fontWeight: 700, fontSizePx: 72, uppercase: false, italic: false, letterSpacingEm: 0, lineHeight: 1.4, color: '#fff', activeColor: '#141110', highlightColor: '#F4D24E', stroke: { color: '#000', widthPx: 0 }, shadow: 'soft', position: 'bottom', rotationDeg: 0, backplate: 'scrim', scrimPct: 44 },
+  // Wellness · faith · quotes — calm centred italic serif that fades in
+  still: { preset: 'still', mode: 'block', animation: 'fade', fontFamily: '"Instrument Serif", Georgia, serif', fontWeight: 400, fontSizePx: 87, uppercase: false, italic: true, letterSpacingEm: 0.01, lineHeight: 1.5, color: '#F3EFEA', activeColor: '#F3EFEA', highlightColor: '#A9C4A0', stroke: { color: '#000', widthPx: 0 }, shadow: 'soft', position: 'center', rotationDeg: 0 },
+  // Retro · 80s · synthwave — a cool-to-warm gradient fill, chrome not neon
+  chrome: { preset: 'chrome', mode: 'block', animation: 'fade', fontFamily: '"Space Grotesk", Arial, sans-serif', fontWeight: 700, fontSizePx: 92, uppercase: true, italic: false, letterSpacingEm: 0.03, lineHeight: 1.08, color: '#fff', activeColor: '#fff', highlightColor: '#7FB2E8', stroke: { color: '#000', widthPx: 0 }, shadow: 'soft', position: 'center', rotationDeg: 0, gradient: { from: '#bfe4ff', mid: '#7FB2E8', midStop: 45, to: '#F0806E' } },
+  // Gaming · nightlife · hype — bold caps pop, the payoff word glows electric
+  volt: { preset: 'volt', mode: 'word', animation: 'pop', fontFamily: 'Archivo, Arial, sans-serif', fontWeight: 900, fontSizePx: 84, uppercase: true, italic: false, letterSpacingEm: 0, lineHeight: 1.06, color: '#EAFBFF', activeColor: '#EAFBFF', highlightColor: '#4CC5FF', stroke: { color: '#000', widthPx: 0 }, shadow: 'glow', position: 'center', rotationDeg: 0 },
+  // Edgy · alt · streetwear — hard caps with a tight RGB split on the accent
+  static: { preset: 'static', mode: 'word', animation: 'glitch', fontFamily: 'Archivo, Arial, sans-serif', fontWeight: 800, fontSizePx: 84, uppercase: true, italic: false, letterSpacingEm: 0.01, lineHeight: 1.08, color: '#fff', activeColor: '#fff', highlightColor: '#7FB2E8', stroke: { color: '#000', widthPx: 0 }, shadow: 'none', position: 'center', rotationDeg: 0 },
+  // Food · recipe · cooking — friendly sans, the key verb in a warm accent
+  plate: { preset: 'plate', mode: 'word', animation: 'rise', fontFamily: '"Hanken Grotesk", Arial, sans-serif', fontWeight: 800, fontSizePx: 78, uppercase: false, italic: false, letterSpacingEm: 0, lineHeight: 1.2, color: '#fff', activeColor: '#fff', highlightColor: '#E8B04B', stroke: { color: '#000', widthPx: 0 }, shadow: 'soft', position: 'bottom', rotationDeg: 0, backplate: 'scrim', scrimPct: 46 },
+  // Sports · fitness · training — italic caps with drive
+  field: { preset: 'field', mode: 'word', animation: 'pop', fontFamily: 'Archivo, Arial, sans-serif', fontWeight: 900, fontSizePx: 87, uppercase: true, italic: true, letterSpacingEm: 0, lineHeight: 1.02, color: '#fff', activeColor: '#fff', highlightColor: '#B8E04B', stroke: { color: '#000', widthPx: 0 }, shadow: 'soft', position: 'bottom', rotationDeg: 0, backplate: 'scrim', scrimPct: 44 },
+  // Travel · places · adventure — a clean geometric sans over a calm wash
+  voyage: { preset: 'voyage', mode: 'word', animation: 'rise', fontFamily: '"Space Grotesk", Arial, sans-serif', fontWeight: 600, fontSizePx: 75, uppercase: false, italic: false, letterSpacingEm: 0, lineHeight: 1.2, color: '#F4F7F6', activeColor: '#F4F7F6', highlightColor: '#5FB6A6', stroke: { color: '#000', widthPx: 0 }, shadow: 'soft', position: 'bottom', rotationDeg: 0, backplate: 'scrim', scrimPct: 46 },
+  // Pets · animals · wholesome — rounded, warm, unhurried
+  paws: { preset: 'paws', mode: 'word', animation: 'pop', fontFamily: '"Bricolage Grotesque", Arial, sans-serif', fontWeight: 700, fontSizePx: 81, uppercase: false, italic: false, letterSpacingEm: 0, lineHeight: 1.12, color: '#fff', activeColor: '#fff', highlightColor: '#F2A177', stroke: { color: '#000', widthPx: 0 }, shadow: 'soft', position: 'bottom', rotationDeg: 0, backplate: 'scrim', scrimPct: 44 },
+  // Everyday · storytime · POV — the neutral house voice, legible on anything
+  candid: { preset: 'candid', mode: 'word', animation: 'rise', fontFamily: '"Hanken Grotesk", Arial, sans-serif', fontWeight: 800, fontSizePx: 78, uppercase: false, italic: false, letterSpacingEm: -0.01, lineHeight: 1.22, color: '#fff', activeColor: '#fff', highlightColor: '#7FB2E8', stroke: { color: '#000', widthPx: 0 }, shadow: 'soft', position: 'bottom', rotationDeg: 0, backplate: 'scrim', scrimPct: 46 },
+  // Dance · music · trends — heavy caps on the beat
+  dance: { preset: 'dance', mode: 'word', animation: 'pop', fontFamily: 'Archivo, Arial, sans-serif', fontWeight: 900, fontSizePx: 89, uppercase: true, italic: false, letterSpacingEm: -0.01, lineHeight: 1.04, color: '#fff', activeColor: '#fff', highlightColor: '#F0806E', stroke: { color: '#000', widthPx: 0 }, shadow: 'soft', position: 'center', rotationDeg: 0 },
 }
 
 // Hybrid model: the AI picks a preset and may nudge a few SAFE, bounded knobs on top of

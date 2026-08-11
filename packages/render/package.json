@@ -11,7 +11,8 @@
     "./qa/render-qa": "./src/qa/render-qa.ts",
     "./music/music-sync": "./src/music/music-sync.ts",
     "./music/music-selection": "./src/music/music-selection.ts",
-    "./remotion/render-remotion": "./src/remotion/render-remotion.ts"
+    "./remotion/render-remotion": "./src/remotion/render-remotion.ts",
+    "./remotion/caption-legibility": "./src/remotion/caption-legibility.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

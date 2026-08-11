@@ -2,7 +2,7 @@ import React from 'react'
 import { AbsoluteFill, Sequence, useVideoConfig } from 'remotion'
 import { SceneClip } from '../components/SceneClip.js'
 import { SceneEffects } from '../components/SceneEffects.js'
-import { SubtitleOverlay } from '../components/SubtitleOverlay.js'
+import { CaptionFonts, SubtitleOverlay } from '../components/SubtitleOverlay.js'
 import { GradeOverlay } from '../components/GradeOverlay.js'
 import { OnScreenTextOverlay } from '../components/OnScreenTextOverlay.js'
 import { WatermarkOverlay } from '../components/WatermarkOverlay.js'
@@ -54,6 +54,10 @@ export const ReelComposition: React.FC<ReelCompositionProps> = ({
 
   return (
     <AbsoluteFill style={{ backgroundColor: '#000', width, height }}>
+      {/* The caption typefaces, blocked on before frame 0. Mounted for the whole composition,
+          not inside the overlay, which unmounts between chunks. */}
+      {captionStyle.enabled === false ? null : <CaptionFonts />}
+
       {/* Scene clips — each in its own Sequence so Remotion handles the timeline */}
       {scenes.map((scene) => (
         <Sequence
