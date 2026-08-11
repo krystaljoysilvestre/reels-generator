@@ -10,6 +10,7 @@ import { resolveNextStep, enqueueStep } from '@reels/queue'
 import { captureException } from '../monitoring/sentry.js'
 import { isTerminalError } from './error-policy.js'
 import { autoCrossGate } from './auto-gate.js'
+import { composeCover } from './compose-cover.js'
 import {
   generateStory,
   annotateAudioScript,
@@ -103,6 +104,14 @@ export async function dispatchPipelineJob(job: Job<PipelineJobData>): Promise<vo
         break
       case 'render_qa':
         await renderQaStep(reelId)
+        break
+      case 'compose_cover':
+        // On-demand packaging rebuild, NOT a member of PIPELINE_STEPS: it isn't part of a reel's linear
+        // progress (it would skew the dashboard's n/N) and it has no successor, so resolveNextStep
+        // returns null and autoCrossGate ignores it. Deliberately not wrapped in runStep either — the
+        // whole point is that it re-runs whenever the creator changes the words, which a cached
+        // inputHash would defeat. Free, so there is nothing to re-bill.
+        await composeCover({ reelId })
         break
       default:
         throw new Error(`Unknown pipeline step: ${stepName}`)

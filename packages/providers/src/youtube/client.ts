@@ -12,6 +12,11 @@
 // true marginal cost, not an unaccounted estimate. Attaching a caption track adds ~400 units to an
 // upload (~2000 total), which lowers the ceiling to ~5 uploads/day on the default quota.
 
+// thumbnails.set caps the body at 2MB (developers.google.com/youtube/v3/docs/thumbnails/set). Exported so
+// the cover compositor can target it at render time instead of discovering it at publish time, when the
+// video is already up and the only remaining option is to drop the thumbnail.
+export const YOUTUBE_THUMBNAIL_MAX_BYTES = 2 * 1024 * 1024
+
 export interface YouTubeUploadParams {
   video: Buffer
   title: string // ≤100 chars, no '<' or '>'
@@ -111,18 +116,39 @@ export async function uploadToYouTube(params: YouTubeUploadParams): Promise<YouT
   if (!json.id) throw new Error('YouTube upload returned no video id')
 
   if (params.thumbnailJpeg) {
-    try {
-      const thumbRes = await fetch(
-        `https://www.googleapis.com/upload/youtube/v3/thumbnails/set?videoId=${json.id}`,
-        {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'image/jpeg' },
-          body: new Uint8Array(params.thumbnailJpeg),
-        },
+    // Size is checked BEFORE the request, because an oversized body comes back as an opaque 400 that reads
+    // exactly like every other rejection — and the cap was previously unenforced anywhere. It never bit
+    // while covers were 1280×720 (~90-130KB); a full-resolution 1080×1920 cover is where it starts to.
+    if (params.thumbnailJpeg.length > YOUTUBE_THUMBNAIL_MAX_BYTES) {
+      console.warn(
+        `[youtube] thumbnail skipped: ${(params.thumbnailJpeg.length / 1_048_576).toFixed(2)}MB exceeds the ` +
+        `${YOUTUBE_THUMBNAIL_MAX_BYTES / 1_048_576}MB thumbnails.set limit — auto frame kept`,
       )
-      if (!thumbRes.ok) console.warn(`[youtube] custom thumbnail rejected (${thumbRes.status}) — auto frame kept`)
-    } catch (err) {
-      console.warn(`[youtube] thumbnail set failed: ${err instanceof Error ? err.message : String(err)}`)
+    } else {
+      try {
+        const thumbRes = await fetch(
+          `https://www.googleapis.com/upload/youtube/v3/thumbnails/set?videoId=${json.id}`,
+          {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'image/jpeg' },
+            body: new Uint8Array(params.thumbnailJpeg),
+          },
+        )
+        // A rejection here is EXPECTED, not anomalous, on two known configurations, so it says which:
+        // custom thumbnails need a phone-verified account, and for SHORTS they additionally need the
+        // YouTube Partner Program (rolled out 2026-07-24, still expanding). A non-YPP Shorts channel gets
+        // frame selection only. Left as a warning rather than a throw — the video is already published and
+        // failing the whole upload over packaging would be worse — but it names the likely cause so this
+        // stops looking like a mystery.
+        if (!thumbRes.ok) {
+          console.warn(
+            `[youtube] custom thumbnail rejected (${thumbRes.status}) — auto frame kept. ` +
+            `Custom thumbnails require a phone-verified account, and on Shorts also the YouTube Partner Program.`,
+          )
+        }
+      } catch (err) {
+        console.warn(`[youtube] thumbnail set failed: ${err instanceof Error ? err.message : String(err)}`)
+      }
     }
   }
 

@@ -3,7 +3,8 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { eq } from 'drizzle-orm'
 import { getDb, reels } from '@reels/db'
-import { PostMetaSchema } from '@reels/core'
+import { PostMetaSchema, thumbnailOverlay } from '@reels/core'
+import { enqueueStep } from '@reels/queue'
 import { requireReelOwner } from '@/lib/api-access'
 
 // The reel's post package (title/hook/caption/hashtags). Written by the generate_post_meta step;
@@ -43,9 +44,29 @@ export async function PATCH(req: NextRequest) {
   if (gate instanceof NextResponse) return gate
 
   const db = getDb()
-  const reel = await db.query.reels.findFirst({ where: eq(reels.id, reelId), columns: { id: true } })
+  const reel = await db.query.reels.findFirst({ where: eq(reels.id, reelId), columns: { id: true, postMeta: true } })
   if (!reel) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
+  // What the cover would burn BEFORE this save, so an edit that doesn't touch the overlay doesn't queue a
+  // pointless rebuild. thumbnailOverlay() falls back to the title, so a title edit can move the overlay too.
+  const before = PostMetaSchema.safeParse(reel.postMeta)
+  const overlayBefore = before.success ? thumbnailOverlay(before.data) : ''
+
   await db.update(reels).set({ postMeta, updatedAt: new Date() }).where(eq(reels.id, reelId))
-  return NextResponse.json({ ok: true })
+
+  // Rebuild the cover when the burned words changed. Editing the thumbnail text used to be inert: the
+  // composite was built inside the render step, whose inputHash excludes postMeta, so the save was
+  // followed by a cache skip and the STALE cover was what published. Compositing is $0 and takes seconds.
+  const coverStale = thumbnailOverlay(postMeta) !== overlayBefore
+  if (coverStale) {
+    try {
+      await enqueueStep({ reelId, stepName: 'compose_cover' })
+    } catch (err) {
+      // The text is already saved; a queue outage must not lose the creator's edit. Report it so the UI
+      // can say the cover is still catching up rather than silently showing an old image.
+      console.warn(`[post-meta] cover rebuild not queued for ${reelId.slice(0, 8)}: ${err instanceof Error ? err.message : String(err)}`)
+      return NextResponse.json({ ok: true, coverRebuilding: false, coverRebuildQueueFailed: true })
+    }
+  }
+  return NextResponse.json({ ok: true, coverRebuilding: coverStale })
 }

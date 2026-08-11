@@ -402,18 +402,22 @@ export async function renderThumbnailStill(input: {
   title: string // the OVERLAY words (post-meta.thumbnailText, falling back to the title)
   outputPath: string // .jpeg
   accent?: string // channel accent colour (captionStyle.highlightColor)
-  // Is the SOURCE frame portrait? Drives the fitting: a portrait frame is never cropped into 16:9,
-  // because a centre crop keeps only 32% of its height and routinely discards the subject. Callers pass
-  // the platform preset's aspect rather than measuring the file — it is the authority on what the scene
-  // images were rendered at, and it needs no image library on the worker.
-  sourceVertical?: boolean
+  // Cover dimensions — the CHANNEL'S OWN aspect, not a fixed 16:9. Callers pass the platform preset's
+  // dimensions: it is the authority on what the scene images were rendered at, and it matches the aspect
+  // each platform documents for its thumbnail (9:16 for Shorts, 16:9 for long-form). Rendering at the
+  // source's aspect is what makes cropping safe — see the Aspect note in ThumbnailComposition.
+  // Defaults to the registered 16:9 so existing callers are unaffected.
+  width?: number
+  height?: number
+  // jpegQuality is overridable because a full-resolution vertical cover has to fit YouTube's 2MB
+  // thumbnails.set limit; the caller retries smaller rather than having the upload silently rejected.
+  quality?: number
 }): Promise<void> {
   const imageSrc = await toDataUri(input.imagePath, 'image/webp')
   const props = {
     imageSrc,
     title: input.title,
     ...(input.accent ? { accent: input.accent } : {}),
-    ...(input.sourceVertical ? { sourceVertical: true } : {}),
   }
 
   const bundleUrl = await getBundleUrl()
@@ -427,12 +431,18 @@ export async function renderThumbnailStill(input: {
   })
 
   await renderStill({
-    composition,
+    // Override the registered dimensions so one composition serves every aspect. The component reads them
+    // back via useVideoConfig() and picks its layout from width vs height.
+    composition: {
+      ...composition,
+      ...(input.width ? { width: input.width } : {}),
+      ...(input.height ? { height: input.height } : {}),
+    },
     serveUrl: bundleUrl,
     output: input.outputPath,
     inputProps: props,
     imageFormat: 'jpeg',
-    jpegQuality: 90,
+    jpegQuality: input.quality ?? 90,
     chromiumOptions: { disableWebSecurity: true }, // allow data URIs
     ...(browserExecutable ? { browserExecutable } : {}),
   })

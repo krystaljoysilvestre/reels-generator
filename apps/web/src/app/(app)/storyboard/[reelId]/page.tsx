@@ -2,7 +2,7 @@ import { getDb, reels, scenes, assets, channels, pipelineSteps, publications } f
 import { and, desc, eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { assertReelAccess } from '@/lib/access'
-import { type ChannelVoice, type VoiceSettings, moodToVoiceSettings, ToneConfigSchema, AudioPacksSchema, OperatorSfxSchema, PRESET_BEDS } from '@reels/core'
+import { type ChannelVoice, type VoiceSettings, moodToVoiceSettings, ToneConfigSchema, AudioPacksSchema, OperatorSfxSchema, PostMetaSchema, PRESET_BEDS } from '@reels/core'
 import { isYouTubeConfigured } from '@reels/providers'
 import { channelMood, MOOD_TINT } from '@/lib/pipeline-phases'
 import { StoryboardEditor } from './StoryboardEditor'
@@ -78,6 +78,26 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
   const renderUrl = renderAsset
     ? `/api/asset?key=${encodeURIComponent(renderAsset.storageKey)}&v=${new Date(renderAsset.createdAt).getTime()}`
     : null
+
+  // The PACKAGING a viewer meets before pressing play — the platform title and the cover.
+  // Passed to the spot-check gate because that is where "would you publish this?" gets answered, and until
+  // now neither was on that screen: every surface showed `stories.title` (the deliberately casual WORKING
+  // title, e.g. "the rungs he left behind") while the real platform title sat unread in postMeta, and the
+  // cover was never rendered anywhere in the app at all.
+  // Matched by role, not by hardcoded key — the same way the export route finds it.
+  const coverAsset = reelAssets.find((a) => (a.meta as Record<string, unknown> | null)?.['role'] === 'thumbnail')
+  const parsedMeta = PostMetaSchema.safeParse(reel.postMeta)
+  const packaging = parsedMeta.success
+    ? {
+        title: parsedMeta.data.title,
+        thumbnailText: parsedMeta.data.thumbnailText,
+        // The cover upserts in place on the SAME key, so the asset id never changes and can't bust the
+        // cache. createdAt is bumped on every rebuild, which is what makes an edited cover actually appear.
+        coverUrl: coverAsset
+          ? `/api/asset?key=${encodeURIComponent(coverAsset.storageKey)}&v=${new Date(coverAsset.createdAt).getTime()}`
+          : null,
+      }
+    : null
   // Background music reflects the channel's chosen mode (Sound step): AI → a per-reel mood dropdown (steers
   // the bed generated at render); preset/upload → the actual chosen track(s), shown read-only with a preview;
   // none → silent. For preset/upload we resolve a friendly label + a playable URL for each pool track.
@@ -147,6 +167,7 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
       sceneImageHistory={sceneImageHistory}
       sceneVideoVariations={sceneVideoVariations}
       renderUrl={renderUrl}
+      packaging={packaging}
       musicMood={reel.musicMood}
       channelMusicMood={channelMusicMood}
       aiMusic={aiMusic}

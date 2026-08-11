@@ -41,6 +41,8 @@ interface StoryboardEditorProps {
   sceneImageHistory: Record<number, { assetId: string; url: string }[]>
   sceneVideoVariations: Record<number, string[]>
   renderUrl: string | null
+  // Title + cover as a viewer would meet them. Null until the packaging step has run.
+  packaging: { title: string; thumbnailText: string; coverUrl: string | null } | null
   musicMood: string | null // this reel's background-music mood override (MusicMood); null = inherit the channel default
   channelMusicMood: string | null // the channel's default mood (MusicMood), shown as the "inherit" option
   aiMusic: boolean // channel composes its bed per-reel (musicMode='ai') → the mood dropdown steers it
@@ -58,7 +60,7 @@ interface StoryboardEditorProps {
 
 export function StoryboardEditor({
   reel, story, scenes: initialScenes, voicePool, voiceRecommend,
-  sceneImages, sceneImageHistory, sceneVideoVariations, renderUrl: initialRenderUrl, musicMood: initialMusicMood, channelMusicMood, aiMusic, musicMode, channelMusicTracks, musicUploadUrl: initialMusicUploadUrl,
+  sceneImages, sceneImageHistory, sceneVideoVariations, renderUrl: initialRenderUrl, packaging, musicMood: initialMusicMood, channelMusicMood, aiMusic, musicMode, channelMusicTracks, musicUploadUrl: initialMusicUploadUrl,
   initialVideoEffects, initialOperatorSfx, initialVoiceSettings,
   channelName, genreCategory, moodTint, failure,
 }: StoryboardEditorProps) {
@@ -1159,10 +1161,32 @@ export function StoryboardEditor({
         <div className="sticky bottom-0 z-40 flex flex-shrink-0 flex-wrap items-center gap-3 border-t border-border bg-bg/80 px-4 py-3 backdrop-blur sm:px-8 sm:py-4">
           {reel.status === 'spot_check' && (
             <>
-              <div className="mr-auto">
-                <p className="font-display text-[15px] font-700 text-ink">Spot-check</p>
-                <p className="text-xs text-muted">Give it a watch. Love it? Approve it. Want a different voice? Swap it and re-render.</p>
+              {/* The packaging a viewer meets BEFORE pressing play, shown at the moment the reel is judged.
+                  It used to appear only after approval, so this gate asked "would you publish this?" while
+                  showing the internal working title and no cover at all. */}
+              <div className="mr-auto flex min-w-0 items-center gap-3">
+                {packaging?.coverUrl && (
+                  <img
+                    src={packaging.coverUrl}
+                    alt="Cover"
+                    className="h-14 w-auto flex-shrink-0 rounded-md border border-border object-contain"
+                  />
+                )}
+                <div className="min-w-0">
+                  <p className="font-display text-[15px] font-700 text-ink">Spot-check</p>
+                  {packaging ? (
+                    <>
+                      <p className="truncate text-sm font-medium text-ink" title={packaging.title}>
+                        {packaging.title}
+                      </p>
+                      <p className="text-xs text-muted">Your title and cover — what people see before they press play.</p>
+                    </>
+                  ) : (
+                    <p className="text-xs text-muted">Give it a watch. Love it? Approve it. Want a different voice? Swap it and re-render.</p>
+                  )}
+                </div>
               </div>
+              <PostCaptionButton reelId={reel.id} />
               {/* Change voice, then re-render — post-render analog of the storyboard voice pill. The picker
                   saves the pick to the reel; the next Re-render re-runs TTS with it (stills/clips are reused). */}
               <button

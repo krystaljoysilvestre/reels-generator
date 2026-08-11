@@ -3,12 +3,13 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { mkdir, writeFile, readFile, rm, copyFile } from 'node:fs/promises'
+import { mkdir, writeFile, rm, copyFile } from 'node:fs/promises'
 import { getDb, reels, scenes, assets, channels } from '@reels/db'
-import { downloadBuffer, uploadBuffer, uploadFile, buildInputHash } from '@reels/providers'
-import { thumbnailOverlay, TimingsSchema, LutConfigSchema, CaptionStyleSchema, channelPlatformPreset, PostMetaSchema, effectsFromSelection, parseMotion, effectiveGenre,} from '@reels/core'
-import { renderReelWithRemotion, renderThumbnailStill } from '@reels/render/remotion/render-remotion'
+import { downloadBuffer, uploadFile, buildInputHash } from '@reels/providers'
+import { TimingsSchema, LutConfigSchema, CaptionStyleSchema, channelPlatformPreset, effectsFromSelection, parseMotion, effectiveGenre,} from '@reels/core'
+import { renderReelWithRemotion } from '@reels/render/remotion/render-remotion'
 import { resolveMediaGenre } from '@reels/core/prompts/scenes.v1'
+import { composeCover } from '../compose-cover.js'
 import { runStep, setReelStatus } from '../harness.js'
 import { runPool } from '../pool.js'
 
@@ -347,48 +348,14 @@ export async function renderStep(reelId: string): Promise<void> {
         set: { meta, createdAt: new Date() },
       })
 
-      // ── Post thumbnail (best-effort): hero frame + composited title ──────
-      // 1280×720 for YouTube packaging; the export zip and publish flows prefer it over the raw frame.
-      // Skipped without complaint when there's no title or no hero image — never fails the render.
+      // ── Post cover (best-effort) ─────────────────────────────────────────
+      // Lives in compose-cover.ts so it can also be rebuilt on its own when the creator edits the
+      // packaging — the render step is no longer the only way to change a thumbnail. Still best-effort
+      // here: a cover problem must never fail a reel that rendered.
       try {
-        const postMeta = PostMetaSchema.safeParse(reel.postMeta)
-        const heroScene =
-          reelScenes.find((s) => s.isHero && s.imageAssetId) ?? reelScenes.find((s) => s.imageAssetId)
-        const heroAsset = heroScene?.imageAssetId ? allAssets.find((a) => a.id === heroScene.imageAssetId) : null
-        // The OVERLAY, not the title. thumbnailOverlay() falls back to the title so reels written before
-        // `thumbnailText` existed still render exactly as before (publish-bar audit, 2026-08-10).
-        const overlay = postMeta.success ? thumbnailOverlay(postMeta.data) : ''
-        if (postMeta.success && overlay && heroAsset) {
-          const heroPath = join(tmp, 'thumb_hero.webp')
-          await writeFile(heroPath, await downloadBuffer(heroAsset.storageKey))
-          const thumbPath = join(tmp, 'thumbnail.jpg')
-          await renderThumbnailStill({
-            imagePath: heroPath,
-            title: overlay,
-            outputPath: thumbPath,
-            ...(captionStyle.highlightColor ? { accent: captionStyle.highlightColor } : {}),
-            // The platform preset is the authority on the hero frame's aspect — the scene images were
-            // rendered at exactly these dimensions. A portrait frame must not be cropped into 16:9.
-            sourceVertical: platformPreset.height > platformPreset.width,
-          })
-          const thumbKey = `reels/${reelId}/thumbnail.jpg`
-          await uploadBuffer(thumbKey, await readFile(thumbPath), 'image/jpeg')
-          const thumbMeta = { role: 'thumbnail', title: overlay }
-          await db.insert(assets).values({
-            reelId,
-            channelId: reel.channelId,
-            kind: 'image',
-            storageKey: thumbKey,
-            provider: 'local',
-            costCents: 0,
-            meta: thumbMeta,
-          }).onConflictDoUpdate({
-            target: [assets.reelId, assets.storageKey],
-            set: { meta: thumbMeta, createdAt: new Date() },
-          })
-        }
+        await composeCover({ reelId })
       } catch (err) {
-        console.warn(`[render] thumbnail skipped: ${err instanceof Error ? err.message : String(err)}`)
+        console.warn(`[render] cover skipped: ${err instanceof Error ? err.message : String(err)}`)
       }
 
       return { output: { storageKey, reused }, costCents: 0 }

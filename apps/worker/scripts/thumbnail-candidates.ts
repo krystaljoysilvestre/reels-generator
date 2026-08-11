@@ -42,7 +42,7 @@ void (async () => {
   const { getDb, reels, channels, scenes, assets, stories } = await import('@reels/db')
   const { eq, and, desc } = await import('drizzle-orm')
   const { downloadBuffer } = await import('@reels/providers')
-  const { PostMetaSchema, thumbnailOverlay, CaptionStyleSchema } = await import('@reels/core')
+  const { PostMetaSchema, thumbnailOverlay, CaptionStyleSchema, channelPlatformPreset } = await import('@reels/core')
   const { renderThumbnailStill } = await import('@reels/render/remotion/render-remotion')
 
   const OUT = process.env['OUT'] ?? join(process.cwd(), 'thumbnail-candidates')
@@ -81,24 +81,27 @@ void (async () => {
     writeFileSync(heroPath, await downloadBuffer(heroAsset.storageKey))
     const slug = slugFor(ch.name)
 
-    // `sourceVertical` decides the fitting, and production reads it from the platform preset rather than
-    // the file. Here there is no preset in hand, so measure the actual frame — same answer, since the
-    // scene images are rendered at the preset's dimensions.
+    // The cover is rendered at the CHANNEL'S OWN aspect, and the platform preset is the authority in
+    // production — so use the same seam here rather than inferring anything from the file. The frame is
+    // still measured, but only to report how closely it matches (which is what makes cropping safe now).
     const meta = await imageSize(heroPath)
-    const sourceVertical = meta.height > meta.width
+    const preset = channelPlatformPreset(ch)
 
     const file = join(OUT, `${slug}${SUFFIX}.jpg`)
-    const note = sourceVertical
-      ? `vertical → uncropped panel right + blurred fill (a 16:9 centre crop would keep only ${Math.round(((meta.width / meta.height) / (16 / 9)) * 100)}% of the height)`
-      : 'already 16:9 → full bleed'
+    // How much of the frame the cover keeps. Both are the same orientation now, so this should read ~100%
+    // — the number worth watching, since the old 16:9-for-everything cover kept 32% of a portrait frame.
+    const srcAspect = meta.width / meta.height
+    const dstAspect = preset.width / preset.height
+    const kept = Math.round(Math.min(srcAspect / dstAspect, dstAspect / srcAspect) * 100)
     console.log(`\n${ch.name}  —  overlay: "${overlay}"`)
-    console.log(`   source ${meta.width}×${meta.height} · ${note}`)
+    console.log(`   source ${meta.width}×${meta.height} → cover ${preset.width}×${preset.height} · keeps ~${kept}% of the frame`)
     try {
       await renderThumbnailStill({
         imagePath: heroPath,
         title: overlay,
         outputPath: file,
-        sourceVertical,
+        width: preset.width,
+        height: preset.height,
         ...(accent ? { accent } : {}),
       })
       made++

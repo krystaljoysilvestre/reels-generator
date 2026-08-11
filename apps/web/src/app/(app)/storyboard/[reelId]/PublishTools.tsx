@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { PostMeta } from '@reels/core'
 import { useToast } from '@/components/Toast'
@@ -10,11 +10,15 @@ import { useToast } from '@/components/Toast'
 
 export function PostCaptionButton({ reelId }: { reelId: string }) {
   const { toast } = useToast()
+  const router = useRouter()
   const [open, setOpen] = useState(false)
   const [meta, setMeta] = useState<PostMeta | null>(null)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [hashtagsText, setHashtagsText] = useState('')
+  // Cleared on unmount so a pending cover refresh can't fire against a gone component.
+  const coverRefresh = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => { if (coverRefresh.current) clearTimeout(coverRefresh.current) }, [])
 
   useEffect(() => {
     if (!open) return
@@ -53,7 +57,19 @@ export function PostCaptionButton({ reelId }: { reelId: string }) {
       return
     }
     setMeta(next)
-    toast('Caption saved.', 'success')
+
+    // Changing the burned words rebuilds the cover in the background. Say so rather than letting the
+    // creator stare at the old image wondering whether the edit took — and refresh once it has had time
+    // to land, since the cover keeps the same URL and only its timestamp changes.
+    const body = (await res.json().catch(() => null)) as { coverRebuilding?: boolean } | null
+    if (body?.coverRebuilding) {
+      toast('Saved — updating your cover.', 'success')
+      if (coverRefresh.current) clearTimeout(coverRefresh.current)
+      coverRefresh.current = setTimeout(() => router.refresh(), 6000)
+    } else {
+      toast('Caption saved.', 'success')
+      router.refresh()
+    }
   }
 
   function copyAll() {
