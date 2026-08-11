@@ -97,7 +97,11 @@ export const PIPELINE_CHAIN: Record<string, string | null> = {
   generate_sfx: 'generate_music',        // resolveNextStep reroutes to animate_scenes if any video-tier scene
   animate_scenes: 'generate_music',
   generate_music: 'mix_audio',           // per-reel AI bed (no-op for non-AI channels), then mix
-  mix_audio: 'render',
+  // Cover-frame ranking sits between the mix and the render because the render is where the cover is
+  // composed, and it needs the pick to already exist. It only needs the scene images, which have existed
+  // since generate_images, so this is the latest safe point rather than a dependency.
+  mix_audio: 'rank_cover_frames',
+  rank_cover_frames: 'render',
   render: 'render_qa',
   render_qa: null,                       // → spot_check (human spot-check)
 }

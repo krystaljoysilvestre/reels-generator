@@ -125,6 +125,10 @@ export async function runStep<T>(
         .set({
           status: 'done',
           output: output as Record<string, unknown>,
+          // ACCUMULATE, don't overwrite: reels.costCents counts every attempt's real spend, so a retry
+          // that follows a partially-paid failure must leave the two figures agreeing. Same atomic-SQL
+          // reason as the reel increment below — fan-out steps run concurrently.
+          costCents: sql`${pipelineSteps.costCents} + ${costCents}`,
           finishedAt: new Date(),
         })
         .where(
@@ -165,10 +169,18 @@ export async function runStep<T>(
       }
     }
 
-    // Mark step failed; worker BullMQ retry logic handles re-queueing
+    // Mark step failed; worker BullMQ retry logic handles re-queueing.
+    // The partial spend lands on the STEP row too, not just the reel — a step that paid and then threw is
+    // exactly the case per-step attribution exists to expose. Omitting it here would make an expensive
+    // failure look free and leave the two figures disagreeing by the amount that most deserves attention.
     await db
       .update(pipelineSteps)
-      .set({ status: 'failed', error: String(err), finishedAt: new Date() })
+      .set({
+        status: 'failed',
+        error: String(err),
+        ...(unreturned > 0 ? { costCents: sql`${pipelineSteps.costCents} + ${unreturned}` } : {}),
+        finishedAt: new Date(),
+      })
       .where(
         and(
           eq(pipelineSteps.reelId, ctx.reelId),

@@ -24,6 +24,7 @@ import {
   animateScenes,
   generateMusicStep,
   mixAudioStep,
+  rankCoverFrames,
   renderStep,
   renderQaStep,
 } from './index.js'
@@ -98,6 +99,9 @@ export async function dispatchPipelineJob(job: Job<PipelineJobData>): Promise<vo
         break
       case 'mix_audio':
         await mixAudioStep(reelId)
+        break
+      case 'rank_cover_frames':
+        await rankCoverFrames(reelId)
         break
       case 'render':
         await renderStep(reelId)

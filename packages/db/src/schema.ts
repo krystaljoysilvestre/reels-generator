@@ -304,6 +304,11 @@ export const reels = pgTable(
     // generate_post_meta step (regenerates when the story changes) and operator-editable. Consumed by
     // the export post-package. Null = not yet generated (export falls back to a lazy generation).
     postMeta: jsonb('post_meta'),
+    // The cover selection (ReelCover): which frame the cover is built from, who chose it ('ranked' by the
+    // vision pass vs 'creator'), and the ranked shortlist behind the recommendation. `source` is what lets
+    // a re-rank leave a creator's pick alone — human choice outranks generated choice until reset.
+    // Null = never ranked; composeCover then falls back to the planner's hero flag as before.
+    cover: jsonb('cover'),
     // Manually-logged platform performance (ReelMetrics: views/likes/comments + recordedAt). Feeds
     // stories.performanceScore (channel-relative), which weights few-shot reference selection.
     metrics: jsonb('metrics'),
@@ -527,6 +532,11 @@ export const pipelineSteps = pgTable(
     inputHash: text('input_hash'),
     output: jsonb('output'),
     error: text('error'),
+    // What THIS step spent, so a reel's total is attributable to the stages that caused it. Accumulates
+    // across attempts (a step that burns 6c failing and 3c succeeding cost 9c, and reels.costCents counts
+    // both). sum(cost_cents) over a reel's steps is a LOWER bound on reels.costCents — on-demand routes
+    // spend without a step row. 0 on a row predating migration 0059 means "unknown", not "free".
+    costCents: integer('cost_cents').notNull().default(0),
     startedAt: timestamp('started_at'),
     finishedAt: timestamp('finished_at'),
   },

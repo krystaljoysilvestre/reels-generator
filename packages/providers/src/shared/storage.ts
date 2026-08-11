@@ -4,6 +4,24 @@ import { createReadStream } from 'node:fs'
 import type { Readable } from 'node:stream'
 
 // Cloudflare R2 via S3-compat API. Zero egress fees. (docs/02)
+//
+// COST ACCOUNTING: deliberately NOT attributed per call, and this note is the record of that decision
+// rather than an oversight. Every other paid call in this codebase returns a `costCents` (see the
+// api-cost-accounting rule); R2 is the one external service that does not, so the reason is written down.
+//
+// R2 bills per MILLION operations plus stored volume — roughly $4.50/M Class A (writes: PutObject,
+// CreateMultipartUpload), $0.36/M Class B (reads: GetObject), $0.015/GB-month stored, egress free
+// (Cloudflare R2 pricing, as of 2026-08). Composing one cover is ~2 operations, i.e. of the order of
+// 0.001c — three to four orders of magnitude below the cheapest metered call we track (a 1c LLM call), and
+// well under the 1c rounding granularity `costCents` uses as an integer. Attributing it would round to
+// zero on every call while adding a cost parameter to every storage helper.
+//
+// What this means when reading per-reel economics: storage is INFRASTRUCTURE here, not per-reel unit cost,
+// the same way render/render_qa CPU time is `costCents: 0`. It is a fixed monthly line, and the figure that
+// actually grows with the library is STORED VOLUME (~$0.015/GB-month), which is a capacity question rather
+// than a per-reel one. Revisit if that bill becomes material — a 1080p long-form render plus its scene
+// images is order-of-GB per reel, so this stops being negligible at library scale even though each call
+// never will be.
 
 function getR2Client() {
   const accountId = process.env['R2_ACCOUNT_ID']

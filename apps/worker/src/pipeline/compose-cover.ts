@@ -16,7 +16,7 @@ import { join } from 'node:path'
 import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises'
 import { getDb, reels, scenes, assets, channels } from '@reels/db'
 import { downloadBuffer, uploadBuffer, YOUTUBE_THUMBNAIL_MAX_BYTES } from '@reels/providers'
-import { PostMetaSchema, CaptionStyleSchema, channelPlatformPreset, thumbnailOverlay } from '@reels/core'
+import { PostMetaSchema, CaptionStyleSchema, ReelCoverSchema, channelPlatformPreset, thumbnailOverlay } from '@reels/core'
 import { renderThumbnailStill } from '@reels/render/remotion/render-remotion'
 
 // One constant key per reel → the cover upserts in place, so every consumer (publish-youtube, auto-gate,
@@ -61,13 +61,16 @@ export async function composeCover(
     orderBy: [asc(scenes.idx)],
   })
 
-  // Hero selection stays exactly as it was — first flagged scene with an image, else the first scene with
-  // any image. It is a known weak point (the planner flags three and this reads one) but changing it is
-  // §3 of the packaging plan, gated on Checkpoint A. Extracting the composer must not also move the frame.
-  const heroScene = frameAssetId
-    ? reelScenes.find((s) => s.imageAssetId === frameAssetId)
-    : (reelScenes.find((s) => s.isHero && s.imageAssetId) ?? reelScenes.find((s) => s.imageAssetId))
-  const resolvedFrameId = frameAssetId ?? heroScene?.imageAssetId
+  // Frame precedence, most authoritative first:
+  //   1. an explicit caller override (a creator picking a specific frame)
+  //   2. `reels.cover.frameAssetId` — the creator's saved pick, or the vision ranking's recommendation
+  //   3. the planner's hero flag, then the first frame with an image (what this always did)
+  // Step 3 stays as the floor so a reel that was never ranked composes exactly as it does today.
+  const saved = ReelCoverSchema.safeParse(reel.cover)
+  const fallbackScene =
+    reelScenes.find((s) => s.isHero && s.imageAssetId) ?? reelScenes.find((s) => s.imageAssetId)
+  const resolvedFrameId =
+    frameAssetId ?? (saved.success ? saved.data.frameAssetId : undefined) ?? fallbackScene?.imageAssetId
   if (!resolvedFrameId) return null
 
   const frameAsset = await db.query.assets.findFirst({ where: eq(assets.id, resolvedFrameId) })

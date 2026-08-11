@@ -1,0 +1,24 @@
+-- Per-step spend attribution.
+--
+-- Cost accounting was CORRECT but not ATTRIBUTABLE. The invariant held — every paid call reached
+-- `reels.cost_cents` exactly once, never on a cache hit — but the money arrived as a single running total
+-- with no record of which step spent it. You could see that a long-form reel cost $8.78 and not see where
+-- it went, which makes "which stage should we optimise" an unanswerable question from the database. The
+-- 2026-08-11 packaging work had to instrument a throwaway script (read the reel total, run one step, read
+-- it again) just to report that frame ranking costs 2-3c.
+--
+-- ACCUMULATES across attempts rather than being overwritten, because `reels.cost_cents` does. A step that
+-- burns 6c failing and 3c succeeding really did cost 9c, and the harness records both (llmCall attaches
+-- spend to the thrown error so a repair round that paid for two completions is not lost). Overwriting
+-- would make the per-step figures disagree with the reel total in exactly the case that matters — the
+-- expensive one.
+--
+-- THE IDENTITY, stated so nobody later reads it as broken:
+--   sum(pipeline_steps.cost_cents) + on-demand route spend = reels.cost_cents
+-- On-demand routes (regen-image, previews, motion, voice) increment `reels.cost_cents` directly and have
+-- no step row, so the sum over steps is a LOWER bound on a reel's spend, not an equality. Fan-out steps
+-- write one row per sub-unit (`generate_images:scene3`), each carrying its own cost, so they sum correctly.
+--
+-- Historical rows get 0: the per-step figures were never recorded and cannot be reconstructed. That is not
+-- the same as "these steps were free", so read 0 on a row that predates this migration as "unknown".
+ALTER TABLE "pipeline_steps" ADD COLUMN IF NOT EXISTS "cost_cents" integer DEFAULT 0 NOT NULL;

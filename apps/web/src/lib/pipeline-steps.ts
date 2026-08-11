@@ -16,6 +16,7 @@ export function stepLabel(name: PipelineStepName | string): string {
     generate_sfx:         'SFX',
     animate_scenes:       'Animate',
     mix_audio:            'Mix',
+    rank_cover_frames:    'Cover',
     render:               'Render',
     render_qa:            'QA',
     spot_check:           'Spot check',

@@ -1,6 +1,7 @@
 export * from './channel.js'
 export * from './source-policy.js'
 export * from './post-meta.js'
+export * from './reel-cover.js'
 export * from './story-bible.js'
 export * from './audio-script.js'
 export * from './timings.js'

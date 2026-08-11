@@ -11,7 +11,7 @@ export const PHASES: Array<{ key: PhaseKey; label: string; steps: string[] }> = 
   { key: 'storyboarding', label: 'Storyboarding', steps: ['analyze_story', 'generate_post_meta', 'breakdown_scenes'] },
   { key: 'filming', label: 'Filming', steps: ['generate_images', 'generate_tts', 'compute_timings', 'generate_sfx', 'animate_scenes'] },
   { key: 'scoring', label: 'Scoring', steps: ['generate_music', 'mix_audio'] },
-  { key: 'finishing', label: 'Finishing', steps: ['render', 'render_qa', 'spot_check'] },
+  { key: 'finishing', label: 'Finishing', steps: ['rank_cover_frames', 'render', 'render_qa', 'spot_check'] },
 ]
 
 // Which phase a pipeline step belongs to, for creator-facing copy (e.g. the failure banner).

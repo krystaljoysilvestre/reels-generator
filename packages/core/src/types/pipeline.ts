@@ -16,6 +16,7 @@ export const PIPELINE_STEPS = [
   'animate_scenes',
   'generate_music',
   'mix_audio',
+  'rank_cover_frames',
   'render',
   'render_qa',
   'spot_check',
@@ -23,7 +24,7 @@ export const PIPELINE_STEPS = [
 
 export type PipelineStepName = (typeof PIPELINE_STEPS)[number]
 
-export const PIPELINE_STEP_COUNT = PIPELINE_STEPS.length // 16
+export const PIPELINE_STEP_COUNT = PIPELINE_STEPS.length // 17
 
 // Fan-out steps (generate_images, animate_scenes) write ONE pipeline_steps row PER sub-unit, named
 // `<step>:scene<idx>` (images) / `<step>:s<idx>v<v>` (animation variations), so their rows no longer

@@ -16,6 +16,7 @@ import { MOOD_TINT, phaseForStep, type ChannelMood } from '@/lib/pipeline-phases
 import { stepLabel } from '@/lib/pipeline-steps'
 import { useToast } from '@/components/Toast'
 import { PostCaptionButton, LogPerformanceButton, PostToYouTubeButton } from './PublishTools'
+import { CoverPicker, type CoverFrame, type CoverSelection } from './CoverPicker'
 
 type Scene = InferSelectModel<typeof scenes>
 type Story = InferSelectModel<typeof stories>
@@ -41,8 +42,18 @@ interface StoryboardEditorProps {
   sceneImageHistory: Record<number, { assetId: string; url: string }[]>
   sceneVideoVariations: Record<number, string[]>
   renderUrl: string | null
-  // Title + cover as a viewer would meet them. Null until the packaging step has run.
-  packaging: { title: string; thumbnailText: string; coverUrl: string | null } | null
+  // Title + cover as a viewer would meet them, plus the frames the cover can be built from and the ranked
+  // recommendation behind the current pick. Null until the packaging step has run.
+  packaging: {
+    title: string
+    thumbnailText: string
+    coverUrl: string | null
+    cover: CoverSelection | null
+    frames: CoverFrame[]
+    // The channel's aspect, resolved server-side from the platform preset — the picker's tiles have to
+    // match the shape of the frames or a portrait grid renders as letterboxed thumbnails.
+    vertical: boolean
+  } | null
   musicMood: string | null // this reel's background-music mood override (MusicMood); null = inherit the channel default
   channelMusicMood: string | null // the channel's default mood (MusicMood), shown as the "inherit" option
   aiMusic: boolean // channel composes its bed per-reel (musicMode='ai') → the mood dropdown steers it
@@ -1186,6 +1197,14 @@ export function StoryboardEditor({
                   )}
                 </div>
               </div>
+              {packaging && (
+                <CoverPicker
+                  reelId={reel.id}
+                  cover={packaging.cover}
+                  frames={packaging.frames}
+                  vertical={packaging.vertical}
+                />
+              )}
               <PostCaptionButton reelId={reel.id} />
               {/* Change voice, then re-render — post-render analog of the storyboard voice pill. The picker
                   saves the pick to the reel; the next Re-render re-runs TTS with it (stills/clips are reused). */}

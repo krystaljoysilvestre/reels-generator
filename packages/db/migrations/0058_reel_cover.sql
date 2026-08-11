@@ -1,0 +1,33 @@
+-- The reel's COVER selection: which frame the cover is built from, who chose it, and the ranked
+-- shortlist behind the recommendation.
+--
+-- Until now the frame was picked by one line at compose time — `first scene with isHero && an image, else
+-- the first scene with an image` — and nothing recorded the decision, so nothing could override it. The
+-- planner flags THREE scenes as hero (its "worth animating" picks, which is a different question from
+-- "works as a cover") and the code read the first. Measured consequence: Crossroads' cover was a bland
+-- empty office chosen blind out of 42 available frames, and it scored 0 of 28 marks in the treatment
+-- review. The frames are already generated and paid for, so choosing better among them is the cheapest
+-- quality lever available.
+--
+-- Stored as ONE jsonb rather than three columns because it is a single decision with its provenance
+-- attached, and because that matches how the rest of this table already carries resolved state
+-- (post_meta, story_bible, evidence_bible). Shape:
+--
+--   { frameAssetId: uuid,
+--     source: 'ranked' | 'creator',
+--     shortlist: [ { assetId, sceneIdx, score, reason, textSpace } ],   -- ranked best-first
+--     sampled: int, total: int }                                        -- what the ranking actually saw
+--
+-- `source` is the load-bearing field, not decoration: it is what lets a later regeneration leave a
+-- creator's pick alone. Human choice outranks generated choice until explicitly reset — the same
+-- provenance rule the platform title follows. A ranking pass may overwrite source='ranked'; it must never
+-- overwrite source='creator'.
+--
+-- NOT a foreign key, deliberately. A jsonb cannot carry ON DELETE SET NULL, so a deleted frame leaves a
+-- dangling id — and that is already handled where it matters: composeCover verifies the frame asset
+-- exists AND belongs to this reel before using it, and falls back to the hero pick otherwise. The
+-- degradation is a slightly worse cover, not an error, which is the right trade for keeping the decision
+-- and its provenance in one readable place.
+--
+-- Null = never ranked. Every existing reel keeps composing exactly as it does today.
+ALTER TABLE "reels" ADD COLUMN IF NOT EXISTS "cover" jsonb;

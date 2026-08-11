@@ -407,6 +407,20 @@
       "when": 1785914364666,
       "tag": "0057_entity_plates",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1785914364667,
+      "tag": "0058_reel_cover",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1785914364668,
+      "tag": "0059_step_cost",
+      "breakpoints": true
     }
   ]
 }

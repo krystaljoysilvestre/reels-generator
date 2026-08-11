@@ -2,7 +2,7 @@ import { getDb, reels, scenes, assets, channels, pipelineSteps, publications } f
 import { and, desc, eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { assertReelAccess } from '@/lib/access'
-import { type ChannelVoice, type VoiceSettings, moodToVoiceSettings, ToneConfigSchema, AudioPacksSchema, OperatorSfxSchema, PostMetaSchema, PRESET_BEDS } from '@reels/core'
+import { type ChannelVoice, type VoiceSettings, moodToVoiceSettings, ToneConfigSchema, AudioPacksSchema, OperatorSfxSchema, PostMetaSchema, ReelCoverSchema, channelPlatformPreset, PRESET_BEDS } from '@reels/core'
 import { isYouTubeConfigured } from '@reels/providers'
 import { channelMood, MOOD_TINT } from '@/lib/pipeline-phases'
 import { StoryboardEditor } from './StoryboardEditor'
@@ -33,6 +33,8 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
       id: true, name: true, voicePool: true,
       nicheDescription: true, toneConfig: true, voiceSearchKeyword: true,
       audioPacks: true, genreCategory: true,
+      // Resolves the channel's aspect for the cover picker, via channelPlatformPreset.
+      targetPlatforms: true,
     },
   })
 
@@ -86,6 +88,38 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
   // cover was never rendered anywhere in the app at all.
   // Matched by role, not by hardcoded key — the same way the export route finds it.
   const coverAsset = reelAssets.find((a) => (a.meta as Record<string, unknown> | null)?.['role'] === 'thumbnail')
+
+  // Frames the cover can be built from: one per scene that has an image, in scene order. `?v=<assetId>`
+  // busts the browser cache the same way the scene grid does — a regenerated frame is a new asset id.
+  const coverFrames = reel.scenes
+    .slice()
+    .sort((a, b) => a.idx - b.idx)
+    .flatMap((s) => {
+      const asset = s.imageAssetId ? reelAssets.find((a) => a.id === s.imageAssetId) : null
+      return asset
+        ? [{ assetId: asset.id, sceneIdx: s.idx, url: `/api/asset?key=${encodeURIComponent(asset.storageKey)}&v=${asset.id}` }]
+        : []
+    })
+  // The platform preset is the authority on the channel's aspect — the same seam composeCover uses, so the
+  // picker's tiles are the shape the cover will actually be.
+  const coverPreset = channel ? channelPlatformPreset(channel) : null
+  const coverAspectVertical = coverPreset ? coverPreset.height > coverPreset.width : true
+  const parsedCover = ReelCoverSchema.safeParse(reel.cover)
+  const coverSelection = parsedCover.success
+    ? {
+        frameAssetId: parsedCover.data.frameAssetId,
+        source: parsedCover.data.source,
+        // Drop any shortlist entry whose frame no longer exists (a regenerated scene replaces its asset),
+        // so the picker never renders a broken tile.
+        shortlist: parsedCover.data.shortlist.flatMap((c) => {
+          const frame = coverFrames.find((f) => f.assetId === c.assetId)
+          return frame ? [{ ...c, url: frame.url }] : []
+        }),
+        sampled: parsedCover.data.sampled,
+        total: parsedCover.data.total,
+      }
+    : null
+
   const parsedMeta = PostMetaSchema.safeParse(reel.postMeta)
   const packaging = parsedMeta.success
     ? {
@@ -96,6 +130,13 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
         coverUrl: coverAsset
           ? `/api/asset?key=${encodeURIComponent(coverAsset.storageKey)}&v=${new Date(coverAsset.createdAt).getTime()}`
           : null,
+        // Which frame the cover is built from, who chose it, and the ranked shortlist behind the
+        // recommendation — so the picker can show WHY a frame is recommended rather than an opaque order.
+        cover: coverSelection,
+        // Every frame the reel owns, for "show all frames". These are already generated and already paid
+        // for, so switching between them is free.
+        frames: coverFrames,
+        vertical: coverAspectVertical,
       }
     : null
   // Background music reflects the channel's chosen mode (Sound step): AI → a per-reel mood dropdown (steers
