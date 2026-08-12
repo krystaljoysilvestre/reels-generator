@@ -2,7 +2,7 @@ import { getDb, reels, assets, channels, pipelineSteps, publications, platformCo
 import { and, desc, eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { assertReelAccess } from '@/lib/access'
-import { type ChannelVoice, type VoiceSettings, moodToVoiceSettings, ToneConfigSchema, AudioPacksSchema, OperatorSfxSchema, PostMetaSchema, ReelCoverSchema, channelPlatformPreset, PRESET_BEDS } from '@reels/core'
+import { type ChannelVoice, type VoiceSettings, moodToVoiceSettings, ToneConfigSchema, AudioPacksSchema, OperatorSfxSchema, PostMetaSchema, ReelCoverSchema, CaptionStyleSchema, channelPlatformPreset, PRESET_BEDS } from '@reels/core'
 import { channelMood, MOOD_TINT } from '@/lib/pipeline-phases'
 import { StoryboardEditor } from './StoryboardEditor'
 import { reelMetadata } from '@/lib/page-metadata'
@@ -32,6 +32,8 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
       id: true, name: true, voicePool: true,
       nicheDescription: true, toneConfig: true, voiceSearchKeyword: true,
       audioPacks: true, genreCategory: true,
+      // The burned-in caption look, so the stage can show a scene's line the way a viewer meets it.
+      captionStyle: true,
       // Resolves the channel's aspect for the cover picker, via channelPlatformPreset.
       targetPlatforms: true,
     },
@@ -175,6 +177,18 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
     scheduledAt = pub?.scheduledAt?.toISOString() ?? null
   }
 
+  // Did the automated render checks pass? The finished-reel screen says so out loud, so it reads the real
+  // render_qa row rather than asserting it. null = the step hasn't run for this reel (older reels, or a
+  // reel that hasn't rendered yet), and the screen then claims nothing.
+  let renderQa: 'passed' | 'failed' | null = null
+  if (['spot_check', 'approved', 'scheduled', 'published'].includes(reel.status)) {
+    const qaStep = await db.query.pipelineSteps.findFirst({
+      where: and(eq(pipelineSteps.reelId, reelId), eq(pipelineSteps.stepName, 'render_qa')),
+      orderBy: [desc(pipelineSteps.startedAt)],
+    })
+    renderQa = qaStep?.status === 'done' ? 'passed' : qaStep?.status === 'failed' ? 'failed' : null
+  }
+
   // If the reel hard-failed, surface which step + why (the chain stops at the first failed step).
   let failure: { step: string; error: string } | null = null
   if (reel.status === 'failed') {
@@ -217,6 +231,12 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
       sceneVideoVariations={sceneVideoVariations}
       renderUrl={renderUrl}
       packaging={packaging}
+      // The whole post package, for the finished-reel screen's inline title + caption fields.
+      postMeta={parsedMeta.success ? parsedMeta.data : null}
+      renderQa={renderQa}
+      // The reel's real output size, named on the render ledger's "Rendering the final cut" row.
+      renderSize={coverPreset ? `${coverPreset.width}×${coverPreset.height}` : '1080×1920'}
+      captionStyle={CaptionStyleSchema.parse(channel?.captionStyle ?? {})}
       musicMood={reel.musicMood}
       channelMusicMood={channelMusicMood}
       aiMusic={aiMusic}

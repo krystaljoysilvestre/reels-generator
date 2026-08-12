@@ -4,19 +4,24 @@ import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import type { InferSelectModel } from 'drizzle-orm'
 import type { scenes, stories } from '@reels/db'
-import type { ChannelVoice, VoiceSettings, OperatorCue } from '@reels/core'
+import type { ChannelVoice, VoiceSettings, OperatorCue, CaptionStyle, PostMeta } from '@reels/core'
 import { resolveMotionSettings, motionCostCents, operatorCueLabel, VIDEO_EFFECTS, MUSIC_MOODS, MUSIC_MOOD_OPTIONS, type MusicMood } from '@reels/core'
 import { GenreLoader } from '@/components/GenreLoader'
 import { usePipelineStatus } from '@/hooks/usePipelineStatus'
 import { PipelinePhaseStepper } from '@/components/PipelinePhaseStepper'
 import { ReelStatusPill } from '@/components/ReelStatusPill'
-import { RenderingState } from '@/components/RenderingState'
 import { primeReelAlert } from '@/lib/reel-alert'
-import { MOOD_TINT, phaseForStep, type ChannelMood } from '@/lib/pipeline-phases'
+import { phaseForStep } from '@/lib/pipeline-phases'
 import { stepLabel } from '@/lib/pipeline-steps'
 import { useToast } from '@/components/Toast'
 import { PostCaptionButton, LogPerformanceButton, PostToYouTubeButton } from './PublishTools'
 import { CoverPicker, type CoverFrame, type CoverSelection } from './CoverPicker'
+import { SceneMedia, MotionDurationChip } from './SceneMedia'
+import { SceneStage } from './SceneStage'
+import { Timeline } from './Timeline'
+import { RenderLedger } from './RenderLedger'
+import { ReelReady } from './ReelReady'
+import { sceneSeconds, sceneStarts, totalSeconds, fmtClock } from './scene-timing'
 
 type Scene = InferSelectModel<typeof scenes>
 type Story = InferSelectModel<typeof stories>
@@ -27,8 +32,6 @@ type Voice = ChannelVoice
 // In the picker, a recommended voice also carries a "why it fits this reel" reason (per_story
 // recommendations). Single-channel pool voices are plain ChannelVoice (no reason).
 type PickerVoice = ChannelVoice & { reason?: string | undefined }
-
-const fmtSecs = (secs: number) => `${Math.round(secs * 10) / 10}s`
 
 interface StoryboardEditorProps {
   reel: { id: string; channelId: string; status: string; voiceId: string | null; costCents: number; operatorMinutes: number; language: string; metricsViews: number | null; publishDestinations: Array<{ target: string; connected: boolean; accountName: string | null }>; scheduledAt?: string | null }
@@ -54,6 +57,10 @@ interface StoryboardEditorProps {
     // match the shape of the frames or a portrait grid renders as letterboxed thumbnails.
     vertical: boolean
   } | null
+  postMeta: PostMeta | null // the whole post package — the finished-reel screen edits title + caption inline
+  renderQa: 'passed' | 'failed' | null // did the automated render checks pass? null = they didn't run
+  renderSize: string // the channel's real output size, e.g. "1080×1920", named on the render ledger
+  captionStyle: CaptionStyle // the channel's burned-in caption look, previewed on the stage
   musicMood: string | null // this reel's background-music mood override (MusicMood); null = inherit the channel default
   channelMusicMood: string | null // the channel's default mood (MusicMood), shown as the "inherit" option
   aiMusic: boolean // channel composes its bed per-reel (musicMode='ai') → the mood dropdown steers it
@@ -71,7 +78,9 @@ interface StoryboardEditorProps {
 
 export function StoryboardEditor({
   reel, story, scenes: initialScenes, voicePool, voiceRecommend,
-  sceneImages, sceneImageHistory, sceneVideoVariations, renderUrl: initialRenderUrl, packaging, musicMood: initialMusicMood, channelMusicMood, aiMusic, musicMode, channelMusicTracks, musicUploadUrl: initialMusicUploadUrl,
+  sceneImages, sceneImageHistory, sceneVideoVariations, renderUrl: initialRenderUrl, packaging,
+  postMeta, renderQa, renderSize, captionStyle,
+  musicMood: initialMusicMood, channelMusicMood, aiMusic, musicMode, channelMusicTracks, musicUploadUrl: initialMusicUploadUrl,
   initialVideoEffects, initialOperatorSfx, initialVoiceSettings,
   channelName, genreCategory, moodTint, failure,
 }: StoryboardEditorProps) {
@@ -109,6 +118,12 @@ export function StoryboardEditor({
   // 'strip' = the cutting-room layout (stage + inspector above a filmstrip dock); 'grid' = a scrolling
   // overview of every scene. Only the filmstrip scrolls in strip view — the page itself never does.
   const [timelineView, setTimelineView] = useState<'strip' | 'grid'>('strip')
+  // The dock's tracks (video clips + voice + music). Open by design — the reel's shape is the point of the
+  // dock — but collapsible when the stage needs the height.
+  const [tracksOpen, setTracksOpen] = useState(true)
+  // A rendered reel opens onto the finished-reel screen. "Back to editing" drops this flag and reveals the
+  // storyboard underneath, so a post-render reel is still fully editable (then re-renderable).
+  const [editingAfterRender, setEditingAfterRender] = useState(false)
   const tierBusyRef = useRef<Set<number>>(new Set()) // scenes with an in-flight motion toggle (drops rapid flips)
   const [selectedVoice, setSelectedVoice] = useState(reel.voiceId ?? voicePool[0]?.providerId ?? '')
   const [showVoicePicker, setShowVoicePicker] = useState(false)
@@ -566,15 +581,17 @@ export function StoryboardEditor({
   const currentVoice = effectiveVoices.find((v) => v.providerId === selectedVoice)
   const selectedScene = selectedIdx != null ? scenes.find((s) => s.idx === selectedIdx) ?? null : null
   const isRenderable = ['storyboard', 'story_review', 'approved', 'failed'].includes(reel.status)
-  const canRender = isRenderable && !!selectedVoice
-  // Post-render gates (spot-check → approved → published) get their own action bar, not the voice/render one.
+  // A reel at spot-check can be re-rendered (a changed scene, a different voice) — the dock's button is the
+  // same one, so it needs the same permission the old spot-check bar's "Re-render" had.
+  const canRerender = isRenderable || reel.status === 'spot_check'
+  const canRender = canRerender && !!selectedVoice
+  // Post-render states (spot-check → approved → published) open onto the finished-reel screen instead of
+  // the storyboard's own action end — until the creator asks to go back to editing.
   const isPostRender = ['spot_check', 'approved', 'scheduled', 'published'].includes(reel.status)
-  // While the render chain runs, editing is locked behind the RenderingState overlay (below). Build phase
-  // (images still generating) is NOT locked — the operator watches scenes populate.
+  const showReady = isPostRender && !editingAfterRender
+  // While the render chain runs, editing is locked behind the render ledger (below). Build phase (images
+  // still generating) is NOT locked — the operator watches scenes populate.
   const isRendering = reel.status === 'rendering' || reel.status === 'render_qa'
-  // moodTint is exactly one of the three MOOD_TINT values (derived server-side), so reverse-map it to the
-  // ChannelMood key the loaders/ticker want.
-  const channelMoodKey: ChannelMood = moodTint === MOOD_TINT.dark ? 'dark' : moodTint === MOOD_TINT.warm ? 'warm' : 'neutral'
 
   // Live build/render progress: scenes/images still generating (status='storyboard' before they land), or
   // the render chain running. Poll while active — the hook refreshes the server so images + status update.
@@ -618,20 +635,43 @@ export function StoryboardEditor({
     bustedImages[idx] = imageBust[idx] ? `${src}&b=${imageBust[idx]}` : src
   }
 
+  // Which frame the render ledger shows: the scene the chain is actually working on. The fan-out steps name
+  // their rows `generate_images:scene3` / `animate_scenes:s3v1`, so a running row names its own scene.
+  const workingSceneIdx = (() => {
+    for (const s of live?.steps ?? []) {
+      if (s.status !== 'running') continue
+      const m = /:(?:scene|s)(\d+)/.exec(s.stepName)
+      if (m) return Number(m[1])
+    }
+    return null
+  })()
+  const renderingSceneUrl =
+    (workingSceneIdx != null ? bustedImages[workingSceneIdx] : undefined) ??
+    (selectedIdx != null ? bustedImages[selectedIdx] : undefined) ??
+    bustedImages[scenes[0]?.idx ?? 1]
+
+  // How long each scene runs and where it starts — the one basis the stage's position bar and the dock's
+  // proportional clips both read from (scene-timing.ts).
+  // The channel's real output shape, so a frame opens at the aspect it will publish at instead of
+  // defaulting to portrait and snapping wide once the media loads. renderSize is "W×H" from the platform
+  // preset (page.tsx); anything unparseable falls back to the 9:16 the app is mostly used for.
+  const [rw, rh] = renderSize.split('×').map((n) => Number(n))
+  const reelAspect = rw && rh ? `${rw} / ${rh}` : '9 / 16'
+  const reelSecs = totalSeconds(scenes)
+  const starts = sceneStarts(scenes)
+  const motionCount = scenes.filter((s) => s.tier === 'video').length
+  const selectedPos = scenes.findIndex((s) => s.idx === selectedIdx)
+
   // The selected scene's editor (or a fallback) — shared between the strip + grid layouts below
   const twistIdx = storyTwistIdx(scenes, story?.twistAnchor)
   const detail = selectedScene ? (
     <SceneInspector
       key={selectedScene.idx}
       scene={selectedScene}
-      total={scenes.length}
+      secs={sceneSeconds(selectedScene)}
       beat={sceneBeat(selectedScene.idx, scenes.length, twistIdx)}
       imgSrc={bustedImages[selectedScene.idx]}
       variations={sceneVideoVariations[selectedScene.idx] ?? []}
-      activeVar={activeVar[selectedScene.idx] ?? 0}
-      setActiveVar={setActiveVar}
-      loaded={loadedMedia.has(selectedScene.idx)}
-      markLoaded={markLoaded}
       loading={loading}
       moodTint={moodTint}
       sceneSaving={sceneSaving[selectedScene.idx]}
@@ -652,8 +692,40 @@ export function StoryboardEditor({
       onPreviewSound={previewSound}
       onRemoveSound={removeSound}
     />
+  ) : null
+  // With no scene selected the panel stays EMPTY on purpose: the stage beside it already carries the
+  // loader and the prompt, and saying it twice on one screen reads as two different messages.
+
+  // The screening room — the selected scene, played big. The finished CUT isn't shown here: once a reel has
+  // rendered it belongs to the finished-reel screen (ReelReady), which plays it at full height with its
+  // package beside it. A creator who came back here to edit reaches it again from the header.
+  const stage = selectedScene ? (
+    <SceneStage
+      key={selectedScene.idx}
+      scene={selectedScene}
+      sceneNo={selectedScene.idx}
+      total={scenes.length}
+      secs={sceneSeconds(selectedScene)}
+      startPct={reelSecs > 0 ? ((starts[selectedScene.idx] ?? 0) / reelSecs) * 100 : 0}
+      spanPct={reelSecs > 0 ? (sceneSeconds(selectedScene) / reelSecs) * 100 : 100}
+      imgSrc={bustedImages[selectedScene.idx]}
+      variations={sceneVideoVariations[selectedScene.idx] ?? []}
+      activeVar={activeVar[selectedScene.idx] ?? 0}
+      onCycleVar={() => setActiveVar((m) => ({ ...m, [selectedScene.idx]: ((m[selectedScene.idx] ?? 0) + 1) % Math.max(1, (sceneVideoVariations[selectedScene.idx] ?? []).length) }))}
+      loaded={loadedMedia.has(selectedScene.idx)}
+      markLoaded={markLoaded}
+      regenerating={loading === `regen-${selectedScene.idx}`}
+      animating={loading === `animate-${selectedScene.idx}`}
+      moodTint={moodTint}
+      reelAspect={reelAspect}
+      captionStyle={captionStyle}
+      onPrev={() => selectDelta(-1)}
+      onNext={() => selectDelta(1)}
+      canPrev={selectedPos > 0}
+      canNext={selectedPos >= 0 && selectedPos < scenes.length - 1}
+    />
   ) : (
-    <div className="flex min-h-[16rem] flex-col items-center justify-center gap-4 px-8 py-16 text-center text-sm text-muted">
+    <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 px-8 text-center text-sm text-night-body">
       {scenes.length === 0 ? (
         <>
           <GenreLoader genre={genreCategory} tint={moodTint} size={52} />
@@ -668,36 +740,6 @@ export function StoryboardEditor({
     </div>
   )
 
-  // Final render preview (the music bed lives in its own card below, vettable before render too).
-  // In the grid overview it sits under the scenes; on the cutting-room stage it gets its own column,
-  // so the finished reel is watchable without the page ever scrolling.
-  const preview = renderUrl ? (
-    <div id="preview" className="border-t border-border px-4 py-6 sm:px-8">
-      <p className="mb-3 text-xs font-medium text-muted">Render preview</p>
-      <video
-        key={renderUrl}
-        src={renderUrl}
-        controls
-        className="max-h-[28rem] rounded-xl border border-border shadow-sm"
-        style={{ aspectRatio: '9/16' }}
-      />
-    </div>
-  ) : null
-
-  const stagePreview = renderUrl ? (
-    <div className="hidden min-h-0 flex-shrink-0 flex-col gap-2 py-5 pr-5 xl:flex">
-      <p className="mono-label text-night-faint">The reel</p>
-      {/* Height-driven so the finished reel always fits the stage without scrolling. */}
-      <video
-        key={renderUrl}
-        src={renderUrl}
-        controls
-        className="min-h-0 flex-1 rounded-lg border border-white/10 shadow-lg"
-        style={{ aspectRatio: '9/16', height: '100%', width: 'auto' }}
-      />
-    </div>
-  ) : null
-
   // Background-music mood — a footer pill + popover (mirrors the video-effects picker). Single-select: pick
   // a mood or inherit the channel default. No bed is generated here; the choice steers generate_music at
   // render. AI-music channels only (preset/upload/none source their bed elsewhere).
@@ -707,6 +749,14 @@ export function StoryboardEditor({
       : null
   const isDefaultMood = musicMood === null
   const activeMoodLabel = !isDefaultMood && (musicMood in MUSIC_MOODS) ? MUSIC_MOODS[musicMood as MusicMood].label : null
+  // What the dock's music TRACK says it's carrying — the same truth as the Music chip, in one phrase.
+  const musicTrackLabel = musicUploadUrl
+    ? 'Your uploaded bed'
+    : aiMusic
+      ? `${activeMoodLabel ?? channelMoodLabel ?? 'Channel default'} · bed`
+      : (musicMode === 'preset' || musicMode === 'upload') && channelMusicTracks.length > 0
+        ? `${channelMusicTracks[0]!.label}${channelMusicTracks.length > 1 ? ` +${channelMusicTracks.length - 1}` : ''}`
+        : 'No music bed'
   // Upload-your-own-bed affordance — shown at the bottom of each music popover. The uploaded STATE gets its
   // own pill (first branch below). Copyright is the operator's; we surface a clear warning and don't clear it.
   const musicUploadSection = (
@@ -958,21 +1008,36 @@ export function StoryboardEditor({
       {/* Header — title block on the left, the reel's four-step journey on the right */}
       <div className="sticky top-0 z-40 flex flex-shrink-0 items-center gap-4 border-b border-border bg-bg/80 px-4 py-3 backdrop-blur sm:px-8 sm:py-4">
         <div className="flex min-w-0 items-center gap-3">
-          <a href="/dashboard" className="btn-ghost btn-sm -ml-1.5" title="Back to reels">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          {/* The way out. The storyboard runs without the app sidebar (Shell's IMMERSIVE list), so this is
+              the only exit on the surface — it gets a real bordered control rather than a ghost glyph, and
+              it goes UP to the channel this reel belongs to, which is where its siblings are. */}
+          <a
+            href={`/channel/${reel.channelId}`}
+            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[9px] border border-border-mid bg-surface text-muted transition-colors hover:border-accent-ring hover:text-ink"
+            title={channelName ? `Back to ${channelName}` : 'Back to the channel'}
+            aria-label={channelName ? `Back to ${channelName}` : 'Back to the channel'}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
               <path d="m15 18-6-6 6-6" />
             </svg>
           </a>
           <div className="min-w-0">
-            <p className="truncate font-display text-lg font-700 -tracking-[0.02em] text-ink">{story?.title ?? 'Untitled reel'}</p>
+            <p className="truncate font-display text-base font-800 -tracking-[0.01em] text-ink">{story?.title ?? 'Untitled reel'}</p>
+            {/* Where you are, in the design's words: the channel, then this stage of its reel. */}
             <p className="mt-0.5 flex items-center gap-2 text-xs text-muted">
-              <span className="hidden font-mono text-faint sm:inline">{reel.id.slice(0, 8)}</span>
+              <span className="truncate">{channelName ? `${channelName} · storyboard` : 'Storyboard'}</span>
               <ReelStatusPill status={reel.status} />
-              <span className="hidden truncate sm:inline">{channelName}</span>
             </p>
           </div>
         </div>
         <div className="flex-1" />
+        {/* Back to the finished reel, for a creator who came here to change something after a render. */}
+        {isPostRender && editingAfterRender && (
+          <button onClick={() => setEditingAfterRender(false)} className="btn-secondary btn-sm flex-shrink-0">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M5 3v18l15-9z" /></svg>
+            Finished reel
+          </button>
+        )}
         <ReelStepper steps={journeySteps} />
         <div className="flex flex-shrink-0 items-center gap-4 border-l border-border pl-4 font-mono text-xs tabular-nums text-muted lg:ml-2">
           {/* key={value} replays the flash on each change, so live cost/time updates read as live */}
@@ -1009,7 +1074,7 @@ export function StoryboardEditor({
       )}
 
       {/* Live BUILD progress strip — phases + scene readiness while images generate. During the RENDER
-          chain the full-surface RenderingState overlay (below) takes over instead. */}
+          chain the full-surface render ledger (below) takes over instead. */}
       {showProgress && !isRendering && (
         <PipelinePhaseStepper reelStatus={live?.reelStatus ?? reel.status} steps={live?.steps ?? []} genre={genreCategory} sceneProgress={sceneProgress} />
       )}
@@ -1017,27 +1082,32 @@ export function StoryboardEditor({
       {ambient}
 
       {/* ══ WORKSPACE ROW ══ One row, fixed height, no page scroll.
-          STRIP: a dark screening-room stage holding the scene's stage-lit preview with the inspector
-          floating beside it as a light panel (the panel owns the only vertical scroll here).
-          GRID: a scrolling overview of every scene instead. */}
+          STRIP: the screening room on the left (the scene, played big) and the inspector DOCKED to the
+          right edge as a light panel — flush, hairline-separated, and the owner of the only vertical
+          scroll here. GRID: a scrolling overview of every scene instead. */}
       {timelineView === 'strip' ? (
+        // Below lg the row becomes a COLUMN — stage on top, inspector under it — rather than a second copy
+        // of the inspector: two mounted instances would mean two sets of the same DOM ids and two
+        // independent drafts of the same scene's change field.
         <div
-          className={`stage flex min-h-0 flex-1 ${isRendering ? 'pointer-events-none select-none' : ''}`}
+          className={`flex min-h-0 flex-1 flex-col lg:flex-row ${isRendering ? 'pointer-events-none select-none' : ''}`}
           aria-hidden={isRendering || undefined}
         >
-          <div className="stage-leak" />
-          <div className="film-grain" />
-          <div className="relative flex min-h-0 w-full">
-            {detail}
-            {stagePreview}
+          <div className="stage relative flex min-h-[38%] min-w-0 flex-1 bg-night-800 lg:min-h-0">
+            <div className="stage-leak" />
+            <div className="film-grain" />
+            {stage}
           </div>
+          <aside className="min-h-0 flex-1 overflow-y-auto border-border bg-surface max-lg:border-t lg:w-[344px] lg:flex-none lg:border-l">
+            {detail}
+          </aside>
         </div>
       ) : (
         <div
           className={`min-h-0 flex-1 overflow-y-auto bg-subtle ${isRendering ? 'pointer-events-none select-none' : ''}`}
           aria-hidden={isRendering || undefined}
         >
-          <SceneTimeline
+          <SceneGrid
             scenes={scenes}
             sceneImages={bustedImages}
             sceneVideoVariations={sceneVideoVariations}
@@ -1049,264 +1119,185 @@ export function StoryboardEditor({
             onArrow={selectDelta}
             moodTint={moodTint}
             twistIdx={twistIdx}
-            view={timelineView}
             onViewChange={setTimelineView}
           />
-          {preview}
         </div>
       )}
-
-      {/* ══ THE DOCK ══ One dark bar under the stage, the cutting room's bench: the scenes ARE the
-          filmstrip (sideways scroll lives here and nowhere else), and the render cluster — narrator,
-          music, effects, spend, Render — sits at its right end. Hidden while rendering (the
-          RenderingState overlay owns the surface). In grid view the strip steps aside (the overview
-          already shows every scene) and the cluster takes the full width. */}
-      {!isRendering && (timelineView === 'strip' || !isPostRender) && (
-        <div className="flex flex-shrink-0 flex-col border-t border-night-seam bg-night-dock md:flex-row md:items-stretch">
-          {timelineView === 'strip' && (
-            <SceneTimeline
-              scenes={scenes}
-              sceneImages={bustedImages}
-              sceneVideoVariations={sceneVideoVariations}
-              loadedMedia={loadedMedia}
-              markLoaded={markLoaded}
-              loading={loading}
-              selectedIdx={selectedIdx}
-              onSelect={setSelectedIdx}
-              onArrow={selectDelta}
-              moodTint={moodTint}
-              twistIdx={twistIdx}
-              view={timelineView}
-              onViewChange={setTimelineView}
-            />
-          )}
-
-          {/* Render cluster — the storyboard phase's action end. (Post-render gates get their own bar
-              below; the dock then carries just the filmstrip.) */}
-          {!isPostRender && (
-            <div className={`flex w-full flex-shrink-0 flex-col gap-2.5 border-night-seam p-3.5 ${timelineView === 'strip' ? 'md:w-[23rem] md:border-l' : ''}`}>
-              <div className="flex flex-wrap items-center gap-2">
-                {/* Narrator — tap to pick the voice. Delivery is auto-tuned per story (no manual sliders). */}
+      {/* ══ THE DOCK ══ The cutting room's bench: a transport row (where the reel is, what it's made of,
+          the one button that renders it) over the reel's SHAPE — clips sized by how long they run, with
+          the voice and music tracks under them. Hidden while rendering (the ledger owns the surface). */}
+      {!isRendering && (
+        <Timeline
+          scenes={scenes}
+          sceneImages={bustedImages}
+          selectedIdx={selectedIdx}
+          onSelect={setSelectedIdx}
+          onArrow={selectDelta}
+          loading={loading}
+          tracksOpen={tracksOpen && timelineView === 'strip'}
+          onToggleTracks={() => setTracksOpen((o) => !o)}
+          voiceLabel={currentVoice ? `${currentVoice.name} · ${(currentVoice.description ?? '').toLowerCase() || 'narrator'}` : 'No voice picked'}
+          onEditVoice={() => setShowVoicePicker(true)}
+          musicLabel={musicTrackLabel}
+          onEditMusic={() => setMusicOpen((o) => !o)}
+          viewToggle={
+            <div className="inline-flex items-center gap-0.5 rounded-sm bg-white/[0.06] p-0.5">
+              {([
+                ['strip', 'Timeline view', <><rect x="3" y="4" width="5" height="16" rx="1" /><rect x="10" y="4" width="5" height="16" rx="1" /><rect x="17" y="4" width="5" height="16" rx="1" /></>],
+                ['grid', 'Grid view', <><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></>],
+              ] as const).map(([v, label, icon]) => (
                 <button
-                  onClick={() => setShowVoicePicker(true)}
-                  disabled={recsLoading && !currentVoice}
-                  className={`dock-chip min-w-0 flex-1 basis-[9rem] ${!selectedVoice ? 'border-accent-ring' : ''}`}
-                  title="Pick a narrator voice"
+                  key={v}
+                  type="button"
+                  onClick={() => setTimelineView(v)}
+                  aria-pressed={timelineView === v}
+                  title={label}
+                  aria-label={label}
+                  className={`rounded-md px-2 py-1 transition-colors ${timelineView === v ? 'bg-white/[0.14] text-night-ink' : 'text-night-faint hover:text-night-ink'}`}
                 >
-                  {recsLoading && !currentVoice ? (
-                    <>
-                      <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-transparent" />
-                      Finding a voice…
-                    </>
-                  ) : (
-                    <>
-                      <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-sm bg-pair-blue-purple">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                          <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3ZM19 11a7 7 0 0 1-14 0M12 18v3" />
-                        </svg>
-                      </span>
-                      <span className="truncate">{currentVoice ? currentVoice.name : 'Pick voice'}</span>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="ml-auto flex-shrink-0 text-night-faint" aria-hidden>
-                        <path d="m6 9 6 6 6-6" />
-                      </svg>
-                    </>
-                  )}
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>{icon}</svg>
                 </button>
-                {musicControl}
-                {effectsControl}
-              </div>
-              {error && <p className="text-xs text-night-danger">{error}</p>}
-              {isRenderable && !selectedVoice && !error && !recsLoading && (
-                <p className="text-[11px] text-night-muted">
-                  {recsError ? 'Could not load voices — open the picker to retry.' : 'Pick a voice to render.'}
-                </p>
-              )}
-              <div className="hidden flex-1 md:block" />
-              <div className="flex items-center gap-3">
-                {/* Spend slate — the reel's real cost so far, on a clapperboard. (Not a forecast: render
-                    cost is only known once the providers report usage.) */}
-                <div className="hidden overflow-hidden rounded-sm border border-white/10 sm:flex" title="What this reel has cost to make so far">
-                  <div className="clapper-band w-4 flex-shrink-0" aria-hidden />
-                  <div className="px-3 py-1">
-                    <p className="mono-label text-[9px] tracking-micro-wide text-night-faint">Spend</p>
-                    <p key={`s${reel.costCents}`} className="animate-value-flash mono-value text-[15px] font-700 text-night-ink">${(reel.costCents / 100).toFixed(2)}</p>
-                  </div>
-                </div>
-                <button onClick={handleRender} disabled={loading === 'render' || !canRender} className="btn-accent btn-glow flex-1 py-3 active:scale-[.98]" title={!selectedVoice ? 'Pick a narrator voice first' : undefined}>
-                  {loading === 'render' ? (
-                    <>
-                      <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/70 border-t-transparent" />
-                      Queuing…
-                    </>
-                  ) : (
-                    <>
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                        <path d="M5 3v18l15-9z" />
-                      </svg>
-                      Render reel
-                    </>
-                  )}
-                </button>
-              </div>
+              ))}
             </div>
-          )}
-        </div>
-      )}
-
-      {/* Rendering moment — a playful, mood-tinted overlay that also LOCKS the editor while the render
-          chain runs (covers the scene area; the bottom bar is hidden below). Clears itself when the reel
-          lands at spot-check (isRendering → false). */}
-      {isRendering && (
-        <RenderingState
-          reelStatus={live?.reelStatus ?? reel.status}
-          steps={live?.steps ?? []}
-          mood={channelMoodKey}
-          genre={genreCategory}
-          sceneProgress={sceneProgress}
-        />
-      )}
-
-
-      {/* Spot-check → approved → published gate */}
-      {isPostRender && (
-        <div className="sticky bottom-0 z-40 flex flex-shrink-0 flex-wrap items-center gap-3 border-t border-border bg-bg/80 px-4 py-3 backdrop-blur sm:px-8 sm:py-4">
-          {reel.status === 'spot_check' && (
+          }
+          controls={
             <>
-              {/* The packaging a viewer meets BEFORE pressing play, shown at the moment the reel is judged.
-                  It used to appear only after approval, so this gate asked "would you publish this?" while
-                  showing the internal working title and no cover at all. */}
-              <div className="mr-auto flex min-w-0 items-center gap-3">
-                {packaging?.coverUrl && (
-                  <img
-                    src={packaging.coverUrl}
-                    alt="Cover"
-                    className="h-14 w-auto flex-shrink-0 rounded-md border border-border object-contain"
-                  />
-                )}
-                <div className="min-w-0">
-                  <p className="font-display text-[15px] font-700 text-ink">Spot-check</p>
-                  {packaging ? (
-                    <>
-                      <p className="truncate text-sm font-medium text-ink" title={packaging.title}>
-                        {packaging.title}
-                      </p>
-                      <p className="text-xs text-muted">Your title and cover — what people see before they press play.</p>
-                    </>
-                  ) : (
-                    <p className="text-xs text-muted">Give it a watch. Love it? Approve it. Want a different voice? Swap it and re-render.</p>
-                  )}
-                </div>
-              </div>
-              {packaging && (
-                <CoverPicker
-                  reelId={reel.id}
-                  cover={packaging.cover}
-                  frames={packaging.frames}
-                  vertical={packaging.vertical}
-                />
-              )}
-              <PostCaptionButton reelId={reel.id} />
-              {/* Change voice, then re-render — post-render analog of the storyboard voice pill. The picker
-                  saves the pick to the reel; the next Re-render re-runs TTS with it (stills/clips are reused). */}
+              {/* Narrator — tap to pick the voice. Delivery is auto-tuned per story (no manual sliders). */}
               <button
                 onClick={() => setShowVoicePicker(true)}
                 disabled={recsLoading && !currentVoice}
-                className="flex h-10 items-center gap-1.5 rounded-lg border border-border bg-subtle/40 px-2.5 text-xs font-medium text-ink transition-colors hover:bg-subtle disabled:cursor-wait disabled:text-muted"
-                title="Change the narrator voice, then re-render"
+                className={`dock-chip h-9 ${!selectedVoice ? 'border-accent-ring' : ''}`}
+                title="Pick a narrator voice"
               >
                 {recsLoading && !currentVoice ? (
                   <>
-                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-muted/50 border-t-transparent" />
-                    Finding voices…
+                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-transparent" />
+                    Finding a voice…
                   </>
                 ) : (
                   <>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 text-muted" aria-hidden>
-                      <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3ZM19 11a7 7 0 0 1-14 0M12 18v3" />
-                    </svg>
-                    <span className="max-w-[11rem] truncate">{currentVoice ? currentVoice.name : 'Change voice'}</span>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 text-faint" aria-hidden>
+                    <span className="flex h-[22px] w-[22px] flex-shrink-0 items-center justify-center rounded-sm bg-pair-blue-purple">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                        <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3ZM19 11a7 7 0 0 1-14 0M12 18v3" />
+                      </svg>
+                    </span>
+                    <span className="max-w-[8rem] truncate">{currentVoice ? currentVoice.name : 'Pick voice'}</span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 text-night-faint" aria-hidden>
                       <path d="m6 9 6 6 6-6" />
                     </svg>
                   </>
                 )}
               </button>
-              <button onClick={handleRender} disabled={loading === 'render' || loading === 'approve'} className="btn-secondary active:scale-[.98]">
-                {loading === 'render' ? 'Queuing…' : 'Re-render'}
-              </button>
-              <button onClick={handleApprove} disabled={loading === 'approve' || loading === 'render'} className="btn-accent active:scale-[.98]">
-                {loading === 'approve' ? 'Approving…' : (
+              {musicControl}
+              {effectsControl}
+            </>
+          }
+          actions={
+            <div className="flex items-center gap-3">
+              {/* Spend — the reel's real cost so far, right-aligned label over value the way the design
+                  lays out its render figure. (Not a forecast: render cost is only known once the
+                  providers report usage.) */}
+              <div className="hidden text-right sm:block" title="What this reel has cost to make so far">
+                <p className="font-mono text-[9px] font-700 uppercase tracking-[0.1em] text-night-gutter">Spend</p>
+                <p key={`s${reel.costCents}`} className="animate-value-flash font-mono text-sm font-700 tabular-nums text-night-ink">${(reel.costCents / 100).toFixed(2)}</p>
+              </div>
+              <button
+                onClick={handleRender}
+                disabled={loading === 'render' || !canRender}
+                className="btn-primary btn-glow rounded-[11px] px-5 py-[11px] text-[13px] active:scale-[.98]"
+                title={!selectedVoice ? 'Pick a narrator voice first' : undefined}
+              >
+                {loading === 'render' ? (
                   <>
-                    Approve reel
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                      <path d="M20 6 9 17l-5-5" />
+                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/70 border-t-transparent" />
+                    Queuing…
+                  </>
+                ) : (
+                  <>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                      <path d="M5 3v18l15-9z" />
                     </svg>
+                    {renderUrl ? 'Re-render' : 'Render reel'}
                   </>
                 )}
               </button>
-            </>
-          )}
-          {reel.status === 'approved' && (
+            </div>
+          }
+        />
+      )}
+      {/* Why the render button is disabled, and anything that went wrong queuing it. */}
+      {!isRendering && (error || (canRerender && !selectedVoice && !recsLoading)) && (
+        <p className={`flex-shrink-0 bg-night-dock px-5 pb-2.5 text-[11px] ${error ? 'text-night-danger' : 'text-night-muted'}`}>
+          {error ?? (recsError ? 'Could not load voices — open the picker to retry.' : 'Pick a voice to render.')}
+        </p>
+      )}
+
+      {/* Rendering moment — the reel being made, beside a ledger of the real pipeline steps. Also LOCKS
+          the editor while the chain runs. Clears itself when the reel lands at spot-check. */}
+      {isRendering && (
+        <RenderLedger
+          steps={live?.steps ?? []}
+          costCents={reel.costCents}
+          title={packaging?.title ?? story?.title ?? 'your reel'}
+          sceneCount={scenes.length}
+          motionCount={motionCount}
+          voiceName={currentVoice?.name ?? ''}
+          renderSize={renderSize}
+          previewUrl={renderingSceneUrl}
+          moodTint={moodTint}
+        />
+      )}
+
+
+      {/* ══ YOUR REEL IS READY ══ The finished cut, with the package a viewer meets beside it. This is
+          where "would you publish this?" gets asked, so it gets the whole surface instead of a bar an inch
+          tall. "Back to editing" reveals the storyboard underneath (and the header brings this back). */}
+      {showReady && (
+        <ReelReady
+          reelId={reel.id}
+          channelId={reel.channelId}
+          status={reel.status}
+          title={packaging?.title ?? story?.title ?? 'Untitled reel'}
+          renderUrl={renderUrl}
+          coverUrl={packaging?.coverUrl ?? null}
+          sceneCount={scenes.length}
+          estSecs={reelSecs}
+          voiceName={currentVoice?.name ?? ''}
+          musicName={musicTrackLabel}
+          costCents={reel.costCents}
+          qa={renderQa}
+          scheduledAt={reel.scheduledAt ?? null}
+          metricsViews={reel.metricsViews}
+          postMeta={postMeta}
+          destinations={reel.publishDestinations}
+          loading={loading}
+          error={error}
+          onBack={() => setEditingAfterRender(true)}
+          onRerender={handleRender}
+          onApprove={handleApprove}
+          onPublish={handlePublish}
+          coverPicker={packaging ? (
+            <CoverPicker
+              reelId={reel.id}
+              cover={packaging.cover}
+              frames={packaging.frames}
+              vertical={packaging.vertical}
+              triggerClass="btn-dark px-3 py-1.5 text-xs"
+            />
+          ) : null}
+          publishTools={
             <>
-              <div className="mr-auto">
-                <p className="flex items-center gap-2">
-                  <ReelStatusPill status="approved" />
-                  <span className="font-display text-[15px] font-700 text-ink">Ready to post</span>
-                </p>
-                <p className="mt-0.5 text-xs text-muted">Your post package (video, thumbnail, caption) is ready — download it, post anywhere, then mark it published.</p>
-                <p className="mt-1 text-xs text-muted">
-                  Destinations: {reel.publishDestinations.map((d) => {
-                    const label = d.target === 'tiktok' ? 'TikTok' : d.target === 'facebook_reels' ? 'Facebook Reels' : 'YouTube'
-                    return `${label}${d.connected && d.accountName ? ` · ${d.accountName}` : ''}`
-                  }).join('  ·  ')}
-                </p>
-              </div>
-              <PostCaptionButton reelId={reel.id} />
-              <a href={`/api/pipeline/export-post-package?reelId=${reel.id}`} className="btn-secondary">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
-                </svg>
-                Download post package
-              </a>
-              {reel.publishDestinations.some((d) => (d.target === 'youtube_shorts' || d.target === 'youtube_long') && d.connected) && <PostToYouTubeButton reelId={reel.id} />}
-              {reel.publishDestinations.some((d) => (d.target === 'youtube_shorts' || d.target === 'youtube_long') && !d.connected) && (
-                <a href={`/channel/${reel.channelId}/settings`} className="btn-accent">Connect YouTube</a>
+              {/* The rest of the package — thumbnail words, hook, hashtags — behind its own dialog. */}
+              <PostCaptionButton reelId={reel.id} triggerClass="btn-dark" />
+              {reel.status === 'approved' && reel.publishDestinations.some((d) => (d.target === 'youtube_shorts' || d.target === 'youtube_long') && d.connected) && (
+                <PostToYouTubeButton reelId={reel.id} triggerClass="btn-dark" />
               )}
-              <button onClick={handlePublish} disabled={loading === 'publish'} className="btn-secondary active:scale-[.98]">
-                {loading === 'publish' ? 'Publishing…' : 'Mark as published'}
-              </button>
+              {reel.status === 'published' && (
+                <LogPerformanceButton reelId={reel.id} initialViews={reel.metricsViews} triggerClass="btn-dark" />
+              )}
             </>
-          )}
-          {(reel.status === 'published' || reel.status === 'scheduled') && (
-            <>
-              <div className="mr-auto">
-                <p className="flex items-center gap-2">
-                  <ReelStatusPill status={reel.status} />
-                  {/* Real views when logged — the only performance figure the app actually holds. */}
-                  {reel.metricsViews != null && (
-                    <span className="mono-value text-[13px] text-ink" title="Views logged for this reel">
-                      {reel.metricsViews.toLocaleString()} views
-                    </span>
-                  )}
-                </p>
-                <p className="mt-0.5 text-xs text-muted">
-                  {reel.status === 'scheduled' && reel.scheduledAt
-                    ? `Uploaded and waiting — goes live ${new Date(reel.scheduledAt).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}.`
-                    : 'Re-download the post package anytime.'}
-                </p>
-              </div>
-              {reel.status === 'published' && <LogPerformanceButton reelId={reel.id} initialViews={reel.metricsViews} />}
-              <PostCaptionButton reelId={reel.id} />
-              <a href={`/api/pipeline/export-post-package?reelId=${reel.id}`} className="btn-secondary">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
-                </svg>
-                Download post package
-              </a>
-            </>
-          )}
-          {error && <p className="w-full text-sm text-danger">{error}</p>}
-        </div>
+          }
+        />
       )}
 
       {/* Voice picker modal */}
@@ -1372,274 +1363,95 @@ function ReelStepper({ steps }: { steps: Array<{ label: string; done: boolean }>
   )
 }
 
-// ── Scene media stack ───────────────────────────────────────────────────────
-// The shared image/video canvas: shimmer skeleton while generating/loading, the "shooting" placeholder,
-// reshoot + animate busy overlays, and the develop-in (blur→sharp) reveal once the media loads. Callers
-// layer their own badges/controls via `children`. Timeline tiles pass playVideo={false} so only the
-// inspector autoplays video (no fleet of autoplaying clips).
-function SceneMedia({
-  scene, imgSrc, videoKey, showVideo, playVideo, loaded, onLoaded, onDuration, regenerating, animating, compact, frameClass, frameStyle, adaptAspect, frameAspect, contain, children,
-}: {
-  scene: Scene; imgSrc?: string | undefined; videoKey?: string | undefined; showVideo: boolean; playVideo: boolean
-  loaded: boolean; onLoaded: () => void; onDuration?: ((secs: number) => void) | undefined
-  regenerating: boolean; animating: boolean
-  // In the strip rail the tile collapses to a slim filmstrip (--shrink → 1); when set, the busy-overlay
-  // caption collapses away with it so the tiny tile shows just the spinner, not cramped text.
-  compact?: boolean
-  // frameAspect fixes the frame's shape (e.g. '16 / 9' for a landscape, YouTube-style player); contain fits
-  // the media inside it (letterboxed on black) instead of cropping. Without them: adaptAspect → media's own
-  // aspect, else a 9:16 tile. frameStyle merges onto the frame box (e.g. scroll-linked border radius/width).
-  frameClass?: string | undefined; frameStyle?: React.CSSProperties | undefined; adaptAspect?: boolean; frameAspect?: string | undefined; contain?: boolean; children?: React.ReactNode
-}) {
-  const hasMedia = Boolean(videoKey || imgSrc)
-  const developClass = `style-develop ${loaded ? 'style-develop-in' : ''}`
-  // With adaptAspect on, the frame matches the media's real aspect ratio (so non-9:16 reels aren't
-  // cropped); otherwise it stays 9:16 for uniform timeline tiles. Defaults to 9:16 until the media loads.
-  const [mediaAspect, setMediaAspect] = useState<string | null>(null)
-  return (
-    <div
-      className={`group relative isolate w-full overflow-hidden rounded-xl border shadow-sm ${contain ? 'bg-black' : 'bg-subtle'} ${frameClass ?? 'border-border'}`}
-      style={{ aspectRatio: frameAspect ?? (adaptAspect && mediaAspect ? mediaAspect : '9 / 16'), ...frameStyle }}
-    >
-      {/* Shimmer sits behind the media (z-0) — shown while still generating or loading */}
-      {(!hasMedia || !loaded) && (
-        <div className="absolute inset-0 z-0 animate-shimmer bg-gradient-to-r from-subtle via-surface to-subtle bg-[length:200%_100%]" />
-      )}
-      {!hasMedia && (
-        <div className="absolute inset-0 z-0 flex flex-col items-center justify-center gap-2 px-2 text-center text-[11px] text-faint">
-          <span className="h-2.5 w-2.5 animate-breathe rounded-full bg-accent/70" />
-          Shooting scene {scene.idx}…
-        </div>
-      )}
-      {showVideo && playVideo ? (
-        <video
-          key={videoKey}
-          src={`/api/asset?key=${encodeURIComponent(videoKey!)}`}
-          autoPlay muted loop playsInline
-          onLoadedData={(e) => { e.currentTarget.muted = true; void e.currentTarget.play().catch(() => {}); onLoaded() }}
-          onLoadedMetadata={(e) => { onDuration?.(e.currentTarget.duration); if (adaptAspect && e.currentTarget.videoWidth) setMediaAspect(`${e.currentTarget.videoWidth} / ${e.currentTarget.videoHeight}`) }}
-          // Force muted as a DOM PROPERTY (React's `muted` attribute is famously unreliable on mount — if it
-          // doesn't stick the browser blocks autoplay), then kick playback off explicitly so the clip
-          // autoplays on every scene select, including cached sources where the `autoPlay` attribute no-ops.
-          // Also catch the already-ready (cached) case so the reveal isn't stuck waiting for onLoadedData.
-          ref={(el) => { if (el) { el.muted = true; void el.play?.().catch(() => {}); if (el.readyState >= 2) { onLoaded(); if (el.duration) onDuration?.(el.duration); if (adaptAspect && el.videoWidth) setMediaAspect(`${el.videoWidth} / ${el.videoHeight}`) } } }}
-          className={`absolute inset-0 z-10 h-full w-full ${contain ? 'object-contain' : 'object-cover'} ${developClass}`}
-        />
-      ) : imgSrc ? (
-        <img
-          src={imgSrc}
-          alt={`Scene ${scene.idx}`}
-          onLoad={(e) => { onLoaded(); if (adaptAspect && e.currentTarget.naturalWidth) setMediaAspect(`${e.currentTarget.naturalWidth} / ${e.currentTarget.naturalHeight}`) }}
-          // Same guard for images: a cached image is already `complete` on mount and won't fire onLoad.
-          ref={(el) => { if (el?.complete && el.naturalWidth > 0) { onLoaded(); if (adaptAspect) setMediaAspect(`${el.naturalWidth} / ${el.naturalHeight}`) } }}
-          className={`absolute inset-0 z-10 h-full w-full ${contain ? 'object-contain' : 'object-cover'} ${developClass}`}
-        />
-      ) : null}
-      {/* Reshoot overlay */}
-      {regenerating && (
-        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-2 bg-ink/45 text-xs font-medium text-white backdrop-blur-sm">
-          <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/70 border-t-transparent" />
-          {/* A dock frame is too small for the caption — the spinner alone carries it there. */}
-          {!compact && <span>Reshooting…</span>}
-        </div>
-      )}
-      {/* Animate overlay — long op, set a gentle expectation */}
-      {animating && (
-        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-2 bg-ink/45 px-3 text-center text-xs font-medium text-white backdrop-blur-sm">
-          <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/70 border-t-transparent" />
-          {/* A dock frame is too small for the caption — the spinner alone carries it there. */}
-          {!compact && (
-            <span className="flex flex-col items-center gap-1">
-              Bringing this scene to life…
-              <span className="text-[10px] font-normal text-white/70">takes about a minute</span>
-            </span>
-          )}
-        </div>
-      )}
-      {children}
-    </div>
-  )
-}
-
-// A motion scene's actual clip length — probed from the generated video's own metadata (not an estimate).
-// Shows just the play glyph until the duration loads, or for a motion scene with no clip generated yet.
-function MotionDurationChip({ clipKey, compact = false }: { clipKey?: string | undefined; compact?: boolean }) {
-  const [secs, setSecs] = useState<number | null>(null)
-  return (
-    <>
-      {/* Animated-scene chip — icon + clip length. In a dock frame there's only room for the icon, which
-          still marks which scenes move. */}
-      <span
-        className={`absolute right-1 top-1 z-20 inline-flex items-center gap-0.5 rounded-full bg-accent/85 py-0.5 font-mono text-[10px] font-700 tabular-nums text-white backdrop-blur ${compact ? 'px-1' : 'px-1.5'}`}
-        title="Moves in the final reel"
-      >
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="2" y="6" width="13" height="12" rx="2" /><path d="m15 11 6-3.5v9L15 13" /></svg>
-        {!compact && <span className="whitespace-nowrap">{secs != null ? fmtSecs(secs) : null}</span>}
-      </span>
-      {clipKey && (
-        <video
-          src={`/api/asset?key=${encodeURIComponent(clipKey)}`}
-          preload="metadata"
-          muted
-          playsInline
-          aria-hidden
-          className="pointer-events-none absolute h-px w-px opacity-0"
-          onLoadedMetadata={(e) => setSecs(e.currentTarget.duration)}
-        />
-      )}
-    </>
-  )
-}
-
-// ── Timeline (master) ─────────────────────────────────────────────────────────
-function SceneTimeline({
-  scenes, sceneImages, sceneVideoVariations, loadedMedia, markLoaded, loading, selectedIdx, onSelect, onArrow, moodTint, twistIdx, view, onViewChange,
+// ── Grid overview ─────────────────────────────────────────────────────────────
+// Every scene at once — the counterpart to the dock's proportional read of the same reel. The timeline
+// answers "how is this cut paced?"; the grid answers "what is in it?". Selection is shared, so a frame
+// picked here is the scene the stage shows when you switch back.
+function SceneGrid({
+  scenes, sceneImages, sceneVideoVariations, loadedMedia, markLoaded, loading, selectedIdx, onSelect, onArrow, moodTint, twistIdx, onViewChange,
 }: {
   scenes: Scene[]; sceneImages: Record<number, string>; sceneVideoVariations: Record<number, string[]>; loadedMedia: Set<number>
   markLoaded: (idx: number) => void; loading: string | null
   selectedIdx: number | null; onSelect: (idx: number) => void; onArrow: (d: number) => void; moodTint: string; twistIdx: number | null
-  view: 'strip' | 'grid'; onViewChange: (v: 'strip' | 'grid') => void
+  onViewChange: (v: 'strip' | 'grid') => void
 }) {
-  const thumbs = (
-    <>
-      {scenes.length === 0 && (
-        <div className={`flex aspect-[9/16] flex-shrink-0 items-center justify-center rounded-lg border border-dashed px-2 text-center text-xs ${
-          view === 'strip' ? 'w-[84px] border-white/15 text-night-faint' : 'w-40 border-border-strong text-faint'
-        }`}>
-          No scenes yet
-        </div>
-      )}
-      {scenes.map((scene) => (
-        <SceneThumb
-          key={scene.idx}
-          scene={scene}
-          imgSrc={sceneImages[scene.idx]}
-          videoKey={(sceneVideoVariations[scene.idx] ?? [])[0]}
-          selected={scene.idx === selectedIdx}
-          loaded={loadedMedia.has(scene.idx)}
-          markLoaded={markLoaded}
-          regenerating={loading === `regen-${scene.idx}`}
-          animating={loading === `animate-${scene.idx}`}
-          moodTint={moodTint}
-          beat={sceneBeat(scene.idx, scenes.length, twistIdx)}
-          onSelect={onSelect}
-          layout={view}
-        />
-      ))}
-    </>
-  )
-
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement) return
     if (e.key === 'ArrowRight') { e.preventDefault(); onArrow(1) }
     else if (e.key === 'ArrowLeft') { e.preventDefault(); onArrow(-1) }
   }
-
-  // Estimated runtime, from narration length — the same ~2.5 words/second the rest of the app uses.
-  const totalSecs = scenes.reduce((n, s) => n + Math.ceil(s.narrationText.split(/\s+/).filter(Boolean).length / 2.5), 0)
-
-  // In the dock the strip is dark-world (it sits on the night surface); the grid overview stays a light
-  // workspace panel. Everything below reads its palette off this one flag.
-  const isStrip = view === 'strip'
+  const total = totalSeconds(scenes)
 
   return (
-    <div className={isStrip ? 'flex min-w-0 flex-1 flex-col py-3' : 'border-b border-border bg-subtle'}>
-      {/* Header — scene count + total runtime, and the strip/grid view toggle (top-right). */}
-      <div className={`flex items-center justify-between gap-2 ${isStrip ? 'px-5' : 'px-4 pt-3 sm:px-8'}`}>
+    <div className="border-b border-border bg-subtle">
+      <div className="flex items-center justify-between gap-2 px-4 pt-3 sm:px-8">
         <span className="flex items-center gap-2.5">
-          <span className={isStrip ? 'text-xs font-700 text-night-ink' : 'micro-label'}>
-            {scenes.length} {scenes.length === 1 ? 'scene' : 'scenes'}
-          </span>
-          {totalSecs > 0 && (
-            <span className={`mono-value text-[11px] ${isStrip ? 'text-night-faint' : 'text-muted'}`} title="Total runtime across all scenes">{totalSecs}s total</span>
-          )}
+          <span className="micro-label">{scenes.length} {scenes.length === 1 ? 'scene' : 'scenes'}</span>
+          {total > 0 && <span className="mono-value text-[11px] text-muted" title="Estimated runtime across all scenes">{fmtClock(total)} total</span>}
         </span>
-        <div className={`inline-flex items-center gap-0.5 rounded-sm p-0.5 ${isStrip ? 'bg-white/[0.06]' : 'bg-subtle-strong'}`}>
-          {([
-            ['strip', 'Strip view', <><rect x="3" y="4" width="5" height="16" rx="1" /><rect x="10" y="4" width="5" height="16" rx="1" /><rect x="17" y="4" width="5" height="16" rx="1" /></>],
-            ['grid', 'Grid view', <><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></>],
-          ] as const).map(([v, label, icon]) => (
-            <button
-              key={v}
-              type="button"
-              onClick={() => onViewChange(v)}
-              aria-pressed={view === v}
-              title={label}
-              aria-label={label}
-              className={`rounded-md px-2 py-1 transition-colors ${
-                view === v
-                  ? isStrip ? 'bg-white/[0.14] text-night-ink' : 'bg-surface text-ink shadow-xs'
-                  : isStrip ? 'text-night-faint hover:text-night-ink' : 'text-muted hover:text-ink'
-              }`}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>{icon}</svg>
-            </button>
+        <button
+          type="button"
+          onClick={() => onViewChange('strip')}
+          className="btn-secondary btn-sm"
+          title="Back to the timeline"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden><rect x="3" y="4" width="5" height="16" rx="1" /><rect x="10" y="4" width="5" height="16" rx="1" /><rect x="17" y="4" width="5" height="16" rx="1" /></svg>
+          Timeline
+        </button>
+      </div>
+
+      <div role="listbox" aria-label="Scenes" tabIndex={0} onKeyDown={onKeyDown}>
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] items-start gap-x-4 gap-y-5 px-4 py-6 sm:px-8">
+          {scenes.length === 0 && (
+            <div className="flex aspect-[9/16] w-40 flex-shrink-0 items-center justify-center rounded-lg border border-dashed border-border-strong px-2 text-center text-xs text-faint">
+              No scenes yet
+            </div>
+          )}
+          {scenes.map((scene) => (
+            <SceneThumb
+              key={scene.idx}
+              scene={scene}
+              imgSrc={sceneImages[scene.idx]}
+              videoKey={(sceneVideoVariations[scene.idx] ?? [])[0]}
+              selected={scene.idx === selectedIdx}
+              loaded={loadedMedia.has(scene.idx)}
+              markLoaded={markLoaded}
+              regenerating={loading === `regen-${scene.idx}`}
+              animating={loading === `animate-${scene.idx}`}
+              moodTint={moodTint}
+              beat={sceneBeat(scene.idx, scenes.length, twistIdx)}
+              onSelect={onSelect}
+            />
           ))}
         </div>
       </div>
-
-      {isStrip ? (
-        <>
-          {/* Sprocket holes — the scenes ARE the filmstrip. */}
-          <div aria-hidden className="sprockets mx-5 mt-2.5 h-2 flex-shrink-0" style={{ ['--sprocket' as string]: '#241B36' }} />
-          <div
-            className="strip-scroll flex min-h-0 flex-1 items-start gap-2.5 overflow-x-auto px-5 pb-1 pt-2.5"
-            role="listbox" aria-label="Scenes" tabIndex={0} onKeyDown={onKeyDown}
-          >
-            {thumbs}
-          </div>
-        </>
-      ) : (
-        <div role="listbox" aria-label="Scenes" tabIndex={0} onKeyDown={onKeyDown}>
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] items-start gap-x-4 gap-y-5 px-4 py-6 sm:px-8">{thumbs}</div>
-        </div>
-      )}
     </div>
   )
 }
 
 function SceneThumb({
-  scene, imgSrc, videoKey, selected, loaded, markLoaded, regenerating, animating, moodTint, beat, onSelect, layout,
+  scene, imgSrc, videoKey, selected, loaded, markLoaded, regenerating, animating, moodTint, beat, onSelect,
 }: {
   scene: Scene; imgSrc?: string | undefined; videoKey?: string | undefined; selected: boolean; loaded: boolean; markLoaded: (idx: number) => void
-  regenerating: boolean; animating: boolean; moodTint: string; beat: 'Hook' | 'Build-up' | 'Twist' | 'Payoff'; onSelect: (idx: number) => void; layout: 'strip' | 'grid'
+  regenerating: boolean; animating: boolean; moodTint: string; beat: 'Hook' | 'Build-up' | 'Twist' | 'Payoff'; onSelect: (idx: number) => void
 }) {
-  const isGrid = layout === 'grid'
-  const isStrip = layout === 'strip' // dock frames are a fixed, compact filmstrip size
   const isVideo = scene.tier === 'video'
-  // On neutral channels the mood tint IS the brand accent (#9B3BFF) — identical to the selection
-  // colour — so a hero wash would read as "selected". Swap in a distinct highlight hue there; dark/warm
-  // channels keep their real mood color (red / amber), which already differs from the selection accent.
+  // On neutral channels the mood tint IS the brand accent (#9B3BFF) — identical to the selection colour —
+  // so a hero wash would read as "selected". Swap in a distinct highlight hue there; dark/warm channels
+  // keep their real mood color (red / amber), which already differs from the selection accent.
   const heroTint = /^#9b3bff$/i.test(moodTint) ? '#2FA4FF' : moodTint
   // A super-short scene descriptor — the place it's set (capped at 2 words), falling back to its lead mood word.
   const shortDesc = (scene.location || scene.mood?.[0] || '').trim().split(/\s+/).filter(Boolean).slice(0, 2).join(' ')
-  // Selected wins the frame with the accent ring; a hero gets only a whisper-faint mood halo (below).
-  // In the dock the ring's offset has to sit on the night surface, or it cuts a light halo out of it.
-  const frameClass = selected
-    ? `border-accent ring-2 ring-accent ring-offset-2 ${isStrip ? 'ring-offset-night-dock' : 'ring-offset-subtle'}`
-    : isStrip ? 'border-night-frame' : 'border-border'
-  // The frame's state word, in the mock's filmstrip vocabulary — what this scene IS at render.
   const state = regenerating || animating ? 'rendering' : isVideo ? 'motion' : 'still'
-  const stateColor = state === 'rendering' ? 'text-brand-blue' : state === 'motion' ? 'text-accent' : 'text-night-faint'
   return (
     <button
       type="button"
       role="option"
       aria-selected={selected}
       onClick={() => onSelect(scene.idx)}
-      ref={(el) => { if (selected && el) el.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' }) }}
-      className={`group flex flex-col text-left focus:outline-none ${isGrid ? 'w-full gap-2' : 'w-[84px] flex-shrink-0'}`}
-      /* The selected frame lifts out of the dock (siblings flank it like a focused carousel item). The
-         grow is a `transform: scale` so it animates smoothly on select; z-index keeps its scaled edges
-         from being clipped by neighbours. */
-      style={isStrip ? {
-        transform: selected ? 'scale(1.1)' : 'scale(1)',
-        transformOrigin: 'bottom center',
-        transition: 'transform 0.25s cubic-bezier(0.22, 1, 0.36, 1)',
-        zIndex: selected ? 10 : 0,
-      } : undefined}
+      className="group flex w-full flex-col gap-2 text-left focus:outline-none"
     >
-      <div className={isStrip ? 'rounded-sm' : 'rounded-xl'}>
+      <div className="rounded-xl">
         <SceneMedia
           scene={scene}
           imgSrc={imgSrc}
@@ -1649,49 +1461,33 @@ function SceneThumb({
           onLoaded={() => markLoaded(scene.idx)}
           regenerating={regenerating}
           animating={animating}
-          compact={isStrip}
-          frameClass={frameClass}
+          frameClass={selected ? 'border-accent ring-2 ring-accent ring-offset-2 ring-offset-subtle' : 'border-border'}
         >
-          {/* Scene number — top-left corner. The accent when selected, else the plain dark chip (hero scenes
-              are no longer special-cased). In the strip it fades with --shrink so the compact filmstrip is
-              just clean frames. */}
           <span
             className={`absolute left-1.5 top-1.5 z-20 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-sm px-1 font-mono text-[11px] font-700 tabular-nums text-white backdrop-blur ${selected ? 'bg-brand-3' : 'bg-ink/70'}`}
           >{String(scene.idx).padStart(2, '0')}</span>
-          {/* Hero scenes are marked bottom-left: the full beat label in the grid overview (room for it),
-              a star in a dock frame (which is far too narrow for text). */}
-          {scene.isHero && !isStrip && (
+          {/* Key beats carry their narrative name — there's room for it here, unlike on a timeline clip. */}
+          {scene.isHero && (
             <span
               className="absolute bottom-1.5 left-1.5 z-20 inline-flex items-center rounded-md bg-ink/70 px-1.5 py-px text-[10px] font-semibold text-white backdrop-blur"
               style={{ boxShadow: `inset 0 0 0 999px ${heroTint}55` }}
             >{beat}</span>
           )}
-          {scene.isHero && isStrip && (
-            <svg
-              className="absolute bottom-1 left-1 z-20"
-              width="13" height="13" viewBox="0 0 24 24" fill="white" role="img" aria-label={`Key beat: ${beat}`}
-              style={{ filter: 'drop-shadow(0 1px 1.5px rgba(0,0,0,0.55))' }}
-            ><title>{beat}</title><path d="M12 2.5l2.6 5.7 6.2.6-4.7 4.1 1.4 6.1L12 16l-5.5 3 1.4-6.1L3.2 8.8l6.2-.6z" /></svg>
-          )}
           {/* Motion scenes show the play glyph + the actual clip length (top-right); stills show no duration. */}
-          {isVideo && <MotionDurationChip clipKey={videoKey} compact={isStrip} />}
+          {isVideo && <MotionDurationChip clipKey={videoKey} />}
         </SceneMedia>
       </div>
-      {/* Under the frame: the grid overview gets the full caption (place + narration); the filmstrip gets
-          only the state word, the way a strip is labelled at the bench. */}
-      {isGrid && (
-        <div className="flex flex-col gap-0.5 overflow-hidden px-0.5">
-          <p className="flex items-center gap-1.5 overflow-hidden">
-            {shortDesc && <span className="truncate text-xs font-600 capitalize text-ink">{shortDesc}</span>}
-            <span className="mono-label flex-shrink-0 text-[9px]">{state}</span>
-          </p>
-          <p className="line-clamp-1 text-[11px] leading-snug text-muted">{scene.narrationText}</p>
-        </div>
-      )}
-      {isStrip && <p className={`frame-state ${stateColor}`}>{state}</p>}
+      <div className="flex flex-col gap-0.5 overflow-hidden px-0.5">
+        <p className="flex items-center gap-1.5 overflow-hidden">
+          {shortDesc && <span className="truncate text-xs font-600 capitalize text-ink">{shortDesc}</span>}
+          <span className="mono-label flex-shrink-0 text-[9px]">{state}</span>
+        </p>
+        <p className="line-clamp-1 text-[11px] leading-snug text-muted">{scene.narrationText}</p>
+      </div>
     </button>
   )
 }
+
 
 // Which scene is the story's TWIST (its dramatic peak): the scene matching the story's peak line
 // (twist_anchor), else the last key visual beat (hero), else the final scene.
@@ -1722,13 +1518,12 @@ function sceneBeat(idx: number, total: number, twistIdx: number | null): 'Hook' 
 type GroundedOption = { label: string; description: string; intent: string; anchor: 'current-first' | 'reference-first' | 'reference-only'; directive: string }
 
 function SceneInspector({
-  scene, total, beat, imgSrc, variations, activeVar, setActiveVar, loaded, markLoaded, loading, moodTint,
+  scene, secs, beat, imgSrc, variations, loading, moodTint,
   sceneSaving, setScenes, setSceneSaving, onSetSceneType, onPreview, onSuggestMotion, onReshoot, onRequestOptions, onUploadImage, history, onSetSceneImage, onSaveText,
   sounds, soundPreviews, onAddSound, onPreviewSound, onRemoveSound,
 }: {
-  scene: Scene; total: number; beat: 'Hook' | 'Build-up' | 'Twist' | 'Payoff'; imgSrc?: string | undefined; variations: string[]; activeVar: number
-  setActiveVar: React.Dispatch<React.SetStateAction<Record<number, number>>>
-  loaded: boolean; markLoaded: (idx: number) => void; loading: string | null; moodTint: string
+  scene: Scene; secs: number; beat: 'Hook' | 'Build-up' | 'Twist' | 'Payoff'; imgSrc?: string | undefined; variations: string[]
+  loading: string | null; moodTint: string
   sceneSaving: 'saving' | 'saved' | undefined
   setScenes: React.Dispatch<React.SetStateAction<Scene[]>>
   setSceneSaving: React.Dispatch<React.SetStateAction<Record<number, 'saving' | 'saved'>>>
@@ -1747,9 +1542,6 @@ function SceneInspector({
   onPreviewSound: (cueId: string) => Promise<void>
   onRemoveSound: (cueId: string) => Promise<void>
 }) {
-  const isVideo = scene.tier === 'video'
-  const videoKey = variations[activeVar]
-  const showVideo = isVideo && Boolean(videoKey)
   const animating = loading === `animate-${scene.idx}`
   const regenerating = loading === `regen-${scene.idx}`
   // Undo/Redo walk this scene's image history (oldest→newest). histPos = where the current image sits; step
@@ -1759,13 +1551,8 @@ function SceneInspector({
   const canRedo = histPos >= 0 && histPos < history.length - 1
   const goUndo = () => { const t = history[histPos - 1]; if (canUndo && t) onSetSceneImage(scene.idx, t.assetId, t.url) }
   const goRedo = () => { const t = history[histPos + 1]; if (canRedo && t) onSetSceneImage(scene.idx, t.assetId, t.url) }
-  // Actual clip length, read from the playing preview's metadata (state resets per scene via the key prop).
-  const [clipSecs, setClipSecs] = useState<number | null>(null)
   // The Twist beat badge uses the mood color (a distinct blue on neutral channels, where mood == selection accent).
   const heroTint = /^#9b3bff$/i.test(moodTint) ? '#2FA4FF' : moodTint
-  const [showFull, setShowFull] = useState(false) // large preview lightbox
-  const [fullLoaded, setFullLoaded] = useState(false) // lightbox media has loaded
-  const [lightboxAspect, setLightboxAspect] = useState<string | null>(null) // real aspect of the open media
   const [changeText, setChangeText] = useState('') // the creator's plain-language change for this scene
   const [motionText, setMotionText] = useState('') // the creator's plain-language MOTION request (video only)
   const [refKey, setRefKey] = useState<string | null>(null) // an attached reference image for the change
@@ -1821,78 +1608,10 @@ function SceneInspector({
   const runPreviewSound = async (id: string) => { setPreviewingId(id); await onPreviewSound(id); setPreviewingId(null) }
 
   return (
-    <div className="animate-fade-in flex min-h-0 w-full flex-col gap-3 p-4 sm:px-6 sm:py-5">
-      <div className="flex min-h-0 w-full flex-1 flex-col gap-4 lg:flex-row lg:gap-6">
-      {/* Preview — sits directly on the dark stage, sized by the stage's HEIGHT (not a fixed width) so it
-          always fits without the page scrolling. */}
-      <div className="order-1 flex min-h-0 w-full flex-shrink-0 flex-col lg:aspect-[9/16] lg:h-full lg:w-auto">
-        {/* The visual is the hero of this panel — presented as a lit stage: a soft mood-tinted glow behind
-            an elevated, generously-rounded frame, so the eye lands here first. */}
-        <div className="relative isolate flex min-h-0 w-full flex-1 justify-center">
-          <div
-            aria-hidden
-            className="pointer-events-none absolute -inset-4 z-0 rounded-[2.5rem] opacity-30 blur-2xl"
-            style={{ background: `radial-gradient(60% 55% at 50% 42%, ${moodTint}, transparent 72%)` }}
-          />
-          <div
-            onClick={() => imgSrc && (setFullLoaded(false), setLightboxAspect(null), setShowFull(true))}
-            title={imgSrc ? 'Open preview' : undefined}
-            className={`group/preview relative z-10 h-full w-full ${imgSrc ? 'cursor-zoom-in' : ''}`}
-          >
-            <SceneMedia
-              scene={scene}
-              imgSrc={imgSrc}
-              videoKey={videoKey}
-              showVideo={showVideo}
-              playVideo
-              // The wrapper owns the 9:16 aspect on the stage; the frame just fills it.
-              frameStyle={{ height: '100%', width: '100%' }}
-              loaded={loaded}
-              onLoaded={() => markLoaded(scene.idx)}
-              onDuration={setClipSecs}
-              regenerating={regenerating}
-              animating={animating}
-              frameClass="!border-0 !rounded-2xl !shadow-xl"
-              adaptAspect
-            >
-            {/* Slate — which scene you're looking at, and how long it runs, in the corners of the frame
-                itself (the cutting-room read: the frame is labelled, not the panel around it). */}
-            <span className="pointer-events-none absolute left-3 top-3 z-20 rounded-2xl bg-black/45 px-2.5 py-1 font-mono text-[11px] font-700 text-white backdrop-blur">
-              SCENE {String(scene.idx).padStart(2, '0')} / {String(total).padStart(2, '0')}
-            </span>
-            {/* Hover hint that the visual opens a larger preview */}
-            {imgSrc && (
-              <span className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center opacity-0 transition-opacity group-hover/preview:opacity-100">
-                <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-ink/55 text-white backdrop-blur">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" /></svg>
-                </span>
-              </span>
-            )}
-            {/* Actual clip length — only for a motion scene whose preview has loaded */}
-            {showVideo && clipSecs != null && (
-              <span className="pointer-events-none absolute right-3 top-3 z-20 rounded-2xl bg-black/45 px-2.5 py-1 font-mono text-[11px] font-600 text-white backdrop-blur">{fmtSecs(clipSecs)}</span>
-            )}
-            {/* Variation cycler — only when an animated scene has 2+ clips (after a render) */}
-            {showVideo && variations.length > 1 && (
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); setActiveVar((m) => ({ ...m, [scene.idx]: ((m[scene.idx] ?? 0) + 1) % variations.length })) }}
-                className="badge absolute bottom-3 right-3 z-20 bg-black/55 text-white backdrop-blur hover:bg-black/70"
-                title={`Take ${activeVar + 1} of ${variations.length} — click to switch`}
-              >
-                ▶ {activeVar + 1}/{variations.length}
-              </button>
-            )}
-          </SceneMedia>
-          </div>
-        </div>
-      </div>
-      {/* Inspector — a light panel floating beside the stage: one column, read top-to-bottom in the order
-          you work a scene (script → picture → motion → sound). It owns the ONLY vertical scroll in the
-          workspace row, so the page itself never scrolls. `order-2` keeps it to the RIGHT of the
-          preview (which is order-1) — without it the default order:0 would put it first. */}
-      <div className="surface order-2 flex min-h-0 min-w-0 flex-1 flex-col gap-5 overflow-y-auto p-4 shadow-lg sm:p-5 lg:w-[23rem] lg:flex-none">
-      <div className="flex items-center justify-between gap-2 border-b border-border pb-3">
+    // One column, read top-to-bottom in the order you work a scene: what it SAYS → what it LOOKS like →
+    // how it MOVES → what it SOUNDS like. The stage beside it shows the scene, so nothing here repeats it.
+    <div className="animate-fade-in flex min-h-0 w-full flex-col gap-[18px] p-4 sm:p-[18px]">
+      <div className="flex items-center justify-between gap-2">
         <span className="flex items-center gap-2">
           <h2 className="mono-label text-[11px]">Scene {String(scene.idx).padStart(2, '0')}</h2>
           {/* Narrative beat — the Twist (story peak) carries the mood accent; the rest are quietly tinted. */}
@@ -1901,7 +1620,10 @@ function SceneInspector({
             style={beat === 'Twist' ? { backgroundColor: `${heroTint}1f`, color: heroTint } : undefined}
           >{beat}</span>
         </span>
-        <span className="mono-value text-[11px] uppercase text-faint">{scene.tier === 'video' ? 'Motion' : 'Still'}</span>
+        {/* How long it runs · what it is at render — the design's inspector slate. */}
+        <span className="font-mono text-[11px] tabular-nums text-faint">
+          {secs}s · {scene.tier === 'video' ? 'MOTION' : 'STILL'}
+        </span>
       </div>
       {/* Narration — the primary text edit; takes the flexible space */}
       <div className="flex min-w-0 flex-col">
@@ -1920,8 +1642,8 @@ function SceneInspector({
               setSceneSaving((s) => { const n = { ...s }; delete n[scene.idx]; return n })
             }}
             onBlur={(e) => void onSaveText(scene.idx, e.target.value)}
-            rows={5}
-            className="block max-h-[28rem] min-h-[7rem] w-full resize-y bg-transparent p-4 text-[15px] leading-7 text-ink placeholder:text-faint focus:outline-none"
+            rows={3}
+            className="block max-h-[24rem] min-h-[6rem] w-full resize-y bg-transparent px-3.5 py-3 text-[13px] leading-relaxed text-ink placeholder:text-faint focus:outline-none"
             placeholder="What the narrator says in this scene…"
             aria-label={`Scene ${scene.idx} narration`}
           />
@@ -1963,160 +1685,181 @@ function SceneInspector({
           }
           return (
             <>
-              {/* Regenerate — the hero surface (stronger border + shadow), the action reached for most.
-                  Regenerate re-rolls a close variation of the current image (fix a small thing); Fresh take
-                  re-imagines the shot from scratch; the field applies a described tweak. Undo/Redo step through
-                  every take generated for this scene (free — no regeneration). */}
-              <div className="flex flex-col gap-3 rounded-2xl border border-border-strong bg-surface p-4 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Image · owns the picture</p>
-                  {/* Undo / Redo — walk this scene's image history. Position shown when there's more than one take. */}
-                  <div className="inline-flex items-center gap-1">
-                    {history.length > 1 && histPos >= 0 && (
-                      <span className="mr-1 text-[10px] tabular-nums text-faint">{histPos + 1}/{history.length}</span>
-                    )}
-                    <button type="button" onClick={goUndo} disabled={!canUndo || regenerating} title="Undo — previous take"
-                      className="flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-surface text-muted transition-colors hover:border-border-strong hover:text-ink disabled:cursor-not-allowed disabled:opacity-40">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M9 14 4 9l5-5" /><path d="M4 9h11a5 5 0 0 1 5 5v0a5 5 0 0 1-5 5H9" /></svg>
-                      <span className="sr-only">Undo</span>
-                    </button>
-                    <button type="button" onClick={goRedo} disabled={!canRedo || regenerating} title="Redo — next take"
-                      className="flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-surface text-muted transition-colors hover:border-border-strong hover:text-ink disabled:cursor-not-allowed disabled:opacity-40">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="m15 14 5-5-5-5" /><path d="M20 9H9a5 5 0 0 0-5 5v0a5 5 0 0 0 5 5h6" /></svg>
-                      <span className="sr-only">Redo</span>
-                    </button>
-                  </div>
+              {/* IMAGE — the picture, and every way to change it. One composer, not a field with buttons
+                  scattered around it: describe the change, optionally attach a reference, send. Under it,
+                  the two whole-shot alternatives. TAKES sit in the label row, because that is what the
+                  image history IS to a creator — takes of the same shot, free to step between (no
+                  regeneration: each one already exists and is already paid for). */}
+              <div className="flex flex-col gap-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-600 text-ink">Image</p>
+                  {/* Take navigation — the design's `[←] take 2/2 [→]`. Hidden until there IS a second take. */}
+                  {history.length > 1 && histPos >= 0 && (
+                    <span className="inline-flex items-center gap-0.5">
+                      <button type="button" onClick={goUndo} disabled={!canUndo || regenerating} title="Previous take"
+                        className="flex h-[26px] w-[26px] items-center justify-center rounded-[7px] border border-border-mid bg-surface text-muted transition-colors hover:text-ink disabled:cursor-not-allowed disabled:text-[#C9C4D6]">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M9 14 4 9l5-5" /><path d="M4 9h11a5 5 0 0 1 0 10h-1" /></svg>
+                        <span className="sr-only">Previous take</span>
+                      </button>
+                      <span className="px-1 font-mono text-[10px] tabular-nums text-faint">take {histPos + 1}/{history.length}</span>
+                      <button type="button" onClick={goRedo} disabled={!canRedo || regenerating} title="Next take"
+                        className="flex h-[26px] w-[26px] items-center justify-center rounded-[7px] border border-border-mid bg-surface text-muted transition-colors hover:text-ink disabled:cursor-not-allowed disabled:text-[#C9C4D6]">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="m15 14 5-5-5-5" /><path d="M20 9H9a5 5 0 0 0 0 10h1" /></svg>
+                        <span className="sr-only">Next take</span>
+                      </button>
+                    </span>
+                  )}
                 </div>
 
-                {/* One-click re-roll (varies the current image) + a from-scratch alternative. */}
-                <div className="flex gap-2">
-                  <button type="button" onClick={() => { if (!regenerating) onReshoot(scene.idx, { mode: 'vary' }) }} disabled={regenerating}
-                    className="btn-accent btn-sm flex-1 active:scale-[.98] disabled:cursor-wait disabled:opacity-50">
-                    {regenerating ? (<><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />Reshooting…</>) : (<><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M21 12a9 9 0 1 1-2.64-6.36" /><path d="M21 3v6h-6" /></svg>Reshoot</>)}
-                  </button>
-                  <button type="button" onClick={() => { if (!regenerating) onReshoot(scene.idx, { mode: 'fresh' }) }} disabled={regenerating}
-                    title="Re-imagine this shot from scratch (new composition)"
-                    className="btn-secondary btn-sm active:scale-[.98] disabled:cursor-wait disabled:opacity-50">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 3v4M3 5h4M6 17v4M4 19h4M13 3l2.5 6.5L22 12l-6.5 2.5L13 21l-2.5-6.5L4 12l6.5-2.5z" /></svg>
-                    Fresh take
-                  </button>
-                </div>
-                <p className="text-[11px] leading-relaxed text-faint">Reshoot keeps it close — fixes a small thing. Fresh take re-imagines the whole shot.</p>
-
-                {/* Or describe a specific change (also anchored to the current image). */}
-                <div className="flex flex-col gap-2 border-t border-border pt-3">
+                {/* The composer. */}
+                <div className="overflow-hidden rounded-xl border border-border-mid bg-surface shadow-xs focus-within:border-accent/40">
                   <textarea
                     value={changeText}
                     onChange={(e) => setChangeText(e.target.value)}
                     onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') runChange() }}
-                    rows={2}
+                    rows={3}
                     disabled={regenerating}
-                    placeholder="Or describe a change — e.g. “lower her hand”…"
+                    placeholder="Describe a change — “lower her hand, warmer light, push in slightly”"
                     aria-label={`Scene ${scene.idx} change`}
-                    className="input resize-y text-xs leading-relaxed disabled:opacity-60"
+                    className="block w-full resize-none bg-transparent px-3 pb-1 pt-3 text-[12.5px] leading-relaxed text-ink placeholder:text-faint focus:outline-none disabled:opacity-60"
                   />
-                  {/* Attach a reference image for the change — the model conditions on it, like attaching in chat. */}
-                  <div className="flex items-center gap-2">
-                    <label className={`btn-secondary btn-sm cursor-pointer ${regenerating || busyUpload ? 'pointer-events-none opacity-50' : ''}`}>
+                  <div className="flex items-center gap-2 p-2">
+                    {/* Attach a reference image — the model conditions on it, like attaching in chat. */}
+                    <label
+                      title="Attach a reference image to guide the regeneration"
+                      className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-accent-soft px-2.5 py-1.5 text-[11px] font-600 text-accent-hover transition-colors hover:bg-subtle-strong ${regenerating || busyUpload ? 'pointer-events-none opacity-50' : ''}`}
+                    >
                       <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" disabled={regenerating || busyUpload !== false}
                         onChange={async (e) => { const f = e.target.files?.[0]; e.currentTarget.value = ''; if (!f) return; setBusyUpload('ref'); const k = await uploadImage(f); setBusyUpload(false); if (k) setRefKey(k) }} />
-                      {busyUpload === 'ref' ? 'Uploading…' : (<><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" /></svg>Attach reference</>)}
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21" /><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="9" cy="9" r="1.5" /></svg>
+                      {busyUpload === 'ref' ? 'Uploading…' : refKey ? 'Reference ✓' : 'Reference'}
                     </label>
-                    {refKey && <span className="flex items-center gap-1 text-[11px] text-positive">reference attached<button type="button" onClick={() => setRefKey(null)} className="text-faint hover:text-ink" aria-label="Remove reference">✕</button></span>}
+                    {refKey && (
+                      <button type="button" onClick={() => setRefKey(null)} className="text-[11px] text-faint hover:text-ink" aria-label="Remove reference">✕</button>
+                    )}
+                    <div className="flex-1" />
+                    {/* Send. With nothing typed and nothing attached this re-rolls a close variation of the
+                        current image — the plain "Reshoot" the button used to be. */}
+                    <button
+                      type="button"
+                      onClick={() => { if (changeText.trim() || refKey) { runChange() } else if (!regenerating) { onReshoot(scene.idx, { mode: 'vary' }) } }}
+                      disabled={regenerating || fbLoading}
+                      className="btn-primary btn-sm rounded-lg px-3 py-[7px] text-xs font-700 active:scale-[.98] disabled:cursor-wait disabled:opacity-50"
+                      title={changeText.trim() || refKey ? 'Apply this change' : 'Re-roll a close variation of this image'}
+                    >
+                      {fbLoading ? (<><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />Reading your reference…</>)
+                        : regenerating ? (<><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />Reshooting…</>)
+                          : (<><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M8 16H3v5" /></svg>Regenerate</>)}
+                    </button>
                   </div>
-                  <button type="button" onClick={runChange} disabled={regenerating || fbLoading || (!changeText.trim() && !refKey)} className="btn-secondary btn-sm w-full active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-50">
-                    {fbLoading ? (<><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />Reading your reference…</>) : regenerating ? (<><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />Applying…</>) : (refKey ? 'Use reference…' : 'Apply change')}
-                  </button>
                 </div>
 
-                {/* Upload your own image to use directly AS this scene's image (no generation). */}
-                <div className="flex flex-col gap-1 border-t border-border pt-3">
-                  <label className={`btn-ghost btn-sm cursor-pointer ${regenerating || busyUpload ? 'pointer-events-none opacity-50' : ''}`}>
+                {/* The two whole-shot moves: re-imagine it, or hand over your own picture. */}
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => { if (!regenerating) onReshoot(scene.idx, { mode: 'fresh' }) }} disabled={regenerating}
+                    title="Re-imagine this shot from scratch (a new composition)"
+                    className="btn-secondary btn-sm flex-1 rounded-[10px] py-2.5 active:scale-[.98] disabled:cursor-wait disabled:opacity-50">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3z" /></svg>
+                    Fresh take
+                  </button>
+                  <label
+                    title="Use your own picture as this scene’s image — no generation"
+                    className={`btn-secondary btn-sm flex-1 cursor-pointer rounded-[10px] py-2.5 ${regenerating || busyUpload ? 'pointer-events-none opacity-50' : ''}`}
+                  >
                     <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" disabled={regenerating || busyUpload !== false}
                       onChange={async (e) => {
                         const f = e.target.files?.[0]; e.currentTarget.value = ''; if (!f) return
                         setBusyUpload('photo'); const k = await uploadImage(f); setBusyUpload(false); if (k) onUploadImage(scene.idx, k)
                       }} />
-                    {busyUpload === 'photo' ? 'Uploading…' : (<><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="M17 8l-5-5-5 5" /><path d="M12 3v12" /></svg>Upload image for this scene</>)}
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" /></svg>
+                    {busyUpload === 'photo' ? 'Uploading…' : 'Replace'}
                   </label>
-                  <span className="text-[11px] leading-relaxed text-faint">Use your own picture as this scene’s image — no generation.</span>
                 </div>
+                <p className="text-[11px] leading-relaxed text-faint">
+                  Regenerate keeps this shot and changes what you describe. Fresh take re-imagines it from scratch.
+                </p>
                 {uploadErr && <p className="text-[11px] text-negative">{uploadErr}</p>}
               </div>
 
-              {/* Format — two selectable rows. The Video row expands IN PLACE to reveal its preview. */}
+              {/* MOTION — two cards, side by side: what this scene IS at render. The Motion card expands
+                  in place for the movement itself (described in words) and an optional preview. */}
               <div className="flex flex-col gap-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">Motion · owns how it moves</p>
+                <p className="text-xs font-600 text-ink">Motion</p>
 
-                {/* Still image */}
-                <button
-                  type="button"
-                  disabled={animating}
-                  aria-pressed={!isVideoType}
-                  onClick={() => onSetSceneType(scene.idx, 'static')}
-                  className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left transition-colors disabled:cursor-wait ${!isVideoType ? 'border-accent bg-accent-soft' : 'border-border bg-surface hover:border-border-strong'}`}
-                >
-                  <span className="flex items-center gap-2 text-xs font-semibold text-ink">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="text-info" aria-hidden><rect x="3" y="3" width="18" height="18" rx="2.5" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="m21 15-5-5L5 21" /></svg>
-                    Still image
-                  </span>
-                  <span className="text-[11px] font-semibold text-faint">Free</span>
-                </button>
+                <div className="flex gap-2">
+                  {/* Still */}
+                  <button
+                    type="button"
+                    disabled={animating}
+                    aria-pressed={!isVideoType}
+                    onClick={() => onSetSceneType(scene.idx, 'static')}
+                    className={`flex flex-1 items-center gap-2.5 rounded-[11px] border px-3 py-2.5 text-left transition-colors disabled:cursor-wait ${!isVideoType ? 'gradient-border' : 'border-border-mid bg-surface hover:border-accent-ring'}`}
+                  >
+                    <span className={`inline-flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-lg ${!isVideoType ? 'bg-brand-3 text-white' : 'bg-subtle-strong text-muted'}`}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="9" cy="9" r="1.5" /><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21" /></svg>
+                    </span>
+                    <span className="min-w-0">
+                      <span className={`block text-xs ${!isVideoType ? 'font-700' : 'font-600'} text-ink`}>Still</span>
+                      <span className="block text-2xs text-faint">Single frame · free</span>
+                    </span>
+                  </button>
 
-                {/* Video — expands in place when chosen */}
-                <div className={`overflow-hidden rounded-xl border transition-colors ${isVideoType ? 'border-accent bg-accent-soft' : 'border-border bg-surface hover:border-border-strong'}`}>
+                  {/* Motion — selecting it opens the panel below. */}
                   <button
                     type="button"
                     disabled={animating}
                     aria-pressed={isVideoType}
                     onClick={() => { if (!isVideoType) onSetSceneType(scene.idx, 'video') }}
-                    className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left transition-colors disabled:cursor-wait"
+                    className={`flex flex-1 items-center gap-2.5 rounded-[11px] border px-3 py-2.5 text-left transition-colors disabled:cursor-wait ${isVideoType ? 'gradient-border' : 'border-border-mid bg-surface hover:border-accent-ring'}`}
                   >
-                    <span className="flex items-center gap-2 text-xs font-semibold text-ink">
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="text-positive" aria-hidden><rect x="2" y="6" width="13" height="12" rx="2" /><path d="m15 11 6-3.5v9L15 13" /></svg>
-                      Video
+                    <span className={`inline-flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-lg ${isVideoType ? 'bg-pair-purple-pink text-white' : 'bg-subtle-strong text-muted'}`}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="m22 8-6 4 6 4V8z" /><rect x="2" y="6" width="14" height="12" rx="2" /></svg>
                     </span>
-                    <span className={`text-[11px] font-semibold ${isVideoType ? 'text-accent' : 'text-faint'}`}>~{previewCost}</span>
+                    <span className="min-w-0">
+                      <span className={`block text-xs ${isVideoType ? 'font-700' : 'font-600'} text-ink`}>Motion</span>
+                      <span className={`block text-2xs ${isVideoType ? 'text-accent' : 'text-faint'}`}>Animated clip · ~{previewCost}</span>
+                    </span>
                   </button>
-                  {isVideoType && (
-                    <div className="flex flex-col gap-3 border-t border-accent/20 px-3 py-3">
-                      {/* Describe the motion — an LLM turns it into the animation (which subject moves + camera
-                          move). The movement analog of the Regenerate field below; clears the old clip so a
-                          Preview/render re-rolls with the new motion. Leave blank to keep the auto motion. */}
-                      <div className="flex flex-col gap-1.5">
-                        <textarea
-                          value={motionText}
-                          onChange={(e) => setMotionText(e.target.value)}
-                          placeholder="Describe the motion — e.g. the figure to her right slowly grins at her as she freezes"
-                          className="input h-16 resize-none text-xs"
-                          disabled={loading === `motion-${scene.idx}`}
-                        />
-                        <button
-                          type="button"
-                          disabled={loading === `motion-${scene.idx}` || !motionText.trim()}
-                          onClick={async () => { const ok = await onSuggestMotion(scene.idx, motionText.trim()); if (ok) setMotionText('') }}
-                          className="btn-secondary btn-sm w-full active:scale-[.98] disabled:opacity-50"
-                        >
-                          {loading === `motion-${scene.idx}` ? 'Setting motion…' : 'Set motion'}
-                        </button>
-                      </div>
-                      {/* Preview — optional; the scene becomes video at render either way. */}
-                      {variations.length === 0 ? (
-                        <div className="flex flex-col gap-1">
-                          <button type="button" onClick={() => onPreview(scene.idx)} disabled={animating} className="btn-secondary btn-sm w-full active:scale-[.98] disabled:cursor-wait">
-                            {animating ? (<><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />Animating…</>) : (<><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M7 5v14l11-7L7 5Z" /></svg>See it move · ~{previewCost}</>)}
-                          </button>
-                          <span className="text-[11px] leading-relaxed text-faint">This scene moves in your final video either way — preview now to see it first.</span>
-                        </div>
-                      ) : (
-                        <p className="flex items-center gap-1.5 text-[11px] text-muted">
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="text-positive" aria-hidden><path d="M20 6 9 17l-5-5" /></svg>
-                          Ready — click the scene to watch it move.
-                        </p>
-                      )}
-                    </div>
-                  )}
                 </div>
+
+                {isVideoType && (
+                  <div className="mt-1 flex flex-col gap-3 rounded-xl border border-accent/25 bg-accent-soft/50 p-3">
+                    {/* Describe the motion — an LLM turns it into the animation (which subject moves + camera
+                        move). The movement analog of the image composer above; clears the old clip so a
+                        Preview/render re-rolls with the new motion. Leave blank to keep the auto motion. */}
+                    <div className="flex flex-col gap-1.5">
+                      <textarea
+                        value={motionText}
+                        onChange={(e) => setMotionText(e.target.value)}
+                        placeholder="Describe the motion — e.g. the figure to her right slowly grins at her as she freezes"
+                        className="input h-16 resize-none text-xs"
+                        disabled={loading === `motion-${scene.idx}`}
+                      />
+                      <button
+                        type="button"
+                        disabled={loading === `motion-${scene.idx}` || !motionText.trim()}
+                        onClick={async () => { const ok = await onSuggestMotion(scene.idx, motionText.trim()); if (ok) setMotionText('') }}
+                        className="btn-secondary btn-sm w-full active:scale-[.98] disabled:opacity-50"
+                      >
+                        {loading === `motion-${scene.idx}` ? 'Setting motion…' : 'Set motion'}
+                      </button>
+                    </div>
+                    {/* Preview — optional; the scene becomes video at render either way. */}
+                    {variations.length === 0 ? (
+                      <div className="flex flex-col gap-1">
+                        <button type="button" onClick={() => onPreview(scene.idx)} disabled={animating} className="btn-secondary btn-sm w-full active:scale-[.98] disabled:cursor-wait">
+                          {animating ? (<><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />Animating…</>) : (<><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M7 5v14l11-7L7 5Z" /></svg>See it move · ~{previewCost}</>)}
+                        </button>
+                        <span className="text-[11px] leading-relaxed text-faint">This scene moves in your final video either way — preview now to see it first.</span>
+                      </div>
+                    ) : (
+                      <p className="flex items-center gap-1.5 text-[11px] text-muted">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="text-positive" aria-hidden><path d="M20 6 9 17l-5-5" /></svg>
+                        Ready — it’s moving on the stage.
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             </>
           )
@@ -2214,12 +1957,10 @@ function SceneInspector({
             </ul>
           )}
         </div>
-        </div>
-      </div>
 
-      {/* AI-grounded feedback — how to use the attached reference. Portaled to <body> (same reason as the
-          lightbox below: the rail's transform would otherwise trap this `fixed` overlay). Shown only when a
-          reference is attached AND the vision model returned options. */}
+      {/* AI-grounded feedback — how to use the attached reference. Portaled to <body> so a transformed
+          ancestor can't trap this `fixed` overlay. Shown only when a reference is attached AND the vision
+          model returned options. */}
       {fbOpen && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-ink/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" onClick={() => setFbOpen(false)}>
           <div className="card animate-fade-in w-full max-w-md p-5 text-left" onClick={(e) => e.stopPropagation()}>
@@ -2251,105 +1992,6 @@ function SceneInspector({
         </div>,
         document.body,
       )}
-
-      {/* Large preview lightbox — portaled to <body> so its `fixed` overlay isn't trapped by the collapsing
-          rail's translate transform (a transformed ancestor would become its containing block). */}
-      {showFull && imgSrc && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/70 p-4 backdrop-blur-sm" onClick={() => setShowFull(false)}>
-          <div className="relative h-[88vh] max-w-[94vw] overflow-hidden rounded-xl bg-ink shadow-lg" style={{ aspectRatio: lightboxAspect ?? '9 / 16' }} onClick={(e) => e.stopPropagation()}>
-            {/* Loading spinner — until the media reports it's ready */}
-            {!fullLoaded && (
-              <div className="absolute inset-0 z-10 flex items-center justify-center" aria-hidden>
-                <span className="h-7 w-7 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-              </div>
-            )}
-            <ZoomPan>
-              {showVideo ? (
-                <video
-                  src={`/api/asset?key=${encodeURIComponent(videoKey!)}`}
-                  autoPlay muted loop playsInline
-                  onLoadedData={(e) => { e.currentTarget.muted = true; void e.currentTarget.play().catch(() => {}); setFullLoaded(true) }}
-                  onLoadedMetadata={(e) => { if (e.currentTarget.videoWidth) setLightboxAspect(`${e.currentTarget.videoWidth} / ${e.currentTarget.videoHeight}`) }}
-                  // Force muted (React's `muted` attr is unreliable → blocks autoplay) and kick off play().
-                  ref={(el) => { if (el) { el.muted = true; void el.play?.().catch(() => {}); if (el.readyState >= 2) { setFullLoaded(true); if (el.videoWidth) setLightboxAspect(`${el.videoWidth} / ${el.videoHeight}`) } } }}
-                  className="pointer-events-none h-full w-full select-none object-contain transition-opacity duration-200"
-                  style={{ opacity: fullLoaded ? 1 : 0 }}
-                />
-              ) : (
-                <img
-                  src={imgSrc}
-                  alt={`Scene ${scene.idx}`}
-                  draggable={false}
-                  onLoad={(e) => { setFullLoaded(true); if (e.currentTarget.naturalWidth) setLightboxAspect(`${e.currentTarget.naturalWidth} / ${e.currentTarget.naturalHeight}`) }}
-                  ref={(el) => { if (el?.complete && el.naturalWidth > 0) { setFullLoaded(true); setLightboxAspect(`${el.naturalWidth} / ${el.naturalHeight}`) } }}
-                  className="pointer-events-none h-full w-full select-none object-contain transition-opacity duration-200"
-                  style={{ opacity: fullLoaded ? 1 : 0 }}
-                />
-              )}
-            </ZoomPan>
-            <button
-              type="button"
-              onClick={() => setShowFull(false)}
-              className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-full bg-ink/55 text-white backdrop-blur transition-colors hover:bg-ink/75"
-              aria-label="Close preview"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><path d="M18 6 6 18M6 6l12 12" /></svg>
-            </button>
-          </div>
-        </div>,
-        document.body,
-      )}
-    </div>
-  )
-}
-
-// Zoom + pan wrapper for the preview lightbox: scroll wheel or ± buttons to zoom, drag to pan when
-// zoomed, double-click to toggle. Resets to fit when zoomed back to 1×.
-function ZoomPan({ children }: { children: React.ReactNode }) {
-  const [scale, setScale] = useState(1)
-  const [tx, setTx] = useState(0)
-  const [ty, setTy] = useState(0)
-  const [dragging, setDragging] = useState(false)
-  const drag = useRef<{ x: number; y: number; tx: number; ty: number } | null>(null)
-
-  const clamp = (s: number) => Math.min(5, Math.max(1, Math.round(s * 100) / 100))
-  const setZoom = (s: number) => {
-    const ns = clamp(s)
-    setScale(ns)
-    if (ns === 1) { setTx(0); setTy(0) }
-  }
-
-  return (
-    <div
-      className="relative h-full w-full touch-none select-none overflow-hidden"
-      style={{ cursor: scale > 1 ? (dragging ? 'grabbing' : 'grab') : 'zoom-in' }}
-      onWheel={(e) => { setZoom(scale - e.deltaY * 0.003) }}
-      onDoubleClick={() => setZoom(scale > 1 ? 1 : 2.5)}
-      onPointerDown={(e) => { if (scale === 1) return; drag.current = { x: e.clientX, y: e.clientY, tx, ty }; setDragging(true); e.currentTarget.setPointerCapture(e.pointerId) }}
-      onPointerMove={(e) => { if (!drag.current) return; setTx(drag.current.tx + (e.clientX - drag.current.x)); setTy(drag.current.ty + (e.clientY - drag.current.y)) }}
-      onPointerUp={() => { drag.current = null; setDragging(false) }}
-      onPointerCancel={() => { drag.current = null; setDragging(false) }}
-    >
-      <div
-        className="h-full w-full"
-        style={{ transform: `translate(${tx}px, ${ty}px) scale(${scale})`, transition: dragging ? 'none' : 'transform 0.12s ease-out' }}
-      >
-        {children}
-      </div>
-      {/* Zoom controls — bottom center; stop propagation so clicks don't start a pan or close the modal */}
-      <div
-        className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-0.5 rounded-full bg-ink/55 p-0.5 text-white backdrop-blur"
-        onPointerDown={(e) => e.stopPropagation()}
-        onDoubleClick={(e) => e.stopPropagation()}
-      >
-        <button type="button" onClick={() => setZoom(scale - 0.5)} disabled={scale <= 1} className="inline-flex h-7 w-7 items-center justify-center rounded-full hover:bg-white/15 disabled:opacity-40" aria-label="Zoom out">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><path d="M5 12h14" /></svg>
-        </button>
-        <button type="button" onClick={() => setZoom(1)} className="min-w-[3rem] rounded-full px-2 text-xs font-medium tabular-nums hover:bg-white/15" aria-label="Reset zoom">{Math.round(scale * 100)}%</button>
-        <button type="button" onClick={() => setZoom(scale + 0.5)} disabled={scale >= 5} className="inline-flex h-7 w-7 items-center justify-center rounded-full hover:bg-white/15 disabled:opacity-40" aria-label="Zoom in">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><path d="M12 5v14M5 12h14" /></svg>
-        </button>
-      </div>
     </div>
   )
 }

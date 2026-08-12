@@ -1,8 +1,15 @@
 'use client'
 import { useState } from 'react'
+import { usePathname } from 'next/navigation'
 import { Avatar, Sidebar } from './Sidebar'
 import { ToastProvider } from '@/components/Toast'
 import { RenderAlertWatcher } from '@/components/RenderAlertWatcher'
+
+// Surfaces that take the WHOLE window: no sidebar, no mobile bar, no page scroll. The storyboard is a
+// screening room — a nav rail beside it competes with the reel for the eye, and every pixel the sidebar
+// takes comes off the frame. These screens carry their own way out (a back chevron in their header).
+// The story studio is the obvious next candidate if this reads well.
+const IMMERSIVE = [/^\/storyboard\//]
 
 export function Shell({
   children,
@@ -16,6 +23,21 @@ export function Shell({
   userImage?: string | null | undefined
 }) {
   const [open, setOpen] = useState(false)
+  const pathname = usePathname()
+  const immersive = IMMERSIVE.some((r) => r.test(pathname ?? ''))
+
+  // Full-bleed: the surface owns the window. Toasts and the render alert stay — they're app-wide.
+  if (immersive) {
+    return (
+      <ToastProvider>
+        <RenderAlertWatcher />
+        {/* overflow-hidden, not auto: an immersive screen manages its own scrolling regions and the page
+            itself must never scroll (no gutter to reserve either). Still a <main> — dropping the sidebar
+            shouldn't cost the page its landmark. */}
+        <main className="h-screen overflow-hidden bg-bg">{children}</main>
+      </ToastProvider>
+    )
+  }
 
   return (
     <ToastProvider>

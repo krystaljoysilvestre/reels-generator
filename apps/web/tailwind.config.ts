@@ -69,6 +69,15 @@ export default {
           dock: '#0F0B18',          // filmstrip dock under the stage
           seam: '#241B36',          // hairline on the dock (top edge, cluster divider)
           frame: '#2B2340',          // resting border of a filmstrip frame
+          // Timeline + render-ledger tones (Storyboard v3). The dock needs mid-greys that the
+          // ink/body/muted/faint ladder doesn't cover: a ruler tick and a track label are quieter than
+          // body copy but must stay legible against #0F0B18.
+          rule: '#5E5773',          // ruler ticks, and the "/ total" half of a transport readout
+          gutter: '#7C7490',        // track gutter labels (VIDEO / VO / Mus), dock micro-labels
+          lilac: '#B9AEDD',         // a labelled value on the dock (voice track, step notes)
+          rose: '#E0A9C6',          // the music track's label (pink side of the mix)
+          live: '#C77DFF',          // the render ledger's running step (pulse dot, "working…")
+          pending: '#635C77',       // a step the render hasn't reached yet
           ink: '#FFFFFF',
           body: '#B8B0CC',
           muted: '#948CAB',

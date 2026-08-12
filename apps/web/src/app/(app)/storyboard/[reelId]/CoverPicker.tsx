@@ -38,11 +38,15 @@ export function CoverPicker({
   cover,
   frames,
   vertical,
+  // The trigger sits on a light bar in some places and on the dark finished-reel screen in others, so the
+  // caller picks its skin (`.btn-dark` there). The modal itself is always a light card.
+  triggerClass = 'btn-secondary',
 }: {
   reelId: string
   cover: CoverSelection | null
   frames: CoverFrame[]
   vertical: boolean
+  triggerClass?: string
 }) {
   const { toast } = useToast()
   const router = useRouter()
@@ -81,7 +85,7 @@ export function CoverPicker({
 
   return (
     <>
-      <button onClick={() => setOpen(true)} className="btn-secondary" title="Pick which frame your cover uses">
+      <button onClick={() => setOpen(true)} className={triggerClass} title="Pick which frame your cover uses">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
           <rect x="3" y="3" width="18" height="18" rx="2" />
           <circle cx="8.5" cy="8.5" r="1.5" />

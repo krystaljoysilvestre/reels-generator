@@ -97,6 +97,13 @@
     @apply btn text-muted hover:bg-accent-soft hover:text-accent;
   }
 
+  /* Dark-world secondary — the twin of `.btn-secondary` for a control sitting ON a night surface (the
+     finished-reel screen, the render ledger). A white card button there reads as a hole in the room. */
+  .btn-dark {
+    @apply btn rounded-[11px] border border-white/[0.16] bg-white/[0.06] px-4 py-2.5 text-[13px]
+           text-[#D8D2E6] hover:border-white/[0.26] hover:bg-white/[0.1];
+  }
+
   .btn-danger {
     @apply btn bg-surface text-danger border border-danger/30 shadow-xs
            hover:bg-danger-soft;
@@ -255,18 +262,6 @@
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
   }
 
-  /* Film sprocket holes — a repeating perforation band along a filmstrip's edge.
-     Recolour per surface with --sprocket (the dark dock uses the night seam). */
-  .sprockets {
-    background-image: repeating-linear-gradient(
-      90deg,
-      transparent 0 6px,
-      var(--sprocket, theme('colors.border-mid')) 6px 14px
-    );
-    background-size: auto 100%;
-    border-radius: 2px;
-  }
-
   /* Dock chip — a control resting on the dark filmstrip dock (voice, music, effects).
      The dark-world twin of a `.btn-secondary`: glass fill, hairline, white label. */
   .dock-chip {
@@ -275,12 +270,7 @@
            hover:border-white/20 hover:bg-white/[0.1] disabled:cursor-wait disabled:text-night-muted;
   }
 
-  /* The state word under a filmstrip frame (STILL / MOTION / RENDERING). */
-  .frame-state {
-    @apply mt-1.5 text-center font-mono text-[9px] font-700 uppercase tracking-[0.04em];
-  }
-
-  /* The filmstrip's own sideways scroller — a dark-world scrollbar, since the page never scrolls here. */
+  /* The timeline's own sideways scroller — a dark-world scrollbar, since the page never scrolls here. */
   .strip-scroll {
     scrollbar-width: thin;
     scrollbar-color: rgba(255, 255, 255, 0.18) transparent;

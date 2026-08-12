@@ -8,7 +8,9 @@ import { useToast } from '@/components/Toast'
 //  - PostCaptionButton: view/edit/copy the reel's post package (title/thumbnail text/hook/caption/hashtags)
 //  - LogPerformanceButton: paste platform numbers after posting (feeds what the channel learns from)
 
-export function PostCaptionButton({ reelId }: { reelId: string }) {
+// Each trigger takes its skin from the caller: these buttons sit on a light bar in some places and on the
+// dark finished-reel screen in others (`.btn-dark` there). The dialogs are always light cards.
+export function PostCaptionButton({ reelId, triggerClass = 'btn-secondary' }: { reelId: string; triggerClass?: string }) {
   const { toast } = useToast()
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -86,7 +88,7 @@ export function PostCaptionButton({ reelId }: { reelId: string }) {
 
   return (
     <>
-      <button onClick={() => setOpen(true)} className="btn-secondary" title="The title, caption, and hashtags for this post">
+      <button onClick={() => setOpen(true)} className={triggerClass} title="The title, caption, and hashtags for this post">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
           <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
         </svg>
@@ -165,7 +167,7 @@ export function PostCaptionButton({ reelId }: { reelId: string }) {
 
 // Uploads the approved reel to the connected YouTube channel (title/caption/AI label included).
 // Rendered only when the YOUTUBE_* keys are configured.
-export function PostToYouTubeButton({ reelId }: { reelId: string }) {
+export function PostToYouTubeButton({ reelId, triggerClass = 'btn-accent' }: { reelId: string; triggerClass?: string }) {
   const { toast } = useToast()
   const router = useRouter()
   const [posting, setPosting] = useState(false)
@@ -188,7 +190,7 @@ export function PostToYouTubeButton({ reelId }: { reelId: string }) {
   }
 
   return (
-    <button onClick={() => void post()} disabled={posting} className="btn-accent" title="Upload this reel to your YouTube channel">
+    <button onClick={() => void post()} disabled={posting} className={triggerClass} title="Upload this reel to your YouTube channel">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
         <path d="M23 12s0-3.85-.49-5.7a3 3 0 0 0-2.11-2.11C18.55 3.7 12 3.7 12 3.7s-6.55 0-8.4.49A3 3 0 0 0 1.49 6.3C1 8.15 1 12 1 12s0 3.85.49 5.7a3 3 0 0 0 2.11 2.11c1.85.49 8.4.49 8.4.49s6.55 0 8.4-.49a3 3 0 0 0 2.11-2.11C23 15.85 23 12 23 12ZM9.75 15.5v-7L15.5 12l-5.75 3.5Z" />
       </svg>
@@ -197,7 +199,7 @@ export function PostToYouTubeButton({ reelId }: { reelId: string }) {
   )
 }
 
-export function LogPerformanceButton({ reelId, initialViews }: { reelId: string; initialViews: number | null }) {
+export function LogPerformanceButton({ reelId, initialViews, triggerClass = 'btn-secondary' }: { reelId: string; initialViews: number | null; triggerClass?: string }) {
   const { toast } = useToast()
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -235,7 +237,7 @@ export function LogPerformanceButton({ reelId, initialViews }: { reelId: string;
 
   return (
     <>
-      <button onClick={() => setOpen(true)} className="btn-secondary" title="Paste this post's numbers so the channel learns what works">
+      <button onClick={() => setOpen(true)} className={triggerClass} title="Paste this post's numbers so the channel learns what works">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
           <path d="M3 3v18h18M7 14l4-4 4 4 5-6" />
         </svg>
