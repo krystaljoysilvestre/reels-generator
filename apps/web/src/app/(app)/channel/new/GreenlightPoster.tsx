@@ -22,6 +22,8 @@ export interface PosterProps {
   captionLabel: string
   /** Rendered preview of the chosen visual style, if the Visual step has one. */
   styleImageUrl: string | null
+  /** The uploaded avatar, if there is one — it replaces the initials tile. */
+  avatarUrl: string | null
 }
 
 export function GreenlightPoster({
@@ -38,6 +40,7 @@ export function GreenlightPoster({
   styleLabel,
   captionLabel,
   styleImageUrl,
+  avatarUrl,
 }: PosterProps) {
   // The crew line accumulates as each decision lands — voice, then music, then captions.
   const crew: string[] = []
@@ -94,8 +97,14 @@ export function GreenlightPoster({
 
             <div className="flex-1" />
 
-            <div className="mb-3 flex h-[52px] w-[52px] items-center justify-center rounded-lg bg-pair-purple-pink font-display text-[19px] font-800 text-white shadow-[0_10px_26px_-8px_rgba(0,0,0,0.5)]">
-              {initials}
+            {/* The same tile the picker shows on the left — an uploaded avatar takes it over the moment
+                it's chosen, so the poster wears the channel's real face and not its initials. */}
+            <div
+              className={`mb-3 flex h-[52px] w-[52px] items-center justify-center overflow-hidden rounded-lg font-display text-[19px] font-800 text-white shadow-[0_10px_26px_-8px_rgba(0,0,0,0.5)] ${
+                avatarUrl ? '' : 'bg-pair-purple-pink'
+              }`}
+            >
+              {avatarUrl ? <img src={avatarUrl} alt="" className="h-full w-full object-cover" /> : initials}
             </div>
             <h2 className="font-display text-[30px] font-900 leading-[0.98] -tracking-[0.02em] text-white">
               {name.trim() || 'Your channel'}

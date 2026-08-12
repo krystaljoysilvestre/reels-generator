@@ -2497,6 +2497,7 @@ export function NewChannelWizard({
           styleLabel={posterStyleLabel}
           captionLabel={posterCaptionLabel}
           styleImageUrl={posterStyleImageUrl}
+          avatarUrl={avatarPreview}
         />
       </div>
 
