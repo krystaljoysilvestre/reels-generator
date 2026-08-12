@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { NICHE_PRESETS, findPreset, trendingId } from './niche-presets'
 import { SUPPORTED_LANGUAGES } from './languages'
 import { Dropdown } from '@/components/Dropdown'
@@ -11,7 +11,7 @@ import { type CaptionPreset, type CaptionStyle, type TargetPlatform, type AudioM
 import { SOURCE_POLICY_CHOICES, mustAskSourcePolicy, type SourcePolicy } from '@reels/core'
 import { type GenreModule, asGenreModule } from '@reels/core/prompts/scenes.v1'
 import { stylesForGenre } from '@reels/core/prompts/story-styles.v1'
-import { GENRE_OPTIONS, genreLabel } from '@/lib/genre-labels'
+import { genreLabel } from '@/lib/genre-labels'
 import { getTrendingNiches, type TrendingNiche } from '@/lib/trending-niches'
 import { KendrixMark } from '@/components/Wordmark'
 import { GreenlightPoster } from './GreenlightPoster'
@@ -193,6 +193,7 @@ export function NewChannelWizard({
   initialTrendingId?: string | null
 } = {}) {
   const router = useRouter()
+  const pathname = usePathname() // so the sign-in banner returns them to the brief they were filling
   const [phase, setPhase] = useState<Phase>('describe')
 
   // ── describe inputs ──
@@ -226,6 +227,12 @@ export function NewChannelWizard({
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
   const [costCents, setCostCents] = useState(0)
+  // Losing the session mid-brief is the one failure the wizard must never absorb quietly. Several
+  // calls below are deliberately silent — a failed autosave or clarify round shouldn't shout — and a
+  // dead session hides inside that silence: the brief keeps accepting work that can no longer be
+  // saved, and the first visible sign is a later step failing for no stated reason. Auth failures
+  // therefore bypass the per-field error lines and raise one banner for the whole screen.
+  const [authNotice, setAuthNotice] = useState<'signed-out' | 'unavailable' | null>(null)
 
   // ── derived profile (generated + stored; not all shown at creation) ──
   const [tone, setTone] = useState<Tone>({ intensity: 5, warmth: 5, energy: 5, pacing: 5, humor: 3 })
@@ -276,8 +283,6 @@ export function NewChannelWizard({
   const [narrativeStyle, setNarrativeStyle] = useState('')
   const [narrativeVoice, setNarrativeVoice] = useState('')
   const [styleInfluence, setStyleInfluence] = useState<StyleInfluence>('medium')
-  // Step 2 states the derived style instead of asking for it; this opens the overrides.
-  const [styleOpen, setStyleOpen] = useState(false)
   const [tagline, setTagline] = useState('') // AI-derived one-line positioning (persisted on the channel)
   // Follow-up questions from the derive (dimensions the description left open). Answers append to the
   // niche text and re-derive. `clarifyHandledText` remembers WHICH niche text was already asked about —
@@ -320,12 +325,14 @@ export function NewChannelWizard({
   // wrote and a script they wrote are different things and both are worth keeping. `sampleScript` /
   // `sampleIsAi` below are derived from whichever mode is active; everything downstream reads those.
   const [aiSample, setAiSample] = useState('') // the example we wrote for them
+  const [aiSampleTitle, setAiSampleTitle] = useState('') // …and what we called it — the story has a name
   const [aiSampleEdited, setAiSampleEdited] = useState(false) // …once they touch it, it counts as theirs
   const [ownSample, setOwnSample] = useState('') // the script they wrote or pasted
-  // Extra references are PASTE-ONLY by design: they persist as reference stories (create/route.ts marks
+  // Extra references were PASTE-ONLY by design: they persist as reference stories (create/route.ts marks
   // every extra source:'user'), and a sample we wrote must never enter the reference pool — the Writer
-  // would then be learning its own output. The creator's scripts are the whole point of the extras.
-  const [extraSampleScripts, setExtraSampleScripts] = useState<string[]>([]) // optional additional references (max 2)
+  // would then be learning its own output. Step 2 no longer offers pasting more than one; the field
+  // stays so a draft saved while it did still carries the creator's scripts through to creation.
+  const [extraSampleScripts, setExtraSampleScripts] = useState<string[]>([]) // additional references (max 2)
   const [sampleMode, setSampleMode] = useState<'forme' | 'own'>('forme') // primary example: written for them vs. their own
   const [mainSteer, setMainSteer] = useState('') // optional idea that steers the next rewrite
   const [drafting, setDrafting] = useState(false) // an example is being written right now
@@ -336,10 +343,6 @@ export function NewChannelWizard({
   // Step 1 → step 2 HOLDS until the example is written, so step 2 never opens on a spinner or on a story
   // left over from the previous identity. The wait stays continuous — the step-1 button keeps narrating.
   const [preparingExample, setPreparingExample] = useState(false)
-  // An example WE wrote demonstrates one channel identity. When that identity moves — a new
-  // description/language (re-derive) or a different genre/style — the example is rewritten to match.
-  // Deferred through this flag so the rewrite reads the NEW identity, not the one being replaced.
-  const [pendingSampleRewrite, setPendingSampleRewrite] = useState(false)
 
   // The ACTIVE example — whichever mode the creator is in is the one the channel gets. Everything
   // downstream (create, the rewrite checks, the labels) reads these two and stays mode-agnostic.
@@ -449,6 +452,7 @@ export function NewChannelWizard({
         // so a resumed draft never loses its example.
         if (typeof d.aiSample === 'string') setAiSample(d.aiSample)
         else if (typeof d.sampleScript === 'string' && d.sampleMode !== 'own') setAiSample(d.sampleScript)
+        if (typeof d.aiSampleTitle === 'string') setAiSampleTitle(d.aiSampleTitle)
         if (typeof d.aiSampleEdited === 'boolean') setAiSampleEdited(d.aiSampleEdited)
         else if (typeof d.sampleIsAi === 'boolean') setAiSampleEdited(!d.sampleIsAi)
         if (typeof d.ownSample === 'string') setOwnSample(d.ownSample)
@@ -486,7 +490,7 @@ export function NewChannelWizard({
       phase, name, committedName, description, seededDescription, niche, languages, targetPlatforms, presetId,
       avatarKey, costCents, tone, style, region, era, locations, objects, vocab,
       voiceMode, selectedVoices, recommended, voiceSearchKeyword, editorialPrinciples, sourcePolicy, genreCategory, presentation, narrativeStyle, narrativeVoice, styleInfluence, tagline, derivedSig,
-      targetSeconds, captionStyle, sampleMode, aiSample, aiSampleEdited, ownSample, autoWroteSample, extraSampleScripts,
+      targetSeconds, captionStyle, sampleMode, aiSample, aiSampleTitle, aiSampleEdited, ownSample, autoWroteSample, extraSampleScripts,
       audioMood, musicChoice, selectedPresetIds, presetPickedManually, uploadedMusic,
       styleProposals, selectedStyleIdx, uploadedStyleIdx, stylePreviews: previewKeys,
     }
@@ -501,7 +505,7 @@ export function NewChannelWizard({
     } catch {
       /* storage full / unavailable — non-fatal */
     }
-  }, [hydrated, phase, name, committedName, description, seededDescription, niche, languages, targetPlatforms, presetId, avatarKey, costCents, tone, targetSeconds, style, region, era, locations, objects, vocab, voiceMode, selectedVoices, recommended, voiceSearchKeyword, editorialPrinciples, sourcePolicy, genreCategory, presentation, narrativeStyle, narrativeVoice, styleInfluence, tagline, derivedSig, captionStyle, sampleMode, aiSample, aiSampleEdited, ownSample, autoWroteSample, extraSampleScripts, audioMood, musicChoice, selectedPresetIds, presetPickedManually, uploadedMusic, styleProposals, selectedStyleIdx, uploadedStyleIdx, stylePreviews, draftChannelId])
+  }, [hydrated, phase, name, committedName, description, seededDescription, niche, languages, targetPlatforms, presetId, avatarKey, costCents, tone, targetSeconds, style, region, era, locations, objects, vocab, voiceMode, selectedVoices, recommended, voiceSearchKeyword, editorialPrinciples, sourcePolicy, genreCategory, presentation, narrativeStyle, narrativeVoice, styleInfluence, tagline, derivedSig, captionStyle, sampleMode, aiSample, aiSampleTitle, aiSampleEdited, ownSample, autoWroteSample, extraSampleScripts, audioMood, musicChoice, selectedPresetIds, presetPickedManually, uploadedMusic, styleProposals, selectedStyleIdx, uploadedStyleIdx, stylePreviews, draftChannelId])
 
   // ── Unsaved-progress guard ──────────────────────────────────────────────────
   // The draft autosaves, but leaving mid-flow still deserves a heads-up so the operator
@@ -577,6 +581,16 @@ export function NewChannelWizard({
     }
   }, [hydrated, trendingLoading, trending, initialPresetId, initialTrendingId])
 
+  // Records an auth-shaped failure from any response and reports whether one happened. 401 means the
+  // session is gone; 503 from the API gate means the session is fine but the account couldn't be read
+  // (a service problem, not the creator's). Neither is about the thing being fetched, and neither is
+  // actionable as a field-level error, so both raise the banner instead. Safe to call on any response.
+  function noteAuthFailure(res: Response): boolean {
+    if (res.status === 401) { setAuthNotice('signed-out'); return true }
+    if (res.status === 503) { setAuthNotice('unavailable'); return true }
+    return false
+  }
+
   // Requested an exit: prompt if there's progress, otherwise just go.
   function requestLeave(href: string) {
     if (hasProgress) setLeaveTo(href)
@@ -600,6 +614,12 @@ export function NewChannelWizard({
         setDraftChannelId(channelId)
         // Relink the localStorage autosave to this row before navigating away.
         try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...buildDraft(), draftChannelId: channelId })) } catch { /* noop */ }
+      } else if (noteAuthFailure(res)) {
+        // The draft didn't reach the server and won't until they're back — hold them on the page so
+        // the banner is read, rather than navigating away as if "Leave & save" had worked.
+        setSavingDraft(false)
+        setLeaveTo(null)
+        return
       }
     } catch {
       /* network error — the localStorage autosave still holds the draft, so nothing is lost */
@@ -640,7 +660,7 @@ export function NewChannelWizard({
         body: JSON.stringify({ nicheDescription: niche.trim(), language, toneConfig: tone, searchKeyword: voiceSearchKeyword || undefined }),
       })
       const json = await res.json()
-      if (!res.ok) throw new Error(json.error ?? 'Failed to recommend voices')
+      if (!res.ok) { noteAuthFailure(res); throw new Error(json.error ?? 'Failed to recommend voices') }
       const recs = (json.voices ?? []) as Array<VoiceOption & { reason: string }>
       setRecommended(recs)
       // Pre-select the top pick so the step is ready.
@@ -677,6 +697,7 @@ export function NewChannelWizard({
       .then(async (res) => {
         const json = await res.json()
         if (res.ok) setAllVoices(json.voices ?? [])
+        else noteAuthFailure(res)
       })
       .finally(() => setVoicesLoading(false))
   }, [showAllVoices, allVoices.length, voicesLoading, language])
@@ -773,7 +794,7 @@ export function NewChannelWizard({
       fd.append('toneConfig', JSON.stringify(tone))
       const res = await fetch('/api/channel/style-ref', { method: 'POST', body: fd })
       const json = await res.json()
-      if (!res.ok) throw new Error(json.error ?? 'Couldn’t read the reference image')
+      if (!res.ok) { noteAuthFailure(res); throw new Error(json.error ?? 'Couldn’t read the reference image') }
       const entry: StyleOption = {
         label: json.label || 'Your reference',
         description: json.description || 'Style from your uploaded reference.',
@@ -834,10 +855,10 @@ export function NewChannelWizard({
   const derivedFresh = hasDerived && derivedSig === `${niche.trim()}|${language}|${platformSig}`
   // Must pick a mode; single needs a chosen voice, per-story defers to render.
   const canLeaveVoice = voiceMode === 'per_story' || (voiceMode === 'single' && selectedVoices.length > 0)
-  // An example being rewritten is mid-flight: every step after 2 is a pre-filled confirmation, so a
-  // fast click-through can reach Create before it lands and persist the PREVIOUS genre's story as the
-  // channel's example. Hold Create until the writing settles.
-  const sampleSettling = drafting || pendingSampleRewrite
+  // An example being written is mid-flight: every step after 2 is a pre-filled confirmation, so a fast
+  // click-through can reach Create before it lands and persist the wrong text as the channel's example.
+  // Hold Create until the writing settles.
+  const sampleSettling = drafting
   const canCreate = canLeaveVoice && !sampleSettling
 
   // The track POOL to persist (preset/upload only; 'ai' generates per reel, 'none' is silent).
@@ -903,14 +924,6 @@ export function NewChannelWizard({
     setSeededDescription(line)
   }
 
-  // Called whenever the channel's identity changes under a written example. A script the CREATOR
-  // wrote is never touched: it's their voice, the one input we can't regenerate, and it stays what
-  // they want the channel to sound like. Ours is only a demo of the identity, so it follows it.
-  function refreshSampleForIdentityChange() {
-    if (!sampleIsAi || sampleScript.trim() === '') return
-    setPendingSampleRewrite(true)
-  }
-
   // Does the example need writing before step 2 is worth showing?
   function exampleNeedsWriting(): boolean {
     if (sampleMode === 'own') return false            // they're writing it themselves
@@ -965,7 +978,7 @@ export function NewChannelWizard({
         body: JSON.stringify({ nicheDescription: text, language }),
         signal,
       })
-      if (!res.ok) return null
+      if (!res.ok) { noteAuthFailure(res); return null }
       const json = await res.json()
       setCostCents((c) => c + (json.costCents ?? 0))
       return Array.isArray(json.questions)
@@ -1125,7 +1138,7 @@ export function NewChannelWizard({
       fd.append('file', file)
       const res = await fetch('/api/channel/avatar', { method: 'POST', body: fd })
       const json = await res.json()
-      if (!res.ok) throw new Error(json.error ?? 'Avatar upload failed')
+      if (!res.ok) { noteAuthFailure(res); throw new Error(json.error ?? 'Avatar upload failed') }
       setAvatarKey(json.key)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Avatar upload failed')
@@ -1164,6 +1177,7 @@ export function NewChannelWizard({
       })
       const json = await res.json()
       if (!res.ok) {
+        noteAuthFailure(res)
         // Surface the specific field that failed validation instead of a bare "Invalid input".
         const fieldErrors = json.issues?.fieldErrors as Record<string, string[]> | undefined
         const detail = fieldErrors && Object.entries(fieldErrors).map(([f, msgs]) => `${f}: ${msgs?.[0]}`).join('; ')
@@ -1279,6 +1293,7 @@ export function NewChannelWizard({
       })
       const json = await res.json()
       if (!res.ok) {
+        noteAuthFailure(res)
         // Surface the specific field that failed (e.g. a too-long steer) instead of a bare "Invalid input".
         const fieldErrors = json.issues?.fieldErrors as Record<string, string[]> | undefined
         const detail = fieldErrors && Object.entries(fieldErrors).map(([f, msgs]) => `${f}: ${msgs?.[0]}`).join('; ')
@@ -1286,6 +1301,7 @@ export function NewChannelWizard({
       }
       const s = json.sample as { title: string; hook: string; script: string }
       setAiSample(s.script?.trim() || s.hook || '')
+      setAiSampleTitle(s.title?.trim() ?? '')
       setAiSampleEdited(false)
       setCostCents((c) => c + (json.costCents ?? 0))
     } catch (e) {
@@ -1294,18 +1310,6 @@ export function NewChannelWizard({
       setDrafting(false)
     }
   }
-
-  // Rewrites the example after an identity change. Runs from an effect rather than inline in the
-  // change handlers because handleSampleDraft reads the genre/style/description off state — firing it
-  // in the same tick would write an example for the identity we just replaced. A failed rewrite
-  // leaves the previous example in place (surfaced by sampleError), never an empty field.
-  // Waiting on any in-flight write also COALESCES: the flag is a boolean, so ten fast genre toggles
-  // collapse into the one call in flight plus a single final rewrite, instead of ten paid calls.
-  useEffect(() => {
-    if (!pendingSampleRewrite || drafting) return
-    setPendingSampleRewrite(false)
-    void handleSampleDraft(mainSteer)
-  }, [pendingSampleRewrite, drafting])
 
   // Writes the example while the creator is STILL ON STEP 1, then advances — that ordering is the whole
   // point: step 2 opens on a finished story, never on a spinner or the previous genre's story. Runs from
@@ -1336,7 +1340,7 @@ export function NewChannelWizard({
         fd.append('file', file)
         const res = await fetch('/api/channel/music-upload', { method: 'POST', body: fd })
         const json = await res.json()
-        if (!res.ok) throw new Error(json.error ?? 'Upload failed')
+        if (!res.ok) { noteAuthFailure(res); throw new Error(json.error ?? 'Upload failed') }
         setUploadedMusic((prev) => [...prev, { key: json.key, name: file.name }])
       }
     } catch (e) {
@@ -1410,7 +1414,7 @@ export function NewChannelWizard({
         }),
       })
       const json = await res.json()
-      if (!res.ok) throw new Error(json.error ?? 'Create failed')
+      if (!res.ok) { noteAuthFailure(res); throw new Error(json.error ?? 'Create failed') }
       try { localStorage.removeItem(DRAFT_KEY) } catch { /* noop */ }
       // Land on the new channel, not the dashboard — the next beat is making the first reel.
       router.push(`/channel/${json.channelId}`)
@@ -1475,6 +1479,34 @@ export function NewChannelWizard({
           squeezing the poster or overflowing the page. */}
       <div className="min-w-0 flex-1 overflow-y-auto">
       <div className="mx-auto w-full max-w-[600px] p-5 sm:px-10 sm:pb-14 sm:pt-8">
+        {/* Sits above the field-level error line because it explains why that error happened, and
+            because nothing else on this screen will work until it's resolved. */}
+        {authNotice && (
+          <div className="mb-5 rounded-lg border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger">
+            {authNotice === 'signed-out' ? (
+              <>
+                <p className="font-medium">You’ve been signed out.</p>
+                <p className="mt-1 text-danger/85">
+                  Your brief is saved on this device — sign in again and it’ll be waiting.{' '}
+                  <a href={`/signin?callbackUrl=${encodeURIComponent(pathname)}`} className="font-medium underline underline-offset-2">
+                    Sign in
+                  </a>
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="font-medium">We can’t reach your account right now.</p>
+                <p className="mt-1 text-danger/85">
+                  Nothing is lost — your brief is saved on this device. Give it a moment, then try again.{' '}
+                  <button type="button" onClick={() => setAuthNotice(null)} className="font-medium underline underline-offset-2">
+                    Dismiss
+                  </button>
+                </p>
+              </>
+            )}
+          </div>
+        )}
+
         {error && (
           <div className="mb-5 rounded-lg border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger">
             {error}
@@ -1821,60 +1853,9 @@ export function NewChannelWizard({
           <div className="animate-fade-in flex flex-col gap-6">
             <Recap name={name} description={description} language={language} avatarPreview={avatarPreview} />
 
-            {/* The style is already chosen from the description — this states it rather than asking.
-                "Change" is the escape hatch for a bad read; the finer knobs live in Settings. */}
-            {genreCategory && (
-              <div className="card p-5">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <SectionLabel>Storytelling style</SectionLabel>
-                    <p className="mt-1.5 text-sm font-medium text-ink">
-                      {genreLabel(genreCategory)}
-                      {narrativeStyleLabel && <span className="text-muted"> · {narrativeStyleLabel}</span>}
-                    </p>
-                    <p className="mt-1 text-xs text-faint">
-                      Chosen from your description — every reel on this channel is written this way.
-                    </p>
-                  </div>
-                  {!styleOpen && (
-                    <button type="button" onClick={() => setStyleOpen(true)} className="btn-ghost btn-sm">
-                      Change
-                    </button>
-                  )}
-                </div>
-
-                {styleOpen && (
-                  <div className="mt-4 grid gap-3 border-t border-border pt-4 sm:grid-cols-2">
-                    <label className="flex flex-col gap-1.5 text-xs font-medium text-muted">
-                      Kind of story
-                      <Dropdown
-                        value={genreCategory}
-                        onChange={(v) => {
-                          setGenreCategory(v as GenreModule)
-                          setNarrativeStyle('') // styles are scoped to the genre — a switch resets to pure genre
-                          refreshSampleForIdentityChange() // the example below demonstrated the old genre
-                        }}
-                        options={GENRE_OPTIONS}
-                      />
-                    </label>
-                    {stylesForGenre(genreCategory).length > 0 && (
-                      <label className="flex flex-col gap-1.5 text-xs font-medium text-muted">
-                        Style
-                        <Dropdown
-                          value={narrativeStyle}
-                          onChange={(v) => { setNarrativeStyle(v); refreshSampleForIdentityChange() }}
-                          options={[{ value: '', label: 'Classic — no added style' }, ...stylesForGenre(genreCategory).map((s) => ({ value: s.id, label: s.label }))]}
-                        />
-                      </label>
-                    )}
-                    <p className="text-xs text-faint sm:col-span-2">
-                      Mixing genres? Pick the dominant one — your description carries the blend into every reel.
-                      Finer tuning lives in channel settings.
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
+            {/* NOT here on purpose: the storytelling style. It's still derived from the description and
+                still governs every reel — but this step shows the RESULT (the story we wrote, by name)
+                instead of the setting behind it. The genre/style dropdowns live in channel settings. */}
 
             <div className="card p-5">
               <SectionLabel>Your channel&apos;s voice</SectionLabel>
@@ -1906,9 +1887,9 @@ export function NewChannelWizard({
 
               {sampleMode === 'forme' ? (
                 <div className="mt-4">
-                  {/* While a write is pending or in flight the OLD example is never shown: it belongs to
-                      the genre/description that was just replaced, and a stale story reads as a wrong
-                      one. It stays in state, so a failed write falls back to it instead of an empty box. */}
+                  {/* While a write is in flight the OLD example is never shown: it belongs to the
+                      description that was just replaced, and a stale story reads as a wrong one. It
+                      stays in state, so a failed write falls back to it instead of an empty box. */}
                   {sampleSettling ? (
                     <div className="flex items-center gap-2 text-sm text-muted">
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="animate-spin" aria-hidden>
@@ -1929,11 +1910,21 @@ export function NewChannelWizard({
                             : 'Your example — edit it freely. Rewrite rebuilds this same story in your channel’s voice.'}
                       </p>
                       {sampleScript.trim() && (
-                        <textarea
-                          className="input mt-2 h-64 resize-none leading-relaxed"
-                          value={sampleScript}
-                          onChange={(e) => setActiveSample(e.target.value)}
-                        />
+                        <>
+                          {/* The story has a name — showing it makes this a piece of work they were
+                              handed, not a block of text. Display only: it's the title of THIS example,
+                              so a rewrite replaces it and their own edits leave it standing. */}
+                          {aiSampleTitle && (
+                            <p className="mt-3 font-display text-[17px] font-800 -tracking-[0.01em] text-ink">
+                              {aiSampleTitle}
+                            </p>
+                          )}
+                          <textarea
+                            className="input mt-2 h-64 resize-none leading-relaxed"
+                            value={sampleScript}
+                            onChange={(e) => setActiveSample(e.target.value)}
+                          />
+                        </>
                       )}
                       {/* One control. The idea line steers it; a script THEY wrote is rebuilt rather than
                           replaced, so a rough draft pasted here comes back told properly. */}
@@ -1966,43 +1957,9 @@ export function NewChannelWizard({
                 />
               )}
               {sampleError && <p className="mt-2 text-xs text-danger">{sampleError}</p>}
-
-              {/* More examples — few-shot is stronger with 2–3. Offered only once a first example exists.
-                  Paste-only on purpose: these persist as reference stories, and an example we wrote must
-                  never teach the Writer its own output. */}
-              {(sampleScript.trim() || extraSampleScripts.length > 0) && (
-              <div className="mt-5 border-t border-border pt-4">
-                <p className="text-xs text-faint">Got more scripts of your own? Each one sharpens the match — add up to two (optional).</p>
-                  {extraSampleScripts.map((s, i) => (
-                    <div key={i} className="mt-3">
-                      <div className="relative">
-                        <textarea
-                          className="input h-28 w-full resize-none pl-3 pr-11 leading-relaxed"
-                          value={s}
-                          onChange={(e) => setExtraSampleScripts((prev) => prev.map((v, j) => (j === i ? e.target.value : v)))}
-                          placeholder="Paste another script of yours"
-                        />
-                        <div className="absolute right-1.5 top-1.5 flex items-center gap-0.5">
-                          <button
-                            type="button"
-                            onClick={() => setExtraSampleScripts((prev) => prev.filter((_, j) => j !== i))}
-                            className="rounded-md p-1.5 text-faint transition-colors hover:bg-subtle hover:text-danger"
-                            title="Remove this example"
-                            aria-label="Remove this example"
-                          >
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M18 6 6 18M6 6l12 12" /></svg>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  {extraSampleScripts.length < 2 && (
-                    <button type="button" onClick={() => setExtraSampleScripts((prev) => [...prev, ''])} className="btn-ghost btn-sm mt-3">
-                      + Paste another script
-                    </button>
-                  )}
-              </div>
-              )}
+              {/* Step 2 asks for ONE example. More references are what the channel EARNS — spot-check
+                  approvals and performance promotions — so the setup no longer asks for a second and a
+                  third up front. */}
             </div>
 
             <div className="flex items-center justify-between gap-3 border-t border-border pt-5">
