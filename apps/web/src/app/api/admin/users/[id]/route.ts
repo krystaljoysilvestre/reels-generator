@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { eq } from 'drizzle-orm'
 import { getDb, users } from '@reels/db'
 import { requireApiAdmin, isUuid } from '@/lib/api-access'
+import { invalidateUserProfile } from '@/lib/user-profile'
 
 // Admin user management: change status (approve / suspend / reset to pending) and/or role.
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -24,5 +25,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   await getDb().update(users).set(patch).where(eq(users.id, id))
+  // Granting or revoking someone's access is the most security-relevant write in the app and there is
+  // no audit table yet, so at minimum it must be reconstructable from logs: actor, target, change.
+  console.log(`[audit] admin ${admin.id} updated user ${id}: ${JSON.stringify(patch)}`)
+  // role/status are read through a short-lived cache on every request (lib/user-profile); drop this
+  // user's entry so approving or suspending them lands on their very next request, not up to a TTL later.
+  invalidateUserProfile(id)
   return NextResponse.json({ ok: true })
 }

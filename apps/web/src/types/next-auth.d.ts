@@ -6,7 +6,9 @@ declare module 'next-auth' {
     user: {
       id: string
       role: string // 'admin' | 'tester'
-      status: string // 'pending' | 'active' | 'suspended'
+      // 'pending' | 'active' | 'suspended', plus 'unavailable' — not a stored value but the signal
+      // that the account row could not be read this request (see lib/user-profile).
+      status: string
     } & DefaultSession['user']
   }
   interface User {

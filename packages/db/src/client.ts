@@ -16,13 +16,21 @@ function createDb(url: string) {
 }
 
 // Singleton for app usage; tests create their own instance.
-let _db: ReturnType<typeof createDb> | undefined
+//
+// Pinned on globalThis rather than module scope, because module scope is NOT stable in Next.js dev:
+// every hot reload builds a fresh module registry, so a module-scoped cache mints a NEW pool per
+// recompile and orphans the previous one — each holding up to `max` connections open. Ten or so
+// reloads exhausts Postgres's 100-connection ceiling, and the failure does not read as "database
+// busy": auth's session callback reads this DB on every request, so a connection it cannot get
+// surfaces to the creator as a 401. globalThis survives the reload, so the pool is reused.
+const DB_KEY = '__reelsDb' as const
+const globalForDb = globalThis as typeof globalThis & { [DB_KEY]?: ReturnType<typeof createDb> }
 
 export function getDb() {
   const url = process.env['DATABASE_URL']
   if (!url) throw new Error('DATABASE_URL is not set')
-  _db ??= createDb(url)
-  return _db
+  globalForDb[DB_KEY] ??= createDb(url)
+  return globalForDb[DB_KEY]
 }
 
 export type Db = ReturnType<typeof createDb>

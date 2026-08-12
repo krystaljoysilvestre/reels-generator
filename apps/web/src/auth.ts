@@ -7,6 +7,7 @@ import { eq } from 'drizzle-orm'
 import bcrypt from 'bcryptjs'
 import { checkRateLimit } from '@reels/providers'
 import { consumeInviteForUser } from '@/lib/invite'
+import { ACCOUNT_UNAVAILABLE, getUserProfile, invalidateUserProfile } from '@/lib/user-profile'
 
 const db = getDb()
 
@@ -56,20 +57,31 @@ export const authConfig: NextAuthConfig = {
     },
     session: async ({ session, token }) => {
       const uid = token.uid as string | undefined
-      if (uid && session.user) {
-        session.user.id = uid
-        const row = await db
-          .select({ role: users.role, status: users.status, name: users.name, image: users.image })
-          .from(users)
-          .where(eq(users.id, uid))
-          .then((r) => r[0])
-        session.user.role = row?.role ?? 'tester'
-        session.user.status = row?.status ?? 'pending'
-        // Display name + avatar also come from the DB rather than the JWT, so the profile backfill
-        // below (or a changed Google photo) shows up on the next request instead of the next login.
-        if (row?.name) session.user.name = row.name
-        if (row?.image) session.user.image = row.image
+      if (!uid || !session.user) return session
+      session.user.id = uid
+      // role/status/name/image come from the users row, not the JWT, so an admin approving or
+      // suspending someone takes effect on their next request. lib/user-profile puts a short-lived
+      // cache in front of that read and — critically — never lets a failed read throw here: a
+      // throwing session callback is indistinguishable from "not signed in" to @auth/core, which is
+      // how a database out of connections used to surface as a silent logout.
+      const profile = await getUserProfile(uid)
+      if (profile === ACCOUNT_UNAVAILABLE) {
+        // Valid session, unreadable account. Say exactly that; the gates turn it into a 503.
+        session.user.role = 'tester'
+        session.user.status = ACCOUNT_UNAVAILABLE
+        return session
       }
+      if (profile === 'missing') {
+        session.user.role = 'tester'
+        session.user.status = 'pending'
+        return session
+      }
+      session.user.role = profile.role
+      session.user.status = profile.status
+      // Display name + avatar are read the same way, so the profile backfill below (or a changed
+      // Google photo) shows up on the next request instead of the next login.
+      if (profile.name) session.user.name = profile.name
+      if (profile.image) session.user.image = profile.image
       return session
     },
   },
@@ -77,7 +89,9 @@ export const authConfig: NextAuthConfig = {
     // A brand-new OAuth (Google) user is created here by the adapter with defaults (tester/pending).
     // If they arrived through a valid invite link, upgrade them to the invite's role + active.
     createUser: async ({ user }) => {
-      if (user?.id) await consumeInviteForUser(user.id)
+      if (!user?.id) return
+      await consumeInviteForUser(user.id)
+      invalidateUserProfile(user.id) // an invite can promote role + status; don't serve the pre-invite row
     },
     signIn: async ({ user, account, profile }) => {
       if (!user?.id) return
@@ -94,6 +108,7 @@ export const authConfig: NextAuthConfig = {
         if (image) patch.image = image
       }
       await db.update(users).set(patch).where(eq(users.id, user.id))
+      invalidateUserProfile(user.id) // name/image may have just changed; show them this request
     },
   },
 }

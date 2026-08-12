@@ -3,6 +3,7 @@ import { and, count, eq, inArray } from 'drizzle-orm'
 import { getDb, channels, reels, stories, getUserUsage, getGlobalSpendTodayCents } from '@reels/db'
 import { assertGlobalDailyBudget, GlobalBudgetExceededError, GLOBAL_DAILY_SPEND_CAP_CENTS, DEFAULT_USER_LIMITS, checkUserLimits, MAX_INFLIGHT_REELS_PER_USER, UNSHIPPED_REEL_STATUSES } from '@reels/core'
 import { getCurrentUser, type SessionUser } from '@/lib/auth'
+import { ACCOUNT_UNAVAILABLE } from '@/lib/user-profile'
 
 // API-route authorization. The page layer uses the redirect/notFound guards in `lib/access.ts`;
 // API routes can't redirect, so these mirror the same tenancy rule (admin sees all; a tester is
@@ -33,6 +34,13 @@ export function isUuid(v: unknown): v is string {
 export async function requireApiUser(): Promise<SessionUser | Denied> {
   const u = await getCurrentUser()
   if (!u) return deny(401, 'Unauthorized')
+  // Signed in, but the account row could not be read (see lib/user-profile). Report the outage as an
+  // outage: a 401 here would tell the creator their session ended and send them to sign in again,
+  // which neither describes nor fixes the problem — and is how a saturated connection pool used to
+  // present itself mid-flow.
+  if (u.status === ACCOUNT_UNAVAILABLE) {
+    return deny(503, 'We couldn’t reach your account just now. Give it a moment and try again.')
+  }
   if (u.status !== 'active') return deny(403, 'Account is not active')
   return u
 }

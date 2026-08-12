@@ -1,5 +1,15 @@
 import { redirect } from 'next/navigation'
 import { auth } from '@/auth'
+import { ACCOUNT_UNAVAILABLE } from '@/lib/user-profile'
+
+// A page gate must never answer "we couldn't read your account" with a redirect to sign-in: the
+// creator is signed in, signing in again changes nothing, and the real fault disappears. Throwing
+// surfaces it as the outage it is.
+function assertAccountReadable(status: string): void {
+  if (status === ACCOUNT_UNAVAILABLE) {
+    throw new Error('Account lookup is temporarily unavailable. Please retry in a moment.')
+  }
+}
 
 export type SessionUser = {
   id: string
@@ -33,6 +43,7 @@ export async function getSession(): Promise<boolean> {
 export async function requireUser(): Promise<SessionUser> {
   const u = await getCurrentUser()
   if (!u) redirect('/signin')
+  assertAccountReadable(u.status)
   return u
 }
 
@@ -41,6 +52,7 @@ export async function requireUser(): Promise<SessionUser> {
 export async function requireAuth(): Promise<SessionUser> {
   const u = await getCurrentUser()
   if (!u) redirect('/signin')
+  assertAccountReadable(u.status)
   if (u.status !== 'active') redirect('/pending')
   return u
 }
