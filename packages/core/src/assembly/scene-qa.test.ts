@@ -314,3 +314,55 @@ describe('reviewSceneBreakdown — depictive-ethics floor (real-party staging, w
     expect(r.warnings.some((w) => w.includes('depictive-ethics floor'))).toBe(false)
   })
 })
+
+describe('reviewSceneBreakdown — a character cannot be the subject of a person-free shot (Check C2)', () => {
+  // Regression for the 2026-08-17 Crossroads defect: object-only beats tagged primary to a person, so the
+  // object the frame was actually about went untagged and its real sourced reference was never passed.
+  const BIBLE: BibleEntity[] = [
+    { id: 'marcel-duchamp', kind: 'character', description: 'a middle-aged man in an early 20th-century suit' },
+    { id: 'duchamp-fountain', kind: 'object', description: "a porcelain urinal, turned on its side, signed 'R. Mutt 1917'" },
+  ]
+  const scene = (over: Partial<SceneQAScene>): SceneQAScene => ({
+    narrationText: 'He flipped a coin.',
+    imagePrompt: 'A coin spins on a bare surface.',
+    tier: 'still',
+    location: 'a studio',
+    ...over,
+  })
+  const run = (scenes: SceneQAScene[]) =>
+    reviewSceneBreakdown({ narration: 'He flipped a coin.', peakMoment: '', minScenes: 1, maxScenes: 8, scenes, bibleEntities: BIBLE })
+
+  const c2 = (r: { errors: string[] }) => r.errors.filter((e) => /PRIMARY subject, but the shot describes no person/.test(e))
+
+  it('fires when a character is primary and the prose describes nobody', () => {
+    const r = run([scene({ primaryEntity: 'marcel-duchamp', imagePrompt: 'A white porcelain urinal mounted to a tile wall, mop bucket at the frame edge. No plinth, no label.' })])
+    expect(c2(r)).toHaveLength(1)
+    expect(c2(r)[0]).toContain('marcel-duchamp')
+  })
+
+  it('stays silent when the shot does describe the person', () => {
+    expect(c2(run([scene({ primaryEntity: 'marcel-duchamp', imagePrompt: 'A man in a dark coat holds a coin between finger and thumb.' })]))).toHaveLength(0)
+  })
+
+  it('stays silent for partial presence — a hand or a distant silhouette still counts', () => {
+    expect(c2(run([scene({ primaryEntity: 'marcel-duchamp', imagePrompt: 'A gloved hand lowers a coin onto a plinth.' })]))).toHaveLength(0)
+    expect(c2(run([scene({ primaryEntity: 'marcel-duchamp', imagePrompt: 'A distant silhouette crosses the gallery doorway.' })]))).toHaveLength(0)
+  })
+
+  it('does not fire when the OBJECT is primary — the correct tagging for an object beat', () => {
+    expect(c2(run([scene({ primaryEntity: 'duchamp-fountain', imagePrompt: 'A white porcelain urinal on a bare plinth.' })]))).toHaveLength(0)
+  })
+
+  it('does not fire on a SUPPORTING character — they may legitimately sit off-frame', () => {
+    expect(c2(run([scene({ primaryEntity: 'duchamp-fountain', supportingEntities: ['marcel-duchamp'], imagePrompt: 'A white porcelain urinal on a bare plinth.' })]))).toHaveLength(0)
+  })
+
+  it('stays silent when the prose NAMES the character but uses no generic person word', () => {
+    expect(c2(run([scene({ primaryEntity: 'marcel-duchamp', imagePrompt: 'Duchamp lowers a coin toward the plinth.' })]))).toHaveLength(0)
+  })
+
+  it('stays silent for legacy callers with no bible', () => {
+    const r = reviewSceneBreakdown({ narration: 'x', peakMoment: '', minScenes: 1, maxScenes: 8, scenes: [scene({ primaryEntity: 'marcel-duchamp' })] })
+    expect(c2(r)).toHaveLength(0)
+  })
+})

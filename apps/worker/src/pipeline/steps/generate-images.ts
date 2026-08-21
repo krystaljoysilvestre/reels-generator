@@ -1,9 +1,9 @@
 import { eq, and } from 'drizzle-orm'
 import { getDb, reels, scenes, assets, channels, stories } from '@reels/db'
-import { generateImage, generateImageFal, imageEngineForGenre, FLUX_IMAGE_ENGINE, buildInputHash, ContentFilterError, llmCall, downloadBuffer, uploadBuffer, sourcePlaceImage, spendFromError, SCENE_IMAGE_MODEL, SCENE_IMAGE_QUALITY, type ImageEngine } from '@reels/providers'
-import { normalizeCanon, WorldBibleSchema, EntityPlateStoreSchema, entityDescriptionHash, assembleImagePrompt, assembleNegativePrompt, assembleReferencePrompt, castNationality, reelLightingDirective, sceneEntities, slug, channelPlatformPreset, StoryBibleSchema, EBN_RENDERING_PROFILE, effectiveGenre, resolveChannelPolicy,} from '@reels/core'
+import { generateImage, generateImageFal, imageEngineForGenre, FLUX_IMAGE_ENGINE, buildInputHash, ContentFilterError, llmCall, downloadBuffer, uploadBuffer, sourceEntityImage, resolveSubjectIdentity, wikidataPersonFacts, spendFromError, SCENE_IMAGE_MODEL, SCENE_IMAGE_QUALITY, type ImageEngine } from '@reels/providers'
+import { archivalShotTarget, identityWithheldEntities, MODES_WITHOUT_PLATES, normalizeCanon, WorldBibleSchema, EntityPlateStoreSchema, entityDescriptionHash, assembleImagePrompt, assembleNegativePrompt, assembleReferencePrompt, castNationality, reelLightingDirective, sceneEntities, slug, channelPlatformPreset, StoryBibleSchema, AppearanceBindingsSchema, appearanceIdForEntity, entityAtAppearance, resolveEntities, EBN_RENDERING_PROFILE, effectiveGenre, resolveChannelPolicy, DepictionRoutingSchema, depictionModeForHuman, allowsRealWorldEntityPlates, canUseArchivalHumanShot, splitSceneDepiction, conditionableReferenceKeys, personNameVariants, mentionsAny, scrubNames, SAFE_REPRESENTATIVE_STAGING, type BibleEntity, type CharacterAppearance, type DepictionRouting, type MediaOrigin, type SourcePolicy } from '@reels/core'
 import { z } from 'zod'
-import { buildRephrasePrompt, REPHRASE_V1_VERSION, buildImageQAPrompt, IMAGE_QA_V1_VERSION, ImageQASchema, buildFilterSafePrompt, FILTER_SAFE_V1_VERSION, FilterSafeSchema, buildPlaceSourceDecidePrompt, buildPlaceVerifyPrompt, PlaceSourceDecisionSchema, PlaceVerifySchema, PLACE_SOURCE_V1_VERSION } from '../../prompts-bridge.js'
+import { buildRephrasePrompt, REPHRASE_V1_VERSION, buildImageQAPrompt, IMAGE_QA_V1_VERSION, ImageQASchema, buildFilterSafePrompt, FILTER_SAFE_V1_VERSION, FilterSafeSchema, buildEntitySourceDecidePrompt, buildEntityVerifyPrompt, buildRepresentativeStagingPrompt, EntitySourceDecisionSchema, EntityVerifySchema, RepresentativeStagingSchema, PLATE_COLOURISE_PROMPT, ENTITY_SOURCE_V1_VERSION } from '../../prompts-bridge.js'
 import { runStep } from '../harness.js'
 import { runPool } from '../pool.js'
 
@@ -82,56 +82,214 @@ async function renderImage(
   }
 }
 
-// ── FACTUAL real-place sourcing ─────────────────────────────────────────────────────────────────────────
-// Fill a real, named PLACE's reference plate with a REAL licensed photograph (Wikimedia Commons) instead of a
-// generated one — gated on the channel's Source Policy (realPlaces). Two guards keep it honest: an LLM decides the location is a
-// specific, named place worth sourcing (a generic setting — a bedroom, a street — falls through to a
-// generated plate), and a vision check confirms the sourced photo actually depicts it. Never throws (fails
-// soft to {sourced:false}); the Wikimedia fetch is free, the two small QA calls are cost-accounted by the
-// caller. On success the real photo becomes the entity's plate, so the normal reference-conditioning path
-// renders every scene of that place from the real building.
-const PLACE_SOURCE_MODEL = 'claude-haiku-4-5-20251001'
-const PLACE_VERIFY_MIN_CONFIDENCE = 0.6
+// ── Depictive fidelity: routing + real-subject sourcing ─────────────────────────────────────────────────
+// Fill a real subject's reference plate with a REAL licensed photograph (Wikimedia Commons) instead of a
+// generated one — for a named place, object, or animal, and for a long-dead historical PERSON. Gated on the
+// channel's Source Policy; every step fails soft to today's generated plate, so the worst case is "no better
+// than before", never "confidently wrong". See specs/depictive-fidelity.md.
+//
+// The guards, in order: a decider classifies the SUBJECT and skips anything generic or fictional; for a human
+// only, identity and death date are verified from STRUCTURED DATA before anything is downloaded; and a vision
+// check confirms the photo actually depicts the subject. The Wikimedia/Wikidata fetches are free; the LLM
+// calls are cost-accounted by the caller.
+const DEPICTION_MODEL = 'claude-haiku-4-5-20251001'
+const ENTITY_VERIFY_MIN_CONFIDENCE = 0.6
+// A face gets a HIGHER bar than a building. The verify step is a filter against obvious mismatches and is
+// documented as weak at wrong-but-similar — which for a person is the entire failure mode (a similar-looking
+// stranger), and the consequence is a real human depicted as someone they are not.
+const HUMAN_VERIFY_MIN_CONFIDENCE = 0.8
 
-type PlateSourceResult =
-  | { sourced: true; key: string; origin: { type: 'sourced'; provider: string; url: string; license: string; author: string }; costCents: number }
-  | { sourced: false; costCents: number }
+// The bible entity id IS the subject name in kebab-case ("paoay-church", "jose-rizal"); de-kebab it so the
+// decider judges by the NAME, not only the feature-list description (which often doesn't name the subject).
+const entityName = (id: string) => id.split('-').map((w) => (w ? w[0]!.toUpperCase() + w.slice(1) : w)).join(' ')
 
-async function sourceLocationPlate(entity: { id: string; description: string }, reelId: string, region: string | undefined): Promise<PlateSourceResult> {
+// Invariant-2 text helpers (personNameVariants / mentionsAny / scrubNames / SAFE_REPRESENTATIVE_STAGING)
+// live in @reels/core types/depiction.ts — pure, so the safety guarantee is unit-tested rather than buried
+// in this step.
+
+/**
+ * Resolve HOW this entity may be depicted, BEFORE any image is fetched. Never throws — on any failure it
+ * returns 'generated', which is the pre-existing behaviour for every entity.
+ *
+ * For a human this is the safety gate, and it runs in the order that matters: IDENTITY first (does a single
+ * Wikipedia article with a Wikidata id say who this is?), then ELIGIBILITY (does P570 put them ≥100 years
+ * dead?). They fail to different modes — see depictionModeForHuman. An unidentified person is never sourced
+ * on ANY path, because "may be presented from a real photograph" must not be reachable by a name we could
+ * not resolve.
+ */
+export async function routeDepiction(
+  entity: { id: string; kind: 'character' | 'location' | 'object'; description: string },
+  policy: SourcePolicy,
+  region: string | undefined,
+): Promise<{ routing: DepictionRouting; costCents: number }> {
+  const generated = (eligibilityReason: DepictionRouting['eligibilityReason'], subjectClass: DepictionRouting['subjectClass'] = 'generic') =>
+    DepictionRoutingSchema.parse({ subjectClass, depictionMode: 'generated', eligibilityReason, query: '' })
   let costCents = 0
   try {
-    // The bible entity id IS the place name in kebab-case (e.g. "paoay-church"); de-kebab it so the decider
-    // judges by the NAME, not only the feature-list description (which often doesn't name the place).
-    const name = entity.id.split('-').map((w) => (w ? w[0]!.toUpperCase() + w.slice(1) : w)).join(' ')
-    // 1) Specific, real, named place worth sourcing? (skip generic settings) + best search query.
-    const dp = buildPlaceSourceDecidePrompt(name, entity.description, region)
-    const decide = await llmCall({ templateVersion: PLACE_SOURCE_V1_VERSION, schema: PlaceSourceDecisionSchema, provider: 'anthropic', model: PLACE_SOURCE_MODEL, system: dp.system, messages: [{ role: 'user', content: dp.userMessage }] })
+    if (!allowsRealWorldEntityPlates(policy)) return { routing: generated('not_permitted'), costCents }
+
+    const name = entityName(entity.id)
+    const dp = buildEntitySourceDecidePrompt(entity.kind, name, entity.description, region)
+    const decide = await llmCall({
+      templateVersion: ENTITY_SOURCE_V1_VERSION, schema: EntitySourceDecisionSchema,
+      provider: 'anthropic', model: DEPICTION_MODEL,
+      system: dp.system, messages: [{ role: 'user', content: dp.userMessage }],
+    })
     costCents += decide.costCents
+    const { subjectClass } = decide.data
     const query = (decide.data.query ?? '').trim()
-    if (!decide.data.sourceable || !query) return { sourced: false, costCents }
 
-    // 2) Find a licence-clean photo of it (free API; null → fall through to a generated plate).
-    const img = await sourcePlaceImage(query)
-    if (!img) return { sourced: false, costCents }
+    if (subjectClass === 'fictional') return { routing: generated('fictional_subject', 'fictional'), costCents }
+    if (subjectClass === 'generic') return { routing: generated('generic_subject', 'generic'), costCents }
+    if (!decide.data.sourceable || !query) return { routing: generated('generic_subject', subjectClass), costCents }
 
-    // 3) Confidence FILTER — does the photo actually depict the described place? (catches obvious mismatches).
-    const vp = buildPlaceVerifyPrompt(name, entity.description)
+    if (subjectClass !== 'human') {
+      return { routing: DepictionRoutingSchema.parse({ subjectClass, depictionMode: 'reference_plate', eligibilityReason: 'real_subject', query }), costCents }
+    }
+
+    // HUMAN. Narrative permission is necessary but never sufficient — the structural gate below is what
+    // actually grants depiction, and no creator setting can reach it.
+    if (policy.realPeople === 'none') return { routing: generated('not_permitted', 'human'), costCents }
+
+    const identity = await resolveSubjectIdentity(query)
+    const facts = identity ? await wikidataPersonFacts(identity.wikibaseItem) : null
+    // The anchor must be an article about a PERSON, not merely an article. A free-text query written by the
+    // decider resolves to whatever ranks first — "Marcel Duchamp French artist" resolved to his *Fountain*,
+    // whose Wikidata item has no death date. Reading P570 off a non-person is meaningless at best and, for a
+    // living person mis-resolved onto a dead namesake, would grant a plate of the wrong human.
+    if (identity && facts && !facts.isHuman) {
+      console.warn(`[generate-images] "${entity.id}": query "${query}" resolved to ${identity.wikibaseItem} (${identity.title}), which is not a person — identity unverified`)
+    }
+    const decided = depictionModeForHuman({
+      wikibaseItem: facts?.isHuman ? identity!.wikibaseItem : null,
+      deathYear: facts?.deathYear ?? null,
+      currentYear: new Date().getUTCFullYear(),
+    })
+    return {
+      routing: DepictionRoutingSchema.parse({ subjectClass: 'human', ...decided, query: decided.depictionMode === 'generated' ? '' : query }),
+      costCents,
+    }
+  } catch (err) {
+    console.warn(`[generate-images] depiction routing failed for "${entity.id}" → generated: ${err instanceof Error ? err.message : String(err)}`)
+    return { routing: generated('generic_subject'), costCents }
+  }
+}
+
+interface SourcedMedia {
+  buffer: Buffer
+  mime: 'image/jpeg' | 'image/png' | 'image/webp'
+  origin: MediaOrigin
+  appearsGrayscale: boolean
+}
+
+/**
+ * Fetch + verify a real photograph for an already-routed subject. Returns null (fail soft) whenever anything
+ * is missing, unverified, or below the confidence bar for its class.
+ *
+ * `usage` is stamped here because it decides what may happen to these bytes later: a conditioning reference
+ * may be colourised, a presented archival photograph may never be touched.
+ */
+async function fetchVerifiedMedia(
+  entity: { id: string; description: string },
+  routing: DepictionRouting,
+  usage: 'conditioning_reference' | 'presented_archival',
+  query = routing.query,
+): Promise<{ media: SourcedMedia | null; costCents: number }> {
+  let costCents = 0
+  try {
+    const subjectClass = routing.subjectClass
+    if (subjectClass === 'fictional' || subjectClass === 'generic' || !query) return { media: null, costCents }
+    const isHuman = subjectClass === 'human'
+
+    // A human's photo must come from the identity-anchored path only; a name-string match has no anchor.
+    const img = await sourceEntityImage(query, { requireArticleIdentity: isHuman })
+    if (!img) return { media: null, costCents }
+
+    const name = entityName(entity.id)
+    const vp = buildEntityVerifyPrompt(subjectClass, name, entity.description)
     const verify = await llmCall({
-      templateVersion: PLACE_SOURCE_V1_VERSION, schema: PlaceVerifySchema, provider: 'anthropic', model: PLACE_SOURCE_MODEL,
+      templateVersion: ENTITY_SOURCE_V1_VERSION, schema: EntityVerifySchema,
+      provider: 'anthropic', model: DEPICTION_MODEL,
       system: vp.system,
       messages: [{ role: 'user', content: [{ type: 'image', mediaType: img.mime, base64: img.buffer.toString('base64') }, { type: 'text', text: vp.userMessage }] }],
     })
     costCents += verify.costCents
-    if (!verify.data.matches || verify.data.confidence < PLACE_VERIFY_MIN_CONFIDENCE) return { sourced: false, costCents }
+    const minConfidence = isHuman ? HUMAN_VERIFY_MIN_CONFIDENCE : ENTITY_VERIFY_MIN_CONFIDENCE
+    if (!verify.data.matches || verify.data.confidence < minConfidence) {
+      console.warn(`[generate-images] "${entity.id}" sourced photo rejected by verify (matches=${verify.data.matches}, confidence=${verify.data.confidence} < ${minConfidence})`)
+      return { media: null, costCents }
+    }
 
-    // The key stays .webp regardless of the real bytes — every downstream reader sniffs magic bytes, not the
-    // extension (see sniffMediaType / fal refDataUri), so the real jpeg/png conditions scenes identically.
-    const key = `reels/${reelId}/refs/${slug(entity.id)}.webp`
-    await uploadBuffer(key, img.buffer, img.mime)
-    return { sourced: true, key, origin: { type: 'sourced', provider: 'wikimedia', url: img.sourceUrl, license: img.license, author: img.author }, costCents }
+    return {
+      media: {
+        buffer: img.buffer,
+        mime: img.mime,
+        appearsGrayscale: verify.data.appearsGrayscale ?? false,
+        origin: {
+          type: 'sourced', provider: 'wikimedia', usage, subjectClass,
+          url: img.sourceUrl, license: img.license, licenseUrl: img.licenseUrl, author: img.author,
+          articleUrl: img.articleUrl,
+          ...(img.wikibaseItem ? { wikibaseItem: img.wikibaseItem } : {}),
+        },
+      },
+      costCents,
+    }
   } catch (err) {
-    console.warn(`[generate-images] real-place sourcing failed for "${entity.id}": ${err instanceof Error ? err.message : String(err)}`)
-    return { sourced: false, costCents }
+    console.warn(`[generate-images] sourcing failed for "${entity.id}": ${err instanceof Error ? err.message : String(err)}`)
+    return { media: null, costCents }
+  }
+}
+
+// No `costCents` on purpose: sourceEntityPlate bills through the `bill` sink as each call is paid, so a
+// returned total would be either dead or double-added. Removing the field is what stops a future reader
+// re-adding `bill(sourced.costCents)` at the call site.
+type PlateSourceResult = { sourced: true; key: string; origin: MediaOrigin } | { sourced: false }
+
+/**
+ * Source this entity's reference PLATE from a real photograph. Only ever called for a subject whose routing
+ * resolved to 'reference_plate'.
+ *
+ * A monochrome plate is colourised first: conditioning colour scenes on an archival black-and-white portrait
+ * produces a grayscale-head-on-colour-body seam (spike-continuity, 2026-07-20). That is legitimate here and
+ * ONLY here — these bytes are a conditioning input, never a frame shown to a viewer — so the origin keeps
+ * BOTH keys, and the transform is named, rather than letting a colourised derivative claim to be the
+ * untouched Wikimedia file.
+ */
+async function sourceEntityPlate(
+  entity: { id: string; description: string },
+  routing: DepictionRouting,
+  reelId: string,
+  engine: ImageEngine,
+  bill: (cents: number) => void,
+): Promise<PlateSourceResult> {
+  const { media, costCents } = await fetchVerifiedMedia(entity, routing, 'conditioning_reference')
+  bill(costCents)
+  if (!media) return { sourced: false }
+
+  // The key stays .webp regardless of the real bytes — every downstream reader sniffs magic bytes, not the
+  // extension (see sniffMediaType / fal refDataUri), so the real jpeg/png conditions scenes identically.
+  const sourceKey = `reels/${reelId}/refs/${slug(entity.id)}.webp`
+  await uploadBuffer(sourceKey, media.buffer, media.mime)
+  const origin: MediaOrigin = { ...media.origin, sourceAssetKey: sourceKey, conditioningAssetKey: sourceKey }
+
+  if (!media.appearsGrayscale || engine.family === 'openai') return { sourced: true, key: sourceKey, origin }
+
+  try {
+    const colourKey = `reels/${reelId}/refs/${slug(entity.id)}-colour.webp`
+    const res = await renderImage(engine, {
+      prompt: PLATE_COLOURISE_PROMPT, negativePrompt: '', reelId, storageKey: colourKey,
+      aspect: 'auto', referenceImageKeys: [sourceKey],
+    }, bill)
+    bill(res.costCents)
+    return {
+      sourced: true, key: res.asset.storageKey,
+      origin: { ...origin, conditioningAssetKey: res.asset.storageKey, conditioningTransform: 'colorized' },
+    }
+  } catch (err) {
+    // Colourisation is an improvement, not a requirement — a monochrome plate still holds identity.
+    bill(spendFromError(err))
+    console.warn(`[generate-images] colourising "${entity.id}" plate failed → using the monochrome original: ${err instanceof Error ? err.message : String(err)}`)
+    return { sourced: true, key: sourceKey, origin }
   }
 }
 
@@ -188,6 +346,11 @@ export async function generateImages(reelId: string): Promise<void> {
   // keywords — is robust to the profile's own negations ("clearly NOT a photograph") while still catching
   // both a forcing bypass (a photoreal channel style has no such affirmation) and a future mis-edit of
   // EBN_RENDERING_PROFILE to something photoreal, before it can ship a guardrail-violating render.
+  //
+  // SCOPE: this governs what we GENERATE. A genuine archival photograph presented as a shot is real media,
+  // not synthesis, and is never measured against it — the guardrail exists so no SYNTHETIC image can be
+  // mistaken for authentic documentation, and a real photograph is authentic documentation. Its honesty
+  // obligation is licence attribution plus an accurate disclosure label, both handled elsewhere.
   if (channel.storyMode === 'ebn' && !(/illustrat/i.test(effectiveStyle) && /(not|never|no)\s+(a\s+)?photo/i.test(effectiveStyle))) {
     throw new Error(`[generate_images] EBN reel ${reelId.slice(0, 8)} resolved to a non-illustrative style — the visual guardrail requires illustration. Style: ${effectiveStyle.slice(0, 80)}`)
   }
@@ -200,11 +363,34 @@ export async function generateImages(reelId: string): Promise<void> {
   // gpt-image-1 (openai) renders text-to-image only (its reference conditioning corrupts identity — see
   // renderImage), so don't pay to mint plates it won't use. fal engines (gemini/flux) DO use them.
   if (storyBible && imageEngine.family !== 'openai') {
-    const referenced = new Set<string>()
-    for (const s of reelScenes) {
-      if (!s.visualPrompt) continue
-      for (const e of sceneEntities(storyBible, { primaryEntity: s.primaryEntity, supportingEntities: s.supportingEntities })) referenced.add(slug(e.id))
+    type PlateTarget = {
+      parent: BibleEntity
+      appearance: CharacterAppearance | null
+      renderEntity: BibleEntity
+      targetKey: string
     }
+    const targetMap = new Map<string, PlateTarget>()
+    for (const s of reelScenes) {
+      // A plate is an input to image generation, so mint it only for a scene that actually needs an image
+      // now. This matters after a Bible re-analysis: already-rendered scenes keep their pixels and must not
+      // trigger a full cast re-plate when only one time-bound appearance is being repaired.
+      if (!s.visualPrompt || s.imageAssetId) continue
+      const appearanceByEntity = AppearanceBindingsSchema.parse(s.appearanceBindings ?? {})
+      const { resolved } = resolveEntities(storyBible, {
+        primaryEntity: s.primaryEntity,
+        supportingEntities: s.supportingEntities,
+      })
+      for (const parent of resolved) {
+        const appearanceId = appearanceIdForEntity(appearanceByEntity, parent)
+        const appearance = appearanceId
+          ? parent.appearances?.find((candidate) => slug(candidate.id) === slug(appearanceId)) ?? null
+          : null
+        const targetKey = `${slug(parent.id)}::${appearance ? slug(appearance.id) : 'base'}`
+        targetMap.set(targetKey, { parent, appearance, renderEntity: entityAtAppearance(parent, appearance?.id), targetKey })
+      }
+    }
+    const plateTargets = [...targetMap.values()]
+    const referenced = new Set(plateTargets.map((target) => slug(target.parent.id)))
     const refNeg = assembleNegativePrompt({ genreCategory: genre })
     // ── Channel-level plate reuse (W2) ──────────────────────────────────────────────────────────
     // A RECURRING entity is minted once per channel and reused forever; a one-off story character is
@@ -227,7 +413,51 @@ export async function generateImages(reelId: string): Promise<void> {
     }
     if (reused > 0) console.log(`[generate-images] ${reelId.slice(0, 8)}: reused ${reused} channel entity plate(s) — not re-minted, not re-paid`)
 
-    const toMint = storyBible.entities.filter((e) => !e.referenceImageKey && referenced.has(slug(e.id)))
+    // ── Depiction routing ────────────────────────────────────────────────────────────────────────
+    // Resolve HOW each referenced entity may be depicted, ONCE, before anything is sourced or rendered.
+    // Everything downstream reads `entity.depiction` — no gate re-derives a mode from `kind`, and nothing
+    // re-checks whether a person is alive.
+    //
+    // Runs over every REFERENCED entity, not just `toMint`: an entity holding a reused channel plate still
+    // needs a mode, because the scene path consults it (a person may never be conditioned on even when a
+    // plate exists from before). Cheap and idempotent — an entity that already carries routing is skipped,
+    // so a retry doesn't re-pay for the classifier.
+    const needsRouting = storyBible.entities.filter((e) => !e.depiction && referenced.has(slug(e.id)))
+    if (needsRouting.length > 0) {
+      const routeHash = buildInputHash('depiction_routing.v1', {
+        reelId,
+        entities: needsRouting.map((e) => `${slug(e.id)}|${e.kind}|${e.description}`).sort().join('\n'),
+        policy: `${policy.realPlaces}|${policy.realPeople}`,
+      })
+      await runStep(
+        { reelId, stepName: 'generate_images:depiction' as never, inputHash: routeHash },
+        async (cost) => {
+          let routeCost = 0
+          await Promise.all(
+            needsRouting.map(async (entity) => {
+              const { routing, costCents } = await routeDepiction(entity, policy, region)
+              if (costCents > 0) { routeCost += costCents; cost.add(costCents) }
+              entity.depiction = routing
+            }),
+          )
+          await db.update(reels).set({ storyBible, updatedAt: new Date() }).where(eq(reels.id, reelId))
+          const notable = needsRouting.filter((e) => e.depiction && e.depiction.depictionMode !== 'generated')
+          if (notable.length > 0) {
+            console.log(`[generate-images] ${reelId.slice(0, 8)}: depiction routing → ${notable.map((e) => `${e.id}=${e.depiction!.depictionMode}(${e.depiction!.subjectClass})`).join(', ')}`)
+          }
+          return { output: { routed: needsRouting.length }, costCents: routeCost }
+        },
+      )
+    }
+
+    // INVARIANT 1, at the source: an 'archival_only' entity is excluded from minting entirely, so it can
+    // acquire neither a sourced plate nor a generated stand-in likeness. It is not "an entity we failed to
+    // plate" — it is an entity that must never have one.
+    // Every selected identity state owns exactly one plate. A variant is never flattened into a second
+    // cast entity, and a scene never receives both its base and variant reference.
+    const toMint = plateTargets.filter(
+      (target) => !target.renderEntity.referenceImageKey && target.parent.depiction?.depictionMode !== 'archival_only',
+    )
     // Plate minting runs INSIDE runStep. It was the one paid path in the pipeline that bypassed the budget
     // gates (assertBudget / assertUserBudget / the global daily kill-switch), and its spend was recorded by a
     // single update AFTER every plate had rendered — so a crash or DB failure mid-flight lost the whole run's
@@ -238,7 +468,9 @@ export async function generateImages(reelId: string): Promise<void> {
     if (toMint.length > 0) {
       const plateHash = buildInputHash('image_plates.v1', {
         reelId,
-        entities: toMint.map((e) => `${slug(e.id)}|${e.description}`).sort().join('\n'),
+        // Depiction mode is IN the hash: a re-route (policy change, a subject reclassified) must re-mint
+        // rather than serve a plate produced under the old mode.
+        entities: toMint.map((target) => `${target.targetKey}|${target.parent.depiction?.depictionMode ?? 'generated'}|${target.renderEntity.description}`).sort().join('\n'),
         engine: `${imageEngine.imageModel}|${imageEngine.editModel}`,
       })
       await runStep(
@@ -250,28 +482,45 @@ export async function generateImages(reelId: string): Promise<void> {
           // the returned total — reporting to both is not a double-add.)
           const bill = (cents: number) => { if (cents > 0) { plateCost += cents; cost.add(cents) } }
           await Promise.all(
-            toMint.map(async (entity) => {
+            toMint.map(async (target) => {
+              const entity = target.renderEntity
+              const persistReference = (key: string, origin?: MediaOrigin): void => {
+                if (target.appearance) {
+                  target.appearance.referenceImageKey = key
+                  if (origin) target.appearance.referenceOrigin = origin
+                } else {
+                  target.parent.referenceImageKey = key
+                  if (origin) target.parent.referenceOrigin = origin
+                }
+              }
               try {
-                // FACTUAL genre: for a real, named PLACE, try a REAL sourced photograph before inventing one. A
-                // generic setting, or a failed / low-confidence source, falls through to the generated plate below.
-                if (policy.realPlaces && entity.kind === 'location') {
-                  const sourced = await sourceLocationPlate(entity, reelId, region)
-                  bill(sourced.costCents)
-                  if (sourced.sourced) { entity.referenceImageKey = sourced.key; entity.referenceOrigin = sourced.origin; return }
+                // DEPICTIVE FIDELITY: for a real, named subject — a place, object, animal, or long-dead
+                // historical person — try a REAL sourced photograph before inventing one. Routing was
+                // resolved above and stored on the entity; nothing here re-derives it from `kind`.
+                //
+                // INVARIANT 1: an 'archival_only' entity NEVER gets a plate. Its photograph may be shown as
+                // a shot, but it may never condition a generated frame — that is the difference between
+                // presenting real media and fabricating a likeness. `return` before any render, so such an
+                // entity also never gets a GENERATED plate standing in for the person.
+                if (target.parent.depiction?.depictionMode === 'archival_only') return
+                if (target.parent.depiction?.depictionMode === 'reference_plate') {
+                  const sourced = await sourceEntityPlate(entity, target.parent.depiction, reelId, imageEngine, bill)
+                  if (sourced.sourced) { persistReference(sourced.key, sourced.origin); return }
                 }
                 // The supernatural threat mints on the grittier Flux engine for horror — Gemini beautifies faces,
                 // sanding the dread off the scare. Every other entity uses the channel's normal engine.
-                const plateEngine = genre === 'horror' && entity.role === 'threat' ? FLUX_IMAGE_ENGINE : imageEngine
+                const plateEngine = genre === 'horror' && target.parent.role === 'threat' ? FLUX_IMAGE_ENGINE : imageEngine
                 // `bill` as onSpend: on a safety-filter rejection the rephrase LLM is paid BEFORE the retry
                 // render, and that retry can itself throw — folding it into the return would lose it.
-                const res = await renderImage(plateEngine, { prompt: assembleReferencePrompt(entity, effectiveStyle, lighting, cast), negativePrompt: refNeg, reelId, storageKey: `reels/${reelId}/refs/${slug(entity.id)}.webp`, aspect }, bill)
-                entity.referenceImageKey = res.asset.storageKey
+                const suffix = target.appearance ? `--${slug(target.appearance.id)}` : ''
+                const res = await renderImage(plateEngine, { prompt: assembleReferencePrompt(entity, effectiveStyle, lighting, cast), negativePrompt: refNeg, reelId, storageKey: `reels/${reelId}/refs/${slug(entity.id)}${suffix}.webp`, aspect }, bill)
+                persistReference(res.asset.storageKey)
                 bill(res.costCents)
               } catch (err) {
                 // This catch swallows the failure (a missing plate falls back to text-to-image), so it is the
                 // last chance to record calls the provider paid for before throwing.
                 bill(spendFromError(err))
-                console.warn(`[generate-images] ${reelId.slice(0, 8)} reference plate failed for "${entity.id}": ${err instanceof Error ? err.message : String(err)}`)
+                console.warn(`[generate-images] ${reelId.slice(0, 8)} reference plate failed for "${target.targetKey}": ${err instanceof Error ? err.message : String(err)}`)
               }
             }),
           )
@@ -280,11 +529,11 @@ export async function generateImages(reelId: string): Promise<void> {
           // Promote CHANNEL-CANON plates to the channel so the next reel reuses these exact pixels
           // instead of minting a fresh look. Re-read the row inside the write so a concurrent reel's
           // promotion isn't clobbered (two reels on one channel can mint different entities at once).
-          const minted = toMint.filter((e) => e.referenceImageKey && canonIds.has(slug(e.id)))
+          const minted = toMint.filter((target) => !target.appearance && target.parent.referenceImageKey && canonIds.has(slug(target.parent.id)))
           if (minted.length > 0) {
             const fresh = await db.query.channels.findFirst({ where: eq(channels.id, channel.id), columns: { entityPlates: true } })
             const store = EntityPlateStoreSchema.parse(fresh?.entityPlates ?? {})
-            for (const e of minted) {
+            for (const { parent: e } of minted) {
               store[slug(e.id)] = {
                 key: e.referenceImageKey!,
                 descriptionHash: entityDescriptionHash(e.description),
@@ -294,7 +543,12 @@ export async function generateImages(reelId: string): Promise<void> {
             await db.update(channels).set({ entityPlates: store, updatedAt: new Date() }).where(eq(channels.id, channel.id))
             console.log(`[generate-images] ${reelId.slice(0, 8)}: promoted ${minted.length} plate(s) to channel canon`)
           }
-          return { output: { minted: toMint.filter((e) => e.referenceImageKey).length }, costCents: plateCost }
+          return {
+            output: {
+              minted: toMint.filter((target) => target.appearance ? target.appearance.referenceImageKey : target.parent.referenceImageKey).length,
+            },
+            costCents: plateCost,
+          }
         },
       )
     }
@@ -324,9 +578,18 @@ export async function generateImages(reelId: string): Promise<void> {
   const isVoiceover = storyBible?.continuity.narratorPerspective === 'voiceover'
   const CLAIM_LOAD = /\d|%|percent|porsyento|bilyon|milyon|libo|thousand|million|billion|\bkada\b|\bper\b|versus|\bvs\.?\b|kumpara|compared|higit|mas\s+(?:mataas|mababa|malaki|maliit|mahal|mura)|more than|less than|up to|hanggang/i
   const carriesClaim = (s: (typeof pending)[number]) => CLAIM_LOAD.test(s.narrationText)
-  const isQATarget = (s: (typeof pending)[number]) => s.tier === 'video' || (peak !== '' && s.narrationText.includes(peak)) || featuresPerson(s) || (isVoiceover && carriesClaim(s))
+  // A scene involving an 'archival_only' person ALWAYS reaches vision QA, so the floor's REAL-PARTY
+  // FABRICATION check sees the pixels. The deterministic scrub below is the guarantee; this is the
+  // defense-in-depth behind it, and it must not depend on the prose happening to match PERSON_NOUN.
+  const archivalSlugs = new Set(
+    (storyBible?.entities ?? []).filter((e) => MODES_WITHOUT_PLATES.has(e.depiction?.depictionMode ?? 'generated')).map((e) => slug(e.id)),
+  )
+  const featuresArchival = (s: (typeof pending)[number]) =>
+    [...(s.primaryEntity ? [s.primaryEntity] : []), ...(s.supportingEntities ?? [])].some((r) => archivalSlugs.has(slug(r)))
+  const isQATarget = (s: (typeof pending)[number]) => s.tier === 'video' || (peak !== '' && s.narrationText.includes(peak)) || featuresPerson(s) || featuresArchival(s) || (isVoiceover && carriesClaim(s))
 
   const processScene = async (scene: (typeof pending)[number]) => {
+    const appearanceByEntity = AppearanceBindingsSchema.parse(scene.appearanceBindings ?? {})
     // FIRST-PERSON NARRATOR VISIBILITY — decide the narrator's splice HERE, deterministically, from whether
     // her FACE is on-screen, NOT from the breakdown's tags (which mark her "present" on nearly every POV
     // beat). In a first-person reel she IS the camera; splicing her full character description into a POV
@@ -349,15 +612,67 @@ export async function generateImages(reelId: string): Promise<void> {
       if (narratorFaceShown) refSupporting = [...refSupporting, narratorId]
     }
 
+    // ── SCENE DEPICTION REQUIREMENTS ────────────────────────────────────────────────────────────────
+    // Resolve what this scene needs BEFORE deciding how to fulfil it, rather than keying the media mode off
+    // `primaryEntity`: a living person can be the significant depictive subject of a beat without being its
+    // primary entity ("the monument stands behind them during the ceremony"), and welding a whole media mode
+    // onto the primary tag would miss exactly that case.
+    const allSceneEnts = storyBible
+      ? sceneEntities(storyBible, { primaryEntity: refPrimary, supportingEntities: refSupporting, appearanceByEntity })
+      : []
+    const sceneDepiction = splitSceneDepiction(allSceneEnts)
+
+    // INVARIANT 2 (structural half): strip 'archival_only' entities from the tag set entirely — BEFORE the
+    // prompt is assembled — so neither their reference plate NOR their frozen description can reach a
+    // generated frame. Descriptions splice verbatim into image prompts, so leaving the tag in place would
+    // hand the model a likeness in prose even with the plate correctly withheld.
+    // TAGGING IS NOT THE TRIGGER — BEING NAMED IS.
+    //
+    // The tagged set is only half the exposure. A withheld person can appear in a shot's PROSE without
+    // being tagged at all ("Close-up of DTI officials shaking hands…" with no entity reference), and the
+    // scene resolver only ever returns TAGGED ids — so keying the scrub off `sceneDepiction` alone leaves
+    // the exact 2026-07-24 production failure reachable through an untagged mention. Mis-tagging is
+    // demonstrably routine on this pipeline (three object beats tagged to a person on the 2026-08-17
+    // Crossroads reel), so an untagged name is a live path, not a hypothetical one.
+    //
+    // So: withhold anyone whose identity must be withheld and who is EITHER tagged here OR named anywhere
+    // in this shot's prose. Reel-wide candidates, per-scene trigger.
+    const withheldCandidates = (storyBible?.entities ?? []).filter(
+      (e) => MODES_WITHOUT_PLATES.has(e.depiction?.depictionMode ?? 'generated'),
+    )
+    const taggedWithheld = new Set(identityWithheldEntities(sceneDepiction).map((e) => slug(e.id)))
+    const withheld = withheldCandidates.filter(
+      (e) => taggedWithheld.has(slug(e.id)) || mentionsAny(scene.visualPrompt ?? '', personNameVariants(e.id)),
+    )
+    if (withheld.length > 0) {
+      const namedOnly = withheld.filter((e) => !taggedWithheld.has(slug(e.id))).map((e) => e.id)
+      if (namedOnly.length > 0) {
+        console.warn(`[generate-images] ${reelId.slice(0, 8)} scene${scene.idx}: prose NAMES withheld ${namedOnly.join(', ')} without tagging them — withholding anyway`)
+      }
+      const stripped = new Set(withheld.map((e) => slug(e.id)))
+      if (refPrimary && stripped.has(slug(refPrimary))) refPrimary = null
+      refSupporting = refSupporting.filter((id) => !stripped.has(slug(id)))
+    }
+
     // Entities this scene features (narrator suppressed for reference PLATES via sceneEntities, the same
     // resolver the prompt assembler uses), resolved from the visibility-adjusted refs above so a POV beat
     // neither splices the narrator's description NOR conditions on her plate (both would draw her figure).
     // Non-empty plate set → reference-conditioned edit on fal; empty → text-to-image. Entities without a
     // minted plate simply don't contribute a reference.
     const sceneEnts = storyBible
-      ? sceneEntities(storyBible, { primaryEntity: refPrimary, supportingEntities: refSupporting })
+      ? sceneEntities(storyBible, { primaryEntity: refPrimary, supportingEntities: refSupporting, appearanceByEntity })
       : []
-    const referenceImageKeys = sceneEnts.map((e) => e.referenceImageKey).filter((k): k is string => Boolean(k))
+    // INVARIANT 1, enforced by the shared helper rather than a local filter — and applied on top of the
+    // tag-strip above. Two guards on the same rule is deliberate: this one holds even if a future edit
+    // changes how tags are resolved.
+    const referenceImageKeys = conditionableReferenceKeys(sceneEnts)
+
+    // A scene conditioning on a real historical person's sourced plate must be framed as a reconstruction —
+    // the depictive-ethics floor's condition for the CARE tier (a sourced plate bypasses REFERENCE_FRAMING,
+    // so the framing rides on the scene prompt).
+    const isReconstruction = sceneEnts.some(
+      (e) => e.depiction?.subjectClass === 'human' && e.referenceOrigin?.type === 'sourced' && Boolean(e.referenceImageKey),
+    )
 
     // One engine for every scene, scare beats included. The gpt-image-1 scare-beat special-case existed
     // because the old fully-detailed corpse-face archetype needed moderation:'low' to render at all — and it
@@ -371,10 +686,30 @@ export async function generateImages(reelId: string): Promise<void> {
     // Server-side prompt assembly — the LLM never sees this. Style suffix + (when analyzed) the scene's bible
     // entities expanded to their frozen descriptions (narrator resolved by the visibility rule above).
     const expansion = storyBible
-      ? { bible: storyBible, primaryEntity: refPrimary, supportingEntities: refSupporting }
+      ? { bible: storyBible, primaryEntity: refPrimary, supportingEntities: refSupporting, appearanceByEntity }
       : undefined
-    const finalPrompt = assembleImagePrompt(scene.visualPrompt!, effectiveStyle, expansion, lighting, cast)
     const negativePrompt = assembleNegativePrompt({ genreCategory: genre })
+
+    // ARCHIVAL CONFLICT POLICY (v1, deliberately conservative).
+    //
+    // Two conditions, and the second is the one live data taught us. (a) Only a SINGLE archival subject can
+    // be attempted: per-subject lead-image sourcing cannot produce a photograph containing two specific
+    // people, and compositing them is forbidden — a composite of two real people is a fabricated record.
+    // (b) That subject must be the scene's PRIMARY one, i.e. its depiction is what the beat is about.
+    //
+    // Detection deliberately scans the whole entity set (a real person can matter without being primary),
+    // but FULFILMENT must not: on the Crossroads reel, two scenes about Duchamp's urinal merely listed him
+    // as supporting, and swapping them for a portrait of him would have thrown away the actual subject of
+    // the shot. When an archival person is present but not primary, they are withheld — the scene generates
+    // around its real subject with their identity scrubbed, which is both safer and truer to the beat.
+    const archivalTarget = archivalShotTarget(sceneDepiction.archivalEntities, scene.primaryEntity)
+    if (sceneDepiction.archivalEntities.length > 1) {
+      console.log(`[generate-images] ${reelId.slice(0, 8)} scene${scene.idx}: ${sceneDepiction.archivalEntities.length} archival subjects — no single archival source can depict them together, using representative staging`)
+    } else if (sceneDepiction.archivalEntities.length === 1 && !archivalTarget) {
+      console.log(`[generate-images] ${reelId.slice(0, 8)} scene${scene.idx}: "${sceneDepiction.archivalEntities[0]!.id}" is present but not the subject — withholding their identity and generating the scene's actual subject`)
+    }
+
+    const finalPrompt = assembleImagePrompt(scene.visualPrompt!, effectiveStyle, expansion, lighting, cast, isReconstruction)
 
     const inputHash = buildInputHash('generate_images.v1', {
       finalPrompt,
@@ -384,6 +719,9 @@ export async function generateImages(reelId: string): Promise<void> {
       quality: SCENE_IMAGE_QUALITY, // in the hash so a recipe change busts the cache + regenerates
       referenceImageKeys, // re-render when a scene's references change (gained/lost a plate)
       engine: `${sceneEngine.imageModel}|${sceneEngine.editModel}`, // switching engine (incl. scare→Flux) busts the cache
+      // The archival subjects are inputs even though they never reach the prompt: they decide whether this
+      // scene is fulfilled by a real photograph and whether the prose is scrubbed.
+      archival: withheld.map((e) => slug(e.id)).sort().join(','),
     })
 
     // Per-scene step row (not the bare 'generate_images') so concurrent scenes don't collide on one
@@ -391,6 +729,87 @@ export async function generateImages(reelId: string): Promise<void> {
     await runStep(
       { reelId, stepName: `generate_images:scene${scene.idx}` as never, inputHash },
       async (cost) => {
+        // ── ARCHIVAL FULFILMENT ──────────────────────────────────────────────────────────────────
+        // A genuine licensed photograph, presented as itself. Nothing generative touches it: no /edit, no
+        // style preset, no negative prompt, no colourisation. Framing and motion at render time are
+        // editorial; modifying the pixels would turn real media into a fabricated record.
+        if (archivalTarget?.depiction && canUseArchivalHumanShot(policy, archivalTarget.depiction)) {
+          const { media, costCents } = await fetchVerifiedMedia(archivalTarget, archivalTarget.depiction, 'presented_archival')
+          cost.add(costCents)
+          if (media) {
+            const key = `reels/${reelId}/scenes/${scene.idx}-archival.webp`
+            await uploadBuffer(key, media.buffer, media.mime)
+            const origin: MediaOrigin = { ...media.origin, sourceAssetKey: key }
+            const [asset] = await db
+              .insert(assets)
+              .values({ reelId, channelId: reel.channelId, kind: 'image', storageKey: key, provider: 'wikimedia', costCents: cost.total, meta: { archival: true, subject: archivalTarget.id, origin } })
+              .onConflictDoUpdate({
+                target: [assets.reelId, assets.storageKey],
+                set: { provider: 'wikimedia', costCents: cost.total, meta: { archival: true, subject: archivalTarget.id, origin }, createdAt: new Date() },
+              })
+              .returning()
+            await db
+              .update(scenes)
+              .set({ imageAssetId: asset!.id, imageOrigin: origin })
+              .where(and(eq(scenes.reelId, reelId), eq(scenes.idx, scene.idx)))
+            console.log(`[generate-images] ${reelId.slice(0, 8)} scene${scene.idx}: presented archival photograph of "${archivalTarget.id}" (${media.origin.license})`)
+            return { output: { assetId: asset!.id, archival: true }, costCents: cost.total }
+          }
+          console.warn(`[generate-images] ${reelId.slice(0, 8)} scene${scene.idx}: no archival photograph for "${archivalTarget.id}" → representative staging`)
+        }
+
+        // ── SANITIZED FALLBACK — INVARIANT 2 ─────────────────────────────────────────────────────
+        // We are about to GENERATE a frame for a scene that involves a living/recent real person. Their
+        // plate was withheld and their description stripped, but the shot's own prose may still name them
+        // ("Close-up of DTI officials shaking hands…" — the 2026-07-24 production failure). Rendered
+        // photoreal, that frame is a fabricated press photo, so the name must not reach the model.
+        //
+        // Three layers, in order: an LLM rewrites the beat into representative staging (the POSITIVE
+        // replacement the floor requires); a deterministic scrub over the assembled prompt is the actual
+        // GUARANTEE; and if a name survives either check we discard the rewrite entirely rather than trust
+        // the rest of it.
+        let renderPrompt = finalPrompt
+        // What vision QA judges the render AGAINST. Normally the scene's own brief — but when an identity is
+        // withheld, the brief still names the person we deliberately refused to draw, so QA would fail the
+        // frame for obeying the floor ("Marcel Duchamp is not present in the frame") and burn a re-roll doing
+        // it. Observed live on 2026-08-12: every withheld scene failed QA twice and kept attempt 0 anyway.
+        // QA has to grade the shot we actually asked for.
+        let qaBrief = scene.visualPrompt!
+        if (withheld.length > 0) {
+          const names = withheld.flatMap((e) => personNameVariants(e.id))
+          const label = withheld.map((e) => entityName(e.id)).join(', ')
+          let staged = ''
+          try {
+            const sp = buildRepresentativeStagingPrompt(scene.visualPrompt!, label)
+            const rewrite = await llmCall({
+              templateVersion: ENTITY_SOURCE_V1_VERSION, schema: RepresentativeStagingSchema,
+              provider: 'anthropic', model: DEPICTION_MODEL,
+              system: sp.system, messages: [{ role: 'user', content: sp.userMessage }],
+            })
+            cost.add(rewrite.costCents)
+            staged = rewrite.data.imagePrompt.trim()
+          } catch (err) {
+            console.warn(`[generate-images] ${reelId.slice(0, 8)} scene${scene.idx} representative-staging rewrite failed: ${err instanceof Error ? err.message : String(err)}`)
+          }
+          // A rewrite that still names the person did not do its job — don't keep any of it.
+          if (!staged || mentionsAny(staged, names)) {
+            if (staged) console.warn(`[generate-images] ${reelId.slice(0, 8)} scene${scene.idx}: staging rewrite still named the subject → safe staging`)
+            staged = SAFE_REPRESENTATIVE_STAGING
+          }
+          renderPrompt = scrubNames(assembleImagePrompt(staged, effectiveStyle, expansion, lighting, cast, isReconstruction), names)
+          // Post-condition. A name here means it arrived through a path neither layer covers (another
+          // entity's description, the style preset) — fall back to staging that names nothing at all.
+          if (mentionsAny(renderPrompt, names)) {
+            console.warn(`[generate-images] ${reelId.slice(0, 8)} scene${scene.idx}: subject name survived scrubbing → falling back to name-free staging`)
+            renderPrompt = assembleImagePrompt(SAFE_REPRESENTATIVE_STAGING, effectiveStyle, undefined, lighting, cast)
+            staged = SAFE_REPRESENTATIVE_STAGING
+          }
+          // Grade against the staging we asked for, scrubbed the same way, so QA can neither reward nor
+          // punish the render for the identity we withheld.
+          qaBrief = scrubNames(staged, names)
+          console.log(`[generate-images] ${reelId.slice(0, 8)} scene${scene.idx}: generated with representative staging (identity withheld: ${label})`)
+        }
+
         const qa = isQATarget(scene)
         let chosen: Awaited<ReturnType<typeof generateImageWithRetry>> | undefined
         let extraNeg = '' // targeted negatives added across re-rolls to push the model off the flagged failure
@@ -407,7 +826,7 @@ export async function generateImages(reelId: string): Promise<void> {
         // passing image in place. Non-QA scenes generate exactly once.
         for (let attempt = 0; attempt <= (qa ? MAX_QA_REROLLS : 0); attempt++) {
           const result = await generateImageWithRetry({
-            prompt: finalPrompt,
+            prompt: renderPrompt,
             negativePrompt: extraNeg ? `${negativePrompt}, ${extraNeg}` : negativePrompt,
             reelId,
             sceneIdx: scene.idx,
@@ -424,7 +843,10 @@ export async function generateImages(reelId: string): Promise<void> {
           if (!qa) break
 
           const buffer = await downloadBuffer(result.asset.storageKey)
-          const { verdict, costCents } = await imageQA(buffer, scene.visualPrompt!)
+          const expectedAppearance = Object.keys(appearanceByEntity).length > 0
+            ? sceneEnts.map((entity) => `${entity.id}: ${entity.description}`).join('\n')
+            : undefined
+          const { verdict, costCents } = await imageQA(buffer, qaBrief, expectedAppearance)
           cost.add(costCents)
           lastIssues = verdict.issues
           if (!best || verdict.issues.length < best.issues.length) best = { buffer, issues: verdict.issues, attempt }
@@ -483,7 +905,7 @@ export async function generateImages(reelId: string): Promise<void> {
           .set({ imageAssetId: asset!.id })
           .where(and(eq(scenes.reelId, reelId), eq(scenes.idx, scene.idx)))
 
-        return { output: { assetId: asset!.id }, costCents: cost.total }
+        return { output: { assetId: asset!.id, archival: false }, costCents: cost.total }
       },
     )
   }
@@ -495,8 +917,8 @@ export async function generateImages(reelId: string): Promise<void> {
 // Vision QA: does the render match the brief's checkable intent? Takes the image BYTES (the caller
 // downloads once and reuses the buffer for best-attempt tracking). Sniffs the real media type so it works
 // regardless of fal's output format. Cheap (Haiku); only called on QA-target scenes.
-async function imageQA(buf: Buffer, visualPrompt: string): Promise<{ verdict: z.infer<typeof ImageQASchema>; costCents: number }> {
-  const { system, userMessage } = buildImageQAPrompt(visualPrompt)
+async function imageQA(buf: Buffer, visualPrompt: string, expectedAppearance?: string): Promise<{ verdict: z.infer<typeof ImageQASchema>; costCents: number }> {
+  const { system, userMessage } = buildImageQAPrompt(visualPrompt, expectedAppearance)
   const r = await llmCall({
     templateVersion: IMAGE_QA_V1_VERSION,
     schema: ImageQASchema,

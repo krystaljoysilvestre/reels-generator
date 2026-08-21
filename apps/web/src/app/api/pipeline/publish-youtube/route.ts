@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { eq, and } from 'drizzle-orm'
-import { getDb, reels, channels, assets, publications, platformConnections } from '@reels/db'
+import { getDb, reels, channels, assets, publications, platformConnections, sceneImageOrigins } from '@reels/db'
 import { transition, PostMetaSchema, formatPostCaption, formatImageCredits, StoryBibleSchema, resolveSidecarSrt } from '@reels/core'
 import { downloadBuffer, uploadToYouTube, toElevenLabsLang } from '@reels/providers'
 import { requireReelOwner } from '@/lib/api-access'
@@ -56,9 +56,10 @@ export async function POST(req: NextRequest) {
 
   const meta = PostMetaSchema.safeParse(reel.postMeta)
   const title = meta.success ? meta.data.title : (reel.story?.title ?? 'Untitled')
-  // Append image-attribution credits for any real SOURCED plates (Wikimedia etc.) so licence terms are met.
+  // Append image-attribution credits for every real SOURCED image (Wikimedia etc.) so licence terms are met —
+  // reference plates AND archival photographs presented as scenes.
   const bibleParse = reel.storyBible ? StoryBibleSchema.safeParse(reel.storyBible) : null
-  const imageCredits = bibleParse?.success ? formatImageCredits(bibleParse.data) : ''
+  const imageCredits = bibleParse?.success ? formatImageCredits(bibleParse.data, await sceneImageOrigins(reel.id)) : ''
   const baseDescription = meta.success ? formatPostCaption(meta.data) : (reel.story?.logline ?? '')
   const description = imageCredits ? `${baseDescription}\n\n${imageCredits}` : baseDescription
   const tags = meta.success ? meta.data.hashtags.map((h) => h.replace(/^#/, '')) : []

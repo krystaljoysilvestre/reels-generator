@@ -1,5 +1,6 @@
 export * from './channel.js'
 export * from './source-policy.js'
+export * from './depiction.js'
 export * from './post-meta.js'
 export * from './reel-cover.js'
 export * from './story-bible.js'

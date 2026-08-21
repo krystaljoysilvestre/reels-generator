@@ -1,5 +1,5 @@
 import { eq, and, gt, isNotNull } from 'drizzle-orm'
-import { getDb, reels, channels, stories, assets, publications, pipelineSteps } from '@reels/db'
+import { getDb, reels, channels, stories, assets, publications, pipelineSteps, sceneImageOrigins } from '@reels/db'
 import { enqueueStep } from '@reels/queue'
 import { listVoices, downloadBuffer, uploadToYouTube, isYouTubeConfigured, toElevenLabsLang } from '@reels/providers'
 import { PostingRulesSchema, PostMetaSchema, formatPostCaption, formatImageCredits, StoryBibleSchema, matchNarratorVoice, nextPublishSlot, resolvePublishSlots, resolvePublishDays, resolveSidecarSrt, type PostingRules, type ChannelVoice, type NarratorVoice } from '@reels/core'
@@ -186,9 +186,10 @@ async function autoPublishYouTube(reelId: string, slot: Date | null): Promise<vo
   const story = reel.storyId ? await db.query.stories.findFirst({ where: eq(stories.id, reel.storyId) }) : null
   const meta = PostMetaSchema.safeParse(reel.postMeta)
   const title = meta.success ? meta.data.title : (story?.title ?? 'Untitled')
-  // Append image-attribution credits for any real SOURCED plates (Wikimedia etc.) so licence terms are met.
+  // Append image-attribution credits for every real SOURCED image (Wikimedia etc.) so licence terms are met —
+  // reference plates AND archival photographs presented as scenes.
   const bibleParse = reel.storyBible ? StoryBibleSchema.safeParse(reel.storyBible) : null
-  const imageCredits = bibleParse?.success ? formatImageCredits(bibleParse.data) : ''
+  const imageCredits = bibleParse?.success ? formatImageCredits(bibleParse.data, await sceneImageOrigins(reel.id)) : ''
   const baseDescription = meta.success ? formatPostCaption(meta.data) : (story?.logline ?? '')
   const description = imageCredits ? `${baseDescription}\n\n${imageCredits}` : baseDescription
   const tags = meta.success ? meta.data.hashtags.map((h) => h.replace(/^#/, '')) : []

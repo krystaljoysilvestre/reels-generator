@@ -1,0 +1,18 @@
+-- Provenance for a scene's image, when that image is a REAL sourced photograph rather than a generated one.
+--
+-- Until now "scene image" and "generated image" were the same thing, so provenance only ever needed to live
+-- on the Story Bible entity whose reference plate was sourced. A reel can now PRESENT a genuine licensed
+-- archival photograph as a shot — a categorically different asset, and one that carries obligations a
+-- generated frame doesn't: it must be credited with its licence, it must never be generatively modified, and
+-- the reel's on-screen disclosure has to describe it accurately instead of calling it an illustration.
+--
+-- Same jsonb shape as the bible's `referenceOrigin` (types/depiction.ts MediaOrigin) on purpose, with `usage`
+-- telling the two apart:
+--   usage='conditioning_reference'  a real image that CONDITIONS a generated frame (may be colourised)
+--   usage='presented_archival'      a real image PRESENTED as itself (may never be modified)
+--
+-- Reusing the shape but not the meaning is deliberate: one provenance vocabulary, one credits formatter, and
+-- an auditable answer to "was this frame generated, conditioned, or real?" for every scene of every reel.
+--
+-- NULL = a generated scene image, which is every scene that exists today.
+ALTER TABLE "scenes" ADD COLUMN IF NOT EXISTS "image_origin" jsonb;

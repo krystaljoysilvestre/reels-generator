@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { slug, normalizeCanon, resolveEntityRef, resolveEntities, mergeBible } from './story-bible.js'
+import { appearanceBindingsForScene, entityAtAppearance, preserveLockedEntities, sceneEntities, slug, normalizeCanon, resolveEntityRef, resolveEntities, mergeBible, validateAppearanceBindings } from './story-bible.js'
 import { StoryBibleSchema, type StoryBible } from '../types/story-bible.js'
 
 function bible(over: Partial<StoryBible> = {}): StoryBible {
@@ -126,5 +126,115 @@ describe('StoryBibleSchema — voiceover perspective', () => {
 
   it('still defaults to third_person when perspective is absent', () => {
     expect(StoryBibleSchema.parse({}).continuity.narratorPerspective).toBe('third_person')
+  })
+})
+
+describe('time-bound character appearances', () => {
+  const narration = 'Lola sat beside me. When she was young, she crossed the river alone. Back home, she smiled.'
+  const retellBible = StoryBibleSchema.parse({
+    entities: [
+      {
+        id: 'grandmother',
+        kind: 'character',
+        description: 'an elderly woman with silver hair in a low bun and a narrow red ribbon',
+        referenceImageKey: 'refs/grandmother.webp',
+        appearances: [
+          {
+            id: 'remembered-youth',
+            description: 'a young girl with long black hair tied with the same narrow red ribbon',
+            referenceImageKey: 'refs/grandmother--remembered-youth.webp',
+          },
+        ],
+      },
+    ],
+    continuity: {
+      narratorPerspective: 'third_person',
+      narratorEntityId: null,
+      timeline: [],
+      journey: [
+        { span: 'Lola sat beside me.', locationLabel: 'home', locationEntityId: null, present: ['grandmother'], visible: ['grandmother'], appearanceByEntity: {} },
+        { span: 'When she was young, she crossed the river alone.', locationLabel: 'river', locationEntityId: null, present: ['grandmother'], visible: ['grandmother'], appearanceByEntity: { grandmother: 'remembered-youth' } },
+        { span: 'Back home, she smiled.', locationLabel: 'home', locationEntityId: null, present: ['grandmother'], visible: ['grandmother'], appearanceByEntity: {} },
+      ],
+    },
+  })
+
+  it('keeps legacy linear stories on the base appearance with no new binding', () => {
+    const parsed = StoryBibleSchema.parse({ entities: [{ id: 'maya', kind: 'character', description: 'an adult woman' }] })
+    expect(parsed.entities[0]!.appearances).toBeUndefined()
+    expect(parsed.continuity.journey).toEqual([])
+  })
+
+  it('materializes one selected look without changing the logical identity', () => {
+    const parent = retellBible.entities[0]!
+    const young = entityAtAppearance(parent, 'remembered_youth')
+    expect(young.id).toBe('grandmother')
+    expect(young.description).toContain('young girl')
+    expect(young.referenceImageKey).toBe('refs/grandmother--remembered-youth.webp')
+    expect(parent.description).toContain('elderly woman')
+  })
+
+  it('maps framing, memory, and return scenes to their anchored appearance', () => {
+    expect(appearanceBindingsForScene(retellBible, narration, 'Lola sat beside me.')).toEqual({})
+    expect(appearanceBindingsForScene(retellBible, narration, 'When she was young, she crossed the river alone.')).toEqual({ grandmother: 'remembered-youth' })
+    expect(appearanceBindingsForScene(retellBible, narration, 'Back home, she smiled.')).toEqual({})
+  })
+
+  it('resolves exactly one appearance for a scene, never base and variant together', () => {
+    const entities = sceneEntities(retellBible, {
+      primaryEntity: 'grandmother',
+      supportingEntities: [],
+      appearanceByEntity: { Grandmother: 'remembered_youth' },
+    })
+    expect(entities).toHaveLength(1)
+    expect(entities[0]!.description).toContain('young girl')
+    expect(entities[0]!.description).not.toContain('elderly woman')
+    expect(entities[0]!.referenceImageKey).toBe('refs/grandmother--remembered-youth.webp')
+  })
+
+  it('rejects an appearance binding that has no matching variant', () => {
+    const invalid = StoryBibleSchema.parse({
+      ...retellBible,
+      continuity: {
+        ...retellBible.continuity,
+        journey: [{ ...retellBible.continuity.journey[1]!, appearanceByEntity: { grandmother: 'childhood' } }],
+      },
+    })
+    expect(validateAppearanceBindings(invalid)).toContain('Journey leg 1 binds "grandmother" to unknown appearance "childhood".')
+  })
+})
+
+describe('preserveLockedEntities — established render identity', () => {
+  it('keeps a plate-backed base look while accepting a newly analyzed time-bound appearance', () => {
+    const prior = StoryBibleSchema.parse({
+      entities: [{
+        id: 'grandmother', kind: 'character',
+        description: 'an elderly woman with silver hair in a bun and a dark woven blouse',
+        referenceImageKey: 'refs/grandmother.webp',
+      }],
+    })
+    const fresh = StoryBibleSchema.parse({
+      entities: [{
+        id: 'grandmother', kind: 'character',
+        description: 'an elderly woman in a floral dress',
+        appearances: [{ id: 'remembered-youth', description: 'a young girl with long braids' }],
+      }],
+    })
+    const out = preserveLockedEntities(fresh, prior)
+    expect(out.entities[0]!.description).toBe('an elderly woman with silver hair in a bun and a dark woven blouse')
+    expect(out.entities[0]!.referenceImageKey).toBe('refs/grandmother.webp')
+    expect(out.entities[0]!.appearances?.[0]?.id).toBe('remembered-youth')
+  })
+
+  it('preserves an unambiguous plate-backed entity even when analysis refines its id', () => {
+    const prior = StoryBibleSchema.parse({
+      entities: [{ id: 'balete-tree', kind: 'location', description: 'the established old balete', referenceImageKey: 'refs/balete.webp' }],
+    })
+    const fresh = StoryBibleSchema.parse({
+      entities: [{ id: 'balete-tree-san-esteban', kind: 'location', description: 'a newly invented redesign' }],
+    })
+    const out = preserveLockedEntities(fresh, prior)
+    expect(out.entities[0]!.description).toBe('the established old balete')
+    expect(out.entities[0]!.referenceImageKey).toBe('refs/balete.webp')
   })
 })

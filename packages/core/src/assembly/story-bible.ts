@@ -3,7 +3,7 @@
 // step (to flag references that resolve to nothing).
 
 import type { WorldBible } from '../types/channel.js'
-import type { BibleEntity, StoryBible, JourneyLeg } from '../types/story-bible.js'
+import type { BibleEntity, CharacterAppearance, StoryBible, JourneyLeg } from '../types/story-bible.js'
 
 // Normalize a free-form name/id to a comparison key: lowercase, unicode-aware, punctuation → hyphen.
 // "The Mirror" / "the_mirror" / "the-mirror" all collapse to "the-mirror".
@@ -63,6 +63,8 @@ export function mergeBible(canon: BibleEntity[], analyzed: StoryBible): StoryBib
 export interface EntityRefs {
   primaryEntity: string | null
   supportingEntities: string[]
+  // Per-entity appearance id selected by the story's anchored temporal context. Missing = base appearance.
+  appearanceByEntity?: Record<string, string>
 }
 
 export interface ResolvedEntities {
@@ -90,6 +92,89 @@ export function resolveEntities(bible: StoryBible, refs: EntityRefs): ResolvedEn
     resolved.push(entity)
   }
   return { resolved, unresolved }
+}
+
+// Resolve one character appearance by slug-tolerant id. Kept separate from resolveEntityRef because an
+// appearance is never a cast member in its own right — it can only be reached through its parent identity.
+export function resolveCharacterAppearance(entity: BibleEntity, appearanceId: string | null | undefined): CharacterAppearance | null {
+  const target = appearanceId ? slug(appearanceId) : ''
+  if (!target) return null
+  return entity.appearances?.find((a) => slug(a.id) === target) ?? null
+}
+
+// Materialize the render-facing entity for one scene. All semantic/safety fields remain on the parent;
+// only the frozen look + plate/provenance are replaced. Returning a BibleEntity keeps every existing
+// assembler/provider boundary unchanged while guaranteeing base and variant are never injected together.
+export function entityAtAppearance(entity: BibleEntity, appearanceId: string | null | undefined): BibleEntity {
+  const appearance = resolveCharacterAppearance(entity, appearanceId)
+  if (!appearance) return entity
+  return {
+    ...entity,
+    description: appearance.description,
+    referenceImageKey: appearance.referenceImageKey,
+    referenceOrigin: appearance.referenceOrigin,
+  }
+}
+
+export function appearanceIdForEntity(bindings: Record<string, string> | null | undefined, entity: BibleEntity): string | undefined {
+  if (!bindings) return undefined
+  const target = slug(entity.id)
+  const hit = Object.entries(bindings).find(([entityRef]) => slug(entityRef) === target)
+  return hit?.[1]
+}
+
+// The appearance binding for a scene is inherited from the journey leg covering the START of its narration
+// span. A cut that crosses a real temporal boundary is already a storyboard error: scenes must cut on time
+// shifts. Missing/legacy journeys return {}, preserving the base appearance path.
+export function appearanceBindingsForScene(
+  bible: StoryBible,
+  fullNarration: string,
+  sceneNarration: string,
+): Record<string, string> {
+  const sceneAt = fullNarration.indexOf(sceneNarration.trim())
+  if (sceneAt < 0) return {}
+  for (const leg of bible.continuity.journey) {
+    const span = leg.span.trim()
+    if (!span) continue
+    const legAt = fullNarration.indexOf(span)
+    if (legAt >= 0 && sceneAt >= legAt && sceneAt < legAt + span.length) return leg.appearanceByEntity ?? {}
+  }
+  return {}
+}
+
+// Validate analyzer-authored bindings before they become deterministic render input. These are reference
+// integrity checks, not taste: a binding must name one real character variant and only for a character
+// present in that anchored leg. Empty output means the default/base appearance is unambiguous.
+export function validateAppearanceBindings(bible: StoryBible): string[] {
+  const issues: string[] = []
+  const entityById = new Map(bible.entities.map((e) => [slug(e.id), e]))
+  for (const entity of bible.entities) {
+    if (entity.kind !== 'character' && (entity.appearances?.length ?? 0) > 0) {
+      issues.push(`Entity "${entity.id}" is ${entity.kind} but declares character appearance variants.`)
+    }
+    const seen = new Set<string>()
+    for (const appearance of entity.appearances ?? []) {
+      const id = slug(appearance.id)
+      if (seen.has(id)) issues.push(`Entity "${entity.id}" repeats appearance id "${appearance.id}".`)
+      seen.add(id)
+    }
+  }
+  bible.continuity.journey.forEach((leg, i) => {
+    const present = new Set((leg.present ?? []).map(slug))
+    for (const [entityRef, appearanceRef] of Object.entries(leg.appearanceByEntity ?? {})) {
+      const entity = entityById.get(slug(entityRef))
+      if (!entity) {
+        issues.push(`Journey leg ${i + 1} binds appearance for unknown entity "${entityRef}".`)
+        continue
+      }
+      if (entity.kind !== 'character') issues.push(`Journey leg ${i + 1} binds an appearance to non-character "${entity.id}".`)
+      if (!present.has(slug(entity.id))) issues.push(`Journey leg ${i + 1} binds "${entity.id}" but that character is not present in the leg.`)
+      if (!resolveCharacterAppearance(entity, appearanceRef)) {
+        issues.push(`Journey leg ${i + 1} binds "${entity.id}" to unknown appearance "${appearanceRef}".`)
+      }
+    }
+  })
+  return issues
 }
 
 // ── Operator overrides ────────────────────────────────────────────────────────
@@ -123,10 +208,33 @@ export function applyBibleEdit(bible: StoryBible, edit: BibleEdit): StoryBible {
 // analyzer never overwrites a human correction. A locked prior entity replaces the fresh entity of the
 // same id (or is appended if the fresh derivation dropped it). Fresh, unlocked entities pass through.
 export function preserveLockedEntities(fresh: StoryBible, prior: StoryBible | null | undefined): StoryBible {
+  // A minted plate makes the base description an established visual fact. Prompt-version re-analysis may
+  // discover new timeline states, but it must not silently redesign the already-rendered base character,
+  // place, or object. Match leniently because a better analyzer may refine an id ("balete-tree" →
+  // "balete-tree-san-esteban") while still referring to the same unambiguous entity.
+  const established = (prior?.entities ?? []).filter((entity) => entity.referenceImageKey)
+  const withEstablishedLooks = fresh.entities.map((entity) => {
+    const previous = resolveEntityRef({ ...fresh, entities: established }, entity.id)
+    if (!previous || previous.kind !== entity.kind) return entity
+    const priorAppearances = new Map((previous.appearances ?? []).map((appearance) => [slug(appearance.id), appearance]))
+    const appearances = (entity.appearances ?? []).map((appearance) => {
+      const old = priorAppearances.get(slug(appearance.id))
+      return old?.referenceImageKey ? { ...appearance, ...old } : appearance
+    })
+    return {
+      ...entity,
+      description: previous.description,
+      referenceImageKey: previous.referenceImageKey,
+      ...(previous.referenceOrigin ? { referenceOrigin: previous.referenceOrigin } : {}),
+      ...(previous.depiction ? { depiction: previous.depiction } : {}),
+      ...(appearances.length ? { appearances } : {}),
+    }
+  })
+
   const locked = (prior?.entities ?? []).filter((e) => e.locked)
-  if (locked.length === 0) return fresh
+  if (locked.length === 0) return { ...fresh, entities: withEstablishedLooks }
   const lockedBySlug = new Map(locked.map((e) => [slug(e.id), e]))
-  const merged = fresh.entities.map((e) => lockedBySlug.get(slug(e.id)) ?? e)
+  const merged = withEstablishedLooks.map((e) => lockedBySlug.get(slug(e.id)) ?? e)
   const present = new Set(merged.map((e) => slug(e.id)))
   for (const e of locked) if (!present.has(slug(e.id))) merged.push(e)
   return { ...fresh, entities: merged }
@@ -150,7 +258,9 @@ export function isDepictableEntity(e: BibleEntity): boolean {
 // payoff. Only depictability filters here (label-only entities excluded — see isDepictableEntity).
 export function sceneEntities(bible: StoryBible, refs: EntityRefs): BibleEntity[] {
   const { resolved } = resolveEntities(bible, refs)
-  return resolved.filter(isDepictableEntity)
+  return resolved
+    .map((entity) => entityAtAppearance(entity, appearanceIdForEntity(refs.appearanceByEntity, entity)))
+    .filter(isDepictableEntity)
 }
 
 // Validate the JOURNEY as a state machine over adjacent legs (not each leg in isolation) — catch the
@@ -178,4 +288,32 @@ export function validateJourneyTransitions(journey: JourneyLeg[]): string[] {
     }
   }
   return issues
+}
+
+// ── Archival fulfilment (specs/depictive-fidelity.md) ────────────────────────────────────────────
+/**
+ * Which archival subject — if any — this scene should be FULFILLED by, i.e. replaced with a genuine
+ * photograph instead of a generated frame. Null means generate the scene (with any archival identity
+ * withheld and scrubbed).
+ *
+ * Two conditions, and the second was taught by live data:
+ *
+ * 1. EXACTLY ONE archival subject. Per-subject lead-image sourcing cannot yield a photograph containing two
+ *    specific people, and compositing them is forbidden — a composite of two real people is a fabricated
+ *    record. Two or more → representative staging.
+ * 2. That subject is the scene's PRIMARY one, i.e. its depiction is what the beat is about.
+ *
+ * Condition 2 is NOT a retreat to keying media mode off `primaryEntity` — DETECTION still scans the whole
+ * entity set, because a real person can matter without being primary. It governs FULFILMENT only. On the
+ * 2026-08-12 Crossroads reel, two scenes whose subject was Duchamp's urinal listed Duchamp as merely
+ * supporting; fulfilling them with a portrait of him would have discarded the actual subject of the shot.
+ * Presence is a reason to WITHHOLD an identity; it is not a reason to make the shot about that person.
+ */
+export function archivalShotTarget(
+  archivalEntities: readonly BibleEntity[],
+  primaryEntityId: string | null | undefined,
+): BibleEntity | null {
+  if (archivalEntities.length !== 1 || !primaryEntityId) return null
+  const only = archivalEntities[0]!
+  return slug(only.id) === slug(primaryEntityId) ? only : null
 }

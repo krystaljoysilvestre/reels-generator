@@ -85,6 +85,25 @@ describe('assembleImagePrompt — bible expansion', () => {
     })
     expect(out).toBe(`${STYLE}. ${ACTION}`)
   })
+
+  it('splices only the scene-selected time-bound appearance', () => {
+    const retell = StoryBibleSchema.parse({
+      entities: [{
+        id: 'grandmother',
+        kind: 'character',
+        description: 'an elderly woman with silver hair in a low bun',
+        appearances: [{ id: 'remembered-youth', description: 'a young girl with long black hair and a red ribbon' }],
+      }],
+    })
+    const out = assembleImagePrompt('she runs along the riverbank', STYLE, {
+      bible: retell,
+      primaryEntity: 'grandmother',
+      supportingEntities: [],
+      appearanceByEntity: { grandmother: 'remembered-youth' },
+    })
+    expect(out).toContain('a young girl with long black hair and a red ribbon')
+    expect(out).not.toContain('an elderly woman')
+  })
 })
 
 describe('castNationality', () => {

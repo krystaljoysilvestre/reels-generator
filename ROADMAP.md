@@ -59,6 +59,40 @@ made without it; the first public upload does not establish whether enabling it 
 
 ## Done
 
+- **Depictive fidelity beyond places — objects, animals, real people (2026-08-12)** — real sourced
+  photographs were gated to one line (`policy.realPlaces && kind === 'location'`), so a documentary about
+  the Titanic, a Philippine eagle, or José Rizal invented all three. Now a subject classifier
+  (`entity-source.v1`) routes each entity to one of three media modes, resolved once and read by every
+  downstream gate: `generated`, `reference_plate` (a real image conditions the frame), or `archival_only`
+  (a real image is presented as itself and never conditions anything). The human path is split by the
+  depictive-ethics floor's own carve-outs — long-dead figures get a conditioning plate gated on a Wikidata
+  `P570` death date ≥100 years, living people get genuine licensed archival photographs, and an identity we
+  cannot verify is never sourced on either path. Four invariants are enforced in code with unit tests, the
+  most important being that an `archival_only` person reaches a generated frame neither as a reference plate
+  **nor as a name in the prompt** (the 2026-07-24 fabricated-press-photo failure). Also fixed: the burned
+  media disclosure is now computed from what the reel actually contains, so a real archival photograph is no
+  longer labelled an illustration. `hypotheses/real-places.md` graduated to `specs/depictive-fidelity.md`;
+  migration 0061 adds `scenes.image_origin`. **Verified on a live paid reel** (Crossroads, Duchamp/*Fountain*),
+  which found five defects now fixed with regression tests: the Commons licence guarantee was resting on a
+  regex miss (a fair-use en-wiki upload was rejected by accident, not by rule); the identity anchor never
+  checked it anchored a *person* (a query for Duchamp resolved onto his artwork's Wikidata item — now gated on
+  `P31 = Q5`); asking Commons for 1600px served the full-resolution original, which the vision verifier
+  rejects (now 1024px); archival fulfilment fired when the person was merely *present* rather than the
+  subject; and vision QA graded identity-withheld scenes against the original brief, failing them for obeying
+  the floor and burning a paid re-roll each time. Upstream lesson: a real subject only sources if its Story
+  Bible id **identifies** it — `story-analyzer.v1.23` now requires a disambiguating id (`duchamp-fountain`,
+  not `fountain`, which reads as plumbing).
+
+  **Tagging became load-bearing (2026-08-17).** A sourced plate only reaches a shot that *references* the
+  entity, so a mis-tag now costs depictive truth rather than a continuity wobble. Two guards: `scene-qa`
+  Check C2 errors when a scene's PRIMARY entity is a character but the prose describes no person (the
+  Crossroads reel tagged three object-only beats to Duchamp, who is in none of them), and invariant 2 no
+  longer keys off tagging — a withheld person is withheld when *named* in the prose, not only when tagged,
+  which closed a live path back to the 2026-07-24 failure. A third guard was **rejected on measurement**: a
+  lexical "depicts an entity it doesn't tag" detector scored 1 true positive to 2–3 false on the real reel
+  and would have stamped `R.MUTT 1917` onto shop-window plumbing. See specs/depictive-fidelity.md for why
+  that failure is conceptual rather than a threshold to tune.
+
 - **Per-channel YouTube authorization + direct publish (2026-08-11)** — selected channel destinations
   are acknowledged in Settings and Storyboard; Google OAuth uses signed expiring state + HTTP-only nonce;
   provider tokens are AES-256-GCM encrypted; disconnect revokes the grant best-effort; direct upload is
@@ -218,7 +252,9 @@ made without it; the first public upload does not establish whether enabling it 
 
 2. **Per-channel workspace** — fold the old `/review` and `/storyboard/[id]`
    views into the channel detail page (reels, review queue, analytics tabs).
-   They're currently unreachable from nav.
+   They're currently unreachable from nav. *Partially addressed 2026-08-06
+   (`2c295e1`): the storyboard got its cutting-room treatment — one dark dock,
+   one inspector. The nav folding itself is still open.*
 
 3. **Per-story voice selection** — channel voice picking is done (real voices,
    single or per-story shortlist). When the reel flow is built, a `per_story`
@@ -228,12 +264,15 @@ made without it; the first public upload does not establish whether enabling it 
 4. **Derivation prompt tuning** — iterate on `channel.v1` if the generated
    tone/style/world doesn't match what we imagine for a given niche.
 
-5. **Align reel rendering to the chosen style** — Step-4 previews render on **flux/dev** for
-   faithful stylization; the worker reel pipeline (`generate-images`) still uses **flux/schnell**
-   (cheaper, but collapses non-photoreal styles toward realism). Before producing reels for real,
-   decide the per-image model/quality so produced reels match the style the operator picked at
-   creation (flux/dev everywhere, or a per-channel quality tier). `assembleImagePrompt` already
-   leads with the style DNA, so only the model/guidance differs.
+5. ✅ **Align reel rendering to the chosen style** (superseded) — the flux/dev-vs-schnell framing is
+   obsolete. Scene images now render on **nano-banana** (`fal-ai/gemini-25-flash-image`) by default,
+   with **per-genre engine routing** chosen after a live owner A/B (`packages/providers/src/fal/config.ts`).
+   ⚠️ **Live consequence, still open:** wizard Step-4 previews and real scenes no longer run the same
+   engine, so the preview/scene no-drift invariant is **already broken** — an operator picks a style
+   from a tile rendered by one model and gets reels from another. Worth confirming during the
+   publish-bar audit: if "it doesn't look like what I picked" is a named disqualifier, this is why.
+   Related: `gpt-image-1` (still `SCENE_IMAGE_MODEL` in the OpenAI config, used for the hybrid
+   scare-beat route) **is deprecated 2026-10-23** — successor `gpt-image-2`, ~35% cheaper.
 
 6. **De-bias `channel.v1` style derivation (optional)** — Step-4 curation no longer uses the derived
    `stylePreset` (it picks mediums on merit from niche + mood). But `channel.v1` still derives a
@@ -241,15 +280,13 @@ made without it; the first public upload does not establish whether enabling it 
    as the pre-Step-4 default + fallback if style-options fails. If that fallback ever matters, broaden
    `channel.v1` so the default look isn't reflexively cinematic either.
 
-7. **Length follow-ups** — the `$8` short-reel budget cap (`DEFAULT_BUDGET_CAPS_CENTS.short`) is flat;
-   a ~180s reel (more scenes + more TTS) should scale the cap so long-form channels don't false-fail.
-   Also two still-horror-flavored bits to de-bias when generalizing the writing pipeline:
+7. **Length follow-ups** — ✅ **the budget cap half is DONE** (PR #20): `budgetCapForSeconds` scales
+   the cap with runtime ($4 + 9¢/s, $30 ceiling) and a reel that would blow it now **degrades to
+   stills** instead of hard-throwing mid-render. The 2026-07-24 near-miss (a ~100s reel at $7.60,
+   $0.40 under a flat $8 cap, one scene from being stranded) is what motivated it.
+   *Still open — two horror-flavored bits to de-bias when generalizing the writing pipeline:*
    `scenes.v1` guards ("no faces of fear", "children in threatening contexts") and the hardcoded
    `audienceDescriptor: 'young Filipino adult'` in `generate-story`.
-   *New evidence (2026-07-24 production run):* an all-scene-animated ~100s reel landed at **$7.60 —
-   $0.40 under the cap**; one more scene would have stranded it mid-render (shipped steps hard-throw
-   once `costCents` exceeds the cap, with no stills-fallback). Cap needs to be per-channel/reel
-   configurable AND degrade gracefully (finish with stills) instead of failing terminally.
 
 ### Pipeline findings — 2026-07-24 "News Today PH" production run (one-off, $7.60, findings tracker)
 
@@ -262,25 +299,29 @@ the owner (design first, then implementation). Full evidence in the session summ
    news/documentary/explainer family (incl. committed EBN documentary). Candidate architecture:
    [hypotheses/voiceover-perspective.md](hypotheses/voiceover-perspective.md) — one enum value +
    analyzer/scenes/assembly conditionals + channel presentation hint.
-   **Status 2026-07-25:** both director reviews ACCEPT-WITH-CHANGES (folded); Phase-0 probe RAN
-   (39¢): axis mechanism VALIDATED; teaching bar FAILED → judge-and-force **depiction gate**.
-   **PHASE 1 IMPLEMENTED** (working tree, uncommitted): axis (enum + analyzer participant test +
-   scenes VOICEOVER_RULE + scene-qa) · depiction gate (scene-depiction-critic/doctor.v1, informational
-   boards, kill switch, scored audit) · presentation hint (channels.presentation, migration 0045,
-   channel.v1 v1.5, wizard + Settings + analyzer). typecheck/lint/tests green; tenancy 7/7. Next:
-   owner-gated controls lap (~30–50¢, prompt/bible level) → live review → commit → graduate to /specs.
+   **Status 2026-08-07: ✅ SHIPPED, on main (`c8e31bd`, PR #19).** Both director reviews
+   ACCEPT-WITH-CHANGES (folded); Phase-0 probe RAN (39¢): axis mechanism VALIDATED; teaching bar
+   FAILED → judge-and-force **depiction gate**. Phase 1 merged: axis (enum + analyzer participant
+   test + scenes VOICEOVER_RULE + scene-qa) · depiction gate (scene-depiction-critic/doctor.v1,
+   informational boards, `SCENE_DEPICTION_GATE=0` kill switch, scored audit) · presentation hint
+   (channels.presentation, migration 0045, channel.v1 v1.5, wizard + Settings + analyzer).
+   Remaining: graduate `hypotheses/voiceover-perspective.md` → `/specs`.
 2. **Depictive-ethics floor for real parties** (separable, ships first) — nothing prevents rendering
    identifiable real living people / named orgs' officials/events as photoreal event imagery in
-   standard-mode factual content (EBN's illustrative floor doesn't reach it). **Drafted in full at
-   [specs/depictive-ethics-floor.md](specs/depictive-ethics-floor.md)** (visual-director, 2026-07-25):
-   floor wording + 5-point placement inventory + boundaries + edge cases. Awaiting founder
-   ratification (floors-are-law), then implementation.
-3. **Standalone fact gate** — the EBN Extractor + Fact-Fidelity Checker are excellent but only
-   reachable via `storyMode='ebn'`, which also forces illustrative visuals + burned disclosure + a
-   writer that ignores language/persona/length. Decouple "check my script against sources" into an
-   opt-in step any channel can use (production run proved it works standalone: caught a missing
-   Critical fact + forced attribution). Must define which visual floors travel with it (→ #2).
-   Sequenced after #1/#2; amends specs/evidence-based-narrative.md.
+   standard-mode factual content (EBN's illustrative floor doesn't reach it). **✅ RATIFIED +
+   SHIPPED (2026-07-25, on main).** Spec at
+   [specs/depictive-ethics-floor.md](specs/depictive-ethics-floor.md) (visual-director): floor
+   wording + 5-point placement inventory + boundaries + edge cases, ratified by the founder as
+   floors-are-law (hard safety constraint, no A/B). The deterministic `scene-qa` check ships
+   **warning-first** — remaining work is promoting it to a blocking error once its precision is
+   proven on real boards.
+3. **Standalone fact gate** — **✅ SHIPPED (PR #21, recovered to main in `b523149`).** The EBN
+   Extractor + Fact-Fidelity Checker were only reachable via `storyMode='ebn'`, which also forced
+   illustrative visuals + burned disclosure + a writer that ignores language/persona/length.
+   "Check my script against sources" is now an opt-in step any channel can use, advisory-only
+   (a punch-list, never a block). Production-proven on Pax Silica.
+   ⚠️ Recovery note: a `(#NN)` squash commit is **not** proof of reaching main — verify with
+   `git merge-base --is-ancestor`. This one was stranded on a branch for days.
 4. **Budget cap** — folded into item 7 above (fresh evidence there).
 5. **Render visual-fingerprint gap** — NON-ISSUE on inspection: `render-step.ts` already hashes
    subtitle text+timings into the visual fingerprint alongside `captionStyle`. Closed, no work.
@@ -415,13 +456,24 @@ binding near 30 min.
 - Avatar images can be orphaned in R2 if creation is abandoned (no cleanup job).
 - No channel-name uniqueness check (fine for a single operator).
 
-### Known gaps / cleanup
+### Navigation / legacy cleanup
 
 - Sidebar nav is portfolio-only now; per-channel nav (reels/review/analytics)
   moves into the channel detail page.
 - ~~End-to-end reel production has never run start to finish~~ — **DONE**: first reel
   rendered 2026-06-19; channel-creation polish + flux/dev images + voice delivery + AI
   music shipped 2026-06-20.
+
+### Deliberately uncommitted in the working tree (2026-08-07)
+
+Not abandoned, not shipped — kept where it is on purpose, per decision-log 2026-08-06-002.
+
+- **The bounded-edit chassis** (`packages/core/src/editing/bounded-edit.ts`, `apps/worker/src/pipeline/steps/ending-repair.ts`,
+  the three prompts, `probe-critic-calibration.ts`). The MECHANISM passed everything asked of it —
+  prefix held 28/28, zero stories damaged, all four guards load-bearing. The TASTE driving it failed
+  a blind read. `STORY_ENDING_REPAIR` stays off. Reusable for any future edit region; do not rebuild it.
+- ⚠️ **GOTCHA carried from that lap:** every `llmCall` hangs if Redis is down. Costs an afternoon
+  if you don't know it.
 
 ## Audit backlog (2026-06-20) — fix AFTER channel creation
 Pre-production audit (3 passes: channel creation, quality, robustness). Prioritized; pull as
@@ -484,7 +536,7 @@ The founder's reframe: the reels-sound-thin fix is audio *engineering*; the comp
 direction* — the creative reasoning before a single sound is generated. **An AI Sound Director, not a better
 mixer.** Three phases, each gating its taste-touching parts on a blind ear test before they ship:
 
-- **[NOW] Phase A — Audio Engineering** (branch `feat/sound-presence-phase-a`). Fixes the founder's "I can
+- **[✅ SHIPPED — `7497357`, merged `07fb753`] Phase A — Audio Engineering.** Fixes the founder's "I can
   barely hear it… no continuous background music and sound effects." **Reference gain-staging** (voice/music/
   ambient normalized to a reference so the bed is a true, audible ratio under the voice — it was ~22–27 dB
   under, below the WCAG floor); a **guaranteed continuous bed** (kill the two voice-over-silence paths; a
@@ -493,7 +545,9 @@ mixer.** Three phases, each gating its taste-touching parts on a blind ear test 
   + SFX-bus re-level; plus the principle-7 cost-accounting fixes (music cost scales with length; SFX/TTS/music
   on one plan basis) and the annotate `maxTokens` reliability fix. Near-zero marginal cost (re-leveling, not
   more generation); validated by re-balancing the persisted stems + a blind before/after ear test.
-- **[NEXT] Phase B — Sound Direction** (candidate architecture: [hypotheses/audio-direction.md](hypotheses/audio-direction.md)).
+- **[✅ SHIPPED — `ce53858` (register range + energy, the "leans calm" fix); the blind cross-register ear
+  A/B that GATES it has not been recorded — treat as unvalidated] Phase B — Sound Direction**
+  (candidate architecture: [hypotheses/audio-direction.md](hypotheses/audio-direction.md)).
   An **Audio Direction** — the canonical creative intent for a reel's sound (per-scene emotion, listener
   perspective, environment, intentional silence, peaks/releases, motifs, cross-scene continuity) — that music,
   ambience, foley, SFX, and any *future* provider all derive from. **Never "better prompts"**: the Direction is
@@ -506,7 +560,8 @@ mixer.** Three phases, each gating its taste-touching parts on a blind ear test 
   Judgment/de-biasing, NOT more mandates (prescription *caused* the overfit — Anti-Prescription Guard). Gate:
   cross-register blind ear A/B. Diagnosed + A/B-designed by the Sound Director via Evidence-Before-Taste,
   shipped through the Product Partner + Technical Advisor.
-- **[future] Phase C — Channel Audio Identity, as the Audio Bible.** The channel-level twin of the Audio
+- **[PARKED — spiked 2026-07-24, `353837f`: not earned until channels have a back catalog] Phase C —
+  Channel Audio Identity, as the Audio Bible.** The channel-level twin of the Audio
   Direction (signature motifs, ambience palette, instrumentation, recurring transitions, pacing, loudness
   philosophy, silence habits, forbidden sounds, callbacks) that every reel's Direction inherits from —
   completing the Bible family (Story = fiction, Evidence = fact, Audio = sonic identity). North star: **a viewer

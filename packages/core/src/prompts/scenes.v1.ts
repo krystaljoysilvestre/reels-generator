@@ -10,7 +10,7 @@
 // Back to v1.44: the closing-shot block ("THE LAST SCENE IS THE AFTERIMAGE") is reverted with the rest of
 // the ending TEXT layer (decision-log 2026-08-06-003). The TIME layer that makes a closing shot playable
 // at all — the outro tail in compute-timings §4.65 — is KEPT; it is the part the founder validated.
-export const SCENES_V1_VERSION = 'scenes.v1.44'
+export const SCENES_V1_VERSION = 'scenes.v1.46'
 
 export type GenreModule =
   | 'horror'
@@ -66,6 +66,7 @@ export interface ScenesPromptVars {
     locationEntityId: string | null
     present: string[]
     visible?: string[] | undefined
+    appearanceByEntity?: Record<string, string> | undefined
     occupancyState?: string | undefined
     isReflection?: boolean | undefined
   }[]
@@ -185,9 +186,13 @@ Era: ${v.era}. Region look: ${v.regionDescriptor}.`
           const reflectionNote = lg.isReflection
             ? '; REVEAL — give this leg its OWN dedicated scene (never merge it into a neighbour): open on the threat/apparition, so primaryEntity MUST be that threat character — UNLESS that threat has no physical form (a voice, a whisper, a presence), in which case open on the witness\'s reaction or the real thing it affects and tag THAT as primaryEntity, never the bodiless presence (see A BODILESS THREAT IS NEVER GIVEN A FORM).'
             : ''
-          return `  ${i + 1}. "${span}" → ${loc}; present: [${lg.present.join(', ') || 'no one'}]; on-camera: [${vis}]${reflectionNote}`
+          const appearance = Object.entries(lg.appearanceByEntity ?? {})
+            .map(([entityId, appearanceId]) => `${entityId}=${appearanceId}`)
+            .join(', ')
+          const appearanceNote = appearance ? `; EVENT-TIME APPEARANCE: [${appearance}]` : ''
+          return `  ${i + 1}. "${span}" → ${loc}; present: [${lg.present.join(', ') || 'no one'}]; on-camera: [${vis}]${appearanceNote}${reflectionNote}`
         })
-        .join('\n')}\nFor EACH scene: tag ONLY the location entity of the leg its narration falls in (or none, for a transit leg); include ONLY the characters that leg lists as present; NEVER add a person who isn't there. A leg marked REVEAL is the payoff — it is ALWAYS its own scene, opening on the threat (primaryEntity = the threat).`
+        .join('\n')}\nFor EACH scene: tag ONLY the location entity of the leg its narration falls in (or none, for a transit leg); include ONLY the characters that leg lists as present; NEVER add a person who isn't there. EVENT-TIME APPEARANCE tells you how a character looks when dramatizing that leg. Usually copy it into the scene's appearanceByEntity. You may instead keep the shot in an established framing scene (for example, elderly Lola visibly telling her youthful memory) by using the parent/default look and writing that framing action clearly. Do not switch accidentally, invent an appearance, or show two life stages of one identity in a single frame. Cut at the boundary when you dramatize the time change. A leg marked REVEAL is the payoff — it is ALWAYS its own scene, opening on the threat (primaryEntity = the threat).`
     : ''
 
   // Chapter context (long-form): the director sees the arc + where the last chapter left the world, so
@@ -209,6 +214,7 @@ For each scene write:
 - narrationText: the COMPLETE, VERBATIM substring of the narration this scene covers (copy-paste exactly, no "…").
 - primaryEntity: the bible id of the ONE thing this shot leads with — it MUST be the same subject your imagePrompt OPENS on. Do not lead the imagePrompt with one thing and tag a different thing as primary. On a reveal/payoff you open on the threat/apparition, so THAT is the primaryEntity — even in a first-person reel where the narrator's reflection or body is also in frame, the narrator goes in supportingEntities, NOT primary. (Tagging the narrator primary on a reveal splices the narrator's face onto the shot and you get the narrator instead of the threat.) Use null if the subject you lead with is NOT a bible entity (a shadow, the narrator's own hands).
 - supportingEntities: the bible ids of the other recurring bible things visible in this shot. Include the scene's LOCATION entity here — but ONLY the place the scene is physically IN, NOT a place the character is merely HEADING TOWARD. A "walking toward a room" beat is set in the space they pass through (a hallway, a path, a yard), not inside that room — don't tag it with the destination (that drops them inside it); tag the place actually on screen. Also include the NARRATOR entity whenever their own reflection or body is visible (see PERSPECTIVE), so their appearance is locked. Use exact ids; never invent one.
+- appearanceByEntity: the exact non-default character appearance THIS SHOT depicts, as { "character-id": "appearance-id" }. Usually copy the journey leg's EVENT-TIME APPEARANCE when dramatizing its action. Use {} for every parent/default look, including an intentional shot that stays on the present-day teller while remembered narration continues. Bind only characters tagged in this scene, use only appearance ids present under that character in the Story Bible, and never bind two looks for one person.
 - imagePrompt: a VIVID, SPECIFIC description of this exact shot — aim for 45–75 words, not a terse tag list. Cover concretely: WHO is in frame and the precise action they are caught MID-doing (their posture, what their hands are doing, their expression, and where their gaze goes — at the object, at each other, into the dark — NOT into the camera); the shot size + camera angle; one foreground element for depth; the ACTIVE light source + its direction; the texture of the place. Show people ABSORBED in the moment — candid, mid-motion, never posing or staring into the lens (a person facing the camera doing nothing is the #1 failure). Refer to bible entities by a natural label only ("the mirror", "the friend") — the system splices their look; describe NON-bible subjects inline. No style, medium, or colour-grade words (the system owns the look).
 - sceneIntent: a short phrase for what the audience should NOTICE first in this shot (e.g. "the reflection before the woman", "the shadow under the door").
 - cameraMove: the ONE camera move that best fits this beat — choose from: drift (slow, subtle), push_in, pull_out, pan_left, pan_right, tilt_up, tilt_down, handheld (loose, immediate), locked (almost still). Match it to the beat: push_in for emphasis, pull_out for a reveal, locked for observation/stillness, drift for atmosphere, handheld for immediacy, pan/tilt to follow or discover.
@@ -252,7 +258,7 @@ SAFETY (all genres): no gore, no graphic violence, no nudity/sexualization, no m
 OUTPUT (JSON only):
 {
   "scenes": [
-    { "idx": 1, "narrationText": "complete verbatim substring", "primaryEntity": "cracked-mirror", "supportingEntities": ["the-tenant"], "imagePrompt": "the tenant steps toward the glass, medium shot from behind their shoulder, dust adrift, the bare bulb throwing weak light from above", "sceneIntent": "the reflection before the figure", "cameraMove": "push_in", "subjectMotion": "", "tier": "still", "mood": ["tense", "quiet"], "location": "rented bedroom" }
+    { "idx": 1, "narrationText": "complete verbatim substring", "primaryEntity": "cracked-mirror", "supportingEntities": ["the-tenant"], "appearanceByEntity": {}, "imagePrompt": "the tenant steps toward the glass, medium shot from behind their shoulder, dust adrift, the bare bulb throwing weak light from above", "sceneIntent": "the reflection before the figure", "cameraMove": "push_in", "subjectMotion": "", "tier": "still", "mood": ["tense", "quiet"], "location": "rented bedroom" }
   ]
 }`
 

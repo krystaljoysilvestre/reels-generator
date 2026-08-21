@@ -6,7 +6,7 @@
 // That is only worth building if a single plate actually carries the entity's identity across episodes
 // whose scenes the plate never showed.
 //
-// This is the SAME bar hypotheses/real-places.md set for places, and it retires the workstream if missed:
+// This is the SAME bar specs/depictive-fidelity.md set for places, and it retires the workstream if missed:
 //   (a) BLIND IDENTIFICATION — someone who has seen the plate identifies the entity in each scene as the
 //       same one, unprompted.
 //   (b) MULTI-SHOT PERSISTENCE — identity holds across ≥3 shots that demand framings, distances and

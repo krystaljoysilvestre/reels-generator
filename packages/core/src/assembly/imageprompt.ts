@@ -12,6 +12,7 @@ export interface EntityExpansion {
   bible: StoryBible
   primaryEntity: string | null
   supportingEntities: string[]
+  appearanceByEntity?: Record<string, string>
 }
 
 // The channel's cast nationality/ethnicity. Image models otherwise free-fill a generic (usually Western)
@@ -41,12 +42,24 @@ export function castNationality(languages?: string[] | null, region?: string | n
   return ''
 }
 
+// RECONSTRUCTION FRAMING — the depictive-ethics floor's condition for depicting a long-dead historical
+// figure at all (the depictive-fidelity CARE tier). A sourced portrait plate bypasses REFERENCE_FRAMING entirely
+// (the photograph IS the plate), so the framing has to ride on the SCENE prompt instead, on every beat that
+// conditions on such a plate. Written positively, per DESCRIBE PRESENCE, NOT ABSENCE.
+//
+// This governs what the frame CLAIMS, not whether it is accurate: no render, in any style, may be presented
+// as an authentic photographic record of a real event. The burned disclosure label says the same thing to
+// the viewer; this says it to the model.
+export const RECONSTRUCTION_FRAMING =
+  'a historical reconstruction — a dramatised depiction of a documented past scene, painterly and clearly a reconstruction rather than an authentic archival photograph of a real event'
+
 export function assembleImagePrompt(
   contentPrompt: string,
   stylePreset: string,
   expansion?: EntityExpansion,
   lighting?: string, // reel-level time-of-day directive (see reelLightingDirective) — forces night/dark, etc.
   cast?: string, // channel cast nationality (see castNationality); '' / undefined → no ethnicity directive
+  reconstruction?: boolean, // this scene conditions on a real historical person's plate → append the framing
 ): string {
   const style = stylePreset.trim()
   const content = contentPrompt.trim()
@@ -54,24 +67,30 @@ export function assembleImagePrompt(
   // Constrain ethnicity for whoever appears WITHOUT forcing a person into a people-free shot ("any people").
   const castClause = cast?.trim() ? `any people in frame are ${cast.trim()}` : ''
 
+  const reconstructionClause = reconstruction ? RECONSTRUCTION_FRAMING : ''
+
   // No bible → unchanged: lead with style DNA, then the scene content (legacy callers, previews, etc.).
   // Lighting, when present, is appended as its own clause (keeps the legacy "style, content" form intact).
   if (!expansion) {
-    const parts = [`${style}, ${content}`, castClause, light ?? ''].map((p) => p.trim().replace(/[.,\s]+$/, '')).filter(Boolean)
+    const parts = [`${style}, ${content}`, castClause, light ?? '', reconstructionClause].map((p) => p.trim().replace(/[.,\s]+$/, '')).filter(Boolean)
     return parts.join('. ')
   }
 
-  const { bible, primaryEntity, supportingEntities } = expansion
+  const { bible, primaryEntity, supportingEntities, appearanceByEntity } = expansion
   // Scene entities in splice order, narrator suppression + depictability applied (see sceneEntities). When
   // the scene's image is reference-conditioned (the entity has a plate), the references carry the look — but
   // we still splice the descriptions: they're the channel's narration-language facts that the reference
   // can't encode (which light source is active, etc.), and they keep the text-only fallback identical.
-  const specs = sceneEntities(bible, { primaryEntity, supportingEntities }).map((e) => e.description)
+  const specs = sceneEntities(bible, {
+    primaryEntity,
+    supportingEntities,
+    ...(appearanceByEntity ? { appearanceByEntity } : {}),
+  }).map((e) => e.description)
 
   // Style first (convention: style DNA frames how the scene reads), then the cast ethnicity directive (so it
   // frames every person), then the frozen entity specs in role order (primary leads → satisfies VISUAL
   // PRIORITY mechanically), then the scene's action prose, then the reel-level lighting directive last.
-  const parts = [style, castClause, ...specs, content, light ?? ''].map((p) => p.trim().replace(/[.,\s]+$/, '')).filter(Boolean)
+  const parts = [style, castClause, ...specs, content, light ?? '', reconstructionClause].map((p) => p.trim().replace(/[.,\s]+$/, '')).filter(Boolean)
   return parts.join('. ')
 }
 

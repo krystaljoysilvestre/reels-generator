@@ -2,7 +2,7 @@ import { eq, and, gt, sql } from 'drizzle-orm'
 import type { z } from 'zod'
 import { getDb, reels, stories, scenes, channels } from '@reels/db'
 import { llmCall, buildInputHash } from '@reels/providers'
-import { ScenesOutputSchema, WorldBibleSchema, StoryBibleSchema, EMPTY_STORY_BIBLE, resolveEntities, reviewSceneBreakdown, MOTION_BUDGET, motionBudgetForSeconds, estimateNarrationSec, retileToNarration, cameraMovePrompt, animatorMotionPrompt, slug, planChapters, legsForChapter, CHAPTER_THRESHOLD_SEC, channelPlatformPreset, type StoryChapter, type StoryBible, effectiveGenre,} from '@reels/core'
+import { ScenesOutputSchema, WorldBibleSchema, StoryBibleSchema, EMPTY_STORY_BIBLE, appearanceBindingsForScene, resolveEntities, reviewSceneBreakdown, MOTION_BUDGET, motionBudgetForSeconds, estimateNarrationSec, retileToNarration, cameraMovePrompt, animatorMotionPrompt, slug, planChapters, legsForChapter, CHAPTER_THRESHOLD_SEC, channelPlatformPreset, type StoryChapter, type StoryBible, effectiveGenre,} from '@reels/core'
 import { buildScenesPrompt, SCENES_V1_VERSION, buildPeakExtractPrompt, PEAK_EXTRACT_V1_VERSION, PeakExtractSchema, resolveMediaGenre, buildSceneDepictionCriticPrompt, SCENE_DEPICTION_CRITIC_V1_VERSION, SceneDepictionVerdictSchema, buildSceneDepictionDoctorPrompt, SCENE_DEPICTION_DOCTOR_V1_VERSION, SceneDepictionRepairSchema } from '../../prompts-bridge.js'
 import { runStep } from '../harness.js'
 
@@ -260,7 +260,7 @@ export async function breakdownScenes(reelId: string): Promise<void> {
           maxScenes,
           maxVideoTiers,
           isOpening: chapter.idx === 1,
-          scenes: s.map((x) => ({ narrationText: x.narrationText, imagePrompt: x.imagePrompt, tier: x.tier, location: x.location, primaryEntity: x.primaryEntity ?? null, supportingEntities: x.supportingEntities ?? [], subjectMotion: x.subjectMotion ?? '', sceneIntent: x.sceneIntent ?? null })),
+          scenes: s.map((x) => ({ narrationText: x.narrationText, imagePrompt: x.imagePrompt, tier: x.tier, location: x.location, primaryEntity: x.primaryEntity ?? null, supportingEntities: x.supportingEntities ?? [], ...(x.appearanceByEntity ? { appearanceByEntity: x.appearanceByEntity } : {}), subjectMotion: x.subjectMotion ?? '', sceneIntent: x.sceneIntent ?? null })),
           // Journey-grounded checks (location/cast vs the world-state) — fail-soft: empty journey → skipped.
           bibleEntities: storyBible.entities,
           narratorEntityId: analyzed?.continuity.narratorEntityId ?? null,
@@ -476,6 +476,10 @@ export async function breakdownScenes(reelId: string): Promise<void> {
     const motionPrompt = s.tier === 'video'
       ? animatorMotionPrompt(s.cameraMove, s.subjectMotion)
       : cameraMovePrompt(s.cameraMove)
+    // New scene output chooses its depicted context explicitly. Legacy/omitted output inherits the
+    // analyzer's event-time journey binding so old callers remain deterministic.
+    const appearanceBindings = s.appearanceByEntity
+      ?? appearanceBindingsForScene(storyBible, story.body, s.narrationText)
     await db
       .insert(scenes)
       .values({
@@ -491,6 +495,7 @@ export async function breakdownScenes(reelId: string): Promise<void> {
         location: s.location,
         primaryEntity: s.primaryEntity ?? null,        // bible refs → expanded by assembleImagePrompt (generate_images)
         supportingEntities: s.supportingEntities ?? [],
+        appearanceBindings,
         sceneIntent: s.sceneIntent ?? null,
       })
       .onConflictDoUpdate({
@@ -506,13 +511,14 @@ export async function breakdownScenes(reelId: string): Promise<void> {
           location: s.location,
           primaryEntity: s.primaryEntity ?? null,
           supportingEntities: s.supportingEntities ?? [],
+          appearanceBindings,
           sceneIntent: s.sceneIntent ?? null,
           // A re-breakdown (regenerate) reuses the (reelId, idx) row; drop the render-derived state ONLY
           // when this scene's content actually changed, so generate_images/animate_scenes don't composite
           // the OLD story's image/clip under the NEW narration. `IS DISTINCT FROM` unchanged content →
           // keep the asset (no needless re-pay); changed → NULL it so the pending filter regenerates.
-          imageAssetId: sql`CASE WHEN ${scenes.visualPrompt} IS DISTINCT FROM ${s.imagePrompt} OR ${scenes.narrationText} IS DISTINCT FROM ${s.narrationText} THEN NULL ELSE ${scenes.imageAssetId} END`,
-          videoAssetId: sql`CASE WHEN ${scenes.visualPrompt} IS DISTINCT FROM ${s.imagePrompt} OR ${scenes.motionPrompt} IS DISTINCT FROM ${motionPrompt} THEN NULL ELSE ${scenes.videoAssetId} END`,
+          imageAssetId: sql`CASE WHEN ${scenes.visualPrompt} IS DISTINCT FROM ${s.imagePrompt} OR ${scenes.narrationText} IS DISTINCT FROM ${s.narrationText} OR ${scenes.appearanceBindings} IS DISTINCT FROM ${JSON.stringify(appearanceBindings)}::jsonb THEN NULL ELSE ${scenes.imageAssetId} END`,
+          videoAssetId: sql`CASE WHEN ${scenes.visualPrompt} IS DISTINCT FROM ${s.imagePrompt} OR ${scenes.motionPrompt} IS DISTINCT FROM ${motionPrompt} OR ${scenes.appearanceBindings} IS DISTINCT FROM ${JSON.stringify(appearanceBindings)}::jsonb THEN NULL ELSE ${scenes.videoAssetId} END`,
         },
       })
   }

@@ -49,6 +49,10 @@ export const SceneOutputSchema = z.object({
   // should notice first. These default empty so an empty/absent bible degrades to inline description.
   primaryEntity: z.string().nullable().default(null),
   supportingEntities: z.array(z.string()).default([]),
+  // The render-facing identity state this shot chooses. Usually copied from the narration's journey leg;
+  // an intentionally retained framing shot may omit the leg's variant and show the parent/default teller.
+  // Optional (not defaulted) so legacy model output can be distinguished and deterministically backfilled.
+  appearanceByEntity: z.record(z.string(), z.string()).optional(),
   sceneIntent: z.string().default(''),
 })
 export type SceneOutput = z.infer<typeof SceneOutputSchema>

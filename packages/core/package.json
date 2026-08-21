@@ -45,7 +45,7 @@
     "./prompts/story-analyzer.v1": "./src/prompts/story-analyzer.v1.ts",
     "./prompts/revise-scene.v1": "./src/prompts/revise-scene.v1.ts",
     "./prompts/grounded-feedback.v1": "./src/prompts/grounded-feedback.v1.ts",
-    "./prompts/place-source.v1": "./src/prompts/place-source.v1.ts",
+    "./prompts/entity-source.v1": "./src/prompts/entity-source.v1.ts",
     "./prompts/motion.v1": "./src/prompts/motion.v1.ts",
     "./prompts/rephrase.v1": "./src/prompts/rephrase.v1.ts",
     "./prompts/peak-extract.v1": "./src/prompts/peak-extract.v1.ts",

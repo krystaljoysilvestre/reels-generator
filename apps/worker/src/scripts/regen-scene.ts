@@ -18,7 +18,7 @@ async function main() {
   const { getDb, scenes, assets, channels, reels } = await import('@reels/db')
   const { eq, and, inArray, sql } = await import('drizzle-orm')
   const { generateImageFal, imageEngineForGenre } = await import('@reels/providers')
-  const { assembleImagePrompt, assembleNegativePrompt, reelLightingDirective, sceneEntities, StoryBibleSchema, channelPlatformPreset, effectiveGenre } =
+  const { AppearanceBindingsSchema, assembleImagePrompt, assembleNegativePrompt, conditionableReferenceKeys, reelLightingDirective, sceneEntities, StoryBibleSchema, channelPlatformPreset, effectiveGenre } =
     await import('@reels/core')
 
   const db = getDb()
@@ -28,8 +28,9 @@ async function main() {
   if (!reel || !scene || !channel) throw new Error('reel/scene/channel not found')
 
   const storyBible = reel.storyBible ? StoryBibleSchema.parse(reel.storyBible) : null
+  const appearanceByEntity = AppearanceBindingsSchema.parse(scene.appearanceBindings ?? {})
   const expansion = storyBible
-    ? { bible: storyBible, primaryEntity: scene.primaryEntity, supportingEntities: scene.supportingEntities }
+    ? { bible: storyBible, primaryEntity: scene.primaryEntity, supportingEntities: scene.supportingEntities, appearanceByEntity }
     : undefined
   // The reel's FROZEN genre, not the channel's current one: this re-renders ONE scene back into an
   // existing reel, so it must use the same engine/lighting/guards the reel's other scenes were made
@@ -44,9 +45,7 @@ async function main() {
   const negativePrompt = assembleNegativePrompt({ genreCategory: genre })
 
   const entityPlateKeys = storyBible
-    ? sceneEntities(storyBible, { primaryEntity: scene.primaryEntity, supportingEntities: scene.supportingEntities })
-        .map((e) => e.referenceImageKey)
-        .filter((k): k is string => Boolean(k))
+    ? conditionableReferenceKeys(sceneEntities(storyBible, { primaryEntity: scene.primaryEntity, supportingEntities: scene.supportingEntities, appearanceByEntity }))
     : []
   const currentImage = mode !== 'fresh' && scene.imageAssetId
     ? await db.query.assets.findFirst({ where: eq(assets.id, scene.imageAssetId) })

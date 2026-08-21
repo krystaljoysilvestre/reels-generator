@@ -2,7 +2,7 @@
 // Downloaded from the dashboard for manual posting (Phase 1).
 import type { NextRequest} from 'next/server';
 import { NextResponse } from 'next/server'
-import { getDb, reels, assets, scenes, channels } from '@reels/db'
+import { getDb, reels, assets, scenes, channels, sceneImageOrigins } from '@reels/db'
 import { eq, and, asc, sql } from 'drizzle-orm'
 import { downloadBuffer, llmCall } from '@reels/providers'
 import { PostMetaSchema, PostingRulesSchema, formatPostCaption, formatImageCredits, StoryBibleSchema, nextPublishSlot, resolvePublishSlots, resolvePublishDays, type PostMeta } from '@reels/core'
@@ -196,9 +196,10 @@ export async function GET(req: NextRequest) {
   // Build the caption from the reel's post package (title/hook/caption/hashtags).
   const story = reel.story
   const meta = await resolvePostMeta(reel, story, channel ?? null)
-  // Image-attribution credits for any real SOURCED plates (Wikimedia etc.) — appended so licence terms are met.
+  // Image-attribution credits for every real SOURCED image (Wikimedia etc.) — reference plates AND archival
+  // photographs presented as scenes — appended so licence terms are met.
   const bibleParse = reel.storyBible ? StoryBibleSchema.safeParse(reel.storyBible) : null
-  const imageCredits = bibleParse?.success ? formatImageCredits(bibleParse.data) : ''
+  const imageCredits = bibleParse?.success ? formatImageCredits(bibleParse.data, await sceneImageOrigins(reelId)) : ''
   const captionBody = meta
     ? [`TITLE: ${meta.title}`, '', formatPostCaption(meta)].join('\n')
     : (story?.logline ?? story?.title ?? '')

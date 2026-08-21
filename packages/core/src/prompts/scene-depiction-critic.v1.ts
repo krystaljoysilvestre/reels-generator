@@ -8,8 +8,8 @@
 // as copies of this shape; per the anti-abstraction rule, a shared Gate interface is earned when the
 // THIRD gate lands, not before.
 //
-// Boundary: "depiction" here = does the shot depict its span's CLAIM. Distinct from real-places'
-// "depictive fidelity" (= does a render match the real place) — see hypotheses/real-places.md.
+// Boundary: "depiction" here = does the shot depict its span's CLAIM. Distinct from depictive-fidelity's
+// "depictive fidelity" (= does a render match the real place) — see specs/depictive-fidelity.md.
 // Evidence: the 2026-07-25 voiceover probe — boards scored 0/8, 1/7, 1/5 on load-bearing claims even with
 // the informational genre grammar present; soft prompt guidance is satisficed, judgment is not
 // (hypotheses/voiceover-perspective.md Phase 0). Scoped to informational media-genre boards today; the

@@ -13,6 +13,7 @@
 // order), which is more robust than asking the LLM to renumber.
 
 import { slug } from './story-bible.js'
+import { mentionsAny, personNameVariants } from '../types/depiction.js'
 import type { BibleEntity, JourneyLeg } from '../types/story-bible.js'
 
 export interface SceneQAScene {
@@ -22,6 +23,7 @@ export interface SceneQAScene {
   location: string
   primaryEntity?: string | null
   supportingEntities?: string[]
+  appearanceByEntity?: Record<string, string>
   subjectMotion?: string // the SUBJECT's on-screen motion (video beats); '' = only the camera moves
   sceneIntent?: string | null
 }
@@ -151,6 +153,14 @@ function legForScene(scene: SceneQAScene, journey: JourneyLeg[], narration: stri
     if (legAt !== -1 && at >= legAt && at < legAt + span.length) return leg
   }
   return null
+}
+
+function appearanceSignature(leg: JourneyLeg): string {
+  return Object.entries(leg.appearanceByEntity ?? {})
+    .map(([entityId, appearanceId]) => [slug(entityId), slug(appearanceId)] as const)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([entityId, appearanceId]) => `${entityId}=${appearanceId}`)
+    .join('|')
 }
 
 // Person nouns that signal a human in frame (for cast + static-pose heuristics). Word-boundary matched.
@@ -326,6 +336,43 @@ export function reviewSceneBreakdown(input: SceneQAInput): SceneQAResult {
     const leg = journey.length ? legForScene(s, journey, groundText) : null
     const locEnts = refsOf(s).map(resolve).filter((e): e is BibleEntity => !!e && e.kind === 'location')
 
+    // Legacy/omitted selections inherit the journey state, so they cannot safely cross an appearance
+    // boundary. A scene with an explicit selection may intentionally stay on the established framing
+    // teller across remembered narration; its one selected map remains mechanically unambiguous.
+    if (journey.length > 0 && s.appearanceByEntity === undefined) {
+      const sceneText = s.narrationText.trim()
+      const sceneAt = groundText.indexOf(sceneText)
+      const sceneEnd = sceneAt + sceneText.length
+      if (sceneAt >= 0) {
+        const signatures = new Set<string>()
+        for (const journeyLeg of journey) {
+          const span = journeyLeg.span.trim()
+          const legAt = groundText.indexOf(span)
+          if (legAt < 0) continue
+          const legEnd = legAt + span.length
+          if (sceneAt < legEnd && sceneEnd > legAt) signatures.add(appearanceSignature(journeyLeg))
+        }
+        if (signatures.size > 1) {
+          errors.push(`Scene ${n} crosses a journey boundary where a character's time-bound appearance changes — cut the scene at that boundary so one frame resolves to exactly one appearance.`)
+        }
+      }
+    }
+
+    // Explicit selections are options exposed by the Story Bible, not free-form new character looks.
+    for (const [entityRef, appearanceRef] of Object.entries(s.appearanceByEntity ?? {})) {
+      const entity = resolve(entityRef)
+      if (!entity) {
+        errors.push(`Scene ${n} binds appearance for unknown entity "${entityRef}" — use a Story Bible character id.`)
+        continue
+      }
+      if (!refsOf(s).some((ref) => slug(ref) === slug(entity.id))) {
+        errors.push(`Scene ${n} binds an appearance for "${entity.id}" but does not tag that character in primaryEntity/supportingEntities.`)
+      }
+      if (!entity.appearances?.some((appearance) => slug(appearance.id) === slug(appearanceRef))) {
+        errors.push(`Scene ${n} binds "${entity.id}" to unknown appearance "${appearanceRef}".`)
+      }
+    }
+
     // Location: a scene may only tag the place it's physically IN.
     if (leg) {
       // 2A — ground on the journey leg (catches coherently-wrong tags, not just self-inconsistency).
@@ -359,6 +406,38 @@ export function reviewSceneBreakdown(input: SceneQAInput): SceneQAResult {
       const visible = leg.visible && leg.visible.length ? leg.visible : leg.present ?? []
       if (PERSON_NOUN_RE.test(s.imagePrompt) && visible.length === 0) {
         warnings.push(`Scene ${n} prose mentions a person but the journey has no one visible in this beat — check for an invented extra (a bystander/hand/figure).`)
+      }
+    }
+
+    // Check C2 — a CHARACTER is the primary subject of a shot containing no person (error).
+    //
+    // If the prose describes nobody, a person cannot be what the shot is ABOUT. This catches the director
+    // tagging what the NARRATION is about instead of what the FRAME shows — and it is the cause of a real
+    // 2026-08-17 defect: on the Crossroads reel three object-only beats (a coin mid-flip, a urinal on a
+    // restroom wall, a urinal reflected in a coin) were all tagged primary to Marcel Duchamp, who appears
+    // in none of them. The object those shots were actually about went untagged, so its reference plate —
+    // a real sourced photograph of the artwork — was never passed and each beat invented its own version.
+    //
+    // Two costs, which is why this is an error rather than a nudge. The shot loses the identity anchor it
+    // should have had; and when the mis-tagged character is one whose identity must be withheld, the
+    // withholding machinery fires on a person-free frame, paying for a staging rewrite that repairs nothing.
+    //
+    // Deliberately narrow. It fires only on the PRIMARY tag (a supporting character legitimately sits
+    // off-frame) and only on a total absence of person language, so "a hand reaches in" or "a distant
+    // silhouette" keeps the character tag. Measured on the reel that motivated it: 3 true positives, 0
+    // false — the two correctly-tagged person beats stayed silent.
+    // Two exemptions, both found by the existing suite rather than reasoned out in advance:
+    //   • THE NARRATOR. In a first-person reel she IS the camera, so "over the shoulder, the narrator
+    //     pushing the door open" legitimately carries no person noun. Her framing has its own rules
+    //     (Check E + the render-time visibility rule); she is not a mis-tag.
+    //   • THE CHARACTER'S OWN NAME. Prose may name them directly ("Duchamp lowers the coin") without using
+    //     any generic person word, and that is a person plainly in frame.
+    const primaryEntityRef = s.primaryEntity?.trim()
+    if (input.bibleEntities && primaryEntityRef && slug(primaryEntityRef) !== narratorSlug) {
+      const primary = resolve(primaryEntityRef)
+      const namesPrimary = primary ? mentionsAny(s.imagePrompt, personNameVariants(primary.id)) : false
+      if (primary?.kind === 'character' && !PERSON_NOUN_RE.test(s.imagePrompt) && !namesPrimary) {
+        errors.push(`Scene ${n} tags character "${primary.id}" as its PRIMARY subject, but the shot describes no person at all — it is about something else. Set primaryEntity to the thing the frame actually shows (and tag it, so its reference holds across shots); if the character genuinely belongs in this beat, describe them in the shot.`)
       }
     }
 

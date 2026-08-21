@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { mkdir, writeFile, rm, copyFile } from 'node:fs/promises'
 import { getDb, reels, scenes, assets, channels } from '@reels/db'
 import { downloadBuffer, uploadFile, buildInputHash } from '@reels/providers'
-import { TimingsSchema, LutConfigSchema, CaptionStyleSchema, channelPlatformPreset, effectsFromSelection, parseMotion, effectiveGenre,} from '@reels/core'
+import { TimingsSchema, LutConfigSchema, CaptionStyleSchema, channelPlatformPreset, effectsFromSelection, parseMotion, effectiveGenre, computeMediaDisclosure, MediaOriginSchema,} from '@reels/core'
 import { renderReelWithRemotion } from '@reels/render/remotion/render-remotion'
 import { resolveMediaGenre } from '@reels/core/prompts/scenes.v1'
 import { composeCover } from '../compose-cover.js'
@@ -22,9 +22,11 @@ const RENDER_FETCH_CONCURRENCY = 8
 // The app's default watermark logo (R2 key) — burned onto every reel unless a channel overrides it.
 const DEFAULT_WATERMARK_KEY = 'app/watermark.png'
 
-// Persistent synthetic-media/illustration disclosure burned onto Evidence-Based Narrative reels — the
-// visuals are illustration, and the label makes that explicit to the viewer (specs/evidence-based-narrative.md).
-const EBN_DISCLOSURE_LABEL = 'Illustrated · based on documented sources'
+// The persistent media disclosure burned onto Evidence-Based Narrative reels is COMPUTED from what the reel
+// actually contains (see computeMediaDisclosure), not from the channel flag alone. It used to be the constant
+// 'Illustrated · based on documented sources'; once a reel can present a genuine archival photograph, that
+// constant states something false about real media — it labels a real photograph an illustration.
+// specs/evidence-based-narrative.md, specs/depictive-fidelity.md.
 
 // Pick per-scene video effects from the scene's (AI-derived) mood + the channel genre. Pure mapping —
 // no API call, so it's free; effects are composited at render time. Kept tasteful: gentle life on every
@@ -81,6 +83,17 @@ export async function renderStep(reelId: string): Promise<void> {
   const mixAsset = allAssets.find((a) => (a.meta as Record<string, unknown>)['type'] === 'final_mix')
   if (!mixAsset) throw new Error('No final mix asset — run mix_audio first')
 
+  // MEDIA DISCLOSURE — derived from the scenes' actual provenance, so the burned label describes what the
+  // viewer is watching. A reel mixing generated illustration with genuine archival photographs must not call
+  // all of it "Illustrated"; a reel that is entirely archival must not either.
+  const hasArchivalScenes = reelScenes.some((s) => MediaOriginSchema.safeParse(s.imageOrigin).data?.usage === 'presented_archival')
+  const hasGeneratedScenes = reelScenes.some((s) => MediaOriginSchema.safeParse(s.imageOrigin).data?.usage !== 'presented_archival')
+  const mediaDisclosure = computeMediaDisclosure({
+    hasGeneratedScenes,
+    hasArchivalScenes,
+    isEvidenceBacked: channel.storyMode === 'ebn',
+  })
+
   // The hero clip a video-tier scene renders with — selected exactly as the render loop does below
   // (newest matching row wins via the createdAt ordering). Used both for the cache key and the render.
   const pickVideoAsset = (sceneIdx: number) =>
@@ -114,7 +127,7 @@ export async function renderStep(reelId: string): Promise<void> {
     vignette: lutConfig.vignette,
     lut: lutConfig.lutPath ?? '',
     watermark: channel.watermarkKey ?? DEFAULT_WATERMARK_KEY,
-    disclosure: channel.storyMode === 'ebn' ? EBN_DISCLOSURE_LABEL : '', // in the fingerprint → EBN reels re-render if it changes
+    disclosure: mediaDisclosure, // in the fingerprint → the label changing (or the media mix changing) re-renders
     platform: platformPreset.label, // the resolved spec, so set order can't churn the fingerprint
     frame: `${platformPreset.width}x${platformPreset.height}`, // output dims (belt-and-suspenders to platform)
   })
@@ -270,7 +283,7 @@ export async function renderStep(reelId: string): Promise<void> {
           grain: lutConfig.grain,
           vignette: lutConfig.vignette,
           watermark,
-          ...(channel.storyMode === 'ebn' ? { disclosure: EBN_DISCLOSURE_LABEL } : {}),
+          ...(mediaDisclosure ? { disclosure: mediaDisclosure } : {}),
           outputPath: visualPath,
           onProgress: (p) => {
             const pct = Math.round(p * 100)

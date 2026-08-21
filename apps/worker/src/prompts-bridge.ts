@@ -126,9 +126,12 @@ export { buildFoleySpotPrompt, FOLEY_SPOT_V1_VERSION, FoleySpotSchema } from '@r
 export { buildCompilationPrompt, COMPILATION_V1_VERSION } from '@reels/core/prompts/compilation.v1'
 export { buildPostMetaPrompt, PostMetaLlmSchema, POST_META_V1_VERSION } from '@reels/core/prompts/post-meta.v1'
 export {
-  buildPlaceSourceDecidePrompt,
-  buildPlaceVerifyPrompt,
-  PlaceSourceDecisionSchema,
-  PlaceVerifySchema,
-  PLACE_SOURCE_V1_VERSION,
-} from '@reels/core/prompts/place-source.v1'
+  buildEntitySourceDecidePrompt,
+  buildEntityVerifyPrompt,
+  buildRepresentativeStagingPrompt,
+  EntitySourceDecisionSchema,
+  EntityVerifySchema,
+  RepresentativeStagingSchema,
+  PLATE_COLOURISE_PROMPT,
+  ENTITY_SOURCE_V1_VERSION,
+} from '@reels/core/prompts/entity-source.v1'

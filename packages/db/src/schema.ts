@@ -471,6 +471,10 @@ export const scenes = pgTable(
     // (render falls back to a black placeholder) instead of dangling. `assets` is declared below — the
     // thunk resolves lazily, so the forward reference is fine.
     imageAssetId: uuid('image_asset_id').references((): AnyPgColumn => assets.id, { onDelete: 'set null' }),
+    // Provenance when this scene's image is a REAL sourced photograph presented as itself rather than a
+    // generated frame (jsonb: MediaOrigin, `usage:'presented_archival'`). NULL = generated, which is every
+    // scene that predates archival fulfilment. Drives licence credits and the reel's media disclosure.
+    imageOrigin: jsonb('image_origin'),
     videoAssetId: uuid('video_asset_id').references((): AnyPgColumn => assets.id, { onDelete: 'set null' }),
     startMs: integer('start_ms'),
     endMs: integer('end_ms'),
@@ -482,6 +486,9 @@ export const scenes = pgTable(
     // assembler splices their frozen canonical descriptions so recurring elements don't drift.
     primaryEntity: text('primary_entity'),                                  // the bible id the shot leads with; null = un-canonical subject
     supportingEntities: text('supporting_entities').array().notNull().default([]), // other bible ids in frame
+    // Scene-planner-selected character appearance for this shot, constrained to analyzer-authored options.
+    // Empty = each entity's base look. Persisted so every renderer/regeneration path resolves the same state.
+    appearanceBindings: jsonb('appearance_bindings').notNull().default({}),
     sceneIntent: text('scene_intent'),                                       // "what the audience should notice first"
   },
   (t) => ({

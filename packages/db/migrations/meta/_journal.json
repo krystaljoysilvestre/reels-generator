@@ -428,6 +428,20 @@
       "when": 1786431144774,
       "tag": "0060_swift_wallflower",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1786517544774,
+      "tag": "0061_scene_image_origin",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1786517544775,
+      "tag": "0062_scene_appearance_bindings",
+      "breakpoints": true
     }
   ]
 }

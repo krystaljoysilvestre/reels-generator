@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { getDb, scenes, assets, channels, reels } from '@reels/db'
 import { eq, and, inArray, sql } from 'drizzle-orm'
 import { generateImage, generateImageFal, imageEngineForGenre, FLUX_IMAGE_ENGINE, ContentFilterError, ProviderRateLimitError, llmCall, SCENE_IMAGE_QUALITY } from '@reels/providers'
-import { assembleImagePrompt, assembleReferencePrompt, assembleNegativePrompt, castNationality, reelLightingDirective, sceneEntities, slug, StoryBibleSchema, channelPlatformPreset } from '@reels/core'
+import { AppearanceBindingsSchema, appearanceIdForEntity, assembleImagePrompt, assembleReferencePrompt, assembleNegativePrompt, castNationality, conditionableReferenceKeys, entityAtAppearance, reelLightingDirective, resolveCharacterAppearance, sceneEntities, slug, StoryBibleSchema, channelPlatformPreset } from '@reels/core'
 import { buildReviseScenePrompt, REVISE_SCENE_V1_VERSION, ReviseSceneSchema } from '@reels/core/prompts/revise-scene.v1'
 import { buildFilterSafePrompt, FILTER_SAFE_V1_VERSION, FilterSafeSchema } from '@reels/core/prompts/filter-safe.v1'
 import { requireReelOwner, callerMayUseStorageKey, requireSpendBudget } from '@/lib/api-access'
@@ -53,6 +53,7 @@ export async function POST(req: NextRequest) {
   // Engine + look context up-front, so an entity-look change can re-mint that character's plate BEFORE we
   // render the scene off it. Same engine/plates as the pipeline → the reshoot stays consistent with the reel.
   const storyBible = reel.storyBible ? StoryBibleSchema.parse(reel.storyBible) : null
+  const appearanceByEntity = AppearanceBindingsSchema.parse(scene.appearanceBindings ?? {})
   const engine = imageEngineForGenre(channel.genreCategory)
   const aspect = channelPlatformPreset(channel).aspect
   const lighting = storyBible ? reelLightingDirective(channel.genreCategory, storyBible.continuity.timeline) : undefined
@@ -86,7 +87,7 @@ export async function POST(req: NextRequest) {
   if (tweak) {
     try {
       const sceneEnts = storyBible
-        ? sceneEntities(storyBible, { primaryEntity: scene.primaryEntity, supportingEntities: scene.supportingEntities }).map((e) => ({ id: e.id, description: e.description }))
+        ? sceneEntities(storyBible, { primaryEntity: scene.primaryEntity, supportingEntities: scene.supportingEntities, appearanceByEntity }).map((e) => ({ id: e.id, description: e.description }))
         : []
       const { system, userMessage } = buildReviseScenePrompt(basePrompt, tweak, { genreCategory: channel.genreCategory, entities: sceneEnts, aspect })
       const revised = await llmCall({ templateVersion: REVISE_SCENE_V1_VERSION, schema: ReviseSceneSchema, system, messages: [{ role: 'user', content: userMessage }] })
@@ -99,23 +100,33 @@ export async function POST(req: NextRequest) {
       const look = mode === 'fresh' ? revised.data.entityLook : null
       const ent = look && storyBible ? storyBible.entities.find((e) => e.id === look.entityId) : undefined
       if (look && ent) {
-        // Update the canonical look + re-mint the plate GLOBALLY (threat → Flux so it isn't beautified). A
-        // failed plate keeps the old one — the description still updates.
-        ent.description = look.description.trim() || ent.description
+        // Update only the identity state used by this scene. Editing young Lola must not rewrite elderly
+        // Lola in the framing scenes (and vice versa); both still belong to the same parent character.
+        const selectedAppearanceId = appearanceIdForEntity(appearanceByEntity, ent)
+        const selectedAppearance = resolveCharacterAppearance(ent, selectedAppearanceId)
+        if (selectedAppearance) selectedAppearance.description = look.description.trim() || selectedAppearance.description
+        else ent.description = look.description.trim() || ent.description
+        const renderEntity = entityAtAppearance(ent, selectedAppearance?.id)
         const plateEngine = channel.genreCategory === 'horror' && ent.role === 'threat' ? FLUX_IMAGE_ENGINE : engine
         try {
-          const platePrompt = assembleReferencePrompt(ent, channel.stylePreset, lighting, cast)
-          const plateKey = `reels/${reelId}/refs/${slug(ent.id)}.webp`
+          const platePrompt = assembleReferencePrompt(renderEntity, channel.stylePreset, lighting, cast)
+          const suffix = selectedAppearance ? `--${slug(selectedAppearance.id)}` : ''
+          const plateKey = `reels/${reelId}/refs/${slug(ent.id)}${suffix}.webp`
           const plateRes = plateEngine.family === 'openai'
             ? await generateImage({ prompt: platePrompt, negativePrompt, reelId, sceneIdx, storageKey: plateKey, quality: SCENE_IMAGE_QUALITY, aspect })
             : await generateImageFal({ prompt: platePrompt, negativePrompt, reelId, sceneIdx, storageKey: plateKey, aspect, engine: plateEngine })
           await addSpend(plateRes.costCents) // a second full image generation, previously uncharged
-          ent.referenceImageKey = plateRes.asset.storageKey
+          if (selectedAppearance) selectedAppearance.referenceImageKey = plateRes.asset.storageKey
+          else ent.referenceImageKey = plateRes.asset.storageKey
         } catch { /* keep old plate; description still updated */ }
         await db.update(reels).set({ storyBible }).where(eq(reels.id, reelId))
         const allScenes = await db.query.scenes.findMany({ where: eq(scenes.reelId, reelId) })
         const affectedSceneIdxs = allScenes
-          .filter((s) => s.idx !== sceneIdx && (s.primaryEntity === ent.id || (s.supportingEntities ?? []).includes(ent.id)))
+          .filter((s) => {
+            if (s.idx === sceneIdx || !(s.primaryEntity === ent.id || (s.supportingEntities ?? []).includes(ent.id))) return false
+            const bindings = AppearanceBindingsSchema.parse(s.appearanceBindings ?? {})
+            return (appearanceIdForEntity(bindings, ent) ?? null) === (selectedAppearance?.id ?? null)
+          })
           .map((s) => s.idx)
         entityLook = { entityId: ent.id, affectedSceneIdxs }
       }
@@ -125,13 +136,11 @@ export async function POST(req: NextRequest) {
   }
 
   const expansion = storyBible
-    ? { bible: storyBible, primaryEntity: scene.primaryEntity, supportingEntities: scene.supportingEntities }
+    ? { bible: storyBible, primaryEntity: scene.primaryEntity, supportingEntities: scene.supportingEntities, appearanceByEntity }
     : undefined
   const finalPrompt = assembleImagePrompt(contentPrompt, channel.stylePreset, expansion, lighting, cast)
   const entityPlateKeys = storyBible
-    ? sceneEntities(storyBible, { primaryEntity: scene.primaryEntity, supportingEntities: scene.supportingEntities })
-        .map((e) => e.referenceImageKey)
-        .filter((k): k is string => Boolean(k))
+    ? conditionableReferenceKeys(sceneEntities(storyBible, { primaryEntity: scene.primaryEntity, supportingEntities: scene.supportingEntities, appearanceByEntity }))
     : []
   // 'vary' (default): put the CURRENT image first as the reference so the regen stays close to it (a small
   // fix keeps the composition). 'fresh': omit it → a new composition, plates-only. Faces stay locked either way.

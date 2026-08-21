@@ -55,6 +55,36 @@ Within-reel continuity is the third reason, not the first. (Honest caveat: cross
 4. **Narration wins.** The bible informs; the line overrides (same precedence `scenes.v1` already applies to the world bible). If the story contradicts the bible, the scene follows the story.
 5. **Immutability beats tidiness.** The assembler may expand, order, and concat. It may **not** rewrite, dedupe phrases, or otherwise mutate a canonical string — that would reintroduce the drift the whole design removes.
 
+### Identity across narrative time
+
+**Evidence (2026-08-12, reel `04d75de3-5f2e-4ca1-b752-16f5000960aa`).** The analyzer correctly
+recognized that Lola was recounting events from her youth, and the scene directions asked for her younger
+self, but the Bible could store only one elderly description and one elderly reference plate. Mechanical
+continuity then did the wrong thing perfectly: the elderly plate was injected into every remembered scene.
+
+The correction is an extension of the existing symbol table, not a retell-specific stage or an `isRetell`
+flag:
+
+- One person remains **one `BibleEntity` identity** across the story.
+- A character may carry optional, complete render-facing `appearances` for materially different visible
+  states supported by the narration (`remembered-youth`, for example). They are never separate cast members
+  and never description deltas such as “the same woman but younger.”
+- The ordered journey is the semantic timeline. Each anchored leg may bind a present character to its
+  event-time appearance through `appearanceByEntity`; omission means the parent/default look. Linear stories
+  and time shifts with no visible change emit no variants and retain the existing path.
+- Scene planning explicitly chooses the depicted context. It normally copies the journey binding to
+  dramatize the event, but may intentionally stay on the parent/default framing teller while remembered
+  narration continues. That choice is persisted on the scene before image spend; an omitted legacy choice
+  inherits the journey binding. A shot may never contain two life stages of one identity.
+- The renderer resolves **exactly one** complete description and **exactly one** reference plate for that
+  identity state. It must never condition on both the base and a variant.
+- Image QA receives the selected appearance when one is active and rejects a clear life-stage contradiction.
+
+This is deliberately broader than flashbacks: the same mechanism can represent an explicit later self or
+another persistent time-bound portrayal. It is deliberately narrower than “past tense”: tense alone never
+creates a timeline segment or an appearance. Ambiguous narration may support “child” or “young woman,” but
+never an invented exact numeric age.
+
 ## Schema
 
 New: `StoryBibleSchema` in `packages/core/src/types/` (sibling to `WorldBibleSchema`).

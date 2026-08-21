@@ -1,6 +1,145 @@
-# Hypothesis: Real Places — depictive fidelity for the factual genre
+# Depictive Fidelity — does what the viewer sees actually depict the real thing?
 
-Status: **IMPLEMENTED in the working tree (uncommitted), pending owner live review — 2026-07-20.** Owner directed "build them now" and chose the FULL build, which **crosses the "factual is a committed product" gate** this doc waited behind — recorded as an explicit owner decision. Graduates to `/specs` once reviewed + committed. (Original status: hypothesis, Phase-0-gated — retained below as the design record.) · Owner: PM · Eng: senior
+Status: **CURRENT ARCHITECTURE — graduated from `hypotheses/real-places.md` 2026-08-12.** The responsibility is no longer place-shaped: it now covers every class of real subject a factual story depicts — places, objects, animals, and real people. The original Phase-0-gated hypothesis is retained below as the design record, because its spike findings are still the reason the mechanisms are what they are. · Owner: PM · Eng: senior
+
+---
+
+## The shape of it (2026-08-12)
+
+One question, three answers, because **historical reconstruction and contemporary archival depiction carry different truth obligations**. This is why "real person support" is deliberately not one code path.
+
+| Depiction mode | The model | The real image | Governed by |
+|---|---|---|---|
+| `generated` | creates the depiction | none | the ordinary pipeline |
+| `reference_plate` | generates the frame | conditions it, never presented as authentic event imagery | the real-places CARE tier + reconstruction framing |
+| `archival_only` | is not involved | presented directly, never enters generation | the floor's licensed-archival carve-out |
+| `identity_withheld` | carries the beat by representative staging | none exists — and none is invented | the floor's no-fabricated-likeness rule |
+
+The fourth mode is not a rounding of the third. A real person whose identity we **cannot verify** must get neither a sourced photograph (we don't know who they are) nor a generated one (inventing a face for a named real person is the fabrication this module exists to prevent). Routing that case to `generated` looked harmless and was not — it minted an invented committed likeness of Marcel Duchamp on the 2026-08-12 verification reel.
+
+**Pipeline:** subject classification → verified identity → verified eligibility → depiction mode → scene depiction requirements → fulfilment → provenance → disclosure.
+
+Routing is resolved **once** per entity (`entity.depiction`, `types/depiction.ts`) and every downstream gate reads that value. Nothing re-derives a mode from `kind`, and nothing re-checks whether a person is alive.
+
+### Subject class, not entity kind
+
+The Story Bible's `kind` only distinguishes `character | location | object`, which cannot tell a Philippine eagle from a person, or the Titanic from a cracked mirror. `entity-source.v1` classifies the SUBJECT (`place | object | animal | human | fictional | generic`), and only `human` reaches the liveness gate. That is what makes animals work with no new entity kind — an animal tagged as a `character` would otherwise be asked for a death date.
+
+`generic` is the impact≠coverage guard, now applied to every kind: an anonymous object gains nothing from a real reference and may lose.
+
+### Four invariants, enforced in code
+
+1. **`archival_only` never enters reference assembly** — `conditionableReferenceKeys()`, plus an entity-level exclusion from minting so no *generated* stand-in likeness is created either.
+2. **`archival_only` is never named in a generated prompt.** Invariant 1 stops conditioning leakage; this stops *textual* likeness generation — the half that actually failed on 2026-07-24, with no sourced reference involved. Three layers: an LLM restates the beat as representative staging (the positive replacement the floor requires), a deterministic scrub over the assembled prompt is the guarantee, and a rewrite that still names the subject is discarded entirely rather than partly trusted. Such scenes then reach image QA unconditionally.
+3. **A presented archival photograph is never generatively modified.** Framing and pan are editorial; colourisation and `/edit` are not. A *plate* may be colourised precisely because it is a conditioning input — so provenance carries `usage`, `sourceAssetKey`, `conditioningAssetKey` and `conditioningTransform`, making the distinction auditable rather than merely asserted.
+4. **Human depiction requires two separate structural verifications — identity, then eligibility.** They fail to *different* outcomes:
+
+| Identity (single non-disambiguation article + Wikidata item) | `P570` | Mode | Sourcing |
+|---|---|---|---|
+| verified | ≥ `HUMAN_PLATE_MIN_YEARS_DEAD` | `reference_plate` | conditioning plate, reconstruction-framed |
+| verified | living / recent / absent / malformed | `archival_only` | archival shot allowed — identity is anchored |
+| **not** verified | *not reached* | `generated` | **never sourced** — representative staging only |
+
+The third row is the subtle one. `archival_only` is the *stronger* claim — "this person may be presented from a real photograph" — so it must never be reachable by an identity we could not establish. Concretely, `sourceEntityImage()` takes `requireArticleIdentity: true` for humans, which disables the free-text Commons fallback: that fallback matches a name *string* with no identity anchor, and the vision verify is documented as weak at wrong-but-similar — which for a face is the entire failure mode.
+
+`HUMAN_PLATE_MIN_YEARS_DEAD = 100` is a **product safety boundary, not a copyright calculation**. Copyright duration and likeness ethics are different axes, and the photograph's own term is unrelated to the subject's death; the Commons licence allowlist is the copyright mechanism. Comparison is by calendar year, because `P570` is frequently year-precision only and false precision on a safety gate is worse than none.
+
+### Multi-subject conflict policy (v1)
+
+| archival subjects in a scene | behaviour |
+|---|---|
+| 0 | generated normally |
+| 1 | archival-shot candidate; any sourcing failure → sanitized generated fallback |
+| 2+ | representative staging, logged |
+
+Per-subject lead-image sourcing cannot yield a photograph containing two specific people, and compositing them is forbidden by invariant 3 — a composite of two real people is a fabricated record. Multi-person event sourcing is out of scope; the row exists so nobody reaches for compositing later.
+
+### Disclosure follows the media, not the config
+
+`computeMediaDisclosure()` derives the burned label from what the reel actually contains, because a fixed `'Illustrated · …'` string would call a genuine archival photograph an illustration:
+
+```
+Illustrated · based on documented sources
+Illustration + archival photographs · based on documented sources
+Archival photographs · based on documented sources
+```
+
+Relatedly, the EBN illustrative-style guardrail is scoped to *generated* scenes. It exists so no **synthetic** image can be mistaken for authentic documentation; a real photograph is authentic documentation, and measuring it against a rule written for synthesis is a category error.
+
+### What live verification changed (Crossroads reel, 2026-08-12)
+
+Five defects that only a real reel could surface. Each is now a named rule with a regression test.
+
+1. **The licence guarantee was resting on a regex miss.** Duchamp's article lead image is Man Ray's 1920-21 portrait served from `/wikipedia/en/` — a LOCAL en-wiki upload, which on English Wikipedia means non-free/fair-use. The old URL pattern happened not to match the bare `en` segment, so it was rejected by accident and reported as "no Wikipedia article". Now an explicit **Commons-only** rule (`isLocalNonFreeUpload`): `/wikipedia/commons/` is freely licensed by policy, `/wikipedia/<projectcode>/` is not. Anyone "fixing" the old pattern would have started pulling fair-use media into published video.
+
+2. **The identity anchor didn't check it anchored a PERSON.** The decider's query is LLM-written and free-text search returns whatever ranks first: `"Marcel Duchamp French artist"` resolved to the article for *Fountain*, his readymade. Nothing stopped the pipeline reading `P570` off an artwork. It failed safe here (no death date → ineligible), but the mirror case does not: a living person mis-resolved onto a dead namesake would pass the historical gate and mint a plate of the wrong human. Identity now requires `P31` (instance of) to include `Q5` (human) — `wikidataPersonFacts`.
+
+3. **Asking Commons for 1600px served the ORIGINAL.** MediaWiki never upscales, so `iiurlwidth` ≥ the file's own width returns the full-resolution scan. On the 1416px-wide Stieglitz photograph that meant a 2.19MB original, which the vision verifier rejected outright (`400 Could not process image`); at 1024px the same file verifies fine at 0.33MB. `SOURCE_IMAGE_WIDTH = 1024` keeps us on the thumbnail path.
+
+4. **Presence is not subject-hood.** Two scenes *about the urinal* listed Duchamp as merely supporting, and the "exactly one archival subject → fulfil with their photograph" rule would have replaced both with a portrait of him. `archivalShotTarget` now also requires the archival subject to be the scene's PRIMARY one. Detection still scans the whole entity set; only fulfilment narrowed.
+
+5. **Vision QA was grading withheld scenes against the original brief.** It failed a scene twice for *"Marcel Duchamp is not present in the frame"* — punishing the render for obeying the floor, and burning a paid re-roll each time. QA now grades the sanitized staging brief.
+
+**And the naming lesson, which is upstream of all of it.** A real subject only sources if its Story Bible id *identifies* it. `porcelain-urinal` is a description; `fountain` is a proper title but also a common noun, and the decider correctly read it as plumbing. `duchamp-fountain` resolves to the 1917 readymade. `story-analyzer.v1.23` now requires an identifying id and says to qualify a title that doubles as an ordinary word — the same discipline an encyclopedia uses for article titles.
+
+### Tagging is now load-bearing (2026-08-17)
+
+A sourced plate only reaches a shot that **references** the entity. So a mis-tagged scene no longer costs a
+continuity wobble — it costs depictive truth: we hold the real licensed photograph of the subject and render
+an invention instead. On the Crossroads reel three object-only beats were tagged primary to Marcel Duchamp,
+who appears in none of them, and each invented its own urinal.
+
+Two fixes, and one instructive failure.
+
+**Shipped — `scene-qa` Check C2 (error).** A scene whose PRIMARY entity is a character while its prose
+describes no person at all is about something else; re-tag it. Narrow by construction: primary tag only (a
+supporting character may sit off-frame), exempting the narrator (in a first-person reel she IS the camera and
+has her own rules) and exempting prose that names the character directly. Measured on the reel that motivated
+it: 1 fire, 0 false positives. It **misses** one true positive because that prompt used "silhouette" to
+describe the urinal's silhouette and `PERSON_NOUN_RE` counts that word as a person — conservative, which is
+the right failure direction for an error that triggers a paid repair round.
+
+**Shipped — invariant 2 no longer keys off tagging.** The scrub built its withheld set from the scene's
+resolved entities, which are only the TAGGED ones, so a prompt that *names* a withheld real person without
+tagging them bypassed it entirely. Since mis-tagging is demonstrably routine, that was a live path to the
+2026-07-24 failure, not a hypothetical. Withholding now triggers on tagged **or** named.
+
+**Rejected — a lexical "depicts an entity it doesn't tag" detector.** The obvious guard was to match the
+entity's description terms against the prompt. Measured against the real reel it scored 1 true positive to
+2–3 false, and firing it as an error would have made the reel *worse*: scenes 1 and 2 show ordinary urinals in
+a plumbing-shop window before the artwork exists, and tagging those would have stamped `R.MUTT 1917` onto shop
+stock. The failure is conceptual, not a threshold to tune — this story is *built* on an ordinary urinal
+becoming Fountain by declaration, so "urinal in a shop window" and "urinal on a plinth" are lexically
+identical and semantically opposite. Reference conditioning also transfers an artwork's *artwork-ness*
+(signature, plinth, exhibition tag) wholesale, which fights any counterfactual beat needing the object
+stripped of exactly those marks. Unlike a place or a person, a titled artwork's markings **are** its identity.
+
+### Boundary with the depictive-ethics floor
+
+The floor governs what a depiction may **claim**; this governs what may be **sourced** and how. Both are required and neither exempts the other — the 2026-07-24 DTI failure violated depiction with zero sourced references involved. Where they touch (long-dead figures), this defers to the floor's CARE tier.
+
+### ⚠️ Rights in the SUBJECT, not just the file — found 2026-08-17, unresolved
+
+The licence allowlist proves the *photograph* is freely licensed. It says nothing about rights in the *thing
+photographed*.
+
+Crossroads is the case. Stieglitz's 1917 photograph of *Fountain* is public domain, and the pipeline correctly
+used it — then conditioned six frames on it, producing new derivative depictions of an artwork whose author
+died in 1968 and whose estate licenses reproductions (life+70 runs to 2038 in most jurisdictions). The same
+gap covers a public-domain photograph of an in-copyright building, sculpture, mural, or logo.
+
+Note the asymmetry it creates: the floor correctly refused Man Ray's fair-use portrait of Duchamp and
+correctly withheld his likeness, while nothing at all questioned generating derivatives of his artwork.
+**A licence-clean source is necessary and not sufficient for public publishing.** This is the sibling of the
+freedom-of-panorama caveat and needs a human/legal check before any reel depicting a named artwork ships.
+
+### What this still does not own
+
+Era mismatch (right subject, wrong period), wrong-but-similar instances, freedom of panorama, trademark on real products, and **archival context** — a correctly licensed, correctly identified photograph can still be placed against narration it does not support. The verify filter checks *who*, never *when or why*.
+
+---
+
+## Original hypothesis (2026-07-20) — retained as the design record
 
 > **BUILD SUMMARY (working tree, `pnpm typecheck` + `lint` green, 0 errors; not committed — review-live-first):**
 > - **Reference-anchor control** — regen-image route accepts `anchor` (current-first / reference-first / reference-only) so an attached reference can nudge → dominate → replace (fixes the "attachment is the weakest anchor" finding).
@@ -40,7 +179,7 @@ Purely additive. At every step — no search result, low confidence, no clean li
 
 ## Non-goals — what this must never own
 
-- **People / likenesses.** Separate, policy-gated. Default stays representative stand-ins.
+- ~~**People / likenesses.** Separate, policy-gated. Default stays representative stand-ins.~~ **SUPERSEDED 2026-08-12** — not by relaxing the stance but by the depictive-ethics floor drawing the line precisely enough to build against. The floor's own edge cases rule long-dead figures in reconstruction framing OUT (permitted, deferring here) and genuine licensed archival media OUT (permitted, sourcing path governs), while ruling living public figures IN (forbidden as staged depiction). So: long-dead → conditioning plate; living/recent → archival photograph presented as itself, never conditioned on; unidentified → never sourced. Default for everyone else remains representative stand-ins. See "The shape of it" above.
 - **Not a human review gate.** No re-introduction of the removed cast/places review. The attach is automatic.
 - **Not general web image search.** License-clean, curated sources only. Open-web scraping is out.
 - **Not a proof of correctness.** The confidence step *filters* obvious mistakes; it does not certify the place is right (see Phase 2).
