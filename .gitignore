@@ -28,5 +28,12 @@ renders/
 # A/B experiment output (generated; never committed)
 apps/worker/scripts/ab-out/
 
+# probe / spike output (evidence from a lap, not source — the probe SCRIPTS stay tracked)
+*.profraw
+apps/worker/probe-*.json
+apps/worker/cal-repair-*.json
+apps/worker/critic-devset.json
+apps/worker/spike-*/
+
 # marketing asset sources (large binaries; deliverables live in apps/landing/public)
 assets/trailer-src/
