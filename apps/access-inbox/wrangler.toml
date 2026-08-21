@@ -14,9 +14,18 @@ send_email = [{ name = "INBOX" }]
 [[d1_databases]]
 binding = "DB"
 database_name = "kendrix-access"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "f8fe7a4a-f28e-49af-8ed1-1879b5e9876a"
 migrations_dir = "migrations"
 
 # Secrets (set with `wrangler secret put`):
 #   DESTINATION  — verified inbox to notify (the one hello@/privacy@ forward to).
 #   ACCESS_TOKEN — shared token; must match KENDRIX_LIST_API_KEY in apps/landing.
+
+# Keep this LAST. A bare `[table]` header captures every key below it, so anything placed after
+# this line stops being a top-level binding — that is how `send_email` briefly became a field of
+# `[observability]`. New bindings go ABOVE this block.
+#
+# Persisted logs matter here because a failed notification is swallowed on purpose: without them
+# there is no trace that a signup went unannounced, which is how the first two were missed.
+[observability]
+enabled = true

@@ -27,6 +27,9 @@ interface Env {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
+/** Envelope sender. Must be an address established on the kendrix.io zone in Email Routing. */
+const SENDER = 'access-form@kendrix.io'
+
 const csvCell = (v: string) => `"${v.replace(/"/g, '""')}"`
 
 export default {
@@ -79,6 +82,7 @@ export default {
     // difference between a list of addresses and a list of qualified creators.
     const channel = typeof payload.channel === 'string' ? payload.channel.trim().slice(0, 200) : ''
 
+    let notified = false
     let duplicate = false
     try {
       const res = await env.DB.prepare(
@@ -92,10 +96,19 @@ export default {
       return new Response('Storage failed', { status: 502 })
     }
 
-    if (!duplicate) {
+    // Checked before we hand anything to Cloudflare. A misconfigured DESTINATION (the secret was
+    // once set to a bare token) otherwise gets echoed back inside the provider's rejection text,
+    // which then lands in the logs — so a config mistake quietly becomes a secret disclosure.
+    if (!duplicate && !EMAIL_RE.test(env.DESTINATION ?? '')) {
+      console.error(
+        'access-inbox: DESTINATION secret is not an email address — notification skipped. ' +
+          'Re-set it to a verified Email Routing destination. Value withheld: it may be a credential.',
+        { email },
+      )
+    } else if (!duplicate) {
       try {
         const mime = createMimeMessage()
-        mime.setSender({ name: 'Kendrix access requests', addr: 'access-form@kendrix.io' })
+        mime.setSender({ name: 'Kendrix access requests', addr: SENDER })
         mime.setRecipient(env.DESTINATION)
         mime.setSubject(`[Kendrix · access] ${email}`)
         mime.addMessage({
@@ -110,15 +123,22 @@ export default {
             'GET /export on this worker returns the full list as CSV.',
           ].join('\n'),
         })
-        await env.INBOX.send(
-          new EmailMessage('access-form@kendrix.io', env.DESTINATION, mime.asRaw()),
-        )
-      } catch {
-        // Deliberately swallowed: the signup is already recorded, and losing it to a mail
-        // problem would be the one genuinely bad outcome here.
+        await env.INBOX.send(new EmailMessage(SENDER, env.DESTINATION, mime.asRaw()))
+        notified = true
+      } catch (err) {
+        // Still swallowed — the signup is recorded, and losing it to a mail problem would be the
+        // one genuinely bad outcome. But swallowing it SILENTLY is what let two real signups sit
+        // unannounced, so the failure is now loud in the logs and visible in the response.
+        // Providers quote the offending input back at you, so the raw message can carry whatever
+        // DESTINATION holds. Redact it before logging rather than trusting it to be an address.
+        const raw = err instanceof Error ? err.message : String(err)
+        console.error('access-inbox: notification failed', {
+          email,
+          error: env.DESTINATION ? raw.split(env.DESTINATION).join('[DESTINATION]') : raw,
+        })
       }
     }
 
-    return Response.json({ ok: true, duplicate })
+    return Response.json({ ok: true, duplicate, notified })
   },
 }
