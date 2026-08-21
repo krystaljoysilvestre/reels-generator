@@ -51,8 +51,8 @@ export type LutConfig = z.infer<typeof LutConfigSchema>
 
 // ── Target platform ───────────────────────────────────────────────────────────
 // Where this channel's videos are published. Each preset carries the frame (aspect +
-// pixel dimensions), length cap, caption-safe zone (platform UI overlay), hook
-// convention, and watermark norm. This is the SINGLE source of truth: the channel.v1
+// pixel dimensions), length cap, caption-safe zone (platform UI overlay), and hook
+// convention. This is the SINGLE source of truth: the channel.v1
 // derivation reads the hints to tailor caption + length; image/video generation and
 // the renderer read aspect/width/height; render QA reads maxSeconds.
 export const TargetPlatformSchema = z.enum(['tiktok', 'youtube_shorts', 'facebook_reels', 'youtube_long', 'all'])
@@ -95,7 +95,6 @@ export interface PlatformPreset {
   lengthHint: string             // platform length convention (derivation input)
   hookHint: string               // platform hook convention (story-gen input, later)
   safeZoneBottomPct: number      // % from bottom kept clear of platform UI (render, later)
-  watermark: boolean             // burn the channel handle as a watermark (render, later)
 }
 
 // The absolute ceiling any channel's targetSeconds can take — the largest platform cap (YouTube
@@ -108,21 +107,21 @@ export const PLATFORM_PRESETS: Record<TargetPlatform, PlatformPreset> = {
     captionHint: 'big, bold, centered, word-by-word (pop/hype/impact) — high energy, reads on mute',
     lengthHint: '21–60s sweet spot (up to 180s allowed); keep it punchy',
     hookHint: 'instant pattern-interrupt in the first 1–2s with a bold on-screen text hook',
-    safeZoneBottomPct: 18, watermark: false,
+    safeZoneBottomPct: 18,
   },
   youtube_shorts: {
     label: 'YouTube Shorts', aspect: '9:16', width: 1080, height: 1920, maxSeconds: 60, sweetSpot: [25, 55],
     captionHint: 'clean and legible, sitting a little higher to clear the bottom title/CTA UI',
     lengthHint: '60s hard cap; 25–55s ideal',
     hookHint: 'a clear curiosity/value promise in the first 3s, spoken and on-screen',
-    safeZoneBottomPct: 14, watermark: false,
+    safeZoneBottomPct: 14,
   },
   facebook_reels: {
     label: 'Facebook Reels', aspect: '9:16', width: 1080, height: 1920, maxSeconds: 90, sweetSpot: [20, 60],
     captionHint: 'large, very high-contrast (older/mixed audience, almost always muted)',
     lengthHint: '90s cap; 20–60s ideal',
     hookHint: 'a relatable, story-led hook in the first 3s',
-    safeZoneBottomPct: 20, watermark: false,
+    safeZoneBottomPct: 20,
   },
   // Long-form YouTube (regular horizontal uploads, not Shorts). YouTube itself imposes no ceiling
   // here; this cap tracks what the PIPELINE can finish. The original 600s reason — keeping narration
@@ -137,14 +136,14 @@ export const PLATFORM_PRESETS: Record<TargetPlatform, PlatformPreset> = {
     captionHint: 'restrained cinematic subtitles on a subtle bar — long-form viewers usually have sound ON, so captions support rather than perform',
     lengthHint: '5–20 minutes; give the story room to breathe and escalate in chapters. 5–8 is the sweet spot unless the story genuinely earns more',
     hookHint: 'a cold-open hook in the first 20–30s that promises the payoff, then a fresh pull every minute or two',
-    safeZoneBottomPct: 8, watermark: false,
+    safeZoneBottomPct: 8,
   },
   all: {
     label: 'All platforms', aspect: '9:16', width: 1080, height: 1920, maxSeconds: 60, sweetSpot: [20, 55],
     captionHint: 'safe, legible, centered — must read well on every platform',
     lengthHint: 'keep ≤60s so it fits Shorts everywhere; 20–55s ideal',
     hookHint: 'a strong, universal hook in the first 2–3s',
-    safeZoneBottomPct: 18, watermark: false,
+    safeZoneBottomPct: 18,
   },
 }
 
@@ -194,7 +193,6 @@ export function resolvePlatformPreset(platforms: readonly string[] | null | unde
     lengthHint: `${sweetSpot[0]}–${sweetSpot[1]}s; ${maxSeconds}s hard cap, set by ${shortest.label}`,
     hookHint: `a strong hook in the first 2–3s that works on all of ${names}`,
     safeZoneBottomPct: Math.max(...presets.map((p) => p.safeZoneBottomPct)),
-    watermark: presets.some((p) => p.watermark),
   }
 }
 

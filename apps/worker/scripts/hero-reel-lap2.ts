@@ -36,7 +36,6 @@ void (async () => {
     toneConfig: { intensity: 5, warmth: 5, energy: 6, pacing: 6, humor: 3 },
     audioPacks: { musicMode: 'ai', sfxEnabled: true, musicIntensity: 'balanced', musicMood: 'wondrous' },
     worldBible: { region: '', era: 'present day', canonLocations: [], canonObjects: [], vocabulary: {} },
-    watermarkKey: '', // no watermark (founder directive, hero-reel lap)
     status: 'active',
   }).returning()
 

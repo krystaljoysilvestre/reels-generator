@@ -19,9 +19,6 @@ const execFileAsync = promisify(execFile)
 // memory before it's written — 8 in flight keeps peak footprint modest on a 1080p long-form board.
 const RENDER_FETCH_CONCURRENCY = 8
 
-// The app's default watermark logo (R2 key) — burned onto every reel unless a channel overrides it.
-const DEFAULT_WATERMARK_KEY = 'app/watermark.png'
-
 // The persistent media disclosure burned onto Evidence-Based Narrative reels is COMPUTED from what the reel
 // actually contains (see computeMediaDisclosure), not from the channel flag alone. It used to be the constant
 // 'Illustrated · based on documented sources'; once a reel can present a genuine archival photograph, that
@@ -126,7 +123,6 @@ export async function renderStep(reelId: string): Promise<void> {
     grain: lutConfig.grain,
     vignette: lutConfig.vignette,
     lut: lutConfig.lutPath ?? '',
-    watermark: channel.watermarkKey ?? DEFAULT_WATERMARK_KEY,
     disclosure: mediaDisclosure, // in the fingerprint → the label changing (or the media mix changing) re-renders
     platform: platformPreset.label, // the resolved spec, so set order can't churn the fingerprint
     frame: `${platformPreset.width}x${platformPreset.height}`, // output dims (belt-and-suspenders to platform)
@@ -250,21 +246,6 @@ export async function renderStep(reelId: string): Promise<void> {
             : planSceneEffects(p.scene.mood, p.scene.tier as 'still' | 'video', mediaGenre),
         }))
 
-        // Roaming watermark: the APP brands every reel with its logo by default (DEFAULT_WATERMARK_KEY); a
-        // channel MAY override with its own key. Inlined as a data URI so the Remotion bundle stays
-        // self-contained (no external fetch under its CSP).
-        const wmKey = channel.watermarkKey ?? DEFAULT_WATERMARK_KEY
-        let watermark: { dataUri: string; opacity: number } | null = null
-        if (wmKey) {
-          try {
-            const buf = await downloadBuffer(wmKey)
-            const mime = wmKey.endsWith('.png') ? 'image/png' : wmKey.endsWith('.webp') ? 'image/webp' : 'image/jpeg'
-            watermark = { dataUri: `data:${mime};base64,${buf.toString('base64')}`, opacity: 0.28 }
-          } catch (err) {
-            console.warn(`[render] watermark load failed (${wmKey}): ${err instanceof Error ? err.message : String(err)}`)
-          }
-        }
-
         // ── Remotion renders the visual track (no audio) ─────────────────
         const visualPath = join(tmp, 'visual.mp4')
         // Remotion fires onProgress far more often than the percentage changes — unthrottled, a long-form
@@ -282,7 +263,6 @@ export async function renderStep(reelId: string): Promise<void> {
           height: platformPreset.height,
           grain: lutConfig.grain,
           vignette: lutConfig.vignette,
-          watermark,
           ...(mediaDisclosure ? { disclosure: mediaDisclosure } : {}),
           outputPath: visualPath,
           onProgress: (p) => {

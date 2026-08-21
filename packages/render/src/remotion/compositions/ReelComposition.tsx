@@ -5,7 +5,6 @@ import { SceneEffects } from '../components/SceneEffects.js'
 import { CaptionFonts, SubtitleOverlay } from '../components/SubtitleOverlay.js'
 import { GradeOverlay } from '../components/GradeOverlay.js'
 import { OnScreenTextOverlay } from '../components/OnScreenTextOverlay.js'
-import { WatermarkOverlay } from '../components/WatermarkOverlay.js'
 import type { ReelCompositionProps } from '../types.js'
 
 export type { ReelCompositionProps } from '../types.js'
@@ -47,7 +46,6 @@ export const ReelComposition: React.FC<ReelCompositionProps> = ({
   captionSafeZonePct,
   grain,
   vignette,
-  watermark,
   disclosure,
 }) => {
   const { width, height } = useVideoConfig()
@@ -88,9 +86,6 @@ export const ReelComposition: React.FC<ReelCompositionProps> = ({
 
       {/* Burned-in subtitles — always on top of all scenes + their grade */}
       <SubtitleOverlay subtitles={subtitles} captionStyle={captionStyle} safeZonePct={captionSafeZonePct} />
-
-      {/* Roaming channel watermark — topmost, full duration; hops position so it can't be cropped out */}
-      {watermark ? <WatermarkOverlay dataUri={watermark.dataUri} opacity={watermark.opacity} /> : null}
 
       {/* Synthetic-media / illustration disclosure — persistent, full-duration, top-center so it clears
           the bottom caption band. Set for Evidence-Based Narrative reels (specs/evidence-based-narrative.md):

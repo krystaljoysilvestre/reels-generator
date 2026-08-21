@@ -155,7 +155,6 @@ export const channels = pgTable('channels', {
   voiceMode: text('voice_mode').notNull().default('single'),  // 'single' | 'per_story'
   voiceSearchKeyword: text('voice_search_keyword').notNull().default(''),  // AI-derived genre tag for matching/recommending narrator voices
   voicePool: jsonb('voice_pool').notNull().default([]),        // selected real ElevenLabs voices
-  watermarkKey: text('watermark_key'),                          // optional per-channel watermark override (R2 key); null = use the app default logo
   audioPacks: jsonb('audio_packs').notNull().default({}),
   postingRules: jsonb('posting_rules').notNull().default({}),
   costCents: integer('cost_cents').notNull().default(0), // what creating this channel cost us (derive + style options/previews)

@@ -88,7 +88,6 @@ export interface RemotionRenderInput {
   height?: number
   grain: number
   vignette: number
-  watermark?: { dataUri: string; opacity: number } | null // roaming channel logo overlay; null = none
   disclosure?: string // persistent synthetic-media/illustration label (EBN reels); undefined = none
   outputPath: string
   onProgress?: (progress: number) => void
@@ -279,7 +278,6 @@ export async function renderReelWithRemotion(input: RemotionRenderInput): Promis
     captionSafeZonePct: input.captionSafeZonePct,
     grain: input.grain,
     vignette: input.vignette,
-    watermark: input.watermark ?? null,
     ...(input.disclosure ? { disclosure: input.disclosure } : {}),
   }
 
@@ -366,7 +364,6 @@ export async function renderCaptionPresetStill(input: {
     captionSafeZonePct: input.safeZonePct,
     grain: 0.15,
     vignette: 0.25,
-    watermark: null,
   }
 
   const bundleUrl = await getBundleUrl()
