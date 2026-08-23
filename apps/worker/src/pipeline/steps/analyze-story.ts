@@ -3,17 +3,28 @@ import { getDb, reels, stories, channels } from '@reels/db'
 import { llmCall, buildInputHash } from '@reels/providers'
 import {
   WorldBibleSchema,
+  allowsRealWorldEntityPlates,
   StoryBibleSchema,
   EMPTY_STORY_BIBLE,
   normalizeCanon,
   mergeBible,
   preserveLockedEntities,
+  resolveChannelPolicy,
   validateAppearanceBindings,
+  validateJourneyTiling,
   validateJourneyTransitions,
   type StoryBible,
 } from '@reels/core'
-import { buildStoryAnalyzerPrompt, STORY_ANALYZER_V1_VERSION } from '../../prompts-bridge.js'
+import { buildStoryAnalyzerPrompt, STORY_ANALYZER_V1_VERSION, buildIdentityStateCriticPrompt, IDENTITY_STATE_CRITIC_V1_VERSION, IdentityStateCriticSchema } from '../../prompts-bridge.js'
 import { runStep } from '../harness.js'
+import { routeDepiction } from '../depiction-routing.js'
+
+class IdentityStateGateError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'IdentityStateGateError'
+  }
+}
 
 // analyze_story produces a TEXT-ONLY bible — no images. Reference plates used to be minted here for every
 // entity, but that paid for plates on entities the story never uses (channel-canon noise) and before the
@@ -42,6 +53,7 @@ export async function analyzeStory(reelId: string): Promise<void> {
 
   const worldBible = WorldBibleSchema.parse(channel.worldBible)
   const channelCanon = normalizeCanon(worldBible)
+  const sourcePolicy = resolveChannelPolicy(reel, null, channel)
 
   // Operator-locked entities from a prior derive are HUMAN TRUTH — carried forward so a re-run can't
   // overwrite a correction (and their already-minted plates are reused, not re-paid).
@@ -58,7 +70,13 @@ export async function analyzeStory(reelId: string): Promise<void> {
 
   // channelCanon is in the hash so a channel-canon change re-derives the bible; narration covers story
   // edits; presentation is in it so changing the hint re-derives the bible (the hint steers perspective).
-  const inputHash = buildInputHash(STORY_ANALYZER_V1_VERSION, { narration: story.body, channelCanon, presentation: channel.presentation })
+  const inputHash = buildInputHash(STORY_ANALYZER_V1_VERSION, {
+    narration: story.body,
+    channelCanon,
+    presentation: channel.presentation,
+    sourcePolicy,
+    identityStateCriticVersion: IDENTITY_STATE_CRITIC_V1_VERSION,
+  })
 
   const result = await runStep(
     { reelId, stepName: 'analyze_story', inputHash },
@@ -80,10 +98,56 @@ export async function analyzeStory(reelId: string): Promise<void> {
         // Re-parse to recover the resolved output type (defaults applied) — zod's input type is loose
         // because of the schema defaults, so the generic on llmCall infers the optional-fields shape.
         let analyzed: StoryBible = StoryBibleSchema.parse(llm.data)
+        const requiredStateIds = new Map<string, Set<string>>()
+
+        // Prompt guidance alone missed Crossroads' load-bearing transformation twice. Judge the extracted
+        // Bible explicitly before scene planning; a failure buys one targeted analyzer repair, still inside
+        // this runStep so every paid token reaches the reel exactly once.
+        if (allowsRealWorldEntityPlates(sourcePolicy) && analyzed.entities.length > 0) {
+          const statePrompt = buildIdentityStateCriticPrompt({
+            narration: story.body,
+            bibleJson: JSON.stringify(analyzed, null, 2),
+          })
+          const stateVerdict = await llmCall({
+            templateVersion: IDENTITY_STATE_CRITIC_V1_VERSION,
+            schema: IdentityStateCriticSchema,
+            provider: 'anthropic',
+            system: statePrompt.system,
+            messages: [{ role: 'user', content: statePrompt.userMessage }],
+            maxTokens: 1800,
+          })
+          cost += stateVerdict.costCents
+          const stateIssues = stateVerdict.data.issues ?? []
+          console.log(
+            `[identity-state-gate] ${reelId.slice(0, 8)}: ${stateVerdict.data.ok && stateIssues.length === 0 ? 'pass' : `${stateIssues.length} issue(s)`}`,
+          )
+          if (!stateVerdict.data.ok || stateIssues.length > 0) {
+            for (const issue of stateIssues) {
+              requiredStateIds.set(issue.entityId, new Set(issue.requiredStateIds ?? []))
+            }
+            const issues = stateIssues.map(
+              (issue) => `${issue.entityId}: ${issue.reason} Boundary: ${issue.boundaryEvidence}. Required states: ${(issue.requiredStateIds ?? []).join(', ') || 'judge from narration'}.`,
+            )
+            const repair = await llmCall({
+              templateVersion: STORY_ANALYZER_V1_VERSION,
+              schema: StoryBibleSchema,
+              system,
+              messages: [
+                { role: 'user', content: userMessage },
+                { role: 'assistant', content: JSON.stringify(analyzed) },
+                { role: 'user', content: `Repair these missing visual identity states, then return the corrected FULL Story Bible JSON only:\n- ${issues.join('\n- ')}\nKeep each subject as one entity, add only narration-supported appearances, split journey spans at the exact visible state boundary, and bind the correct state. Preserve all other correct entities and facts.` },
+              ],
+              maxTokens: analyzerMaxTokens,
+            })
+            cost += repair.costCents
+            analyzed = StoryBibleSchema.parse(repair.data)
+          }
+        }
 
         // Journey transition validation → ONE repair round (mirrors the breakdown's repair). Catches the
         // narrator "teleporting" between enclosed spaces with no movement leg. Conservative — usually no-op.
         const journeyIssues = [
+          ...validateJourneyTiling(story.body, analyzed.continuity.journey),
           ...validateJourneyTransitions(analyzed.continuity.journey),
           ...validateAppearanceBindings(analyzed),
         ]
@@ -95,8 +159,10 @@ export async function analyzeStory(reelId: string): Promise<void> {
             system,
             messages: [
               { role: 'user', content: userMessage },
-              { role: 'assistant', content: JSON.stringify(llm.data) },
-              { role: 'user', content: `Fix these journey continuity or character-appearance binding problems, then return the corrected FULL JSON only:\n- ${journeyIssues.join('\n- ')}\nKeep every journey span verbatim and preserve all correct entities, appearances, and legs.` },
+              // Repair the CURRENT state-enriched bible, not the analyzer's original output. Feeding the
+              // original here erased the state doctor's work on Crossroads in the very next round.
+              { role: 'assistant', content: JSON.stringify(analyzed) },
+              { role: 'user', content: `Fix these journey continuity or identity-state binding problems, then return the corrected FULL JSON only:\n- ${journeyIssues.join('\n- ')}\nKeep every journey span verbatim and preserve all correct entities, appearances, and legs.` },
             ],
             maxTokens: analyzerMaxTokens,
           })
@@ -104,14 +170,48 @@ export async function analyzeStory(reelId: string): Promise<void> {
           analyzed = StoryBibleSchema.parse(repair.data)
         }
 
+        // A later journey repair must not erase a state the identity audit just made load-bearing. Enforce
+        // the critic's typed requirement after every analyzer repair, before routing or image work.
+        for (const [entityId, states] of requiredStateIds) {
+          const entity = analyzed.entities.find((candidate) => candidate.id === entityId)
+          const actual = new Set((entity?.appearances ?? []).map((appearance) => appearance.id))
+          const missing = states.size > 0
+            ? [...states].filter((stateId) => !actual.has(stateId))
+            : actual.size > 0 ? [] : ['a narration-supported non-default state']
+          if (!entity || missing.length > 0) {
+            throw new IdentityStateGateError(
+              `Identity state repair did not persist for "${entityId}" (missing: ${missing.join(', ')}).`,
+            )
+          }
+        }
+
         // Resolve the final bible: channel canon + this story's extraction (analyzer wins on shared ids).
         bible = mergeBible(channelCanon, analyzed)
       } catch (err) {
+        if (err instanceof IdentityStateGateError) throw err
         console.warn(`[analyze-story] ${reelId.slice(0, 8)} analysis failed, persisting canon-only bible: ${err instanceof Error ? err.message : String(err)}`)
         bible = mergeBible(channelCanon, EMPTY_STORY_BIBLE)
       }
       // Carry forward any operator-locked entities (and their plates) so a re-derive can't clobber edits.
       bible = preserveLockedEntities(bible, priorBible)
+
+      // Resolve source/depiction status BEFORE the director plans scenes. This remains text-only: no image is
+      // searched or downloaded here, so the storyboard gate stays cheap. The director can now distinguish a
+      // verified real identity from a generic precursor and bind the exact entity/state deliberately. These
+      // paid classification calls live inside analyze_story's runStep and are returned in its one cost total.
+      const unrouted = bible.entities.filter((entity) => !entity.depiction)
+      if (unrouted.length > 0) {
+        const routed = await Promise.all(
+          unrouted.map(async (entity) => ({
+            entity,
+            result: await routeDepiction(entity, sourcePolicy, worldBible.region),
+          })),
+        )
+        for (const { entity, result: routedEntity } of routed) {
+          entity.depiction = routedEntity.routing
+          cost += routedEntity.costCents
+        }
+      }
       return { output: bible, costCents: cost }
     },
   )

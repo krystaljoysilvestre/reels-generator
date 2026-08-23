@@ -42,6 +42,16 @@ export function castNationality(languages?: string[] | null, region?: string | n
   return ''
 }
 
+// Historical setting is factual continuity, not a style choice. The scene director knows the era while
+// planning, but its concise content prompt may omit it; carry the Story Bible era into every independent
+// image call so a 1917 hall cannot silently become a modern white-cube gallery.
+export function historicalEraDirective(era?: string | null, region?: string | null): string | undefined {
+  const value = era?.trim()
+  if (!value || /^(modern(?:-day)?|present(?:-day)?|contemporary|current|timeless|unknown|unspecified)$/i.test(value)) return undefined
+  const place = region?.trim() ? ` in ${region.trim()}` : ''
+  return `historically accurate to ${value}${place}; all visible architecture, interiors, clothing, documents, fixtures, materials, technology, artworks, and display conventions are period-authentic, with no later-era features`
+}
+
 // RECONSTRUCTION FRAMING — the depictive-ethics floor's condition for depicting a long-dead historical
 // figure at all (the depictive-fidelity CARE tier). A sourced portrait plate bypasses REFERENCE_FRAMING entirely
 // (the photograph IS the plate), so the framing has to ride on the SCENE prompt instead, on every beat that

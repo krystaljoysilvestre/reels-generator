@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { classifyGenre, asGenreModule, GENRE_MODULE_VALUES } from './scenes.v1.js'
+import { classifyGenre, asGenreModule, buildScenesPrompt, GENRE_MODULE_VALUES } from './scenes.v1.js'
 
 describe('classifyGenre', () => {
   it('keeps the original three buckets' + "' priority", () => {
@@ -36,5 +36,24 @@ describe('asGenreModule', () => {
     expect(asGenreModule('')).toBeNull()
     expect(asGenreModule(null)).toBeNull()
     expect(asGenreModule(undefined)).toBeNull()
+  })
+})
+
+describe('buildScenesPrompt', () => {
+  it('does not let an attempted event become a successful visual outcome', () => {
+    const { userMessage } = buildScenesPrompt({
+      bibleEntitiesJson: '[]',
+      era: '1917',
+      regionDescriptor: 'New York City',
+      nicheDescription: 'documentary art history',
+      narration: 'He submitted the work, but the Society excluded it.',
+      minScenes: 1,
+      maxScenes: 2,
+      peakMoment: '',
+      maxVideoTiers: 0,
+    })
+
+    expect(userMessage).toContain('ATTEMPT IS NOT OUTCOME')
+    expect(userMessage).toContain('not public display or acceptance')
   })
 })

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { appearanceBindingsForScene, entityAtAppearance, preserveLockedEntities, sceneEntities, slug, normalizeCanon, resolveEntityRef, resolveEntities, mergeBible, validateAppearanceBindings } from './story-bible.js'
+import { appearanceBindingsForScene, inheritedAppearanceBindingsForScene, entityAtAppearance, preserveLockedEntities, sceneEntities, slug, normalizeCanon, resolveEntityRef, resolveEntities, mergeBible, validateAppearanceBindings } from './story-bible.js'
 import { StoryBibleSchema, type StoryBible } from '../types/story-bible.js'
 
 function bible(over: Partial<StoryBible> = {}): StoryBible {
@@ -201,6 +201,67 @@ describe('time-bound character appearances', () => {
       },
     })
     expect(validateAppearanceBindings(invalid)).toContain('Journey leg 1 binds "grandmother" to unknown appearance "childhood".')
+  })
+})
+
+describe('time-bound object identity states', () => {
+  const bible = StoryBibleSchema.parse({
+    entities: [{
+      id: 'duchamp-fountain',
+      kind: 'object',
+      description: 'the porcelain readymade rotated onto its back and signed R. Mutt 1917',
+      referenceImageKey: 'refs/fountain.webp',
+      referenceOrigin: { type: 'sourced', provider: 'wikimedia', usage: 'conditioning_reference' },
+      depiction: { subjectClass: 'object', depictionMode: 'reference_plate', eligibilityReason: 'real_subject', query: 'Duchamp Fountain' },
+      appearances: [{
+        id: 'unsigned-upright',
+        description: 'the same porcelain fixture upright in plumbing-shop orientation, unmarked and without a plinth',
+        referenceImageKey: 'refs/fountain--unsigned-upright.webp',
+        referenceOrigin: { type: 'sourced', provider: 'wikimedia', usage: 'conditioning_reference' },
+      }],
+    }],
+    continuity: {
+      narratorPerspective: 'voiceover', narratorEntityId: null, timeline: [],
+      journey: [{
+        span: 'Before the signature, it was an ordinary fixture.', locationLabel: 'plumbing shop',
+        locationEntityId: null, present: [], visible: [],
+        appearanceByEntity: { 'duchamp-fountain': 'unsigned-upright' }, isReflection: false,
+      }],
+    },
+  })
+
+  it('allows a narration-supported state on a non-character identity', () => {
+    expect(validateAppearanceBindings(bible)).toEqual([])
+    const [resolved] = sceneEntities(bible, {
+      primaryEntity: 'duchamp-fountain', supportingEntities: [],
+      appearanceByEntity: { 'duchamp-fountain': 'unsigned-upright' },
+    })
+    expect(resolved?.id).toBe('duchamp-fountain')
+    expect(resolved?.description).toContain('unmarked')
+    expect(resolved?.referenceImageKey).toBe('refs/fountain--unsigned-upright.webp')
+  })
+
+  it('deterministically inherits the event-time state only when the exact identity is tagged', () => {
+    const sceneNarration = 'Before the signature, it was an ordinary fixture.'
+    expect(inheritedAppearanceBindingsForScene(bible, sceneNarration, sceneNarration, {
+      primaryEntity: 'duchamp-fountain', supportingEntities: [],
+    })).toEqual({ 'duchamp-fountain': 'unsigned-upright' })
+    expect(inheritedAppearanceBindingsForScene(bible, sceneNarration, sceneNarration, {
+      primaryEntity: null, supportingEntities: [],
+    })).toEqual({})
+  })
+
+  it('keeps objects out of the journey person-presence lists', () => {
+    const invalid = StoryBibleSchema.parse({
+      ...bible,
+      continuity: {
+        ...bible.continuity,
+        journey: [{ ...bible.continuity.journey[0]!, present: ['duchamp-fountain'], visible: ['duchamp-fountain'] }],
+      },
+    })
+    expect(validateAppearanceBindings(invalid)).toContain(
+      'Journey leg 1 lists non-character "duchamp-fountain" as a present/visible person.',
+    )
   })
 })
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { validateJourneyTransitions } from './story-bible.js'
+import { validateJourneyTiling, validateJourneyTransitions } from './story-bible.js'
 import type { JourneyLeg } from '../types/story-bible.js'
 
 const leg = (o: Partial<JourneyLeg>): JourneyLeg => ({
@@ -10,6 +10,19 @@ const leg = (o: Partial<JourneyLeg>): JourneyLeg => ({
   visible: [],
   isReflection: false,
   ...o,
+})
+
+describe('validateJourneyTiling', () => {
+  it('accepts verbatim ordered coverage', () => {
+    expect(validateJourneyTiling('One. Two.', [leg({ span: 'One.' }), leg({ span: 'Two.' })])).toEqual([])
+  })
+
+  it('finds a missing prefix and trailing narration', () => {
+    expect(validateJourneyTiling('In 1917, one. Two. Three.', [leg({ span: 'one.' }), leg({ span: 'Two.' })])).toEqual([
+      'Journey leaves uncovered narration before leg 1.',
+      'Journey leaves trailing narration uncovered.',
+    ])
+  })
 })
 
 describe('validateJourneyTransitions', () => {

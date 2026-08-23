@@ -114,6 +114,43 @@ identical and semantically opposite. Reference conditioning also transfers an ar
 (signature, plinth, exhibition tag) wholesale, which fights any counterfactual beat needing the object
 stripped of exactly those marks. Unlike a place or a person, a titled artwork's markings **are** its identity.
 
+### Verified visual identity is inherited, not attached scene-by-scene (2026-08-23)
+
+**Founder decision.** When a factual story depicts a specific real subject whose identity is load-bearing,
+Kendrix resolves one verified, rights-eligible visual anchor on the Story Bible entity and every scene that
+depicts that exact subject and state inherits it automatically. This is a correctness constraint, independent
+of genre or language; shot choice, composition, lighting, and channel style remain the director's judgment.
+
+Crossroads exposed a consumption failure rather than a missing sourcing mechanism. The verified Stieglitz
+image was installed on one scene, not on `duchamp-fountain`, while other scenes were mis-bound or unbound.
+They therefore invented unrelated fixtures even though the reel already held the right source.
+
+The rule is deliberately **identity-and-state aware**, not "source anything searchable":
+
+- A named real place, object, animal, or eligible historical person gets a canonical source anchor only when
+  the source is verified and the subject's identity matters to the story.
+- A materially different story-time state selects one appearance of the same identity. For *Fountain*, the
+  unmarked shop fixture and the signed, rotated artwork are distinct visual states; the signature, plinth,
+  and exhibition orientation must not leak backward.
+- Generic, anonymous, fictional, incidental, unverifiable, or wrong-era subjects remain generated or
+  withheld under the existing depiction mode. The existence of a searchable image is not itself a reason to
+  use it.
+- Presented archival media remains untouched and separate from a conditioning reference. Provenance,
+  disclosure, human eligibility, and subject-rights review remain load-bearing.
+
+**Pipeline consequence.** Subject routing must be available to scene planning, before it chooses entity
+bindings. After the director chooses the exact entity/state visible in each shot, deterministic code resolves
+the corresponding reference key for every automatic generation and reshoot consumer. A scene claiming a
+`reference_plate` identity without a verified sourced anchor is a bounded pre-image failure, not a silent
+text-only or independently generated fallback. QA judges the rendered identity; it does not infer or rewrite
+the director's entity intent after image spend.
+
+**Smallest proof on Crossroads.** Hand-label the eight scenes as `generic precursor`, `canonical Fountain`,
+`presented archival`, or `not depicted`; require the source-enriched plan to match those labels before any
+image call; then regenerate only canonical-*Fountain* scenes from the same plate. The proof fails if the
+object changes identity, if finished-artwork details leak into a precursor beat, or if the anchor flattens
+the intended shot variety.
+
 ### Boundary with the depictive-ethics floor
 
 The floor governs what a depiction may **claim**; this governs what may be **sourced** and how. Both are required and neither exempts the other — the 2026-07-24 DTI failure violated depiction with zero sourced references involved. Where they touch (long-dead figures), this defers to the floor's CARE tier.

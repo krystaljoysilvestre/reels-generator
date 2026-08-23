@@ -6,11 +6,11 @@ import { DepictionRoutingSchema, MediaOriginSchema, type MediaOrigin } from './d
 // wherever its id is referenced, so a recurring element never paraphrase-drifts across the
 // independently-generated scene images.
 
-// A materially different, time-bound rendering of ONE character identity. The base entity description is
-// the default appearance; variants exist only when the narration supports a visible change (e.g. the same
-// grandmother now vs as a child). They are not separate characters: cast, relationships, and story identity
-// stay on the parent entity. Reference/provenance fields are populated post-analysis, exactly like the base
-// entity's plate.
+// A materially different, time-bound rendering of ONE entity identity. The base entity description is the
+// default appearance; variants exist only when the narration supports a visible change (e.g. the same
+// grandmother now vs as a child, or the same artifact before vs after a documented modification). They are
+// not separate identities: cast/relationships/provenance stay on the parent. Reference/provenance fields are
+// populated post-analysis, exactly like the base entity's plate.
 export const CharacterAppearanceSchema = z.object({
   id: z.string().min(1), // English kebab-case within the parent identity: "remembered-youth"
   description: z.string().min(1), // COMPLETE render-facing look for this state, not a delta like "younger"
@@ -18,6 +18,10 @@ export const CharacterAppearanceSchema = z.object({
   referenceOrigin: MediaOriginSchema.optional(),
 })
 export type CharacterAppearance = z.infer<typeof CharacterAppearanceSchema>
+// New code should use the identity-neutral name. The old export remains source-compatible for existing
+// character consumers and persisted JSON is unchanged.
+export const EntityAppearanceSchema = CharacterAppearanceSchema
+export type EntityAppearance = CharacterAppearance
 
 export const AppearanceBindingsSchema = z.record(z.string(), z.string())
 export type AppearanceBindings = z.infer<typeof AppearanceBindingsSchema>
@@ -35,15 +39,15 @@ export const BibleEntitySchema = z.object({
   // (a window, a bare bulb, a gasera, "no electricity") — they are facts of the place; WHICH source is
   // active + the time of day are per-scene decisions.
   description: z.string().min(1),
-  // Optional time-bound looks for a CHARACTER. Empty is the overwhelmingly common linear-story path and
-  // preserves the existing one-description/one-plate behaviour. Non-character variants are rejected by
-  // validateAppearanceBindings before scene planning rather than encoded as a shape every object must carry.
+  // Optional time-bound looks for this SAME identity. Empty is the overwhelmingly common linear-story path
+  // and preserves the existing one-description/one-plate behaviour. Use only for a narration-supported,
+  // materially visible state change; never as a way to create alternate designs of one subject.
   appearances: z.array(CharacterAppearanceSchema).optional(),
   // R2 key of this entity's canonical reference plate — a single image generated once from `description`
-  // (see analyze_story). The scene-image step conditions on it so the entity keeps its pixel-level identity
+  // (see generate_images). The scene-image step conditions on it so the entity keeps its pixel-level identity
   // across scenes, not just its prose. NOT authored by the analyzer LLM (it's populated post-analysis and
-  // overwritten if present); the assembler/resolver treat it as optional, so a missing plate degrades the
-  // scene to text-only — never a failure. Absent on channel-canon entities until they're given a plate.
+  // overwritten if present). Ordinary generated entities may omit it and render text-only. An entity routed
+  // to `reference_plate`, however, must have a verified sourced anchor before scene image spend.
   referenceImageKey: z.string().optional(),
   // Provenance of the reference plate. A SOURCED real photograph (from Wikimedia Commons) carries its licence
   // + author so the reel can attribute it; a 'generated' plate (the default, and the only kind for non-factual
@@ -86,9 +90,10 @@ export const JourneyLegSchema = z.object({
   // Subset of `present` actually ON-camera. Empty array = "same as present" (nothing intentionally hidden).
   // Non-empty + narrower than present = POV / reflection / hidden-subject (narrator present but off-camera).
   visible: z.array(z.string()).default([]),
-  // Appearance variant active for a character during this anchored span. Missing = the entity's base/default
-  // description. This maps story time to identity state; it does NOT force the director to invent a flashback.
-  // The analyzer only emits a binding when this span actually depicts a materially different visible state.
+  // Appearance variant active for an entity during this anchored span. Missing = its base/default
+  // description. This maps story time to identity state; it does NOT force the director to invent a
+  // flashback or alternate design. The analyzer emits a binding only for a materially visible state that
+  // the narration supports.
   appearanceByEntity: AppearanceBindingsSchema.optional(),
   // Minimal spatial state, just enough for the transition validator to catch teleportation.
   occupancyState: z.enum(['outside', 'approaching', 'inside', 'leaving']).optional(),
@@ -232,8 +237,27 @@ export function identityWithheldEntities(split: SceneDepiction): BibleEntity[] {
 export function conditionableReferenceKeys(entities: readonly BibleEntity[]): string[] {
   return entities
     .filter((e) => !MODES_WITHOUT_PLATES.has(e.depiction?.depictionMode ?? 'generated'))
+    // A named real identity is not allowed to fall back to an old generated plate. The routing contract
+    // says the frame depicts the real subject; only a verified sourced origin can satisfy that claim.
+    .filter((e) => e.depiction?.depictionMode !== 'reference_plate' || hasVerifiedIdentityReference(e))
     .map((e) => e.referenceImageKey)
     .filter((k): k is string => Boolean(k))
+}
+
+/** True when the exact materialized entity/state carries the sourced identity anchor its routing requires. */
+export function hasVerifiedIdentityReference(entity: BibleEntity): boolean {
+  return Boolean(entity.referenceImageKey && entity.referenceOrigin?.type === 'sourced')
+}
+
+/**
+ * Reference-plated identities that would otherwise reach an image model without their verified anchor.
+ * Callers run this after resolving appearanceByEntity so a sourced base plate cannot accidentally satisfy a
+ * scene that selected an unanchored time-bound state.
+ */
+export function missingRequiredIdentityReferences(entities: readonly BibleEntity[]): BibleEntity[] {
+  return entities.filter(
+    (e) => e.depiction?.depictionMode === 'reference_plate' && !hasVerifiedIdentityReference(e),
+  )
 }
 
 /**

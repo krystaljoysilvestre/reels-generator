@@ -667,6 +667,7 @@ export function StoryboardEditor({
   const detail = selectedScene ? (
     <SceneInspector
       key={selectedScene.idx}
+      reelId={reel.id}
       scene={selectedScene}
       secs={sceneSeconds(selectedScene)}
       beat={sceneBeat(selectedScene.idx, scenes.length, twistIdx)}
@@ -1518,10 +1519,11 @@ function sceneBeat(idx: number, total: number, twistIdx: number | null): 'Hook' 
 type GroundedOption = { label: string; description: string; intent: string; anchor: 'current-first' | 'reference-first' | 'reference-only'; directive: string }
 
 function SceneInspector({
-  scene, secs, beat, imgSrc, variations, loading, moodTint,
+  reelId, scene, secs, beat, imgSrc, variations, loading, moodTint,
   sceneSaving, setScenes, setSceneSaving, onSetSceneType, onPreview, onSuggestMotion, onReshoot, onRequestOptions, onUploadImage, history, onSetSceneImage, onSaveText,
   sounds, soundPreviews, onAddSound, onPreviewSound, onRemoveSound,
 }: {
+  reelId: string
   scene: Scene; secs: number; beat: 'Hook' | 'Build-up' | 'Twist' | 'Payoff'; imgSrc?: string | undefined; variations: string[]
   loading: string | null; moodTint: string
   sceneSaving: 'saving' | 'saved' | undefined
@@ -1562,7 +1564,7 @@ function SceneInspector({
   // and "use my photo".
   async function uploadImage(file: File): Promise<string | null> {
     setUploadErr(null)
-    const fd = new FormData(); fd.append('file', file)
+    const fd = new FormData(); fd.append('reelId', reelId); fd.append('file', file)
     const res = await fetch('/api/pipeline/scene-image-upload', { method: 'POST', body: fd })
     const j = await res.json().catch(() => null)
     if (!res.ok || !j?.key) { setUploadErr(j?.error ?? 'Upload failed.'); return null }

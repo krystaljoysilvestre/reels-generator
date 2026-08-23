@@ -2,8 +2,8 @@ import { eq, and, gt, sql } from 'drizzle-orm'
 import type { z } from 'zod'
 import { getDb, reels, stories, scenes, channels } from '@reels/db'
 import { llmCall, buildInputHash } from '@reels/providers'
-import { ScenesOutputSchema, WorldBibleSchema, StoryBibleSchema, EMPTY_STORY_BIBLE, appearanceBindingsForScene, resolveEntities, reviewSceneBreakdown, MOTION_BUDGET, motionBudgetForSeconds, estimateNarrationSec, retileToNarration, cameraMovePrompt, animatorMotionPrompt, slug, planChapters, legsForChapter, CHAPTER_THRESHOLD_SEC, channelPlatformPreset, type StoryChapter, type StoryBible, effectiveGenre,} from '@reels/core'
-import { buildScenesPrompt, SCENES_V1_VERSION, buildPeakExtractPrompt, PEAK_EXTRACT_V1_VERSION, PeakExtractSchema, resolveMediaGenre, buildSceneDepictionCriticPrompt, SCENE_DEPICTION_CRITIC_V1_VERSION, SceneDepictionVerdictSchema, buildSceneDepictionDoctorPrompt, SCENE_DEPICTION_DOCTOR_V1_VERSION, SceneDepictionRepairSchema } from '../../prompts-bridge.js'
+import { ScenesOutputSchema, WorldBibleSchema, StoryBibleSchema, EMPTY_STORY_BIBLE, appearanceBindingsForScene, inheritedAppearanceBindingsForScene, resolveEntities, reviewSceneBreakdown, MOTION_BUDGET, motionBudgetForSeconds, estimateNarrationSec, retileToNarration, cameraMovePrompt, animatorMotionPrompt, slug, planChapters, legsForChapter, CHAPTER_THRESHOLD_SEC, channelPlatformPreset, type StoryChapter, type StoryBible, effectiveGenre,} from '@reels/core'
+import { buildScenesPrompt, SCENES_V1_VERSION, buildPeakExtractPrompt, PEAK_EXTRACT_V1_VERSION, PeakExtractSchema, resolveMediaGenre, buildSceneDepictionCriticPrompt, SCENE_DEPICTION_CRITIC_V1_VERSION, SceneDepictionVerdictSchema, buildSceneDepictionDoctorPrompt, SCENE_DEPICTION_DOCTOR_V1_VERSION, SceneDepictionRepairSchema, buildEntityBindingCriticPrompt, reconcileVerifiedIdentityBindings, tagVerifiedAppearanceBindings, verifiedIdentityBindingsMatch, ENTITY_BINDING_CRITIC_V1_VERSION, EntityBindingVerdictSchema } from '../../prompts-bridge.js'
 import { runStep } from '../harness.js'
 
 // ── DEPICTION GATE (judge → targeted repair → re-judge; see scene-depiction-critic.v1) ──────────────
@@ -65,9 +65,11 @@ function validateSceneTiling(narration: string, sceneTexts: string[]): string | 
 // Beat-driven scene-count range for a span of narration (~1 scene / 9-16s): the director picks WITHIN it
 // by cutting on dramatic beats. Bounds stay inside the schema's hard 3-16 range; the prompt TARGET is
 // capped at 14 (two below the max) so a rare overshoot still validates instead of crashing the reel.
-function sceneCountRange(seconds: number): { minScenes: number; maxScenes: number } {
+export function sceneCountRange(seconds: number): { minScenes: number; maxScenes: number } {
   const minScenes = Math.max(3, Math.floor(seconds / 16))
-  const maxScenes = Math.min(14, Math.max(minScenes + 1, Math.ceil(seconds / 9)))
+  // One scene of editorial slack lets an uneven long clause (often the final inference/payoff) split at
+  // its real thought boundary without forcing the rest of the board below the pacing target.
+  const maxScenes = Math.min(14, Math.max(minScenes + 1, Math.ceil(seconds / 9) + 1))
   return { minScenes, maxScenes }
 }
 
@@ -172,6 +174,10 @@ export async function breakdownScenes(reelId: string): Promise<void> {
   // Genre is per-REEL since series — read the frozen value (specs/channel-series.md).
   const mediaGenre = resolveMediaGenre({ storyMode: channel.storyMode, genreCategory: effectiveGenre(reel, channel), niche: channel.nicheDescription })
   const depictionGateApplies = SCENE_DEPICTION_GATE_ENABLED && mediaGenre === 'informational'
+  const verifiedIdentityEntities = storyBible.entities.filter((entity) =>
+    entity.depiction?.depictionMode === 'reference_plate' || entity.depiction?.depictionMode === 'archival_only',
+  )
+  const identityBindingGateApplies = verifiedIdentityEntities.length > 0
 
   // Bible folded into the hash: editing the bible (or re-analysis) re-triggers the breakdown. The chapter
   // plan + budget are part of the recipe — a re-cut story re-runs even at the same prompt version.
@@ -187,6 +193,7 @@ export async function breakdownScenes(reelId: string): Promise<void> {
     ...(depictionGateApplies
       ? { depictionCriticVersion: SCENE_DEPICTION_CRITIC_V1_VERSION, depictionDoctorVersion: SCENE_DEPICTION_DOCTOR_V1_VERSION }
       : {}),
+    ...(identityBindingGateApplies ? { entityBindingCriticVersion: ENTITY_BINDING_CRITIC_V1_VERSION } : {}),
   })
 
   const result = await runStep(
@@ -279,12 +286,88 @@ export async function breakdownScenes(reelId: string): Promise<void> {
           return true
         }
 
+        const auditAndRepairIdentityBindings = async (chapterScenes: BreakdownScenes): Promise<string[]> => {
+          if (!identityBindingGateApplies) return []
+          const verifiedIds = verifiedIdentityEntities.map((entity) => entity.id)
+          for (const scene of chapterScenes) {
+            const completed = tagVerifiedAppearanceBindings({
+              primaryEntity: scene.primaryEntity ?? null,
+              supportingEntities: scene.supportingEntities ?? [],
+              appearanceByEntity: scene.appearanceByEntity ?? {},
+            }, verifiedIds)
+            scene.primaryEntity = completed.primaryEntity
+            scene.supportingEntities = completed.supportingEntities
+            scene.appearanceByEntity = completed.appearanceByEntity
+          }
+
+          const judge = async () => {
+            const prompt = buildEntityBindingCriticPrompt({
+              entities: storyBible.entities.map((entity) => ({
+                id: entity.id,
+                description: entity.description,
+                requiresVerifiedBinding: verifiedIdentityEntities.some((verified) => slug(verified.id) === slug(entity.id)),
+                ...(entity.appearances?.length
+                  ? { appearances: entity.appearances.map((appearance) => ({ id: appearance.id, description: appearance.description })) }
+                  : {}),
+              })),
+              scenes: chapterScenes.map((scene, idx) => ({
+                idx: idx + 1,
+                narrationText: scene.narrationText,
+                imagePrompt: scene.imagePrompt,
+              })),
+            })
+            const verdict = await llmCall({
+              templateVersion: ENTITY_BINDING_CRITIC_V1_VERSION,
+              schema: EntityBindingVerdictSchema,
+              provider: 'anthropic',
+              system: prompt.system,
+              messages: [{ role: 'user', content: prompt.userMessage }],
+              maxTokens: 2500,
+            })
+            cost.add(verdict.costCents)
+            return verdict.data
+          }
+
+          const verdict = await judge()
+          const byIdx = new Map(verdict.scenes.map((scene) => [scene.idx, scene]))
+          chapterScenes.forEach((scene, idx) => {
+            const judged = byIdx.get(idx + 1)
+            if (!judged || verifiedIdentityBindingsMatch({
+              primaryEntity: scene.primaryEntity ?? null,
+              supportingEntities: scene.supportingEntities ?? [],
+              appearanceByEntity: scene.appearanceByEntity ?? {},
+            }, verifiedIds, judged.depictedBindings ?? [])) return
+            const reconciled = reconcileVerifiedIdentityBindings({
+              primaryEntity: scene.primaryEntity ?? null,
+              supportingEntities: scene.supportingEntities ?? [],
+              appearanceByEntity: scene.appearanceByEntity ?? {},
+            }, verifiedIds, judged.depictedBindings ?? [])
+            scene.primaryEntity = reconciled.primaryEntity
+            scene.supportingEntities = reconciled.supportingEntities
+            scene.appearanceByEntity = reconciled.appearanceByEntity
+          })
+
+          const errors: string[] = []
+          chapterScenes.forEach((_scene, idx) => {
+            const judged = byIdx.get(idx + 1)
+            if (!judged) errors.push(`Scene ${idx + 1} has no verified-identity binding verdict.`)
+            else if (!verifiedIdentityBindingsMatch({
+              primaryEntity: _scene.primaryEntity ?? null,
+              supportingEntities: _scene.supportingEntities ?? [],
+              appearanceByEntity: _scene.appearanceByEntity ?? {},
+            }, verifiedIds, judged.depictedBindings ?? [])) {
+              errors.push(`Scene ${idx + 1} has an incorrect verified-identity/state binding: ${judged.reason || 'the tags do not match the exact real subject shown'}`)
+            }
+          })
+          return errors
+        }
+
         // Best-of-N. The breakdown is only correct if it (a) tiles the WHOLE span — a gap is fatal, as
         // compute_timings throws on any uncovered span — AND (b) keeps every shot under the duration limit.
         // Roll up to N times, score each AFTER the deterministic retile, feed the failures back to the next
         // roll, and keep the BEST. Most chapters pass on the first roll and break out.
         const MAX_ATTEMPTS = 3
-        let best: { scenes: BreakdownScenes; violations: number; notes: string[] } | null = null
+        let best: { scenes: BreakdownScenes; violations: number; bindingViolations: number; notes: string[] } | null = null
         let prev: BreakdownData | null = null
         let prevErrors: string[] = []
 
@@ -304,9 +387,23 @@ export async function breakdownScenes(reelId: string): Promise<void> {
           applyNarratorBackstop(output.scenes)
           const tiled = applyRetile(output.scenes)
 
+          // Identity state is inherited, not remembered by the director. The director decides whether an
+          // exact bible identity is visibly tagged; once tagged, the journey's event-time state wins.
+          for (const scene of output.scenes) {
+            const inherited = inheritedAppearanceBindingsForScene(storyBible, story.body, scene.narrationText, {
+              primaryEntity: scene.primaryEntity ?? null,
+              supportingEntities: scene.supportingEntities ?? [],
+            })
+            if (Object.keys(inherited).length > 0) {
+              scene.appearanceByEntity = { ...(scene.appearanceByEntity ?? {}), ...inherited }
+            }
+          }
+
           const tilingError = validateSceneTiling(chapter.text, output.scenes.map((s) => s.narrationText))
-          const qa = reviewSceneBreakdown(qaInput(output.scenes))
-          const errors = [...(tilingError ? [tilingError] : []), ...qa.errors]
+          let qa = reviewSceneBreakdown(qaInput(output.scenes))
+          const bindingErrors = await auditAndRepairIdentityBindings(output.scenes)
+          qa = reviewSceneBreakdown(qaInput(output.scenes))
+          const errors = [...(tilingError ? [tilingError] : []), ...qa.errors, ...bindingErrors]
           // A bailed retile means a probable un-fixable gap → weight it heavily so a tiled roll always wins.
           const violations = errors.length + (tiled ? 0 : 3)
           const unresolvedRefs = analyzed
@@ -314,7 +411,13 @@ export async function breakdownScenes(reelId: string): Promise<void> {
             : []
           const notes = [...errors, ...qa.warnings, ...(unresolvedRefs.length ? [`unresolved bible refs: ${unresolvedRefs.join(', ')}`] : [])]
 
-          if (!best || violations < best.violations) best = { scenes: output.scenes, violations, notes }
+          if (
+            !best ||
+            bindingErrors.length < best.bindingViolations ||
+            (bindingErrors.length === best.bindingViolations && violations < best.violations)
+          ) {
+            best = { scenes: output.scenes, violations, bindingViolations: bindingErrors.length, notes }
+          }
           if (violations === 0) break
           prev = output
           prevErrors = errors
@@ -322,6 +425,11 @@ export async function breakdownScenes(reelId: string): Promise<void> {
 
         const chosen = best!
         const tag = chaptered ? ` ch${chapter.idx}/${chapters.length}` : ''
+        if (chosen.bindingViolations > 0) {
+          throw new Error(
+            `[entity-binding-gate]${tag} ${chosen.bindingViolations} verified identity/state binding issue(s) remain: ${chosen.notes.join('; ')}`,
+          )
+        }
         if (chosen.violations > 0) {
           console.warn(`[scene-qa] ${reelId.slice(0, 8)}${tag} kept best of ${MAX_ATTEMPTS} rolls (violations=${chosen.violations}):\n  - ${chosen.notes.join('\n  - ')}`)
         } else if (chosen.notes.length > 0) {
@@ -423,6 +531,15 @@ export async function breakdownScenes(reelId: string): Promise<void> {
             console.warn(`[depiction-gate] ${reelId.slice(0, 8)}${tag} failed, keeping the pre-gate board: ${String(err)}`)
             depictionAudits.push({ chapter: chapter.idx, status: 'failed', error: String(err) })
           }
+        }
+
+        // The depiction doctor is allowed to change what a frame visibly shows, so identity correctness
+        // must be the LAST semantic gate. This catches a newly introduced exact person/place/object and
+        // attaches its verified source/state before any image provider can be called.
+        const finalBindingErrors = await auditAndRepairIdentityBindings(chosen.scenes)
+        const finalStateErrors = reviewSceneBreakdown(qaInput(chosen.scenes)).errors.filter((error) => /\bbind(?:s|ing)?\b|identity state/i.test(error))
+        if (finalBindingErrors.length > 0 || finalStateErrors.length > 0) {
+          throw new Error(`[entity-binding-gate-final]${tag} ${[...finalBindingErrors, ...finalStateErrors].join('; ')}`)
         }
 
         return chosen.scenes

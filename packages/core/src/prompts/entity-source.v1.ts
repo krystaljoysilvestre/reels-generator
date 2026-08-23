@@ -14,7 +14,7 @@
 import { z } from 'zod'
 import { SubjectClassSchema } from '../types/depiction.js'
 
-export const ENTITY_SOURCE_V1_VERSION = 'entity-source.v1'
+export const ENTITY_SOURCE_V1_VERSION = 'entity-source.v1.1'
 
 // (1) DECIDE — what class of real-world thing is this, and is it specific enough that a real photograph
 // would improve the render? The impact≠coverage guard is the whole point: a GENERIC subject (a bedroom, a
@@ -42,10 +42,16 @@ Classify into exactly one subjectClass:
 - "fictional" — invented: a story character, a mythological or folkloric being, a supernatural presence. Use this EVEN IF the name resembles a real person's — an invented character called "Maria Santos" is fictional.
 - "generic" — real in kind but ANONYMOUS and unnamed: "a bedroom", "an office", "a street", "a stray dog", "a cracked mirror", "a rusty key", "a schoolgirl". No specific real instance is meant.
 
+An organization, institution, company, government body, movement, committee, or group of people is NOT a
+visual subject in this taxonomy. Classify the organization itself as "generic" and sourceable FALSE: its logo,
+headquarters, members, and documents are different subjects, and choosing one would make a false visual claim.
+Only classify a separately named physical building/site, specific document/artifact, or eligible individual
+person when that is the entity actually described.
+
 Judge primarily by the NAME. If the name designates a specific real subject, classify it as that subject even when the description only lists physical features. If the name is a generic noun phrase, it is "generic".
 
 Then set sourceable:
-- TRUE only for "place", "object", "animal", or "human" — a specific real subject a viewer could look up and that plausibly has photographs.
+- TRUE only for "place", "object", "animal", or "human" — a specific real VISUAL subject a viewer could look up and that plausibly has photographs.
 - FALSE for "fictional" and "generic", always. A real photograph of some other bedroom, or of a real person who merely shares a made-up character's name, would be wrong — not helpful.
 
 When sourceable, write the best search query for a clear photograph of that subject: its proper name${region ? ', including the country/region when that disambiguates it' : ''}. For a species, the common English name. For a person, their full commonly-used name. Keep it short, no quotes.`

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { BibleEntitySchema, StoryBibleSchema, conditionableReferenceKeys, formatImageCredits, identityWithheldEntities, splitSceneDepiction, type BibleEntity } from './story-bible.js'
+import { BibleEntitySchema, StoryBibleSchema, conditionableReferenceKeys, formatImageCredits, identityWithheldEntities, missingRequiredIdentityReferences, splitSceneDepiction, type BibleEntity } from './story-bible.js'
 import { archivalShotTarget } from '../assembly/story-bible.js'
 import type { DepictionMode, MediaOrigin } from './depiction.js'
 
@@ -9,6 +9,7 @@ const entity = (id: string, mode: DepictionMode | null, key?: string): BibleEnti
     kind: 'character',
     description: `a description of ${id}`,
     ...(key ? { referenceImageKey: key } : {}),
+    ...(key && mode === 'reference_plate' ? { referenceOrigin: { type: 'sourced', provider: 'wikimedia', usage: 'conditioning_reference' } } : {}),
     ...(mode ? { depiction: { subjectClass: 'human', depictionMode: mode, eligibilityReason: 'real_subject', query: id } } : {}),
   })
 
@@ -33,6 +34,26 @@ describe('invariant 1 — an archival_only entity never contributes a reference 
 
   it('treats an unrouted entity as generated, preserving pre-existing behaviour', () => {
     expect(conditionableReferenceKeys([entity('ashley', null, 'refs/ashley.webp')])).toEqual(['refs/ashley.webp'])
+  })
+
+  it('rejects a generated fallback plate for a real identity', () => {
+    const generatedFallback = BibleEntitySchema.parse({
+      id: 'duchamp-fountain', kind: 'object', description: 'the 1917 readymade',
+      referenceImageKey: 'refs/generated-fallback.webp', referenceOrigin: { type: 'generated' },
+      depiction: { subjectClass: 'object', depictionMode: 'reference_plate', eligibilityReason: 'real_subject', query: 'Duchamp Fountain' },
+    })
+    expect(conditionableReferenceKeys([generatedFallback])).toEqual([])
+    expect(missingRequiredIdentityReferences([generatedFallback]).map((e) => e.id)).toEqual(['duchamp-fountain'])
+  })
+
+  it('requires the exact selected state to carry its own sourced anchor', () => {
+    const unsigned = BibleEntitySchema.parse({
+      ...entity('duchamp-fountain', 'reference_plate', 'refs/fountain.webp'),
+      referenceImageKey: undefined,
+      referenceOrigin: undefined,
+      description: 'the same porcelain fixture, unsigned and upright',
+    })
+    expect(missingRequiredIdentityReferences([unsigned]).map((e) => e.id)).toEqual(['duchamp-fountain'])
   })
 })
 
@@ -132,6 +153,11 @@ describe('archival fulfilment — presence withholds an identity; it does not ma
     // Scene 2/3 of reel 38f08fcf: the subject is the urinal, Duchamp is supporting. Returning him here
     // would have replaced a shot of the artwork with a portrait of the artist.
     expect(archivalShotTarget([duchamp], 'porcelain-urinal')).toBeNull()
+  })
+
+  it('does not replace an event containing another exact sourced subject with a portrait', () => {
+    const fountain = entity('duchamp-fountain', 'reference_plate', 'refs/fountain.webp')
+    expect(archivalShotTarget([duchamp], 'marcel-duchamp', [fountain])).toBeNull()
   })
 
   it('does not fulfil with two archival subjects — compositing real people is forbidden', () => {

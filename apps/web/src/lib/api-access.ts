@@ -4,6 +4,9 @@ import { getDb, channels, reels, stories, getUserUsage, getGlobalSpendTodayCents
 import { assertGlobalDailyBudget, GlobalBudgetExceededError, GLOBAL_DAILY_SPEND_CAP_CENTS, DEFAULT_USER_LIMITS, checkUserLimits, MAX_INFLIGHT_REELS_PER_USER, UNSHIPPED_REEL_STATUSES } from '@reels/core'
 import { getCurrentUser, type SessionUser } from '@/lib/auth'
 import { ACCOUNT_UNAVAILABLE } from '@/lib/user-profile'
+import { isLegacyUnownedUploadKey, isUuid, reelIdFromKey } from '@/lib/storage-key'
+
+export { isUuid, reelIdFromKey } from '@/lib/storage-key'
 
 // API-route authorization. The page layer uses the redirect/notFound guards in `lib/access.ts`;
 // API routes can't redirect, so these mirror the same tenancy rule (admin sees all; a tester is
@@ -24,11 +27,6 @@ const deny = (status: number, error: string): Denied => NextResponse.json({ erro
 
 // Postgres uuid columns throw (22P02) on malformed text. Client-supplied ids hit uuid columns, so
 // screen them first and treat a bad id as "not found" (never a 500, never a DB round-trip).
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-export function isUuid(v: unknown): v is string {
-  return typeof v === 'string' && UUID_RE.test(v)
-}
-
 // Authenticated AND active. The base gate for routes that don't touch a stored tenant object
 // (uploads to fresh keys, LLM helpers that act only on the request body).
 export async function requireApiUser(): Promise<SessionUser | Denied> {
@@ -110,9 +108,11 @@ export async function requireStoryOwner(storyId: unknown): Promise<SessionUser |
 // Does `key` name an R2 object the user is allowed to reference (as an image reference, uploaded
 // bed, etc.)? Used to stop routes that accept a client-supplied storageKey from pointing a render
 // at another tenant's object. `reels/<reelId>/...` keys must resolve to a reel the caller owns;
-// non-reel keys (fresh `uploads/`, `avatars/`, shared presets) are random/unguessable and allowed.
+// Legacy `uploads/` keys have no ownership edge and are rejected — randomness is not authorization.
+// Other non-reel keys are existing shared/channel surfaces with their own migration path.
 export async function callerMayUseStorageKey(user: SessionUser, key: unknown): Promise<boolean> {
   if (typeof key !== 'string' || key.length === 0) return false
+  if (isLegacyUnownedUploadKey(key)) return false
   const reelId = reelIdFromKey(key)
   if (reelId === undefined) return true // not a reel-scoped key → not another tenant's derived asset
   if (reelId === null) return false // malformed reels/ key
@@ -125,14 +125,6 @@ export async function callerMayUseStorageKey(user: SessionUser, key: unknown): P
     .where(eq(reels.id, reelId))
     .then((r) => r[0])
   return !!row && row.ownerId === user.id
-}
-
-// Parse the reelId out of a `reels/<reelId>/...` storage key.
-//   undefined → not a reels/ key   |   null → reels/ key with a bad id   |   string → the reelId
-export function reelIdFromKey(key: string): string | null | undefined {
-  if (!key.startsWith('reels/')) return undefined
-  const seg = key.split('/')[1]
-  return isUuid(seg) ? seg : null
 }
 
 // Cost-safety gate for ON-DEMAND paid actions (previews, image/motion regen, add-sound) that spend

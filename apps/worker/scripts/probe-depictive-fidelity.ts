@@ -29,7 +29,7 @@ import '../src/env.js'
 import { llmCall, resolveSubjectIdentity, wikidataDeathYear } from '@reels/providers'
 import { HUMAN_PLATE_MIN_YEARS_DEAD, SourcePolicySchema, mentionsAny, personNameVariants } from '@reels/core'
 import { buildRepresentativeStagingPrompt, RepresentativeStagingSchema } from '../src/prompts-bridge.js'
-import { routeDepiction } from '../src/pipeline/steps/generate-images.js'
+import { routeDepiction } from '../src/pipeline/depiction-routing.js'
 
 const POLICY = SourcePolicySchema.parse({ realPlaces: true, realPeople: 'historical', realEvents: true, invention: 'constrained' })
 
