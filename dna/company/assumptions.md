@@ -151,9 +151,13 @@ Roadmap Phase
 
 1
 
+Current Test Vehicle
+
+**Crossroads only** (founder decision 2026-08-24). Other channels are excluded from the current Customer Zero proof lap.
+
 Evidence Needed
 
-Customer Zero identifies recurring product improvements before external creators do.
+Operating Crossroads identifies recurring product improvements before external creators do, and the channel publishes consistently enough to produce audience evidence.
 
 Invalidation Signal
 

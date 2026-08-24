@@ -1,10 +1,9 @@
 # Roadmap
 
 Living backlog for the operator app. Vision: an AI pipeline that turns a niche
-description into publish-ready videos; we run it ourselves first on our own
-Filipino-horror channel(s) (Shorts/Reels for reach, long-form YouTube
-compilations for RPM, brand deals at scale), and productize as SaaS only after a
-channel proves traction.
+description into publish-ready videos; we run it ourselves first on **Crossroads**
+(Shorts/Reels for reach, long-form YouTube for deeper viewing and RPM), and
+productize as SaaS only after the channel proves traction.
 
 Model today: **one operator, multiple channels.** Dashboard = the operator's
 channel portfolio.
@@ -15,7 +14,7 @@ sequenced this way — lives in `dna/company/roadmap.md` (company DNA starts at
 
 ---
 
-## Now — publish one reel that stays up (2026-08-22)
+## Now — publish Crossroads and keep it up (2026-08-24)
 
 Everything below this section is backlog. This is the only active item.
 
@@ -25,21 +24,19 @@ per-channel authorization path — real id `RRvU0b1TFAc`, processed, served publ
 `videoCount: 0`. The publish PATH is demonstrated end-to-end; the act is not.
 **Kendrix has never published a reel intended to stay up.** That is the gate (decision-log 2026-08-22-001).
 
-### 1. Publish one reel that stays up — the whole gate
+### 1. Publish one Crossroads reel that stays up — the whole gate
 
-**Emberlight** is the nearest candidate: `spot_check`, finished render, full packaging repair already
-applied (cover plus *"A Ladder for Stars"*). Three steps:
+**Crossroads is the sole Customer Zero channel for this lap.** Other channels do not count toward current
+roadmap progress, even if their old artifacts remain useful as historical test cases.
+Take the current Crossroads candidate through three steps:
 
-1. **Re-render it — free.** Every render before 2026-08-21 burned a roaming Kendrix watermark, so both
-   existing reels still carry one. `watermark` left the render fingerprint, so the next pass drops it,
-   and `render` books `costCents: 0` — the pass is CPU-only and costs nothing. Do this before posting
-   anything, or the logo ships.
+1. **Produce a fresh Crossroads render.** Use the current factual/visual-truth path and the repaired
+   packaging surface. If the selected render predates 2026-08-21, re-render it before review so the
+   removed Kendrix watermark cannot ship; the render pass itself books `costCents: 0`.
 2. **Watch it and decide.** The 2026-08-10 audit proved this is the most reliable instrument we own.
    The question is not "is this approvable" but **"would you leave this up."**
-3. **Connect that channel and post.** Accounts are owned per channel, so Emberlight needs its own
-   connection — that step is not friction to route around, it is Phase 1's *"repeat the workflow without
-   setup assistance"* asked for real on a second channel. Free port 3000 first; the OAuth redirect is
-   pinned there.
+3. **Connect Crossroads and post.** Accounts are owned per channel, so the publishing grant must belong
+   to Crossroads. Free port 3000 first; the OAuth redirect is pinned there.
 
 ### 2. The first audience number — arrives on its own
 
@@ -68,10 +65,14 @@ unconnected ones). Public view counts now read via `YOUTUBE_API_KEY` with no gra
 retention still need the OAuth grant (YouTube Analytics API, `yt-analytics.readonly`) and remain a
 deliberate later step. See decision-log 2026-08-21-002.
 
-**What NOT to do:** turn one successful upload into a platform-integration lap. And note where the last
-ten days went — depictive fidelity, the cutting room, captions, the auth fix — all real work, all
-verified on **Crossroads and Lihim ng Nayon, which are engineering fixtures rather than Customer Zero
-evidence.** The two channels Phase 0 is measured by went untouched from 08-12.
+**Scope correction — 2026-08-24:** the founder designated **Crossroads** as the channel that counts.
+Earlier documents grouped it with Lihim ng Nayon as an engineering fixture and pointed the publish lap at
+another channel; that operating assumption is retired. The Crossroads work on depictive fidelity, verified
+identity and sourced narrative is directly relevant foundation work, but it becomes roadmap evidence only
+when a Crossroads reel stays live and produces an audience reading.
+
+**What NOT to do:** turn one successful upload into a platform-integration lap, or split the active proof
+across channels. Finish the Crossroads loop first.
 
 **Launch boundary — implemented is not generally available:**
 

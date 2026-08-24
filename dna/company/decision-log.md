@@ -998,6 +998,45 @@ dna/company/current-metrics.md, decision-log 2026-08-11-001 (annotated), decisio
 ---
 
 
+### 2026-08-24-001
+
+Status: Accepted
+
+Title: Crossroads Is the Sole Customer Zero Channel for the Current Proof Lap
+
+Decision
+
+Focus the active Phase 0 proof loop entirely on **Crossroads**. Other channels do not count toward current roadmap progress, even when their historical artifacts remain useful for regression tests or past decision context. Reclassify Crossroads from an engineering fixture to the founder's Customer Zero channel and point the immediate gate at one Crossroads reel that stays live.
+
+Why
+
+The founder explicitly chose Crossroads as *our channel*. Splitting the proof across channels obscured the question the roadmap is trying to answer: whether Kendrix can repeatedly produce work the founder genuinely wants to publish on the channel they intend to operate. Crossroads also exercises the factual-grounding, depictive-fidelity and verified-identity foundations that have received the most recent production work, so completing its loop converts that work from internal verification into relevant Customer Zero evidence.
+
+This decision changes the subject of the experiment, not the phase or its exit criteria. Phase 0 still requires a reliable storytelling engine; the immediate evidence remains a reel that stays live, followed by a real audience reading.
+
+Alternatives Considered
+
+**Publish the previous nearest candidate.** Rejected by the founder. Nearness is not useful if success on that channel is not the proof they want to pursue.
+
+**Count all internal channels equally.** Rejected. It permits work to migrate toward whichever artifact is easiest to finish and makes Customer Zero evidence ambiguous.
+
+**Erase historical references to other channels.** Rejected. The decision log is append-only, and technical specs should retain real historical examples. They no longer control current priorities or metrics.
+
+Expected Impact
+
+Roadmap attention, workflow metrics and audience evidence now have one subject. Engineering work on Crossroads can move the company state when it ends in a retained publish; work on other channels cannot silently substitute for that proof.
+
+Review Trigger
+
+Review only after Crossroads has published consistently enough to reveal whether the single-channel focus is producing useful learning, or if the founder explicitly changes the Customer Zero channel again.
+
+Related Documents
+
+ROADMAP.md, dna/company/current-metrics.md, dna/company/assumptions.md, decision-log 2026-08-22-001
+
+---
+
+
 ## Relationship to the Decision Framework
 
 The Decision Framework explains how decisions are made.
