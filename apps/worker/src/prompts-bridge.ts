@@ -133,7 +133,8 @@ export {
 export { buildStoryAnalyzerPrompt, STORY_ANALYZER_V1_VERSION } from '@reels/core/prompts/story-analyzer.v1'
 export { buildRephrasePrompt, REPHRASE_V1_VERSION } from '@reels/core/prompts/rephrase.v1'
 export { buildPeakExtractPrompt, PEAK_EXTRACT_V1_VERSION, PeakExtractSchema } from '@reels/core/prompts/peak-extract.v1'
-export { buildImageQAPrompt, IMAGE_QA_V1_VERSION, ImageQASchema } from '@reels/core/prompts/image-qa.v1'
+export { buildImageQAPrompt, IMAGE_QA_V1_VERSION, ImageQASchema, isBlockingImageTruthFailure } from '@reels/core/prompts/image-qa.v1'
+export { buildVisualTruthCriticPrompt, VISUAL_TRUTH_CRITIC_V1_VERSION, VisualTruthVerdictSchema } from '@reels/core/prompts/visual-truth-critic.v1'
 export { buildFilterSafePrompt, FILTER_SAFE_V1_VERSION, FilterSafeSchema } from '@reels/core/prompts/filter-safe.v1'
 export { buildVideoQAPrompt, VIDEO_QA_V1_VERSION, VideoQASchema } from '@reels/core/prompts/video-qa.v1'
 export { buildFoleySpotPrompt, FOLEY_SPOT_V1_VERSION, FoleySpotSchema } from '@reels/core/prompts/foley-spot.v1'
@@ -142,9 +143,11 @@ export { buildPostMetaPrompt, PostMetaLlmSchema, POST_META_V1_VERSION } from '@r
 export {
   buildEntitySourceDecidePrompt,
   buildEntityVerifyPrompt,
+  buildIdentityStateVerifyPrompt,
   buildRepresentativeStagingPrompt,
   EntitySourceDecisionSchema,
   EntityVerifySchema,
+  IdentityStateVerifySchema,
   RepresentativeStagingSchema,
   PLATE_COLOURISE_PROMPT,
   ENTITY_SOURCE_V1_VERSION,

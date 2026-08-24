@@ -56,4 +56,40 @@ describe('buildScenesPrompt', () => {
     expect(userMessage).toContain('ATTEMPT IS NOT OUTCOME')
     expect(userMessage).toContain('not public display or acceptance')
   })
+
+  it('does not invent an exact venue for an organization or historical event', () => {
+    const { userMessage } = buildScenesPrompt({
+      bibleEntitiesJson: '[]',
+      era: '1917',
+      regionDescriptor: 'New York City',
+      nicheDescription: 'documentary art history',
+      narration: 'The directors voted to reject the work.',
+      minScenes: 1,
+      maxScenes: 2,
+      peakMoment: '',
+      maxVideoTiers: 0,
+    })
+
+    expect(userMessage).toContain('HISTORICAL EVENT CONTEXT IS NOT A VENUE REFERENCE')
+    expect(userMessage).toContain('do not invent a documentary-looking overview')
+    expect(userMessage).toContain('locationEntityId remain unbound')
+  })
+
+  it('separates presenting verified evidence from conditioning a reconstruction', () => {
+    const { userMessage } = buildScenesPrompt({
+      bibleEntitiesJson: JSON.stringify([{ id: 'the-blind-man-magazine', kind: 'object' }]),
+      era: '1917',
+      regionDescriptor: 'New York City',
+      nicheDescription: 'documentary art history',
+      narration: 'The Blind Man published the photograph and defended Fountain.',
+      minScenes: 1,
+      maxScenes: 2,
+      peakMoment: '',
+      maxVideoTiers: 0,
+    })
+
+    expect(userMessage).toContain('sourcePresentationEntity')
+    expect(userMessage).toContain('verified source pixels untouched')
+    expect(userMessage).toContain('future publication not yet present')
+  })
 })

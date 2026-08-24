@@ -35,6 +35,7 @@
     "./prompts/story-ending-surgeon.v1": "./src/prompts/story-ending-surgeon.v1.ts",
     "./prompts/story-edit-verifier.v1": "./src/prompts/story-edit-verifier.v1.ts",
     "./prompts/story-ebn-extractor.v1": "./src/prompts/story-ebn-extractor.v1.ts",
+    "./prompts/visual-truth-critic.v1": "./src/prompts/visual-truth-critic.v1.ts",
     "./prompts/story-ebn-planner.v1": "./src/prompts/story-ebn-planner.v1.ts",
     "./prompts/story-ebn-writer.v1": "./src/prompts/story-ebn-writer.v1.ts",
     "./prompts/story-ebn-fidelity.v1": "./src/prompts/story-ebn-fidelity.v1.ts",

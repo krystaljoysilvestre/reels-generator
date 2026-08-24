@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildImageQAPrompt } from './image-qa.v1.js'
+import { buildImageQAPrompt, isBlockingImageTruthFailure } from './image-qa.v1.js'
 
 describe('buildImageQAPrompt — time-bound appearance', () => {
   it('adds a life-stage check only when the scene selected an appearance variant', () => {
@@ -10,8 +10,42 @@ describe('buildImageQAPrompt — time-bound appearance', () => {
       'the woman crosses the river',
       'grandmother: a young girl with long black hair and a red ribbon',
     )
-    expect(memory.userMessage).toContain('EXPECTED TIME-BOUND CHARACTER APPEARANCE')
-    expect(memory.userMessage).toContain('CHARACTER LIFE STAGE')
+    expect(memory.userMessage).toContain('EXPECTED VERIFIED ENTITY STATE')
+    expect(memory.userMessage).toContain('VERIFIED ENTITY STATE')
     expect(memory.userMessage).toContain('a young girl')
+  })
+
+  it('separates blocking factual truth from best-effort craft QA', () => {
+    const factual = buildImageQAPrompt(
+      'anonymous hands beside an unmarked object',
+      undefined,
+      { required: true, depictionBasis: 'representative', narrationText: 'The directors rejected it.' },
+    )
+    expect(factual.userMessage).toContain('FACTUAL DEPICTION CONTRACT (blocking)')
+    expect(factual.userMessage).toContain('representative must remain anonymous')
+    expect(factual.userMessage).toContain('pass:false with truthPass:true is valid')
+    expect(factual.userMessage).toContain('truthPass')
+
+    const fiction = buildImageQAPrompt('a woman opens a fictional door')
+    expect(fiction.userMessage).toContain('set truthPass:true')
+  })
+
+  it('classifies verified object state as truth while keeping conceptual composition in craft QA', () => {
+    const prompt = buildImageQAPrompt(
+      'Fountain dissolves into a blank field',
+      "duchamp-fountain: turned on its back, marked 'R. Mutt 1917'",
+      { required: true, depictionBasis: 'conceptual', narrationText: 'Without the rejection, it might have vanished.' },
+    )
+
+    expect(prompt.userMessage).toContain('identity-defining geometry, orientation, configuration, and markings')
+    expect(prompt.userMessage).toContain('never demote those to ordinary issues')
+    expect(prompt.userMessage).toContain('different composition or visual device')
+    expect(prompt.userMessage).toContain('do NOT put it in truthIssues')
+  })
+
+  it('blocks only the independent truth verdict', () => {
+    expect(isBlockingImageTruthFailure(true, { truthPass: false })).toBe(true)
+    expect(isBlockingImageTruthFailure(true, { truthPass: true })).toBe(false)
+    expect(isBlockingImageTruthFailure(false, { truthPass: false })).toBe(false)
   })
 })

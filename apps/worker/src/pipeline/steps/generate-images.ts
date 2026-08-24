@@ -1,12 +1,13 @@
 import { eq, and } from 'drizzle-orm'
-import { getDb, reels, scenes, assets, channels, stories } from '@reels/db'
+import { getDb, reels, scenes, assets, channels, stories, assertVisualTruthReady } from '@reels/db'
 import { generateImage, generateImageFal, imageEngineForGenre, FLUX_IMAGE_ENGINE, buildInputHash, ContentFilterError, llmCall, downloadBuffer, uploadBuffer, sourceEntityImage, spendFromError, SCENE_IMAGE_MODEL, SCENE_IMAGE_QUALITY, type ImageEngine } from '@reels/providers'
-import { archivalShotTarget, identityWithheldEntities, MODES_WITHOUT_PLATES, normalizeCanon, WorldBibleSchema, EntityPlateStoreSchema, entityDescriptionHash, assembleImagePrompt, assembleNegativePrompt, assembleReferencePrompt, castNationality, historicalEraDirective, reelLightingDirective, sceneEntities, slug, channelPlatformPreset, StoryBibleSchema, AppearanceBindingsSchema, appearanceIdForEntity, entityAtAppearance, resolveEntities, EBN_RENDERING_PROFILE, effectiveGenre, resolveChannelPolicy, canUseArchivalHumanShot, splitSceneDepiction, conditionableReferenceKeys, missingRequiredIdentityReferences, personNameVariants, mentionsAny, scrubNames, SAFE_REPRESENTATIVE_STAGING, type BibleEntity, type CharacterAppearance, type DepictionRouting, type MediaOrigin } from '@reels/core'
+import { archivalShotTarget, presentedSourceTarget, identityWithheldEntities, MODES_WITHOUT_PLATES, normalizeCanon, WorldBibleSchema, EntityPlateStoreSchema, entityDescriptionHash, assembleImagePrompt, assembleNegativePrompt, assembleReferencePrompt, castNationality, historicalEraDirective, reelLightingDirective, sceneEntities, slug, channelPlatformPreset, StoryBibleSchema, AppearanceBindingsSchema, appearanceIdForEntity, entityAtAppearance, resolveEntities, EBN_RENDERING_PROFILE, effectiveGenre, resolveChannelPolicy, requiresEvidence, canUseArchivalHumanShot, splitSceneDepiction, conditionableReferenceKeys, missingRequiredIdentityReferences, personNameVariants, mentionsAny, scrubNames, SAFE_REPRESENTATIVE_STAGING, visualTruthContractErrors, type BibleEntity, type CharacterAppearance, type DepictionRouting, type MediaOrigin, type DepictionBasis, type SourcePolicy } from '@reels/core'
 import { z } from 'zod'
-import { buildRephrasePrompt, REPHRASE_V1_VERSION, buildImageQAPrompt, IMAGE_QA_V1_VERSION, ImageQASchema, buildFilterSafePrompt, FILTER_SAFE_V1_VERSION, FilterSafeSchema, buildEntityVerifyPrompt, buildRepresentativeStagingPrompt, EntityVerifySchema, RepresentativeStagingSchema, PLATE_COLOURISE_PROMPT, ENTITY_SOURCE_V1_VERSION } from '../../prompts-bridge.js'
+import { buildRephrasePrompt, REPHRASE_V1_VERSION, buildImageQAPrompt, IMAGE_QA_V1_VERSION, ImageQASchema, isBlockingImageTruthFailure, buildFilterSafePrompt, FILTER_SAFE_V1_VERSION, FilterSafeSchema, buildEntityVerifyPrompt, buildIdentityStateVerifyPrompt, buildRepresentativeStagingPrompt, EntityVerifySchema, IdentityStateVerifySchema, RepresentativeStagingSchema, PLATE_COLOURISE_PROMPT, ENTITY_SOURCE_V1_VERSION } from '../../prompts-bridge.js'
 import { runStep } from '../harness.js'
 import { runPool } from '../pool.js'
 import { routeDepiction } from '../depiction-routing.js'
+import { resolveMediaGenre } from '@reels/core/prompts/scenes.v1'
 
 // generate_images — step 4
 // One image per scene. Style preset injected server-side — the system owns the look, the LLM only writes
@@ -14,12 +15,12 @@ import { routeDepiction } from '../depiction-routing.js'
 //  • Scenes that feature a bible entity WITH a reference plate → reference-conditioned edit on fal
 //    (Gemini 2.5 Flash Image): the entity's plate(s) are passed as image_urls so the recurring ghost/house
 //    keeps its pixel-level identity across scenes (the visual half of the continuity guarantee).
-//  • Every other scene (no bible, or no plate for its entities) → text-to-image via OpenAI gpt-image-1,
-//    exactly as before. Same-`location` continuity there stays prompt-driven (the SETTING rule).
+//  • Every other scene (no bible, or no plate for its entities) → text-to-image on the configured scene
+//    engine. Same-`location` continuity there stays prompt-driven (the SETTING rule).
 // Content-filter rejection → rephrase.v1 retry (max 3) → mood-only downgrade.
 // HERO (tier:'video') + PEAK scenes additionally get a vision QA pass that re-rolls when the render clearly
 // contradicts the brief (open door, third-person instead of POV, a figure shown when it should be implied).
-// QA improves rather than gates — a reel is never failed on a verdict.
+// Craft QA improves and flags; factual truth/identity QA blocks after the bounded re-roll is exhausted.
 
 const MAX_REPHRASE_ATTEMPTS = 3
 
@@ -33,6 +34,13 @@ const IMAGE_QA_MODEL = 'claude-haiku-4-5-20251001' // vision QA runs on Claude (
 // limit (POV-with-figure, shadow-under-closed-door) never converges, so more attempts just burn cost. When QA
 // still fails, the image is kept and the verdict is flagged on meta.qaIssues for the operator to act on.
 const MAX_QA_REROLLS = 1
+
+// Factual truth is a property of the reel's frozen Source Policy, not its creative genre. Keep the legacy
+// informational enrollment for channels that predate Source Policy, while ensuring a factual commentary,
+// horror, or any future genre cannot enter the evidence-backed story path and then bypass visual truth QA.
+export function requiresVisualTruthQa(policy: SourcePolicy, mediaGenre: string): boolean {
+  return requiresEvidence(policy) || mediaGenre === 'informational'
+}
 
 // The reflective surfaces where a FIRST-PERSON narrator's own FACE can appear on screen. These are the ONLY
 // beats where her locked look must be spliced/conditioned (see the visibility rule in processScene) — on
@@ -99,7 +107,10 @@ const ENTITY_VERIFY_MIN_CONFIDENCE = 0.6
 // documented as weak at wrong-but-similar — which for a person is the entire failure mode (a similar-looking
 // stranger), and the consequence is a real human depicted as someone they are not.
 const HUMAN_VERIFY_MIN_CONFIDENCE = 0.8
-const MAX_STATE_PLATE_ATTEMPTS = 2
+// Exact state adaptation is a bounded correctness repair, not creative option generation. Crossroads live
+// verification produced two invalid precursor plates in a row; a third attempt is the smallest retry budget
+// that avoids failing the whole board on that observed variance while still stopping deterministically.
+const MAX_STATE_PLATE_ATTEMPTS = 3
 
 // The bible entity id IS the subject name in kebab-case ("paoay-church", "jose-rizal"); de-kebab it so the
 // decider judges by the NAME, not only the feature-list description (which often doesn't name the subject).
@@ -113,9 +124,13 @@ export function sourceQueryCandidates(
   routing: Pick<DepictionRouting, 'query' | 'subjectClass'>,
 ): string[] {
   const name = entityName(entity.id)
+  // Commons search can get worse when a precise title is padded with container/media nouns (live case:
+  // "The Blind Man magazine May 1917 issue Fountain" returned generic periodicals, while the compact
+  // "The Blind Man May 1917 Fountain" returned the exact issue-2 page). Keep both; verification decides.
+  const compactQuery = routing.query.replace(/\b(?:magazine|issue|publication|document|photograph|photo|image|scan)\b/gi, ' ').replace(/\s+/g, ' ').trim()
   const raw = routing.subjectClass === 'human'
     ? [routing.query]
-    : [routing.query, name, `${name} ${entity.description}`]
+    : [routing.query, compactQuery, name, `${name} ${entity.description}`]
   const seen = new Set<string>()
   return raw.map((value) => value.trim()).filter((value) => {
     const normalized = value.toLowerCase()
@@ -126,7 +141,7 @@ export function sourceQueryCandidates(
 }
 
 export function buildStateAdaptationPrompt(basePrompt: string, stateDescription: string): string {
-  return `${basePrompt}\n\nIDENTITY-STATE LOCK: Preserve the source subject's exact physical geometry, proportions, openings, rim, and fixture details. Change only what the story-time state requires. The finished reference MUST visibly satisfy this exact state: ${stateDescription}. Do not omit, obscure, paraphrase, or relocate any named mark or signature.`
+  return `${basePrompt}\n\nIDENTITY-STATE LOCK: Preserve the source subject's exact physical geometry, proportions, openings, rim, and fixture details. TARGET STATE IS AUTHORITATIVE: render exactly its specified orientation, surface markings, labels, damage, and restoration. A source-state detail that is absent from or contradicts this target belongs to another moment and must not carry over. The finished reference MUST visibly satisfy this exact state: ${stateDescription}.`
 }
 
 // Invariant-2 text helpers (personNameVariants / mentionsAny / scrubNames / SAFE_REPRESENTATIVE_STAGING)
@@ -173,8 +188,13 @@ async function fetchVerifiedMedia(
     const name = entityName(entity.id)
     const seenSources = new Set<string>()
     for (const sourceQuery of sourceQueryCandidates(entity, routing)) {
-      try {
-        const img = await sourceEntityImage(sourceQuery, { requireArticleIdentity: isHuman })
+      // Article lead first preserves the strongest non-human identity anchor. If vision rejects that exact
+      // file, retry the SAME query against Commons directly before broadening the query: an article about a
+      // publication commonly leads with its cover while the required issue/page exists as a separate file.
+      // Humans deliberately never get this unanchored path.
+      const searchModes = isHuman ? [false] : [false, true]
+      for (const preferCommonsSearch of searchModes) try {
+        const img = await sourceEntityImage(sourceQuery, { requireArticleIdentity: isHuman, preferCommonsSearch })
         if (!img || seenSources.has(img.sourceUrl)) continue
         seenSources.add(img.sourceUrl)
         const vp = buildEntityVerifyPrompt(subjectClass, name, entity.description)
@@ -187,7 +207,7 @@ async function fetchVerifiedMedia(
         costCents += verify.costCents
         const minConfidence = isHuman ? HUMAN_VERIFY_MIN_CONFIDENCE : ENTITY_VERIFY_MIN_CONFIDENCE
         if (!verify.data.matches || verify.data.confidence < minConfidence) {
-          console.warn(`[generate-images] "${entity.id}" candidate "${img.title}" rejected by verify (matches=${verify.data.matches}, confidence=${verify.data.confidence} < ${minConfidence})`)
+          console.warn(`[generate-images] "${entity.id}" candidate "${img.title}" rejected by verify (matches=${verify.data.matches}, confidence=${verify.data.confidence} < ${minConfidence}; ${verify.data.note})`)
           continue
         }
 
@@ -206,7 +226,7 @@ async function fetchVerifiedMedia(
           costCents,
         }
       } catch (candidateError) {
-        console.warn(`[generate-images] source candidate "${sourceQuery}" failed for "${entity.id}": ${candidateError instanceof Error ? candidateError.message : String(candidateError)}`)
+        console.warn(`[generate-images] source candidate "${sourceQuery}"${preferCommonsSearch ? ' (Commons search)' : ''} failed for "${entity.id}": ${candidateError instanceof Error ? candidateError.message : String(candidateError)}`)
       }
     }
     return { media: null, costCents }
@@ -273,21 +293,24 @@ async function sourceEntityPlate(
       }, bill)
       bill(res.costCents)
       const rendered = await downloadBuffer(res.asset.storageKey)
-      const verifyPrompt = buildEntityVerifyPrompt(routing.subjectClass, entityName(identityEntity.id), renderEntity.description)
+      const verifyPrompt = buildIdentityStateVerifyPrompt(entityName(identityEntity.id), renderEntity.description)
       const verify = await llmCall({
         templateVersion: ENTITY_SOURCE_V1_VERSION,
-        schema: EntityVerifySchema,
+        schema: IdentityStateVerifySchema,
         provider: 'anthropic',
         model: DEPICTION_MODEL,
         system: verifyPrompt.system,
         messages: [{ role: 'user', content: [
+          { type: 'text', text: 'IMAGE 1 — verified source identity:' },
+          { type: 'image', mediaType: media.mime, base64: media.buffer.toString('base64') },
+          { type: 'text', text: 'IMAGE 2 — generated state-adapted candidate:' },
           { type: 'image', mediaType: sniffMediaType(rendered), base64: rendered.toString('base64') },
           { type: 'text', text: verifyPrompt.userMessage },
         ] }],
       })
       bill(verify.costCents)
-      if (!verify.data.matches || verify.data.confidence < ENTITY_VERIFY_MIN_CONFIDENCE) {
-        console.warn(`[generate-images] adapted state "${renderEntity.id}:${state.id}" rejected by verify on attempt ${attempt + 1} (matches=${verify.data.matches}, confidence=${verify.data.confidence})`)
+      if (!verify.data.identityPreserved || !verify.data.candidateMatchesTargetExactly || verify.data.confidence < ENTITY_VERIFY_MIN_CONFIDENCE) {
+        console.warn(`[generate-images] adapted state "${renderEntity.id}:${state.id}" rejected by verify on attempt ${attempt + 1} (identity=${verify.data.identityPreserved}, target=${verify.data.candidateMatchesTargetExactly}, confidence=${verify.data.confidence}; ${verify.data.note})`)
         continue
       }
       return {
@@ -362,6 +385,13 @@ export async function generateImages(reelId: string): Promise<void> {
   // never source a real photo of a real place it was literally about, while every informational channel
   // got the permission whether or not its creator wanted it.
   const policy = resolveChannelPolicy(reel, null, channel)
+  const truthQaRequired = requiresVisualTruthQa(
+    policy,
+    resolveMediaGenre({ storyMode: channel.storyMode, genreCategory: genre, niche: channel.nicheDescription }),
+  )
+  // A linked failed verdict is terminal until the scene is deliberately regenerated. This check runs
+  // before reference sourcing or any image spend, so worker retries surface the same blocker for free.
+  await assertVisualTruthReady(reelId)
   const lighting = storyBible ? reelLightingDirective(genre, storyBible.continuity.timeline) : undefined
 
   // Image model is chosen per genre (currently gpt-image-1 for all — owner preference). Used for both
@@ -512,7 +542,7 @@ export async function generateImages(reelId: string): Promise<void> {
     // referenceImageKey: the hash is the set of entities still MISSING a plate, so a swallowed plate failure
     // retries on the next run instead of being cached away as done.
     if (toMint.length > 0) {
-      const plateHash = buildInputHash('image_plates.v2', {
+      const plateHash = buildInputHash('image_plates.v6', {
         reelId,
         // Depiction mode is IN the hash: a re-route (policy change, a subject reclassified) must re-mint
         // rather than serve a plate produced under the old mode.
@@ -619,6 +649,15 @@ export async function generateImages(reelId: string): Promise<void> {
 
   const pending = reelScenes.filter((s) => s.visualPrompt && !s.imageAssetId) // skip already-generated (idempotency)
 
+  const contractErrors = pending.flatMap((scene) => visualTruthContractErrors({
+    depictionBasis: scene.depictionBasis as DepictionBasis,
+    sourcePresentationEntity: scene.sourcePresentationEntity,
+    primaryEntity: scene.primaryEntity,
+  }).map((error) => `scene ${scene.idx}: ${error}`))
+  if (contractErrors.length > 0) {
+    throw new Error(`[visual-truth-gate] ${contractErrors.join(' | ')}`)
+  }
+
   // VERIFIED IDENTITY COVERAGE — deterministic and pre-spend. The director has already decided which exact
   // entity/state is visible; code now guarantees every `reference_plate` claim reaches the renderer with its
   // sourced anchor. This intentionally does not infer tags from prose (the Crossroads lexical experiment
@@ -670,7 +709,9 @@ export async function generateImages(reelId: string): Promise<void> {
   )
   const featuresArchival = (s: (typeof pending)[number]) =>
     [...(s.primaryEntity ? [s.primaryEntity] : []), ...(s.supportingEntities ?? [])].some((r) => archivalSlugs.has(slug(r)))
-  const isQATarget = (s: (typeof pending)[number]) => Boolean(eraContext) || s.tier === 'video' || (peak !== '' && s.narrationText.includes(peak)) || featuresPerson(s) || featuresArchival(s) || (isVoiceover && carriesClaim(s))
+  const isQATarget = (s: (typeof pending)[number]) => truthQaRequired || Boolean(eraContext) || s.tier === 'video' || (peak !== '' && s.narrationText.includes(peak)) || featuresPerson(s) || featuresArchival(s) || (isVoiceover && carriesClaim(s))
+
+  const blockingTruthFailures: string[] = []
 
   const processScene = async (scene: (typeof pending)[number]) => {
     const appearanceByEntity = AppearanceBindingsSchema.parse(scene.appearanceBindings ?? {})
@@ -746,6 +787,21 @@ export async function generateImages(reelId: string): Promise<void> {
     const sceneEnts = storyBible
       ? sceneEntities(storyBible, { primaryEntity: refPrimary, supportingEntities: refSupporting, appearanceByEntity })
       : []
+    // A scene may explicitly say that the verified source itself is the shot. Keep that editorial choice
+    // separate from ordinary identity conditioning: otherwise a document/artwork gets handed to an image
+    // model and comes back as a persuasive but false facsimile. Wrong-state variants are rejected by the
+    // pure resolver before any scene-image spend.
+    const sourcePresentationTarget = presentedSourceTarget(
+      sceneEnts,
+      scene.sourcePresentationEntity,
+      refPrimary,
+      appearanceByEntity,
+    )
+    if (scene.sourcePresentationEntity && !sourcePresentationTarget) {
+      throw new Error(
+        `[generate_images] scene ${scene.idx} requested source presentation for "${scene.sourcePresentationEntity}" but it is not the sourced primary entity in its base state`,
+      )
+    }
     // INVARIANT 1, enforced by the shared helper rather than a local filter — and applied on top of the
     // tag-strip above. Two guards on the same rule is deliberate: this one holds even if a future edit
     // changes how tags are resolved.
@@ -795,13 +851,14 @@ export async function generateImages(reelId: string): Promise<void> {
 
     const finalPrompt = assembleImagePrompt(scene.visualPrompt!, effectiveStyle, expansion, lighting, cast, isReconstruction)
 
-    const inputHash = buildInputHash('generate_images.v3', {
+    const inputHash = buildInputHash('generate_images.v4', {
       finalPrompt,
       sceneIdx: scene.idx,
       reelId,
       model: SCENE_IMAGE_MODEL,
       quality: SCENE_IMAGE_QUALITY, // in the hash so a recipe change busts the cache + regenerates
       referenceImageKeys, // re-render when a scene's references change (gained/lost a plate)
+      sourcePresentation: sourcePresentationTarget?.referenceOrigin?.sourceAssetKey ?? '',
       engine: `${sceneEngine.imageModel}|${sceneEngine.editModel}`, // switching engine (incl. scare→Flux) busts the cache
       // The archival subjects are inputs even though they never reach the prompt: they decide whether this
       // scene is fulfilled by a real photograph and whether the prose is scrubbed.
@@ -816,6 +873,51 @@ export async function generateImages(reelId: string): Promise<void> {
     await runStep(
       { reelId, stepName: `generate_images:scene${scene.idx}` as never, inputHash },
       async (cost) => {
+        // ── EXACT SOURCE FULFILMENT ───────────────────────────────────────────────────────────────
+        // The evidence is the image. Copy the untouched, already-verified source bytes into the scene;
+        // do not crop, restyle, colourise, composite, or ask a generator to redraw them. Render-time
+        // framing may pan/fit the still, exactly like any other presented archival shot.
+        if (sourcePresentationTarget?.referenceOrigin?.sourceAssetKey) {
+          const sourceKey = sourcePresentationTarget.referenceOrigin.sourceAssetKey
+          const sourceBytes = await downloadBuffer(sourceKey)
+          const key = `reels/${reelId}/scenes/${scene.idx}-source.webp`
+          await uploadBuffer(key, sourceBytes, sniffMediaType(sourceBytes))
+          const origin: MediaOrigin = {
+            ...sourcePresentationTarget.referenceOrigin,
+            usage: 'presented_archival',
+            sourceAssetKey: sourceKey,
+            conditioningAssetKey: undefined,
+            conditioningTransform: undefined,
+          }
+          const [asset] = await db
+            .insert(assets)
+            .values({
+              reelId,
+              channelId: reel.channelId,
+              kind: 'image',
+              storageKey: key,
+              provider: origin.provider ?? 'source',
+              costCents: cost.total,
+              meta: { archival: true, exactSource: true, subject: sourcePresentationTarget.id, origin, truthQaRequired, truthQaPass: true, truthQaIssues: [], depictionBasis: scene.depictionBasis },
+            })
+            .onConflictDoUpdate({
+              target: [assets.reelId, assets.storageKey],
+              set: {
+                provider: origin.provider ?? 'source',
+                costCents: cost.total,
+                meta: { archival: true, exactSource: true, subject: sourcePresentationTarget.id, origin, truthQaRequired, truthQaPass: true, truthQaIssues: [], depictionBasis: scene.depictionBasis },
+                createdAt: new Date(),
+              },
+            })
+            .returning()
+          await db
+            .update(scenes)
+            .set({ imageAssetId: asset!.id, imageOrigin: origin })
+            .where(and(eq(scenes.reelId, reelId), eq(scenes.idx, scene.idx)))
+          console.log(`[generate-images] ${reelId.slice(0, 8)} scene${scene.idx}: presented exact source for "${sourcePresentationTarget.id}" untouched`)
+          return { output: { assetId: asset!.id, archival: true, exactSource: true }, costCents: cost.total }
+        }
+
         // ── ARCHIVAL FULFILMENT ──────────────────────────────────────────────────────────────────
         // A genuine licensed photograph, presented as itself. Nothing generative touches it: no /edit, no
         // style preset, no negative prompt, no colourisation. Framing and motion at render time are
@@ -840,7 +942,7 @@ export async function generateImages(reelId: string): Promise<void> {
               .set({ imageAssetId: asset!.id, imageOrigin: origin })
               .where(and(eq(scenes.reelId, reelId), eq(scenes.idx, scene.idx)))
             console.log(`[generate-images] ${reelId.slice(0, 8)} scene${scene.idx}: presented archival photograph of "${archivalTarget.id}" (${media.origin.license})`)
-            return { output: { assetId: asset!.id, archival: true }, costCents: cost.total }
+            return { output: { assetId: asset!.id, archival: true, exactSource: false }, costCents: cost.total }
           }
           console.warn(`[generate-images] ${reelId.slice(0, 8)} scene${scene.idx}: no archival photograph for "${archivalTarget.id}" → representative staging`)
         }
@@ -901,12 +1003,14 @@ export async function generateImages(reelId: string): Promise<void> {
         let chosen: Awaited<ReturnType<typeof generateImageWithRetry>> | undefined
         let extraNeg = '' // targeted negatives added across re-rolls to push the model off the flagged failure
         let lastIssues: string[] = [] // QA verdict of the kept image ([] = passed / not QA'd)
+        let lastTruthIssues: string[] = []
+        let lastTruthPass = true
         // KEEP THE BEST ATTEMPT, not the last. Attempts overwrite the same storage key, so without this a
         // near-miss roll (failed QA on one nit) gets clobbered by a later, WORSE roll — observed live: a
         // reveal's attempt 0 drew the story's contradiction almost right, got re-rolled, and attempt 1 (a
         // studio portrait) was what shipped. Track each attempt's bytes + issue count and restore the best
         // after the loop when the final roll didn't win. Fewest QA issues = best (a pass is 0).
-        let best: { buffer: Buffer; issues: string[]; attempt: number } | undefined
+        let best: { buffer: Buffer; issues: string[]; truthPass: boolean; truthIssues: string[]; attempt: number } | undefined
 
         // Each attempt re-generates (gpt-image-1 is non-deterministic, so a re-roll is a genuinely
         // different render) and overwrites the same storage key, so stopping at the first pass leaves the
@@ -933,12 +1037,22 @@ export async function generateImages(reelId: string): Promise<void> {
           const expectedAppearance = Object.keys(appearanceByEntity).length > 0
             ? sceneEnts.map((entity) => `${entity.id}: ${entity.description}`).join('\n')
             : undefined
-          const { verdict, costCents } = await imageQA(buffer, qaBrief, expectedAppearance)
+          const { verdict, costCents } = await imageQA(buffer, qaBrief, expectedAppearance, {
+            required: truthQaRequired,
+            depictionBasis: scene.depictionBasis as DepictionBasis,
+            narrationText: scene.narrationText,
+          })
           cost.add(costCents)
           lastIssues = verdict.issues
-          if (!best || verdict.issues.length < best.issues.length) best = { buffer, issues: verdict.issues, attempt }
-          if (verdict.pass) {
+          lastTruthPass = verdict.truthPass
+          lastTruthIssues = verdict.truthIssues
+          const score = (verdict.truthPass ? 0 : 1000) + verdict.truthIssues.length * 100 + verdict.issues.length
+          const bestScore = best ? (best.truthPass ? 0 : 1000) + best.truthIssues.length * 100 + best.issues.length : Number.POSITIVE_INFINITY
+          if (score < bestScore) best = { buffer, issues: verdict.issues, truthPass: verdict.truthPass, truthIssues: verdict.truthIssues, attempt }
+          if (verdict.pass && verdict.truthPass) {
             lastIssues = []
+            lastTruthPass = true
+            lastTruthIssues = []
             if (attempt > 0) console.log(`[image-qa] ${reelId.slice(0, 8)} scene${scene.idx} passed on re-roll ${attempt}`)
             break
           }
@@ -949,14 +1063,16 @@ export async function generateImages(reelId: string): Promise<void> {
             extraNeg = 'third person, full body shot, visible person, figure in frame, camera looking down at a person'
           }
           const tag = attempt < MAX_QA_REROLLS ? 're-rolling' : 'keeping best attempt'
-          console.warn(`[image-qa] ${reelId.slice(0, 8)} scene${scene.idx} attempt ${attempt} failed → ${tag}: ${verdict.issues.join('; ')}`)
+          console.warn(`[image-qa] ${reelId.slice(0, 8)} scene${scene.idx} attempt ${attempt} failed → ${tag}: ${[...verdict.truthIssues, ...verdict.issues].join('; ')}`)
         }
 
         // The canonical key holds the LAST attempt's bytes; if an earlier attempt scored better (fewer QA
         // issues), restore its bytes so the kept image is the closest roll to the brief.
-        if (qa && best && best.issues.length < lastIssues.length) {
+        if (qa && best && ((best.truthPass ? 0 : 1000) + best.truthIssues.length * 100 + best.issues.length) < ((lastTruthPass ? 0 : 1000) + lastTruthIssues.length * 100 + lastIssues.length)) {
           await uploadBuffer(chosen!.asset.storageKey, best.buffer, sniffMediaType(best.buffer))
           lastIssues = best.issues
+          lastTruthPass = best.truthPass
+          lastTruthIssues = best.truthIssues
           console.log(`[image-qa] ${reelId.slice(0, 8)} scene${scene.idx} restored attempt ${best.attempt} (fewest issues: ${best.issues.length})`)
         }
 
@@ -967,6 +1083,14 @@ export async function generateImages(reelId: string): Promise<void> {
           visualPrompt: scene.visualPrompt, // store the prompt so undo/redo can restore it with the image
           ...(qa ? { qaPass: lastIssues.length === 0 } : {}),
           ...(lastIssues.length ? { qaIssues: lastIssues } : {}),
+          truthQaRequired,
+          // Craft conformance and truth are deliberately independent. A conceptual frame that communicates
+          // through a different composition remains a storyboard note; a verified identity/state error is
+          // a hard last-mile blocker. image-qa.v1.5 explicitly classifies object geometry/orientation/marks
+          // as truth, closing the Fountain miss without promoting every prompt detail into factual law.
+          truthQaPass: !truthQaRequired || lastTruthPass,
+          truthQaIssues: truthQaRequired ? lastTruthIssues : [],
+          depictionBasis: scene.depictionBasis,
         }
         // Default scene-image key is constant per scene; a re-run (e.g. the rerender-images script clears
         // imageAssetId) upserts this row in place rather than colliding on the unique (reelId, storageKey).
@@ -989,23 +1113,30 @@ export async function generateImages(reelId: string): Promise<void> {
 
         await db
           .update(scenes)
-          .set({ imageAssetId: asset!.id })
+          .set({ imageAssetId: asset!.id, imageOrigin: null })
           .where(and(eq(scenes.reelId, reelId), eq(scenes.idx, scene.idx)))
 
-        return { output: { assetId: asset!.id, archival: false }, costCents: cost.total }
+        if (isBlockingImageTruthFailure(truthQaRequired, { truthPass: lastTruthPass })) {
+          blockingTruthFailures.push(`scene ${scene.idx}: ${lastTruthIssues.join('; ') || 'factual image truth QA failed without a reason'}`)
+        }
+
+        return { output: { assetId: asset!.id, archival: false, exactSource: false }, costCents: cost.total }
       },
     )
   }
 
   // Rolling pool — fast without flooding fal, and one bad scene doesn't abort the others.
   await runPool(pending, IMAGE_CONCURRENCY, processScene, 'scene image')
+  if (blockingTruthFailures.length > 0) {
+    throw new Error(`[visual-truth-image-qa] ${blockingTruthFailures.join(' | ')}`)
+  }
 }
 
 // Vision QA: does the render match the brief's checkable intent? Takes the image BYTES (the caller
 // downloads once and reuses the buffer for best-attempt tracking). Sniffs the real media type so it works
 // regardless of fal's output format. Cheap (Haiku); only called on QA-target scenes.
-async function imageQA(buf: Buffer, visualPrompt: string, expectedAppearance?: string): Promise<{ verdict: z.infer<typeof ImageQASchema>; costCents: number }> {
-  const { system, userMessage } = buildImageQAPrompt(visualPrompt, expectedAppearance)
+async function imageQA(buf: Buffer, visualPrompt: string, expectedAppearance?: string, truth?: { required: boolean; depictionBasis: DepictionBasis; narrationText: string }): Promise<{ verdict: z.infer<typeof ImageQASchema>; costCents: number }> {
+  const { system, userMessage } = buildImageQAPrompt(visualPrompt, expectedAppearance, truth)
   const r = await llmCall({
     templateVersion: IMAGE_QA_V1_VERSION,
     schema: ImageQASchema,
@@ -1022,7 +1153,7 @@ async function imageQA(buf: Buffer, visualPrompt: string, expectedAppearance?: s
       },
     ],
   })
-  return { verdict: r.data, costCents: r.costCents }
+  return { verdict: ImageQASchema.parse(r.data), costCents: r.costCents }
 }
 
 interface ImageGenAttemptParams {

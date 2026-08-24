@@ -16,3 +16,31 @@ describe('story analyzer identity states', () => {
     expect(prompt.userMessage).toContain('Never let the final state')
   })
 })
+
+describe('story analyzer visual entity boundary', () => {
+  it('keeps organizations and historical events out of location identity', () => {
+    const prompt = buildStoryAnalyzerPrompt({
+      narration: 'The Society held its first exhibition and later voted to reject the work.',
+      channelCanon: [],
+      nicheDescription: 'art history',
+      era: '1917',
+      regionDescriptor: 'New York',
+    })
+    expect(prompt.userMessage).toContain('ORGANIZATIONS AND EVENTS ARE CONTEXT, NOT LOCATIONS')
+    expect(prompt.userMessage).toContain('locationEntityId MUST be null')
+    expect(prompt.userMessage).toContain('actual physical building/site/room')
+  })
+
+  it('retains a one-scene named factual subject so sourcing can anchor it', () => {
+    const prompt = buildStoryAnalyzerPrompt({
+      narration: 'The photograph ran in the May 1917 issue of The Blind Man.',
+      channelCanon: [],
+      nicheDescription: 'art history',
+      era: '1917',
+      regionDescriptor: 'New York',
+    })
+    expect(prompt.userMessage).toContain('ONE-SCENE FACTUAL IDENTITY EXCEPTION')
+    expect(prompt.userMessage).toContain('dated publication issue or document')
+    expect(prompt.userMessage).toContain('stage cannot anchor it')
+  })
+})

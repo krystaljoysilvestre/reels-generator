@@ -15,13 +15,18 @@
 // and continuity survive by construction. Versioned source; bump on any prompt-affecting edit.
 import { z } from 'zod'
 
-export const SCENE_DEPICTION_DOCTOR_V1_VERSION = 'scene-depiction-doctor.v1.0'
+export const SCENE_DEPICTION_DOCTOR_V1_VERSION = 'scene-depiction-doctor.v1.5'
 
 export const SceneDepictionRepairSchema = z.object({
   repairs: z.array(
     z.object({
       idx: z.number().int(), // must echo a failing scene's idx
       imagePrompt: z.string().min(1),
+      depictionBasis: z.enum(['source', 'reconstruction', 'representative', 'conceptual']),
+      sourcePresentationEntity: z.string().nullable(),
+      primaryEntity: z.string().nullable(),
+      supportingEntities: z.array(z.string()),
+      appearanceByEntity: z.record(z.string(), z.string()),
     }),
   ),
 })
@@ -34,7 +39,10 @@ export interface SceneDepictionDoctorVars {
   // Only the FAILING scenes, each with the critic's diagnosis. primaryEntity (when tagged) is the subject
   // the shot must still OPEN on — repairs that change the lead break the primary↔lead invariant and get
   // reverted by the caller's deterministic-QA guard.
-  scenes: { idx: number; narrationText: string; imagePrompt: string; reason: string; primaryEntity?: string | null }[]
+  evidenceFacts?: unknown
+  bibleEntities?: unknown
+  journey?: unknown
+  scenes: { idx: number; narrationText: string; imagePrompt: string; reason: string; primaryEntity?: string | null; depictionBasis: 'source' | 'reconstruction' | 'representative' | 'conceptual'; sourcePresentationEntity?: string | null }[]
 }
 
 export function buildSceneDepictionDoctorPrompt(v: SceneDepictionDoctorVars): { system: string; userMessage: string } {
@@ -57,12 +65,19 @@ REPAIR RULES:
 - Write 45–75 words, concrete and specific to THIS span — the wallpaper test must now fail (the shot could not sit under a different script).
 - If the scene is tagged with a primary subject, your repaired shot still OPENS on that same subject.
 - Only the people the span itself places may appear; never invent background people. Any beat may be people-free.
+- Repair the truth relationship too. Choose source only for exact verified pixels named by sourcePresentationEntity; reconstruction only for a specific supported moment; representative for anonymous non-event staging; conceptual for hypotheses, counterfactuals, metaphors, or mechanisms that must not read as historical documentation.
+- Never invent a venue, emblem, audience, boardroom, meeting, ceremony, exhibition display, vote, publication, or identity state. If the anchors do not establish a specific event record, tighten to supported evidence/detail or use representative/conceptual staging.
+- A diagnosis is a removal requirement, not wording advice. For unsupported_specificity, delete every unsupported visible detail instead of replacing it with a different plausible detail—including plausible studios, pedestals, counters, furniture, and light sources that assert an unestablished place. For invented_venue_identity, the repaired frame must contain no recognizable hall, office, institutional architecture, emblem, wall label, signage, flag, branded furniture, audience, or exhibition overview unless that exact element exists in the supplied anchors; use an anonymous/non-identifying context or a tighter supported detail chosen for this span. For invented_event_record, remove the documentary-looking event staging itself—not just faces or logos.
+- A formal outcome is not evidence of its unseen interaction. On resignation, rejection, approval, vote, filing, signing, withdrawal, announcement, or publication beats, never repair into a plausible conversation, meeting, entrance, handshake, letter handoff, or posed departure unless that exact act is in the anchors. Use verified source evidence when available; otherwise render only an anonymous/non-identifying representation or supported consequence of the outcome.
+- For source basis, do not invent a room, desk, hands, caption, typesetting, or readable content around the source. The exact source pixels fill the frame untouched; imagePrompt should describe presenting that verified source as itself, without asserting page details beyond its supplied provenance.
+- Write only what IS visible. Never use "no", "without", "not", or a list of forbidden objects in imagePrompt; image models treat negative nouns as drawing cues. Fill the frame positively with the supported subject/context instead.
+- source requires sourcePresentationEntity equal to the scene's primaryEntity. Every non-source basis requires sourcePresentationEntity:null. Return primaryEntity/supportingEntities/appearanceByEntity that match only what the repaired frame visibly contains, using exact ids and states from the supplied Story Bible; do not retain merely mentioned entities.
 - No style, medium, or colour-grade words (the system owns the look); ENGLISH only; no readable text, charts, labels, or numbers IN the frame — image models garble text (render the physical comparison; the caption layer owns exact figures).${perspectiveClause}
 Return repairs ONLY for the scenes given, keyed by their idx.`
 
-  const userMessage = `FAILING SCENES:\n${v.scenes
-    .map((s) => `SCENE ${s.idx}${s.primaryEntity ? ` (primary subject: ${s.primaryEntity})` : ''}\nspan: ${s.narrationText.trim()}\ncurrent shot: ${s.imagePrompt.trim()}\nwhy it failed: ${s.reason}`)
-    .join('\n\n')}\n\nReturn the repaired shots. OUTPUT (JSON only):\n{ "repairs": [ { "idx": 1, "imagePrompt": "" } ] }`
+  const userMessage = `SUPPLIED EVIDENCE FACTS:\n${JSON.stringify(v.evidenceFacts ?? null, null, 2)}\n\nSTORY BIBLE ENTITIES / VERIFIED SOURCES / STATES:\n${JSON.stringify(v.bibleEntities ?? null, null, 2)}\n\nCHRONOLOGY / JOURNEY:\n${JSON.stringify(v.journey ?? null, null, 2)}\n\nFAILING SCENES:\n${v.scenes
+    .map((s) => `SCENE ${s.idx}${s.primaryEntity ? ` (primary subject: ${s.primaryEntity})` : ''}\nspan: ${s.narrationText.trim()}\ncurrent basis: ${s.depictionBasis}\ncurrent sourcePresentationEntity: ${s.sourcePresentationEntity ?? 'null'}\ncurrent shot: ${s.imagePrompt.trim()}\nwhy it failed: ${s.reason}`)
+    .join('\n\n')}\n\nReturn the repaired shots. OUTPUT (JSON only):\n{ "repairs": [ { "idx": 1, "imagePrompt": "", "depictionBasis": "representative", "sourcePresentationEntity": null, "primaryEntity": null, "supportingEntities": [], "appearanceByEntity": {} } ] }`
 
   return { system, userMessage }
 }

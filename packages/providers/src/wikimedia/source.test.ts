@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { resolveSubjectIdentity, sourceEntityImage, wikidataDeathYear, wikidataPersonFacts } from './source.js'
+import { commonsTitleMatchScore, resolveSubjectIdentity, sourceEntityImage, wikidataDeathYear, wikidataPersonFacts } from './source.js'
 
 // Invariant 4's provider half: for a HUMAN, article resolution is the ONLY identity path. The free-text
 // Commons fallback matches a name STRING with no identity anchor, so it could return a photograph of the
@@ -52,6 +52,7 @@ function mockFetch(routes: Routes) {
 }
 
 const calledCommonsSearch = () => calls.some((u) => u.includes('commons.wikimedia.org') && u.includes('generator=search'))
+const calledWikipediaSearch = () => calls.some((u) => u.includes('en.wikipedia.org') && u.includes('list=search'))
 
 const SEARCH_HIT = { query: { search: [{ title: 'Some Subject' }] } }
 const SEARCH_MISS = { query: { search: [] } }
@@ -95,6 +96,73 @@ describe('requireArticleIdentity closes the free-text path', () => {
     mockFetch({ search: SEARCH_MISS, commonsSearch: { query: { pages: [] } } })
     expect(await sourceEntityImage('Some Obscure Chapel')).toBeNull()
     expect(calledCommonsSearch()).toBe(true)
+  })
+})
+
+describe('exact non-human retry search', () => {
+  const COMMONS_SEARCH_OK = {
+    query: {
+      pages: [{
+        index: 1,
+        title: 'File:The exact issue.jpg',
+        imageinfo: [{
+          url: LEAD_IMAGE_URL, thumburl: LEAD_IMAGE_URL, mime: 'image/jpeg',
+          descriptionurl: 'https://commons.wikimedia.org/wiki/File:The_exact_issue.jpg',
+          extmetadata: { LicenseShortName: { value: 'Public domain' }, Artist: { value: 'Unknown' } },
+        }],
+      }],
+    },
+  }
+
+  it('can bypass a wrong article lead and search Commons for the exact edition', async () => {
+    mockFetch({ commonsSearch: COMMONS_SEARCH_OK })
+    expect(await sourceEntityImage('The Blind Man issue 2 May 1917', { preferCommonsSearch: true })).not.toBeNull()
+    expect(calledCommonsSearch()).toBe(true)
+    expect(calledWikipediaSearch()).toBe(false)
+  })
+
+  it('never allows a human onto the unanchored retry path', async () => {
+    mockFetch({ commonsSearch: COMMONS_SEARCH_OK })
+    expect(await sourceEntityImage('Some Person', { requireArticleIdentity: true, preferCommonsSearch: true })).toBeNull()
+    expect(calledCommonsSearch()).toBe(false)
+  })
+
+  it('ranks an exact dated issue title above a famous but loosely related first result', async () => {
+    const famousUrl = 'https://upload.wikimedia.org/wikipedia/commons/1/11/Famous.jpg'
+    const exactUrl = 'https://upload.wikimedia.org/wikipedia/commons/2/22/Exact.jpg'
+    mockFetch({
+      commonsSearch: {
+        query: {
+          pages: [
+            {
+              index: 1,
+              title: 'File:Duchamp Fountain.jpg',
+              imageinfo: [{
+                url: famousUrl, thumburl: famousUrl, mime: 'image/jpeg',
+                descriptionurl: 'https://commons.wikimedia.org/wiki/File:Duchamp_Fountain.jpg',
+                extmetadata: { LicenseShortName: { value: 'Public domain' }, Artist: { value: 'Unknown' } },
+              }],
+            },
+            {
+              index: 15,
+              title: 'File:The Richard Mutt Case, The Blind Man, No. 2, New York, 1917.jpg',
+              imageinfo: [{
+                url: exactUrl, thumburl: exactUrl, mime: 'image/jpeg',
+                descriptionurl: 'https://commons.wikimedia.org/wiki/File:The_Richard_Mutt_Case.jpg',
+                extmetadata: { LicenseShortName: { value: 'Public domain' }, Artist: { value: 'Unknown' } },
+              }],
+            },
+          ],
+        },
+      },
+    })
+    const result = await sourceEntityImage('The Blind Man No 2 1917', { preferCommonsSearch: true })
+    expect(result?.sourceUrl).toContain('The_Richard_Mutt_Case')
+  })
+
+  it('weights dates and issue numbers as identity-bearing title tokens', () => {
+    expect(commonsTitleMatchScore('The Blind Man No 2 1917', 'The Blind Man No 2 New York 1917'))
+      .toBeGreaterThan(commonsTitleMatchScore('The Blind Man No 2 1917', 'The Blind Man issue 1 April'))
   })
 })
 

@@ -41,6 +41,8 @@ interface StoryboardEditorProps {
   // Context for recommending a narrator on the fly when voicePool is empty (per_story channels).
   voiceRecommend: { nicheDescription: string; language: string; toneConfig: unknown; searchKeyword: string }
   sceneImages: Record<number, string>
+  // Automated frame notes. Truth conflicts block the final cut; craft notes are review-only.
+  sceneImageQa: Record<number, { craftIssues: string[]; truthIssues: string[]; truthBlocked: boolean }>
   // Every image ever generated per scene, oldest→newest — powers Undo/Redo (walk back to a prior take for free).
   sceneImageHistory: Record<number, { assetId: string; url: string }[]>
   sceneVideoVariations: Record<number, string[]>
@@ -78,7 +80,7 @@ interface StoryboardEditorProps {
 
 export function StoryboardEditor({
   reel, story, scenes: initialScenes, voicePool, voiceRecommend,
-  sceneImages, sceneImageHistory, sceneVideoVariations, renderUrl: initialRenderUrl, packaging,
+  sceneImages, sceneImageQa, sceneImageHistory, sceneVideoVariations, renderUrl: initialRenderUrl, packaging,
   postMeta, renderQa, renderSize, captionStyle,
   musicMood: initialMusicMood, channelMusicMood, aiMusic, musicMode, channelMusicTracks, musicUploadUrl: initialMusicUploadUrl,
   initialVideoEffects, initialOperatorSfx, initialVoiceSettings,
@@ -316,11 +318,9 @@ export function StoryboardEditor({
     // Force the <img> to re-fetch the (overwritten) scene image NOW — independent of whether
     // router.refresh() manages to push a fresh asset-id ?v= through the client router cache. Clear this
     // scene's loaded flag so the develop-in reveal plays for the fresh image instead of holding the stale
-    // one. A new image also invalidates any motion (the clip was animated off the old image): the route
-    // reset the scene to a still, so reflect that locally too.
+    // one. The route preserves the scene's intended tier; only the stale generated clip is invalidated.
     setImageBust((b) => ({ ...b, [sceneIdx]: (b[sceneIdx] ?? 0) + 1 }))
     setLoadedMedia((s) => { const n = new Set(s); n.delete(sceneIdx); return n })
-    setScenes((prev) => prev.map((s) => (s.idx === sceneIdx ? { ...s, tier: 'still' } : s)))
     setLoading(null)
     router.refresh()
   }
@@ -672,6 +672,7 @@ export function StoryboardEditor({
       secs={sceneSeconds(selectedScene)}
       beat={sceneBeat(selectedScene.idx, scenes.length, twistIdx)}
       imgSrc={bustedImages[selectedScene.idx]}
+      imageQa={sceneImageQa[selectedScene.idx]}
       variations={sceneVideoVariations[selectedScene.idx] ?? []}
       loading={loading}
       moodTint={moodTint}
@@ -1520,11 +1521,13 @@ type GroundedOption = { label: string; description: string; intent: string; anch
 
 function SceneInspector({
   reelId, scene, secs, beat, imgSrc, variations, loading, moodTint,
+  imageQa,
   sceneSaving, setScenes, setSceneSaving, onSetSceneType, onPreview, onSuggestMotion, onReshoot, onRequestOptions, onUploadImage, history, onSetSceneImage, onSaveText,
   sounds, soundPreviews, onAddSound, onPreviewSound, onRemoveSound,
 }: {
   reelId: string
   scene: Scene; secs: number; beat: 'Hook' | 'Build-up' | 'Twist' | 'Payoff'; imgSrc?: string | undefined; variations: string[]
+  imageQa?: { craftIssues: string[]; truthIssues: string[]; truthBlocked: boolean } | undefined
   loading: string | null; moodTint: string
   sceneSaving: 'saving' | 'saved' | undefined
   setScenes: React.Dispatch<React.SetStateAction<Scene[]>>
@@ -1713,6 +1716,24 @@ function SceneInspector({
                   )}
                 </div>
 
+                {imageQa && (imageQa.truthBlocked || imageQa.craftIssues.length > 0) && (
+                  <div className={`rounded-xl border px-3 py-2.5 ${imageQa.truthBlocked ? 'border-danger/25 bg-danger-soft text-danger' : 'border-warning/25 bg-warning-soft text-warning'}`}>
+                    <p className="text-xs font-700">
+                      {imageQa.truthBlocked ? 'Verified detail needs fixing' : 'Worth another look'}
+                    </p>
+                    <p className="mt-0.5 text-[11px] leading-relaxed opacity-85">
+                      {imageQa.truthBlocked
+                        ? 'The final cut is paused until this frame matches the verified details.'
+                        : 'This take may not carry the scene clearly.'}
+                    </p>
+                    <ul className="mt-2 list-disc space-y-1 pl-4 text-[11px] leading-relaxed">
+                      {(imageQa.truthBlocked ? imageQa.truthIssues : imageQa.craftIssues).map((issue, index) => (
+                        <li key={`${issue}-${index}`}>{issue}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
                 {/* The composer. */}
                 <div className="overflow-hidden rounded-xl border border-border-mid bg-surface shadow-xs focus-within:border-accent/40">
                   <textarea
@@ -1758,7 +1779,10 @@ function SceneInspector({
 
                 {/* The two whole-shot moves: re-imagine it, or hand over your own picture. */}
                 <div className="flex gap-2">
-                  <button type="button" onClick={() => { if (!regenerating) onReshoot(scene.idx, { mode: 'fresh' }) }} disabled={regenerating}
+                  <button type="button" onClick={() => {
+                    const instruction = changeText.trim()
+                    if (!regenerating) onReshoot(scene.idx, { mode: 'fresh', ...(instruction ? { instruction } : {}) })
+                  }} disabled={regenerating}
                     title="Re-imagine this shot from scratch (a new composition)"
                     className="btn-secondary btn-sm flex-1 rounded-[10px] py-2.5 active:scale-[.98] disabled:cursor-wait disabled:opacity-50">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3z" /></svg>

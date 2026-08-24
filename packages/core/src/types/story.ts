@@ -1,6 +1,9 @@
 import { z } from 'zod'
 import { CAMERA_MOVE_KEYS } from '../motion/motion.js'
 
+export const DepictionBasisSchema = z.enum(['source', 'reconstruction', 'representative', 'conceptual'])
+export type DepictionBasis = z.infer<typeof DepictionBasisSchema>
+
 // The narrator's casting profile: the gender + apparent age band of the private person THE TELLER
 // instantiated, surfaced ONLY to auto-select a matching TTS voice. It is never rendered into the
 // narration (invisible embodiment stays intact). Defaults keep BYO/legacy/story.v1 output safe.
@@ -49,6 +52,15 @@ export const SceneOutputSchema = z.object({
   // should notice first. These default empty so an empty/absent bible degrades to inline description.
   primaryEntity: z.string().nullable().default(null),
   supportingEntities: z.array(z.string()).default([]),
+  // When the truthful shot IS a verified source image (an archival photograph, document page, artwork
+  // reproduction, map, etc.), name the one bible entity whose untouched source pixels should fill the
+  // scene. Null means the source may condition a reconstruction but is not itself presented as the shot.
+  // Persisting this choice keeps "show the evidence" distinct from "generate a scene inspired by it".
+  sourcePresentationEntity: z.string().nullable().default(null),
+  // The truth relationship between this frame and the narrated event. This is editorial provenance, not
+  // style: it tells the renderer whether it may present source pixels, reconstruct a supported moment,
+  // represent a claim without asserting a specific event record, or visualize an idea conceptually.
+  depictionBasis: DepictionBasisSchema.default('reconstruction'),
   // The render-facing identity state this shot chooses. Usually copied from the narration's journey leg;
   // an intentionally retained framing shot may omit the leg's variant and show the parent/default teller.
   // Optional (not defaulted) so legacy model output can be distinguished and deterministically backfilled.

@@ -9,7 +9,7 @@
 import { StoryBibleSchema } from '../types/story-bible.js'
 import type { BibleEntity } from '../types/story-bible.js'
 
-export const STORY_ANALYZER_V1_VERSION = 'story-analyzer.v1.25'
+export const STORY_ANALYZER_V1_VERSION = 'story-analyzer.v1.27'
 
 // The analyzer emits a full StoryBible; the caller validates with this schema.
 export { StoryBibleSchema }
@@ -66,6 +66,21 @@ ENTITIES — the recurring people, places, and objects that ANCHOR the story. Ru
   it never reappears, the answer is no — it is NOT an entity. Incidental props the narration mentions in
   passing (earphones, a phone's clock, a fridge light, a glass of water, a single text bubble) are NOT
   entities — they belong in the one scene's inline description, not the bible. When unsure, LEAVE IT OUT.
+- ONE-SCENE FACTUAL IDENTITY EXCEPTION. In a factual/real-world narration, extract a concrete NAMED real
+  visual subject even when it appears in only one beat when that beat explicitly depicts the subject and its
+  exact identity matters: a named artwork or artifact, a dated publication issue or document, a landmark,
+  vessel, vehicle, species/individual animal, or similarly look-up-able thing. Without an entity the sourcing
+  stage cannot anchor it and the renderer invents a generic substitute. This is not permission to pad the
+  Bible: a person, organization, event, idea, or merely mentioned subject does not qualify unless the shot
+  actually depicts a concrete visual identity governed by the existing person/organization rules.
+- ORGANIZATIONS AND EVENTS ARE CONTEXT, NOT LOCATIONS. A named organization, institution, committee,
+  movement, exhibition, ceremony, vote, trial, battle, or other event is not itself a physical Story Bible
+  entity. Never turn it into a "location" merely because events happened somewhere: that freezes an invented
+  venue and makes every later shot repeat it. Extract a location only when the narration establishes the
+  actual physical building/site/room as a recurring visual subject. Extract a separately named document,
+  artwork, artifact, person, or other concrete visual subject when it independently passes the entity test.
+  Under VOICEOVER, an event or organization may remain the leg's locationLabel for subject-matter context,
+  but locationEntityId MUST be null unless the physical venue itself is an extracted location entity.
 - THE PARTICIPANT TEST DECIDES EMBODIMENT, BEFORE ANY NARRATOR IS EXTRACTED. Ask: did the teller LIVE the events (a participant telling what happened to them — a diegetic narrator), or is the teller REPORTING, EXPLAINING, or ARGUING about events from outside them (news, documentary, explainer, essay, recap — a VOICEOVER)? Pronouns are evidence, participation is the verdict: first-person cues ("ako", "ko", "nakita ko", "I", "my", "natin", "sa atin") appear in BOTH kinds of narration, so they alone never decide. A VOICEOVER narrator is a voice above the story's world with NO body in it: do NOT extract a narrator entity for it, ever.
 - THE LIVED FIRST-PERSON NARRATOR IS ALWAYS AN ENTITY. If the narration is told in first person by a teller who LIVED the events, you MUST extract the narrator as a "character" entity with a FULLY committed look (gender + wardrobe + hair + build), EVEN in a solo story where no one else appears and they are only ever seen as their own hands, a reflection, or a partial body. A first-person narrator IS shown — hands on a sink, a face in a mirror, a shoulder edging the frame — so without a locked appearance every such shot renders a DIFFERENT person. Set continuity.narratorEntityId to this entity's id, and list this id in the journey leg's "present" array for every leg the narrator is physically in (for the narrator, that is every leg).
 - FACTS ONLY. Each "description" is a short, depictable noun phrase of OBSERVABLE traits — for a person: gender, apparent age, build, hair, and wardrobe (ALL of these — an under-described person renders as a random, often wrong, figure), plus one distinguishing detail; for a place: layout, key furniture, materials, colours, wear; for an object: count, state, condition. NO mood words, NO adjectives of feeling, NO interpretation (write "an old mirror, dark wood frame, cracked glass", never "a creepy mirror").

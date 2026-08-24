@@ -47,6 +47,7 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
 
   // Map scene idx → image URL (R2 public URL or storage key)
   const sceneImages: Record<number, string> = {}
+  const sceneImageQa: Record<number, { craftIssues: string[]; truthIssues: string[]; truthBlocked: boolean }> = {}
   const sceneVideoVariations: Record<number, string[]> = {}
   // Per-scene image history for Undo/Redo: every image ever generated for the scene, oldest→newest. Each regen
   // writes a UNIQUE storage key (see regen-image route) so old images survive and can be re-pointed to for free.
@@ -56,7 +57,16 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
     const imgAsset = reelAssets.find((a) => a.id === scene.imageAssetId)
     // ?v=<assetId> busts the browser cache: a regenerated scene gets a NEW asset id → a new URL, so the
     // browser can never show the previous (e.g. pre-fix) image for the same storage key.
-    if (imgAsset) sceneImages[scene.idx] = `/api/asset?key=${encodeURIComponent(imgAsset.storageKey)}&v=${imgAsset.id}`
+    if (imgAsset) {
+      sceneImages[scene.idx] = `/api/asset?key=${encodeURIComponent(imgAsset.storageKey)}&v=${imgAsset.id}`
+      const meta = (imgAsset.meta ?? {}) as Record<string, unknown>
+      const strings = (value: unknown) => Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
+      sceneImageQa[scene.idx] = {
+        craftIssues: strings(meta['qaIssues']),
+        truthIssues: strings(meta['truthQaIssues']),
+        truthBlocked: meta['truthQaRequired'] === true && meta['truthQaPass'] !== true,
+      }
+    }
     const videos = reelAssets.filter(
       (a) => a.kind === 'video' && (a.meta as Record<string, unknown>)['sceneIdx'] === scene.idx,
     )
@@ -227,6 +237,7 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
         searchKeyword: channel?.voiceSearchKeyword ?? '',
       }}
       sceneImages={sceneImages}
+      sceneImageQa={sceneImageQa}
       sceneImageHistory={sceneImageHistory}
       sceneVideoVariations={sceneVideoVariations}
       renderUrl={renderUrl}

@@ -376,3 +376,39 @@ export function archivalShotTarget(
   const only = archivalEntities[0]!
   return slug(only.id) === slug(primaryEntityId) ? only : null
 }
+
+/**
+ * Resolve an exact, already-sourced entity whose untouched source pixels should fulfil a scene.
+ *
+ * This is intentionally narrower than reference conditioning: the director must explicitly request the
+ * presentation, the source must be the shot's primary subject, and a time-bound appearance may not silently
+ * present the parent's wrong-state photograph. The helper does no IO; callers copy sourceAssetKey bytes and
+ * stamp them `presented_archival` so credits/disclosure remain truthful.
+ */
+export function presentedSourceTarget(
+  entities: readonly BibleEntity[],
+  requestedEntityId: string | null | undefined,
+  primaryEntityId: string | null | undefined,
+  appearanceBindings: Record<string, string> | null | undefined,
+): BibleEntity | null {
+  if (!requestedEntityId || !primaryEntityId || slug(requestedEntityId) !== slug(primaryEntityId)) return null
+  if (Object.keys(appearanceBindings ?? {}).some((id) => slug(id) === slug(requestedEntityId))) return null
+  const target = entities.find((entity) => slug(entity.id) === slug(requestedEntityId))
+  if (!target) return null
+  if (target.depiction?.depictionMode !== 'reference_plate') return null
+  return presentableSourceEntity(target)
+}
+
+// Some verified sources are minted while adapting event-time appearances. When one appearance's textual
+// state exactly matches the entity's canonical/base state, its untouched source is also truthful for the
+// base entity. Promote provenance only—not the conditioned plate—and never guess across differing states
+// (the precursor Fountain must not inherit the later signed photograph).
+export function presentableSourceEntity(entity: BibleEntity): BibleEntity | null {
+  if (entity.referenceOrigin?.type === 'sourced' && entity.referenceOrigin.sourceAssetKey) return entity
+  const canonical = entity.description.trim().replace(/\s+/g, ' ').toLowerCase()
+  const exactState = entity.appearances?.find((appearance) => {
+    const state = appearance.description.trim().replace(/\s+/g, ' ').toLowerCase()
+    return state === canonical && appearance.referenceOrigin?.type === 'sourced' && Boolean(appearance.referenceOrigin.sourceAssetKey)
+  })
+  return exactState?.referenceOrigin ? { ...entity, referenceOrigin: exactState.referenceOrigin } : null
+}

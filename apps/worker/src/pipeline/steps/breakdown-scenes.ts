@@ -2,8 +2,8 @@ import { eq, and, gt, sql } from 'drizzle-orm'
 import type { z } from 'zod'
 import { getDb, reels, stories, scenes, channels } from '@reels/db'
 import { llmCall, buildInputHash } from '@reels/providers'
-import { ScenesOutputSchema, WorldBibleSchema, StoryBibleSchema, EMPTY_STORY_BIBLE, appearanceBindingsForScene, inheritedAppearanceBindingsForScene, resolveEntities, reviewSceneBreakdown, MOTION_BUDGET, motionBudgetForSeconds, estimateNarrationSec, retileToNarration, cameraMovePrompt, animatorMotionPrompt, slug, planChapters, legsForChapter, CHAPTER_THRESHOLD_SEC, channelPlatformPreset, type StoryChapter, type StoryBible, effectiveGenre,} from '@reels/core'
-import { buildScenesPrompt, SCENES_V1_VERSION, buildPeakExtractPrompt, PEAK_EXTRACT_V1_VERSION, PeakExtractSchema, resolveMediaGenre, buildSceneDepictionCriticPrompt, SCENE_DEPICTION_CRITIC_V1_VERSION, SceneDepictionVerdictSchema, buildSceneDepictionDoctorPrompt, SCENE_DEPICTION_DOCTOR_V1_VERSION, SceneDepictionRepairSchema, buildEntityBindingCriticPrompt, reconcileVerifiedIdentityBindings, tagVerifiedAppearanceBindings, verifiedIdentityBindingsMatch, ENTITY_BINDING_CRITIC_V1_VERSION, EntityBindingVerdictSchema } from '../../prompts-bridge.js'
+import { ScenesOutputSchema, WorldBibleSchema, StoryBibleSchema, EMPTY_STORY_BIBLE, appearanceBindingsForScene, inheritedAppearanceBindingsForScene, resolveEntities, reviewSceneBreakdown, visualTruthContractErrors, presentableSourceEntity, MOTION_BUDGET, motionBudgetForSeconds, estimateNarrationSec, retileToNarration, cameraMovePrompt, animatorMotionPrompt, slug, planChapters, legsForChapter, CHAPTER_THRESHOLD_SEC, channelPlatformPreset, type StoryChapter, type StoryBible, effectiveGenre,} from '@reels/core'
+import { buildScenesPrompt, SCENES_V1_VERSION, buildPeakExtractPrompt, PEAK_EXTRACT_V1_VERSION, PeakExtractSchema, resolveMediaGenre, buildSceneDepictionCriticPrompt, SCENE_DEPICTION_CRITIC_V1_VERSION, SceneDepictionVerdictSchema, buildSceneDepictionDoctorPrompt, SCENE_DEPICTION_DOCTOR_V1_VERSION, SceneDepictionRepairSchema, buildVisualTruthCriticPrompt, VISUAL_TRUTH_CRITIC_V1_VERSION, VisualTruthVerdictSchema, buildEntityBindingCriticPrompt, reconcileVerifiedIdentityBindings, tagVerifiedAppearanceBindings, verifiedIdentityBindingsMatch, ENTITY_BINDING_CRITIC_V1_VERSION, EntityBindingVerdictSchema } from '../../prompts-bridge.js'
 import { runStep } from '../harness.js'
 
 // ── DEPICTION GATE (judge → targeted repair → re-judge; see scene-depiction-critic.v1) ──────────────
@@ -12,6 +12,8 @@ import { runStep } from '../harness.js'
 // a named const so repair depth is tunable later (cascade failures may warrant more rounds someday).
 const SCENE_DEPICTION_GATE_ENABLED = process.env['SCENE_DEPICTION_GATE'] !== '0'
 const SCENE_DEPICTION_MAX_REPAIRS = 2
+const SCENE_DEPICTION_GATE_VERSION = 'scene-depiction-gate.v2'
+const VISUAL_TRUTH_GATE_VERSION = 'visual-truth-gate.v2'
 
 // One scored judge round for the gate's audit trail — structured counts, not bare pass/fail, so
 // "2/8 → 7/8 after doctor" is queryable per reel (which channels need the doctor, is it worth its cost).
@@ -19,8 +21,10 @@ interface DepictionRound {
   round: number
   sceneCount: number
   depictedCount: number
+  truthPassCount: number
   interchangeableCount: number
   failedIdxs: number[]
+  truthFailedIdxs: number[]
   repairedIdxs: number[]
   revertedIdxs: number[]
   // What the doctor actually rewrote this round (applied repairs only) — production diagnostics: shows
@@ -186,12 +190,13 @@ export async function breakdownScenes(reelId: string): Promise<void> {
     channelId: channel.id,
     peakMoment,
     storyBible,
+    ...(depictionGateApplies ? { evidenceBible: reel.evidenceBible ?? null } : {}),
     chapters: chapters.map((c) => `${c.startOffset}-${c.endOffset}`).join('|'),
     videoAlloc: videoAlloc.join(','),
     // Only perturb the cache key when the depiction gate applies — non-informational genres keep their
     // existing hashes (no mass re-run); toggling the gate produces distinct keys. (Plan-gate pattern.)
     ...(depictionGateApplies
-      ? { depictionCriticVersion: SCENE_DEPICTION_CRITIC_V1_VERSION, depictionDoctorVersion: SCENE_DEPICTION_DOCTOR_V1_VERSION }
+      ? { depictionGateVersion: SCENE_DEPICTION_GATE_VERSION, depictionCriticVersion: SCENE_DEPICTION_CRITIC_V1_VERSION, depictionDoctorVersion: SCENE_DEPICTION_DOCTOR_V1_VERSION, visualTruthGateVersion: VISUAL_TRUTH_GATE_VERSION, visualTruthCriticVersion: VISUAL_TRUTH_CRITIC_V1_VERSION }
       : {}),
     ...(identityBindingGateApplies ? { entityBindingCriticVersion: ENTITY_BINDING_CRITIC_V1_VERSION } : {}),
   })
@@ -226,7 +231,7 @@ export async function breakdownScenes(reelId: string): Promise<void> {
         const prevScene = prevChapterScenes?.[prevChapterScenes.length - 1]
 
         const { system, userMessage } = buildScenesPrompt({
-          bibleEntitiesJson: JSON.stringify(storyBible.entities, null, 2),
+          bibleEntitiesJson: JSON.stringify(storyBible.entities.map((entity) => presentableSourceEntity(entity) ?? entity), null, 2),
           // Authoritative perspective only when analysis actually ran; else let the director detect it.
           narratorPerspective: analyzed ? analyzed.continuity.narratorPerspective : undefined,
           directorNotes: storyBible.constraints.directorNotes,
@@ -442,12 +447,26 @@ export async function breakdownScenes(reelId: string): Promise<void> {
         // repair that introduces new scene-qa errors. Fail-safe: any error keeps the pre-gate board.
         if (depictionGateApplies) {
           try {
-            const judge = async (sc: BreakdownScenes) => {
+            const judge = async (sc: BreakdownScenes, onlyIdxs?: number[]) => {
+              const requested = onlyIdxs ? new Set(onlyIdxs) : null
               const p = buildSceneDepictionCriticPrompt({
                 nicheDescription: channel.nicheDescription ?? '',
                 genreCategory: mediaGenre,
                 narratorPerspective: analyzed?.continuity.narratorPerspective,
-                scenes: sc.map((s, i) => ({ idx: i + 1, narrationText: s.narrationText, imagePrompt: s.imagePrompt, tier: s.tier })),
+                evidenceFacts: reel.evidenceBible ?? null,
+                bibleEntities: storyBible.entities.map((entity) => presentableSourceEntity(entity) ?? entity),
+                journey: storyBible.continuity.journey,
+                scenes: sc.map((s, i) => ({ s, idx: i + 1 })).filter(({ idx }) => !requested || requested.has(idx)).map(({ s, idx }) => ({
+                  idx,
+                  narrationText: s.narrationText,
+                  imagePrompt: s.imagePrompt,
+                  tier: s.tier,
+                  depictionBasis: s.depictionBasis ?? 'reconstruction',
+                  primaryEntity: s.primaryEntity ?? null,
+                  supportingEntities: s.supportingEntities ?? [],
+                  sourcePresentationEntity: s.sourcePresentationEntity ?? null,
+                  appearanceByEntity: s.appearanceByEntity ?? {},
+                })),
               })
               const res = await llmCall({
                 templateVersion: SCENE_DEPICTION_CRITIC_V1_VERSION,
@@ -455,10 +474,25 @@ export async function breakdownScenes(reelId: string): Promise<void> {
                 system: p.system,
                 messages: [{ role: 'user', content: p.userMessage }],
                 provider: 'anthropic',
-                maxTokens: 3000,
+                maxTokens: 5000,
               })
               cost.add(res.costCents)
-              return res.data.scenes
+              const mapped = {
+                eventRecord: 'invented_event_record',
+                venueIdentity: 'invented_venue_identity',
+                chronology: 'chronology_leak',
+                modality: 'modality_collapse',
+                identityState: 'wrong_identity_state',
+                sourceUse: 'source_should_be_present',
+                unsupportedSpecificity: 'unsupported_specificity',
+              } as const
+              return res.data.scenes.map((verdict) => {
+                const violations = new Set(verdict.truthViolations ?? [])
+                for (const [check, violation] of Object.entries(mapped) as [keyof typeof mapped, (typeof mapped)[keyof typeof mapped]][]) {
+                  if (verdict.truthChecks[check] === 'unsupported') violations.add(violation)
+                }
+                return { ...verdict, truthPass: violations.size === 0, truthViolations: [...violations] }
+              })
             }
             const rounds: DepictionRound[] = []
             const scoreRound = (verdicts: Awaited<ReturnType<typeof judge>>, repairedIdxs: number[], revertedIdxs: number[], repairs: { idx: number; before: string; after: string }[]) => {
@@ -466,8 +500,10 @@ export async function breakdownScenes(reelId: string): Promise<void> {
                 round: rounds.length + 1,
                 sceneCount: chosen.scenes.length,
                 depictedCount: verdicts.filter((x) => x.depicted).length,
+                truthPassCount: verdicts.filter((x) => x.truthPass).length,
                 interchangeableCount: verdicts.filter((x) => x.interchangeable).length,
-                failedIdxs: verdicts.filter((x) => !x.depicted).map((x) => x.idx),
+                failedIdxs: verdicts.filter((x) => !x.depicted || !x.truthPass).map((x) => x.idx),
+                truthFailedIdxs: verdicts.filter((x) => !x.truthPass).map((x) => x.idx),
                 repairedIdxs,
                 revertedIdxs,
                 repairs,
@@ -476,19 +512,53 @@ export async function breakdownScenes(reelId: string): Promise<void> {
             let verdicts = await judge(chosen.scenes)
             scoreRound(verdicts, [], [], [])
             let repairedRounds = 0
-            while (verdicts.some((x) => !x.depicted) && repairedRounds < SCENE_DEPICTION_MAX_REPAIRS) {
+            while (verdicts.some((x) => !x.depicted || !x.truthPass) && repairedRounds < SCENE_DEPICTION_MAX_REPAIRS) {
               repairedRounds++
+              // When the critic says the verified evidence itself should be shown and exactly ONE visible
+              // scene entity owns verified source pixels, the source selection is not a creative choice.
+              // Promote it deterministically before asking the doctor to repair prose; this removes a
+              // needless chance for the model to redraw a known document/artwork as a facsimile.
+              for (const verdict of verdicts) {
+                if (!(verdict.truthViolations ?? []).includes('source_should_be_present')) continue
+                const scene = chosen.scenes[verdict.idx - 1]
+                if (!scene) continue
+                const visibleIds = [scene.primaryEntity, ...(scene.supportingEntities ?? [])].filter((id): id is string => Boolean(id))
+                const candidates = storyBible.entities.flatMap((entity) => {
+                  if (!visibleIds.some((id) => slug(id) === slug(entity.id))) return []
+                  const source = presentableSourceEntity(entity)
+                  return source ? [source] : []
+                })
+                if (candidates.length !== 1) continue
+                const source = candidates[0]!
+                scene.depictionBasis = 'source'
+                scene.sourcePresentationEntity = source.id
+                scene.primaryEntity = source.id
+                scene.supportingEntities = []
+                scene.appearanceByEntity = {}
+                scene.imagePrompt = `Present the verified source image of ${source.id} itself, filling the full frame edge to edge as a standalone source image.`
+              }
               const failing = verdicts
-                .filter((x) => !x.depicted)
+                .filter((x) => !x.depicted || !x.truthPass)
                 .flatMap((x) => {
                   const s = chosen.scenes[x.idx - 1]
-                  return s ? [{ idx: x.idx, narrationText: s.narrationText, imagePrompt: s.imagePrompt, reason: x.reason || `does not depict: ${x.claim}`, primaryEntity: s.primaryEntity ?? null }] : []
+                  return s ? [{
+                    idx: x.idx,
+                    narrationText: s.narrationText,
+                    imagePrompt: s.imagePrompt,
+                    reason: [x.reason || `does not depict: ${x.claim}`, ...(x.truthViolations ?? [])].join('; '),
+                    primaryEntity: s.primaryEntity ?? null,
+                    depictionBasis: s.depictionBasis ?? 'reconstruction',
+                    sourcePresentationEntity: s.sourcePresentationEntity ?? null,
+                  }] : []
                 })
               if (failing.length === 0) break
               const dp = buildSceneDepictionDoctorPrompt({
                 nicheDescription: channel.nicheDescription ?? '',
                 genreCategory: mediaGenre,
                 narratorPerspective: analyzed?.continuity.narratorPerspective,
+                evidenceFacts: reel.evidenceBible ?? null,
+                bibleEntities: storyBible.entities.map((entity) => presentableSourceEntity(entity) ?? entity),
+                journey: storyBible.continuity.journey,
                 scenes: failing,
               })
               const doc = await llmCall({
@@ -502,7 +572,15 @@ export async function breakdownScenes(reelId: string): Promise<void> {
               cost.add(doc.costCents)
               // Merge with the revert guard: a repair that introduces NEW deterministic errors (e.g. a
               // changed lead breaking the primary↔lead invariant) is rolled back, not shipped.
-              const baselineErrors = reviewSceneBreakdown(qaInput(chosen.scenes)).errors.length
+              const countContractErrors = () => chosen.scenes.reduce(
+                (count, scene) => count + visualTruthContractErrors({
+                  depictionBasis: scene.depictionBasis ?? 'reconstruction',
+                  sourcePresentationEntity: scene.sourcePresentationEntity ?? null,
+                  primaryEntity: scene.primaryEntity ?? null,
+                }).length,
+                0,
+              )
+              const baselineErrors = reviewSceneBreakdown(qaInput(chosen.scenes)).errors.length + countContractErrors()
               const repairedIdxs: number[] = []
               const revertedIdxs: number[] = []
               const repairs: { idx: number; before: string; after: string }[] = []
@@ -510,26 +588,190 @@ export async function breakdownScenes(reelId: string): Promise<void> {
                 const target = chosen.scenes[r.idx - 1]
                 if (!target || !failing.some((f) => f.idx === r.idx)) continue // the doctor may only touch what it was handed
                 const prevPrompt = target.imagePrompt
+                const prevBasis = target.depictionBasis
+                const prevSource = target.sourcePresentationEntity
+                const prevPrimary = target.primaryEntity
+                const prevSupporting = target.supportingEntities
+                const prevAppearance = target.appearanceByEntity
                 target.imagePrompt = r.imagePrompt
-                if (reviewSceneBreakdown(qaInput(chosen.scenes)).errors.length > baselineErrors) {
+                target.depictionBasis = r.depictionBasis
+                target.sourcePresentationEntity = r.sourcePresentationEntity
+                target.primaryEntity = r.primaryEntity
+                target.supportingEntities = r.supportingEntities
+                target.appearanceByEntity = r.appearanceByEntity
+                if (reviewSceneBreakdown(qaInput(chosen.scenes)).errors.length + countContractErrors() > baselineErrors) {
                   target.imagePrompt = prevPrompt
+                  target.depictionBasis = prevBasis
+                  target.sourcePresentationEntity = prevSource
+                  target.primaryEntity = prevPrimary
+                  target.supportingEntities = prevSupporting
+                  target.appearanceByEntity = prevAppearance
                   revertedIdxs.push(r.idx)
                 } else {
                   repairedIdxs.push(r.idx)
                   repairs.push({ idx: r.idx, before: prevPrompt, after: r.imagePrompt })
                 }
               }
-              verdicts = await judge(chosen.scenes)
+              const changedIdxs = repairedIdxs
+              if (changedIdxs.length === 0) {
+                scoreRound(verdicts, repairedIdxs, revertedIdxs, repairs)
+                break
+              }
+              const refreshed = await judge(chosen.scenes, changedIdxs)
+              const refreshedByIdx = new Map(refreshed.map((verdict) => [verdict.idx, verdict]))
+              verdicts = verdicts.map((verdict) => refreshedByIdx.get(verdict.idx) ?? verdict)
               scoreRound(verdicts, repairedIdxs, revertedIdxs, repairs)
             }
             depictionAudits.push({ chapter: chapter.idx, status: 'ok', criticVersion: SCENE_DEPICTION_CRITIC_V1_VERSION, doctorVersion: SCENE_DEPICTION_DOCTOR_V1_VERSION, repairedRounds, rounds })
             const first = rounds[0]!
             const last = rounds[rounds.length - 1]!
             console.log(`[depiction-gate] ${reelId.slice(0, 8)}${tag} depicted ${first.depictedCount}/${first.sceneCount} → ${last.depictedCount}/${last.sceneCount} (${repairedRounds} repair round${repairedRounds === 1 ? '' : 's'})`)
+            const unresolvedTruth = verdicts.filter((x) => !x.truthPass)
+            const missingVerdictIdxs = chosen.scenes.flatMap((_scene, idx) =>
+              verdicts.some((verdict) => verdict.idx === idx + 1) ? [] : [idx + 1],
+            )
+            const contractErrors = chosen.scenes.flatMap((scene, idx) =>
+              visualTruthContractErrors({
+                depictionBasis: scene.depictionBasis ?? 'reconstruction',
+                sourcePresentationEntity: scene.sourcePresentationEntity ?? null,
+                primaryEntity: scene.primaryEntity ?? null,
+              }).map((error) => `scene ${idx + 1}: ${error}`),
+            )
+            if (unresolvedTruth.length > 0 || missingVerdictIdxs.length > 0 || contractErrors.length > 0) {
+              const details = [
+                ...unresolvedTruth.map((x) => `scene ${x.idx}: ${(x.truthViolations ?? []).join(', ') || 'truth failure'}${x.reason ? ` (${x.reason})` : ''}`),
+                ...missingVerdictIdxs.map((idx) => `scene ${idx}: missing truth verdict`),
+                ...contractErrors,
+              ]
+              throw new Error(`[visual-truth-gate]${tag} ${details.join('; ')}`)
+            }
           } catch (err) {
-            // Never fail the step over the gate — the pre-gate board ships, exactly as if this were off.
-            console.warn(`[depiction-gate] ${reelId.slice(0, 8)}${tag} failed, keeping the pre-gate board: ${String(err)}`)
             depictionAudits.push({ chapter: chapter.idx, status: 'failed', error: String(err) })
+            throw err
+          }
+        }
+
+        // Independent reject-only verifier. The depiction critic has two jobs (semantic claim coverage and
+        // truth) and live Crossroads runs showed it could satisfice the latter while scoring the former.
+        // This final call has no craft task and no authority to rewrite; any unsupported factual dimension
+        // blocks persistence before an image provider can be reached.
+        if (depictionGateApplies) {
+          const mapped = {
+            eventRecord: 'invented_event_record',
+            venueIdentity: 'invented_venue_identity',
+            chronology: 'chronology_leak',
+            modality: 'modality_collapse',
+            identityState: 'wrong_identity_state',
+            sourceUse: 'source_should_be_present',
+            unsupportedSpecificity: 'unsupported_specificity',
+          } as const
+          const violationsFor = (verdict: z.infer<typeof VisualTruthVerdictSchema>['scenes'][number]) => {
+            const violations = new Set(verdict.violations ?? [])
+            for (const [check, violation] of Object.entries(mapped) as [keyof typeof mapped, (typeof mapped)[keyof typeof mapped]][]) {
+              if (verdict.checks[check] === 'unsupported') violations.add(violation)
+            }
+            return [...violations]
+          }
+          const judgeTruth = async (onlyIdxs?: number[]) => {
+            const requested = onlyIdxs ? new Set(onlyIdxs) : null
+            const prompt = buildVisualTruthCriticPrompt({
+              evidenceFacts: reel.evidenceBible ?? null,
+              bibleEntities: storyBible.entities.map((entity) => presentableSourceEntity(entity) ?? entity),
+              journey: storyBible.continuity.journey,
+              scenes: chosen.scenes.map((scene, idx) => ({ scene, idx: idx + 1 }))
+                .filter(({ idx }) => !requested || requested.has(idx))
+                .map(({ scene, idx }) => ({
+                  idx,
+                  narrationText: scene.narrationText,
+                  imagePrompt: scene.imagePrompt,
+                  depictionBasis: scene.depictionBasis ?? 'reconstruction',
+                  primaryEntity: scene.primaryEntity ?? null,
+                  supportingEntities: scene.supportingEntities ?? [],
+                  sourcePresentationEntity: scene.sourcePresentationEntity ?? null,
+                  appearanceByEntity: scene.appearanceByEntity ?? {},
+                })),
+            })
+            const audit = await llmCall({
+              templateVersion: VISUAL_TRUTH_CRITIC_V1_VERSION,
+              schema: VisualTruthVerdictSchema,
+              provider: 'anthropic',
+              system: prompt.system,
+              messages: [{ role: 'user', content: prompt.userMessage }],
+              maxTokens: 4000,
+            })
+            cost.add(audit.costCents)
+            return VisualTruthVerdictSchema.parse(audit.data).scenes
+          }
+
+          let truthVerdicts = await judgeTruth()
+          for (let round = 0; round < SCENE_DEPICTION_MAX_REPAIRS; round++) {
+            const failingVerdicts = truthVerdicts.filter((verdict) => violationsFor(verdict).length > 0)
+            if (failingVerdicts.length === 0) break
+            const doctorInput = failingVerdicts.flatMap((verdict) => {
+              const scene = chosen.scenes[verdict.idx - 1]
+              if (!scene) return []
+              return [{
+                idx: verdict.idx,
+                narrationText: scene.narrationText,
+                imagePrompt: scene.imagePrompt,
+                reason: [...verdict.reasons, ...violationsFor(verdict)].join('; '),
+                primaryEntity: scene.primaryEntity ?? null,
+                depictionBasis: scene.depictionBasis ?? 'reconstruction',
+                sourcePresentationEntity: scene.sourcePresentationEntity ?? null,
+              }]
+            })
+            if (doctorInput.length === 0) break
+            const doctorPrompt = buildSceneDepictionDoctorPrompt({
+              nicheDescription: channel.nicheDescription ?? '',
+              genreCategory: mediaGenre,
+              narratorPerspective: analyzed?.continuity.narratorPerspective,
+              evidenceFacts: reel.evidenceBible ?? null,
+              bibleEntities: storyBible.entities.map((entity) => presentableSourceEntity(entity) ?? entity),
+              journey: storyBible.continuity.journey,
+              scenes: doctorInput,
+            })
+            const doctor = await llmCall({
+              templateVersion: SCENE_DEPICTION_DOCTOR_V1_VERSION,
+              schema: SceneDepictionRepairSchema,
+              provider: 'anthropic',
+              system: doctorPrompt.system,
+              messages: [{ role: 'user', content: doctorPrompt.userMessage }],
+              maxTokens: 4096,
+            })
+            cost.add(doctor.costCents)
+            const changed: number[] = []
+            for (const repair of doctor.data.repairs) {
+              const target = chosen.scenes[repair.idx - 1]
+              if (!target || !failingVerdicts.some((verdict) => verdict.idx === repair.idx)) continue
+              const candidate = {
+                depictionBasis: repair.depictionBasis,
+                sourcePresentationEntity: repair.sourcePresentationEntity,
+                primaryEntity: repair.primaryEntity,
+              }
+              if (visualTruthContractErrors(candidate).length > 0) continue
+              target.imagePrompt = repair.imagePrompt
+              target.depictionBasis = repair.depictionBasis
+              target.sourcePresentationEntity = repair.sourcePresentationEntity
+              target.primaryEntity = repair.primaryEntity
+              target.supportingEntities = repair.supportingEntities
+              target.appearanceByEntity = repair.appearanceByEntity
+              changed.push(repair.idx)
+            }
+            if (changed.length === 0) break
+            const refreshed = await judgeTruth(changed)
+            const byIdx = new Map(refreshed.map((verdict) => [verdict.idx, verdict]))
+            truthVerdicts = truthVerdicts.map((verdict) => byIdx.get(verdict.idx) ?? verdict)
+          }
+
+          const failures = truthVerdicts.flatMap((verdict) => {
+            const violations = violationsFor(verdict)
+            return violations.length > 0
+              ? [`scene ${verdict.idx}: ${violations.join(', ')}${verdict.reasons.length ? ` (${verdict.reasons.join('; ')})` : ''}`]
+              : []
+          })
+          const missing = chosen.scenes.flatMap((_scene, idx) => truthVerdicts.some((verdict) => verdict.idx === idx + 1) ? [] : [`scene ${idx + 1}: missing verdict`])
+          if (failures.length > 0 || missing.length > 0) {
+            throw new Error(`[visual-truth-verifier] ${[...failures, ...missing].join(' | ')}`)
           }
         }
 
@@ -612,6 +854,8 @@ export async function breakdownScenes(reelId: string): Promise<void> {
         location: s.location,
         primaryEntity: s.primaryEntity ?? null,        // bible refs → expanded by assembleImagePrompt (generate_images)
         supportingEntities: s.supportingEntities ?? [],
+        sourcePresentationEntity: s.sourcePresentationEntity ?? null,
+        depictionBasis: s.depictionBasis ?? 'reconstruction',
         appearanceBindings,
         sceneIntent: s.sceneIntent ?? null,
       })
@@ -628,13 +872,15 @@ export async function breakdownScenes(reelId: string): Promise<void> {
           location: s.location,
           primaryEntity: s.primaryEntity ?? null,
           supportingEntities: s.supportingEntities ?? [],
+          sourcePresentationEntity: s.sourcePresentationEntity ?? null,
+          depictionBasis: s.depictionBasis ?? 'reconstruction',
           appearanceBindings,
           sceneIntent: s.sceneIntent ?? null,
           // A re-breakdown (regenerate) reuses the (reelId, idx) row; drop the render-derived state ONLY
           // when this scene's content actually changed, so generate_images/animate_scenes don't composite
           // the OLD story's image/clip under the NEW narration. `IS DISTINCT FROM` unchanged content →
           // keep the asset (no needless re-pay); changed → NULL it so the pending filter regenerates.
-          imageAssetId: sql`CASE WHEN ${scenes.visualPrompt} IS DISTINCT FROM ${s.imagePrompt} OR ${scenes.narrationText} IS DISTINCT FROM ${s.narrationText} OR ${scenes.appearanceBindings} IS DISTINCT FROM ${JSON.stringify(appearanceBindings)}::jsonb THEN NULL ELSE ${scenes.imageAssetId} END`,
+          imageAssetId: sql`CASE WHEN ${scenes.visualPrompt} IS DISTINCT FROM ${s.imagePrompt} OR ${scenes.narrationText} IS DISTINCT FROM ${s.narrationText} OR ${scenes.appearanceBindings} IS DISTINCT FROM ${JSON.stringify(appearanceBindings)}::jsonb OR ${scenes.sourcePresentationEntity} IS DISTINCT FROM ${s.sourcePresentationEntity ?? null} OR ${scenes.depictionBasis} IS DISTINCT FROM ${s.depictionBasis ?? 'reconstruction'} THEN NULL ELSE ${scenes.imageAssetId} END`,
           videoAssetId: sql`CASE WHEN ${scenes.visualPrompt} IS DISTINCT FROM ${s.imagePrompt} OR ${scenes.motionPrompt} IS DISTINCT FROM ${motionPrompt} OR ${scenes.appearanceBindings} IS DISTINCT FROM ${JSON.stringify(appearanceBindings)}::jsonb THEN NULL ELSE ${scenes.videoAssetId} END`,
         },
       })

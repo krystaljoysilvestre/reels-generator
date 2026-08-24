@@ -41,6 +41,12 @@ export interface SourceOptions {
    * and DISABLE the free-text Commons fallback. Mandatory for humans — see the identity note above.
    */
   requireArticleIdentity?: boolean
+  /**
+   * Search Commons directly instead of accepting a Wikipedia article's lead image. Used only for non-human
+   * retry candidates after the lead image failed the caller's exact identity/state verifier — for example,
+   * an article lead showing issue 1 when the story requires a page from issue 2.
+   */
+  preferCommonsSearch?: boolean
 }
 
 const UA = 'reels-generator/1.0 (documentary subject-image sourcing; contact via app operator)'
@@ -311,12 +317,17 @@ async function resolveViaCommonsSearch(query: string): Promise<SourcedImage | nu
   const api = new URL('https://commons.wikimedia.org/w/api.php')
   api.search = new URLSearchParams({
     action: 'query', format: 'json', formatversion: '2',
-    generator: 'search', gsrsearch: query, gsrnamespace: '6', gsrlimit: '10',
+    // Ask for enough candidates that an exact issue/page can outrank a famous but merely related lead image.
+    // The response is free metadata; paid vision still sees only the first licence-clean ranked candidate.
+    generator: 'search', gsrsearch: query, gsrnamespace: '6', gsrlimit: '25',
     prop: 'imageinfo', iiprop: 'url|mime|extmetadata', iiurlwidth: String(SOURCE_IMAGE_WIDTH),
   }).toString()
   const data = await getJson(api.toString())
   const pages = asArr(asObj(asObj(data)['query'])['pages']).map(asObj)
-  pages.sort((a, b) => Number(a['index'] ?? 999) - Number(b['index'] ?? 999))
+  pages.sort((a, b) => {
+    const byIdentity = commonsTitleMatchScore(query, str(b['title'])) - commonsTitleMatchScore(query, str(a['title']))
+    return byIdentity || Number(a['index'] ?? 999) - Number(b['index'] ?? 999)
+  })
 
   for (const p of pages) {
     const ii = asObj(asArr(p['imageinfo'])[0])
@@ -339,6 +350,28 @@ async function resolveViaCommonsSearch(query: string): Promise<SourcedImage | nu
   return null
 }
 
+// Commons full-text rank is relevance-to-topic, not exact visual identity: a search for a dated magazine
+// issue can put the famous artwork ahead of the issue page that actually contains it. Re-rank the returned
+// FILE TITLES by deterministic query-token overlap before paying vision to judge pixels. Dates and issue
+// numbers carry extra weight because they distinguish editions/states; generic connective words carry none.
+const COMMONS_TITLE_STOP_WORDS = new Set(['a', 'an', 'and', 'at', 'by', 'file', 'for', 'from', 'in', 'jpg', 'jpeg', 'of', 'on', 'png', 'the', 'to', 'webp', 'with'])
+
+export function commonsTitleMatchScore(query: string, title: string): number {
+  const tokens = (value: string) => value
+    .normalize('NFKD')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter((token) => token && !COMMONS_TITLE_STOP_WORDS.has(token))
+  const wanted = new Set(tokens(query))
+  return tokens(title).reduce((score, token) => {
+    if (!wanted.has(token)) return score
+    if (/^\d+$/.test(token)) return score + 3
+    return score + (token.length >= 5 ? 2 : 1)
+  }, 0)
+}
+
 /**
  * Resolve a real subject's name to a real licensed photo. Article-first (disambiguated) → fail soft on
  * ambiguity → Commons free-text search. Returns null when nothing safe is found (caller uses a generated
@@ -351,6 +384,11 @@ async function resolveViaCommonsSearch(query: string): Promise<SourcedImage | nu
 export async function sourceEntityImage(query: string, opts: SourceOptions = {}): Promise<SourcedImage | null> {
   const q = query.trim()
   if (!q) return null
+  if (opts.preferCommonsSearch) {
+    // A human may never enter the unanchored free-text path, regardless of option combinations.
+    if (opts.requireArticleIdentity) return null
+    return resolveViaCommonsSearch(q)
+  }
   const viaArticle = await resolveViaWikipediaArticle(q)
   if (viaArticle === 'ambiguous') {
     console.warn(`[wikimedia] "${q}" is an ambiguous (same-name) subject — not sourcing, using a generated plate instead`)
@@ -376,4 +414,3 @@ export async function sourceEntityImage(query: string, opts: SourceOptions = {})
   }
   return resolveViaCommonsSearch(q)
 }
-
