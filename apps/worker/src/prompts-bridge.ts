@@ -41,8 +41,10 @@ export {
   buildStoryGatePrompt,
   STORY_CRITIC_V2_VERSION,
   StoryGateSchema,
+  enforceStoryGateEssence,
   defaultTasteRubric,
   composeTasteRubric,
+  type StoryGateVerdict,
 } from '@reels/core/prompts/story-critic.v2'
 // Plan-level judge-and-force (OPT-IN, 2026-07-20): the plan gate + the plan doctor run BETWEEN the
 // planner and the writer when a channel opts into agency-driven planning (see generate-story.ts).

@@ -10,7 +10,7 @@ type Reel = { id: string; status: string }
 // One script on the shelf: read it, fix a line, duplicate it, or send it into production.
 // A script a reel is already building from is locked here — the reel owns the script from then on
 // (scene edits write back to it), so we point at the reel instead of offering a second place to edit.
-export function ScriptRow({ script, channelId, reel, isEbn = false }: { script: Script; channelId: string; reel: Reel | null; isEbn?: boolean }) {
+export function ScriptRow({ script, channelId, reel, requiresSources = false }: { script: Script; channelId: string; reel: Reel | null; requiresSources?: boolean }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -172,9 +172,9 @@ export function ScriptRow({ script, channelId, reel, isEbn = false }: { script: 
                   </>
                 ) : (
                   <>
-                    {/* EBN: the shelf is a writing space, not a production door — reels on this channel
-                        are built from source material, never from a pasted script (2026-08-03-001). */}
-                    {!isEbn && (
+                    {/* Evidence-required: the shelf is a writing space, not a production door — reels
+                        are built from source material, never from an ungrounded saved script. */}
+                    {!requiresSources && (
                       <button type="button" onClick={() => void makeReel()} disabled={busy !== null} className="btn-accent btn-sm">
                         {busy === 'reel' ? 'Starting…' : 'Make a reel'}
                       </button>
@@ -204,7 +204,7 @@ export function ScriptRow({ script, channelId, reel, isEbn = false }: { script: 
                     </button>
                   ))}
               </div>
-              {isEbn && !inProduction && (
+              {requiresSources && !inProduction && (
                 <p className="mt-3 text-xs text-muted">
                   Scripts here are notes — this channel&apos;s reels are built from source material when you create one.
                 </p>

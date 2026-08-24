@@ -29,15 +29,13 @@ export function CreateReelButton({
   /** Estimated spend to reach the storyboard gate, and the enforced ceiling for a whole reel. */
   storyboardCents?: number | undefined
   reelCapCents?: number | undefined
-  /** Evidence-Based channel: ONE door — required source material, no seed/paste/saved/hands-off.
-   *  (One production entrypoint per story mode — decision-log 2026-08-03-001.) */
+  /** Evidence-Based channel (kept separately because it also controls the rendering profile). */
   isEbn?: boolean
   /** Fact-gate channel (channels.factCheck): offer an OPTIONAL sources box — the script is written
    *  freely, then checked against these and flagged at review. Advisory; nothing blocks. */
   factCheck?: boolean
-  /** Source Policy requires evidence (requiresEvidence): the sources box is REQUIRED, not advisory —
-   *  the API refuses to create the reel without it, because a factual script is never written from
-   *  model memory. Distinct from `factCheck`, which stays optional (checked only when sources exist). */
+  /** Source Policy requires evidence: ONE production door with required source material — no
+   *  pasted/saved/hands-off route can bypass the factual chain. */
   requiresSources?: boolean
 }) {
   // Setup leaves a script behind; on the first reel it's the obvious thing to shoot.
@@ -51,6 +49,7 @@ export function CreateReelButton({
   const [byoText, setByoText] = useState('')
   const [seedText, setSeedText] = useState('')
   const [dossierText, setDossierText] = useState('')
+  const sourceFirst = isEbn || requiresSources
 
   async function create(generationMode?: 'review' | 'auto') {
     setLoading(true)
@@ -125,8 +124,8 @@ export function CreateReelButton({
 
   function onClick() {
     if (promptMode) setStep('first')
-    // EBN can never skip the modal: even hands-off channels need this reel's source material first.
-    else if (channelMode === 'auto' && !isEbn) void create('auto')
+    // A source-first channel can never skip the modal: every reel needs its own material first.
+    else if (channelMode === 'auto' && !sourceFirst) void create('auto')
     else setStep('byo')
   }
 
@@ -222,15 +221,14 @@ export function CreateReelButton({
       {step !== 'idle' && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-ink/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" onClick={closeModal}>
           <div className="card animate-fade-in w-full max-w-md p-6 text-left" onClick={(e) => e.stopPropagation()}>
-            {isEbn ? (
-              /* Evidence-Based: ONE door. The story is written strictly from what's pasted here — no topic
-                 seed (the planner orders evidence, it doesn't explore), no paste/saved-script doors (an
-                 outside script has no provenance), no hands-off (each reel needs its own material). */
+            {sourceFirst ? (
+              /* Evidence-required: ONE door. No paste/saved-script doors (an outside script has no
+                 provenance), and no hands-off start (each reel needs its own source material). */
               <>
                 <h2 className="text-base font-semibold text-ink">{step === 'first' ? 'Your first reel' : 'New reel'}</h2>
                 <p className="mt-1 text-sm text-muted">
-                  This channel writes from your source material — every line of the story is drawn from what you
-                  give it. You approve the script before the shoot starts.
+                  This channel starts from source material. Add the articles, records, or notes first, then approve
+                  the script before the shoot starts.
                 </p>
                 <label className="mt-3 block">
                   <span className="mb-1 block text-xs font-medium text-muted">Source material</span>

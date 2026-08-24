@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { resolvePeak } from './generate-story.js'
+import { combineEbnStoryReadiness, resolvePeak } from './generate-story.js'
 
 // The studio pipeline's peakMoment chain: the anchor must be a VERBATIM substring of the final
 // narration (music timing depends on it), falling back stage → writer → '' (NULL twist_anchor →
@@ -21,5 +21,38 @@ describe('resolvePeak', () => {
 
   it('skips empty/undefined candidates and trims whitespace', () => {
     expect(resolvePeak(narration, [undefined, '  ', ' Nakangiti. '])).toBe('Nakangiti.')
+  })
+})
+
+describe('combineEbnStoryReadiness', () => {
+  const editorialPass = {
+    pass: true,
+    reason: 'The central decision and consequence are clear.',
+    rewriteCanFix: true,
+    essence: { pass: true, reason: 'A first-time listener can explain what changed and why.' },
+  }
+
+  it('requires factual fidelity independently of editorial quality', () => {
+    expect(combineEbnStoryReadiness(editorialPass, {
+      fidelityPass: false,
+      fidelityReason: 'One factual-fidelity issue must be reviewed.',
+      lengthPass: true,
+      lengthReason: 'Length failed.',
+    })).toMatchObject({ pass: false, reason: 'One factual-fidelity issue must be reviewed.' })
+  })
+
+  it('requires the production length constraint without using length as essence', () => {
+    const result = combineEbnStoryReadiness(editorialPass, {
+      fidelityPass: true,
+      fidelityReason: 'Fidelity failed.',
+      lengthPass: false,
+      lengthReason: 'Narration is outside its requested production budget.',
+    })
+
+    expect(result).toMatchObject({
+      pass: false,
+      reason: 'Narration is outside its requested production budget.',
+      essence: { pass: true },
+    })
   })
 })

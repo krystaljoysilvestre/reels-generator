@@ -2,9 +2,9 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
-// Two ways onto the shelf: write it yourself, or have one written in this channel's voice.
-// Nothing here starts a reel — saving is free, and generating costs a few cents, which we say out loud.
-export function AddScriptButton({ channelId, isEbn, prominent = false }: { channelId: string; isEbn: boolean; prominent?: boolean }) {
+// Scripts on evidence-required channels are notes/voice references only; production starts from sources.
+// Elsewhere there are two ways onto the shelf: write it yourself, or have one written in this channel's voice.
+export function AddScriptButton({ channelId, requiresSources, prominent = false }: { channelId: string; requiresSources: boolean; prominent?: boolean }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [mode, setMode] = useState<'pick' | 'write' | 'generate'>('pick')
@@ -68,14 +68,16 @@ export function AddScriptButton({ channelId, isEbn, prominent = false }: { chann
             {mode === 'pick' && (
               <>
                 <h2 className="text-base font-semibold text-ink">Add a script</h2>
-                <p className="mt-1 text-sm text-muted">Save it now, make the reel whenever you&apos;re ready.</p>
+                <p className="mt-1 text-sm text-muted">
+                  {requiresSources ? 'Save a note or voice reference for later.' : 'Save it now, make the reel whenever you&apos;re ready.'}
+                </p>
                 <div className="mt-4 flex flex-col gap-2.5">
                   <OptionCard title="Write it yourself" desc="Paste or type your narration — we'll save it, nothing gets made yet." onClick={() => setMode('write')} />
-                  {!isEbn && (
+                  {!requiresSources && (
                     <OptionCard title="Write it for me" desc="An original script in this channel's voice. A few cents; no reel until you say so." onClick={() => setMode('generate')} />
                   )}
                 </div>
-                {isEbn && (
+                {requiresSources && (
                   <p className="mt-3 text-xs text-muted">
                     This channel writes from your source material — start a reel and add it there.
                   </p>
