@@ -2,6 +2,7 @@ import { fal } from '@fal-ai/client'
 import { z } from 'zod'
 import { uploadBuffer, downloadBuffer } from '../shared/storage.js'
 import { withProviderLimit } from '../shared/limiter.js'
+import { sniffImageMediaType } from '../shared/media.js'
 import {
   ContentFilterError,
   ProviderError,
@@ -102,10 +103,7 @@ function toFluxSize(aspect?: string): string {
 // Encode a reference image as a data URI with the mime that matches its actual bytes — plates may be webp
 // (Gemini-minted) or png/jpeg (Flux-minted), and fal expects the data-URI mime to match.
 function refDataUri(buf: Buffer): string {
-  let mime = 'image/jpeg'
-  if (buf.length >= 12 && buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP') mime = 'image/webp'
-  else if (buf.length >= 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) mime = 'image/png'
-  return `data:${mime};base64,${buf.toString('base64')}`
+  return `data:${sniffImageMediaType(buf)};base64,${buf.toString('base64')}`
 }
 
 export interface FalImageGenParams {

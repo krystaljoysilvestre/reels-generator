@@ -1,6 +1,6 @@
 import { eq, and } from 'drizzle-orm'
 import { getDb, reels, scenes, assets, channels, stories, assertVisualTruthReady } from '@reels/db'
-import { generateImage, generateImageFal, imageEngineForGenre, FLUX_IMAGE_ENGINE, buildInputHash, ContentFilterError, llmCall, downloadBuffer, uploadBuffer, sourceEntityImage, spendFromError, SCENE_IMAGE_MODEL, SCENE_IMAGE_QUALITY, type ImageEngine } from '@reels/providers'
+import { generateImage, generateImageFal, imageEngineForGenre, FLUX_IMAGE_ENGINE, buildInputHash, ContentFilterError, llmCall, downloadBuffer, uploadBuffer, sourceEntityImage, spendFromError, sniffImageMediaType, SCENE_IMAGE_MODEL, SCENE_IMAGE_QUALITY, type ImageEngine } from '@reels/providers'
 import { archivalShotTarget, presentedSourceTarget, identityWithheldEntities, MODES_WITHOUT_PLATES, normalizeCanon, WorldBibleSchema, EntityPlateStoreSchema, entityDescriptionHash, assembleImagePrompt, assembleNegativePrompt, assembleReferencePrompt, castNationality, historicalEraDirective, reelLightingDirective, sceneEntities, slug, channelPlatformPreset, StoryBibleSchema, AppearanceBindingsSchema, appearanceIdForEntity, entityAtAppearance, resolveEntities, EBN_RENDERING_PROFILE, effectiveGenre, resolveChannelPolicy, requiresEvidence, canUseArchivalHumanShot, splitSceneDepiction, conditionableReferenceKeys, missingRequiredIdentityReferences, personNameVariants, mentionsAny, scrubNames, SAFE_REPRESENTATIVE_STAGING, visualTruthContractErrors, type BibleEntity, type CharacterAppearance, type DepictionRouting, type MediaOrigin, type DepictionBasis, type SourcePolicy } from '@reels/core'
 import { z } from 'zod'
 import { buildRephrasePrompt, REPHRASE_V1_VERSION, buildImageQAPrompt, IMAGE_QA_V1_VERSION, ImageQASchema, isBlockingImageTruthFailure, buildFilterSafePrompt, FILTER_SAFE_V1_VERSION, FilterSafeSchema, buildEntityVerifyPrompt, buildIdentityStateVerifyPrompt, buildRepresentativeStagingPrompt, EntityVerifySchema, IdentityStateVerifySchema, RepresentativeStagingSchema, PLATE_COLOURISE_PROMPT, ENTITY_SOURCE_V1_VERSION } from '../../prompts-bridge.js'
@@ -48,15 +48,6 @@ export function requiresVisualTruthQa(policy: SourcePolicy, mediaGenre: string):
 // third-person figure of her facing the lens (the #1 POV failure). Kept deliberately tight (the proven set)
 // so an incidental "phone screen"/"glass of water" doesn't wrongly pull her face into a shot.
 const NARRATOR_FACE_SURFACE = /\b(mirror|reflection|reflected|glass)\b/i
-
-// Claude vision (QA) needs the real media_type; sniff it from magic bytes rather than trusting the
-// stored extension (the generated format isn't guaranteed to match the .webp key).
-function sniffMediaType(buf: Buffer): 'image/webp' | 'image/jpeg' | 'image/png' {
-  if (buf.length >= 12 && buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP') return 'image/webp'
-  if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'image/jpeg'
-  if (buf.length >= 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return 'image/png'
-  return 'image/jpeg'
-}
 
 // Render one image on the chosen engine — gpt-image-1 (openai) via ../../providers generateImage, or a fal
 // model (gemini/flux) via generateImageFal. Both take/return the same shape, so callers stay engine-agnostic.
@@ -269,7 +260,7 @@ async function sourceEntityPlate(
   if (!media) return { sourced: false }
 
   // The key stays .webp regardless of the real bytes — every downstream reader sniffs magic bytes, not the
-  // extension (see sniffMediaType / fal refDataUri), so the real jpeg/png conditions scenes identically.
+  // extension (see sniffImageMediaType / fal refDataUri), so the real jpeg/png conditions scenes identically.
   const sourceKey = `reels/${reelId}/refs/${slug(identityEntity.id)}-source.webp`
   await uploadBuffer(sourceKey, media.buffer, media.mime)
   const origin: MediaOrigin = { ...media.origin, sourceAssetKey: sourceKey, conditioningAssetKey: sourceKey }
@@ -304,7 +295,7 @@ async function sourceEntityPlate(
           { type: 'text', text: 'IMAGE 1 — verified source identity:' },
           { type: 'image', mediaType: media.mime, base64: media.buffer.toString('base64') },
           { type: 'text', text: 'IMAGE 2 — generated state-adapted candidate:' },
-          { type: 'image', mediaType: sniffMediaType(rendered), base64: rendered.toString('base64') },
+          { type: 'image', mediaType: sniffImageMediaType(rendered), base64: rendered.toString('base64') },
           { type: 'text', text: verifyPrompt.userMessage },
         ] }],
       })
@@ -881,7 +872,7 @@ export async function generateImages(reelId: string): Promise<void> {
           const sourceKey = sourcePresentationTarget.referenceOrigin.sourceAssetKey
           const sourceBytes = await downloadBuffer(sourceKey)
           const key = `reels/${reelId}/scenes/${scene.idx}-source.webp`
-          await uploadBuffer(key, sourceBytes, sniffMediaType(sourceBytes))
+          await uploadBuffer(key, sourceBytes, sniffImageMediaType(sourceBytes))
           const origin: MediaOrigin = {
             ...sourcePresentationTarget.referenceOrigin,
             usage: 'presented_archival',
@@ -1069,7 +1060,7 @@ export async function generateImages(reelId: string): Promise<void> {
         // The canonical key holds the LAST attempt's bytes; if an earlier attempt scored better (fewer QA
         // issues), restore its bytes so the kept image is the closest roll to the brief.
         if (qa && best && ((best.truthPass ? 0 : 1000) + best.truthIssues.length * 100 + best.issues.length) < ((lastTruthPass ? 0 : 1000) + lastTruthIssues.length * 100 + lastIssues.length)) {
-          await uploadBuffer(chosen!.asset.storageKey, best.buffer, sniffMediaType(best.buffer))
+          await uploadBuffer(chosen!.asset.storageKey, best.buffer, sniffImageMediaType(best.buffer))
           lastIssues = best.issues
           lastTruthPass = best.truthPass
           lastTruthIssues = best.truthIssues
@@ -1147,7 +1138,7 @@ async function imageQA(buf: Buffer, visualPrompt: string, expectedAppearance?: s
       {
         role: 'user',
         content: [
-          { type: 'image', mediaType: sniffMediaType(buf), base64: buf.toString('base64') },
+          { type: 'image', mediaType: sniffImageMediaType(buf), base64: buf.toString('base64') },
           { type: 'text', text: userMessage },
         ],
       },

@@ -14,41 +14,44 @@ sequenced this way — lives in `dna/company/roadmap.md` (company DNA starts at
 
 ---
 
-## Now — publish Crossroads and keep it up (2026-08-24)
+## Now — repeat Crossroads while the audience accumulates (2026-08-24)
 
 Everything below this section is backlog. This is the only active item.
 
-**Stories Published is 0.** *Edge of Everything* did go public on 2026-08-11 through Kendrix's own
-per-channel authorization path — real id `RRvU0b1TFAc`, processed, served publicly — but it was a
-**proving run for the OAuth path, never meant to stay up**, and it was taken down. The channel reports
-`videoCount: 0`. The publish PATH is demonstrated end-to-end; the act is not.
-**Kendrix has never published a reel intended to stay up.** That is the gate (decision-log 2026-08-22-001).
+**Stories Published is 1.** Crossroads' *The Urinal Rejected but Immortalized* went live on YouTube on
+2026-08-24 (`6gcyx9bK2mE`) and is intended to stay up. YouTube's Data API confirmed the public video
+immediately after upload. This is Kendrix's first retained Customer Zero publish. *Edge of Everything*
+remains correctly classified as the earlier OAuth proving run that was taken down
+(decision-log 2026-08-22-001).
 
-### 1. Publish one Crossroads reel that stays up — the whole gate
+### 1. Publish one Crossroads reel that stays up — complete, observation open
 
 **Crossroads is the sole Customer Zero channel for this lap.** Other channels do not count toward current
 roadmap progress, even if their old artifacts remain useful as historical test cases.
-Take the current Crossroads candidate through three steps:
+The 2026-08-24 lap completed all three steps:
 
-1. **Produce a fresh Crossroads render.** Use the current factual/visual-truth path and the repaired
-   packaging surface. If the selected render predates 2026-08-21, re-render it before review so the
-   removed Kendrix watermark cannot ship; the render pass itself books `costCents: 0`.
-2. **Watch it and decide.** The 2026-08-10 audit proved this is the most reliable instrument we own.
-   The question is not "is this approvable" but **"would you leave this up."**
-3. **Connect Crossroads and post.** Accounts are owned per channel, so the publishing grant must belong
-   to Crossroads. Free port 3000 first; the OAuth redirect is pinned there.
+1. **Fresh render produced.** The current factual/visual-truth path cleared its blockers; render QA passed.
+2. **Watched and decided.** Editorial, visual and sound review independently returned **publish as-is**;
+   no disqualifying issue was found. The founder delegated the final call and the reel was approved.
+3. **Crossroads posted.** The channel-owned YouTube grant published `6gcyx9bK2mE`; the public API confirmed
+   liveness. TikTok and Facebook Reels remain manual destinations and do not block the first retained proof.
 
-### 2. The first audience number — arrives on its own
+Do not call consistency proven. One retained publish clears the zero; the active question is whether it
+stays up, produces audience evidence, and can be repeated.
 
-No work pending. The poller was repaired 2026-08-21, `YOUTUBE_API_KEY` is configured and verified
-against a control video, and the six-hourly schedule needs no OAuth grant. Within ~6 hours of anything
-going live, real views/likes/comments land in `metrics` — the first external evidence in the company's
-history. Until then every instrument we own is internal.
+### 2. The first audience signal — arrived, observation open
 
-### 3. Then choose the next lap from the numbers
+The public read reached 10 views / 0 likes / 0 comments fourteen minutes after upload. This is Kendrix's
+first non-zero viewer signal, but far too small a sample for a creative intervention. The poller was repaired
+2026-08-21, `YOUTUBE_API_KEY` is configured, and the six-hourly schedule needs no OAuth grant. The first
+scheduled write into `metrics`, the 24-hour snapshot and the seven-day snapshot remain open observations.
 
-Deliberately unassigned, on the principle that made the 2026-08-10 packaging audit work: the seat is
-chosen by evidence, not prediction.
+### 3. Produce Crossroads reel #2 without changing the system — active
+
+The early number says only that the reel is reachable. It does not justify tuning the hook, visuals, sound,
+packaging or models. Run a second Crossroads story through the same factual/visual-truth workflow and the
+same publish bar. This tests repeatability while reel #1 accumulates evidence. Choose an engineering
+intervention only after a recurring failure or a meaningful audience pattern appears.
 
 ### What was fixed to get here (2026-08-21)
 
@@ -71,8 +74,8 @@ another channel; that operating assumption is retired. The Crossroads work on de
 identity and sourced narrative is directly relevant foundation work, but it becomes roadmap evidence only
 when a Crossroads reel stays live and produces an audience reading.
 
-**What NOT to do:** turn one successful upload into a platform-integration lap, or split the active proof
-across channels. Finish the Crossroads loop first.
+**What NOT to do:** turn one retained upload into a platform-integration lap, or split the active proof
+across channels. Observe Crossroads and choose the next lap from its evidence.
 
 **Launch boundary — implemented is not generally available:**
 
@@ -88,9 +91,8 @@ across channels. Finish the Crossroads loop first.
 
 - `STORY_PLAN_GATE` is on main and unset. The one published reel does not establish whether enabling it
   improves watched output.
-- The watermark is off as of 2026-08-21, but both existing reels were rendered before that and still carry
-  it. Re-render before posting (free, CPU-only). No delete-and-reupload dilemma remains — the 08-11 upload
-  is gone (decision-log 2026-08-21-001).
+- The watermark is off as of 2026-08-21. The retained Crossroads reel was freshly rendered after removal;
+  older artifacts still carry it and must not be republished without a free CPU-only re-render.
 - TikTok and Facebook Reels remain honest manual destinations through the post package. Whatever converts
   them to direct publishing should convert **every** caller in the same commit — that omission is exactly
   what cost ten days of audience data here.
