@@ -4,7 +4,7 @@ import { promisify } from 'node:util'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { mkdir, writeFile, rm, copyFile } from 'node:fs/promises'
-import { getDb, reels, scenes, assets, channels } from '@reels/db'
+import { getDb, reels, scenes, assets, channels, assertVisualTruthReady } from '@reels/db'
 import { downloadBuffer, uploadFile, buildInputHash } from '@reels/providers'
 import { TimingsSchema, LutConfigSchema, CaptionStyleSchema, channelPlatformPreset, effectsFromSelection, parseMotion, effectiveGenre, computeMediaDisclosure, MediaOriginSchema,} from '@reels/core'
 import { renderReelWithRemotion } from '@reels/render/remotion/render-remotion'
@@ -53,6 +53,7 @@ export async function renderStep(reelId: string): Promise<void> {
 
   const reel = await db.query.reels.findFirst({ where: eq(reels.id, reelId) })
   if (!reel?.timings) throw new Error(`Reel missing timings: ${reelId}`)
+  await assertVisualTruthReady(reelId)
 
   const timings = TimingsSchema.parse(reel.timings)
   const channel = await db.query.channels.findFirst({ where: eq(channels.id, reel.channelId) })

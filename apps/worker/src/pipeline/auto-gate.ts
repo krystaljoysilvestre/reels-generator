@@ -1,7 +1,7 @@
 import { eq, and, gt, isNotNull } from 'drizzle-orm'
-import { getDb, reels, channels, stories, assets, publications, pipelineSteps, sceneImageOrigins } from '@reels/db'
+import { getDb, reels, channels, stories, assets, publications, pipelineSteps, sceneImageOrigins, resolveYouTubeAuth, markConnectionError, assertVisualTruthReady } from '@reels/db'
 import { enqueueStep } from '@reels/queue'
-import { listVoices, downloadBuffer, uploadToYouTube, isYouTubeConfigured, toElevenLabsLang } from '@reels/providers'
+import { listVoices, downloadBuffer, uploadToYouTube, toElevenLabsLang, type YouTubeAuth } from '@reels/providers'
 import { PostingRulesSchema, PostMetaSchema, formatPostCaption, formatImageCredits, StoryBibleSchema, matchNarratorVoice, nextPublishSlot, resolvePublishSlots, resolvePublishDays, resolveSidecarSrt, type PostingRules, type ChannelVoice, type NarratorVoice } from '@reels/core'
 import { setReelStatus } from './harness.js'
 
@@ -16,8 +16,9 @@ const GATE_STEPS = new Set(['generate_story', 'generate_images', 'render_qa'])
  * already there (`gate.verdicts`, in order, the last one being the outcome after any steered rewrite),
  * so this costs nothing and cannot disagree with what actually happened.
  *
- * Fails OPEN on purpose — a missing/unreadable output must not strand every auto reel at story_review.
- * The risk being managed here is publishing a REJECTED story unread, not publishing an unmeasurable one.
+ * Fails CLOSED for auto mode. Auto-production removes the human backstop, so a missing, errored, or
+ * unreadable editorial verdict is itself a reason to hold at story review rather than silently treating
+ * "not checked" as "approved".
  */
 async function storyGateRejected(reelId: string): Promise<boolean> {
   try {
@@ -25,11 +26,13 @@ async function storyGateRejected(reelId: string): Promise<boolean> {
       where: and(eq(pipelineSteps.reelId, reelId), eq(pipelineSteps.stepName, 'generate_story')),
       orderBy: (t, { desc }) => [desc(t.finishedAt)],
     })
-    const verdicts = (step?.output as { gate?: { verdicts?: { pass?: boolean }[] } } | null)?.gate?.verdicts
-    if (!Array.isArray(verdicts) || verdicts.length === 0) return false
-    return verdicts[verdicts.length - 1]?.pass === false
+    const gate = (step?.output as { gate?: { status?: string; verdicts?: { pass?: boolean }[] } } | null)?.gate
+    if (gate?.status !== 'ok') return true
+    const verdicts = gate.verdicts
+    if (!Array.isArray(verdicts) || verdicts.length === 0) return true
+    return verdicts[verdicts.length - 1]?.pass !== true
   } catch {
-    return false
+    return true
   }
 }
 
@@ -108,7 +111,11 @@ export async function autoCrossGate(stepName: string, reelId: string): Promise<v
     // On a channel that posts to a schedule, the reel is booked into its next free slot and YouTube
     // holds it private until then — the render finishing is not what decides when it goes out.
     const rules = PostingRulesSchema.safeParse(channel.postingRules ?? {})
-    if (rules.success && rules.data.autoProduce.autoPublishYouTube && isYouTubeConfigured()) {
+    // Auto-publish needs THIS channel's grant. A channel the creator never connected keeps the manual
+    // path — it must never borrow another channel's account.
+    const ytAuth =
+      rules.success && rules.data.autoProduce.autoPublishYouTube ? await resolveYouTubeAuth(channel.id) : null
+    if (rules.success && ytAuth) {
       try {
         let slot: Date | null = null
         if (rules.data.publish.mode === 'slots') {
@@ -123,7 +130,7 @@ export async function autoCrossGate(stepName: string, reelId: string): Promise<v
             return
           }
         }
-        await autoPublishYouTube(reelId, slot)
+        await autoPublishYouTube(reelId, slot, ytAuth)
         console.log(
           slot
             ? `[auto] ${reelId.slice(0, 8)} approved → scheduled on YouTube for ${slot.toISOString()}`
@@ -167,8 +174,9 @@ async function nextFreeChannelSlot(channelId: string, rules: PostingRules): Prom
 // Upload one approved reel to YouTube and record it (worker twin of /api/pipeline/publish-youtube).
 // With a slot, YouTube holds the video private and publishes it itself at that instant — so the
 // schedule doesn't depend on this worker being alive later.
-async function autoPublishYouTube(reelId: string, slot: Date | null): Promise<void> {
+async function autoPublishYouTube(reelId: string, slot: Date | null, auth: YouTubeAuth): Promise<void> {
   const db = getDb()
+  await assertVisualTruthReady(reelId)
   const reel = await db.query.reels.findFirst({ where: eq(reels.id, reelId) })
   if (!reel) throw new Error('reel disappeared')
 
@@ -204,15 +212,24 @@ async function autoPublishYouTube(reelId: string, slot: Date | null): Promise<vo
   const ytChannel = await db.query.channels.findFirst({ where: eq(channels.id, reel.channelId) })
   const captionsSrt = resolveSidecarSrt(reel.timings, ytChannel?.captionStyle)
   const captionsLanguage = toElevenLabsLang(ytChannel?.languages?.[0] ?? 'english')
-  const result = await uploadToYouTube({
-    video,
-    title,
-    description,
-    tags,
-    ...(thumbnailJpeg ? { thumbnailJpeg } : {}),
-    ...(slot ? { publishAt: slot } : {}),
-    ...(captionsSrt ? { captionsSrt, captionsLanguage } : {}),
-  })
+  let result
+  try {
+    result = await uploadToYouTube({
+      video,
+      title,
+      description,
+      tags,
+      ...(thumbnailJpeg ? { thumbnailJpeg } : {}),
+      ...(slot ? { publishAt: slot } : {}),
+      ...(captionsSrt ? { captionsSrt, captionsLanguage } : {}),
+      auth,
+    })
+  } catch (err) {
+    // Mirror the manual route: a failed upload marks the connection so Settings asks for a reconnect.
+    // The caller still surfaces the reel-level alert note and leaves the reel approved.
+    await markConnectionError(reel.channelId, 'yt', err instanceof Error ? err.message : String(err))
+    throw err
+  }
 
   // Idempotent on the unique (reelId, platform) index: if a concurrent run already recorded this
   // publication, don't create a second row (the early-return above handles the sequential-retry case;

@@ -291,9 +291,9 @@ export const reels = pgTable(
     // "real places allowed". NULL = pre-policy reel → resolveChannelPolicy falls back to the channel's.
     sourcePolicy: jsonb('source_policy'),
     // Curated raw SOURCE material for THIS reel (court records, transcripts, archives, article excerpts).
-    // Used by BOTH the EBN path (storyMode='ebn': the Extractor freezes it into the Evidence Bible before
-    // the story is written) AND the standalone fact gate (channels.factCheck: the story is written freely,
-    // then checked against these sources after the fact). Never mutated once set.
+    // Used by BOTH the source-constrained path (Source Policy requires evidence: the Extractor freezes it
+    // into the Evidence Bible before the story is written, independent of rendering mode) AND the optional
+    // standalone fact gate (the story is written freely, then checked afterward). Never mutated once set.
     dossier: text('dossier'),
     // The frozen, versioned Evidence Bible (EvidenceBible: { version, facts[] }) extracted from the dossier.
     // Immutable once written — nothing downstream acquires facts; the Planner/Writer only select from it.
@@ -485,8 +485,16 @@ export const scenes = pgTable(
     // assembler splices their frozen canonical descriptions so recurring elements don't drift.
     primaryEntity: text('primary_entity'),                                  // the bible id the shot leads with; null = un-canonical subject
     supportingEntities: text('supporting_entities').array().notNull().default([]), // other bible ids in frame
-    // Scene-planner-selected character appearance for this shot, constrained to analyzer-authored options.
-    // Empty = each entity's base look. Persisted so every renderer/regeneration path resolves the same state.
+    // Exact verified source whose untouched pixels fulfil this scene. Null = generate the scene, using any
+    // eligible source plates only for identity conditioning. This prevents archival documents/artworks from
+    // being regenerated as convincing-but-false facsimiles.
+    sourcePresentationEntity: text('source_presentation_entity'),
+    // Editorial truth relationship for this frame. The renderer treats `source` mechanically (exact bytes)
+    // and every generated mode as non-source; the factual depiction gate owns the semantic judgment.
+    depictionBasis: text('depiction_basis').notNull().default('reconstruction'),
+    // Scene-planner-selected identity state for this shot (person/place/object), constrained to
+    // analyzer-authored options. Empty = each entity's base look. Persisted so every consumer resolves the
+    // same state.
     appearanceBindings: jsonb('appearance_bindings').notNull().default({}),
     sceneIntent: text('scene_intent'),                                       // "what the audience should notice first"
   },

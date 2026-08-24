@@ -67,7 +67,7 @@ interface Initial {
   sourcePolicy: SourcePolicy // what this channel may treat as REAL (already resolved by the loader)
   autoProduce: { enabled: boolean; reelsPerDay: number; startHourUtc: number; autoPublishYouTube: boolean } // the consistency engine cadence
   publish: { mode: 'immediate' | 'slots'; slotsUtc: number[]; daysUtc: number[] } // when a finished reel goes out
-  youtubeConfigured: boolean // YOUTUBE_* env keys present → auto-publish is offerable
+  youtubeConfigured: boolean // this channel has a live YouTube connection → auto-publish is offerable
   youtubeConnectConfigured: boolean
   platformConnections: Array<{ platform: 'fb' | 'ig' | 'yt' | 'tiktok'; accountName: string; status: string }>
 }

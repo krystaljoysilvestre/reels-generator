@@ -4,9 +4,9 @@ import '../src/env.js'
 void (async () => {
   const { runMetricsPoll } = await import('../src/metrics-poll.js')
   const { runDailyDigest } = await import('../src/digest.js')
-  const { isYouTubeConfigured } = await import('@reels/providers')
+  const { youtubeAppConfigured } = await import('@reels/db')
   await runMetricsPoll()
-  console.log(`metrics poll: completed ✓ (YouTube configured: ${isYouTubeConfigured()})`)
+  console.log(`metrics poll: completed ✓ (YouTube OAuth app configured: ${youtubeAppConfigured()})`)
   await runDailyDigest()
   console.log('digest: completed ✓ (Resend configured: ' + Boolean(process.env['RESEND_API_KEY']) + ')')
   process.exit(0)
