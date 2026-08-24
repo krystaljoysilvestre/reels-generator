@@ -50,7 +50,7 @@ Build a reliable storytelling workflow that consistently produces publishable, h
 
 Current Bottleneck
 
-**The retained-publish zero is cleared; repeatability and meaningful audience evidence are now the bottleneck.** Crossroads published *The Urinal Rejected but Immortalized* to YouTube on 2026-08-24 (`6gcyx9bK2mE`) and the public Data API confirmed it is watchable. Fourteen minutes after upload it had 10 views / 0 likes / 0 comments — Kendrix's first non-zero viewer signal, but not enough evidence for a creative intervention. What Kendrix has still never done is repeat the result.
+**The retained-publish zero is cleared; publishing repeatability and meaningful audience evidence are now the bottleneck.** Crossroads published *The Urinal Rejected but Immortalized* to YouTube on 2026-08-24 (`6gcyx9bK2mE`) and the public Data API confirmed it is watchable. Fourteen minutes after upload it had 10 views / 0 likes / 0 comments — Kendrix's first non-zero viewer signal, but not enough evidence for a creative intervention. A second Crossroads reel is now fully rendered and internally approved, so production repeatability has advanced to n=2 approved artifacts; only one is live, so publishing consistency has not.
 
 **Correction of record (2026-08-22).** This document briefly recorded *Stories Published: 1*. That was wrong, and the error is instructive. On 2026-08-11 *Edge of Everything* did go public on YouTube through Kendrix's own per-channel authorization path — YouTube issued a real id (`RRvU0b1TFAc`), processed it, and served it publicly. But it was a **proving run for the OAuth path, never intended to stay up**, and the founder took it down. The channel today reports `videoCount: 0` and `viewCount: 0`.
 
@@ -58,7 +58,7 @@ That made the count **0 live, 1 upload proven** at the time — and the two are 
 
 **The zero was not neglect — it was a defect, found and fixed on 2026-08-21.** The performance poller returned at its own first line for ten days. `runMetricsPoll` gated on `isYouTubeConfigured()`, which required an installation-wide `YOUTUBE_REFRESH_TOKEN` — the exact credential the 08-11 per-channel migration replaced. Two sibling callers were stranded the same way: the worker's **auto-publish** was gated on the same dead check *and* called `uploadToYouTube` with no per-channel auth at all (an operator-wide token would have uploaded to whichever account minted it, regardless of which channel asked), and the **Settings gate** hid the auto-publish option on connected channels while offering it on unconnected ones. Every caller now resolves the channel's own grant through one function.
 
-**What remains is observation and repetition, not another system expansion.** The first Crossroads candidate cleared factual/visual-truth, render QA, and independent editorial, visual and sound review; the founder delegated the final call, and it was published as-is. Measurement no longer depends on the publishing grant. Leave reel #1 untouched, run reel #2 through the same workflow, and choose an engineering intervention only after a recurring production failure or meaningful audience pattern appears.
+**What remains is publication and observation, not another system expansion.** Reel #1 cleared factual/visual-truth, render QA, and independent editorial, visual and sound review; the founder delegated the final call, and it was published as-is. Reel #2, *Apollo 11's One Chance to Leave the Moon* (`869103c8`), now clears the same internal bar at 82.6 seconds and −14.17 LUFS. Leave reel #1 untouched, publish the approved reel #2 without another creative pass, and choose an engineering intervention only after a recurring production failure or meaningful audience pattern appears.
 
 **Scope correction (2026-08-24).** The founder designated **Crossroads** as the sole Customer Zero channel for the current lap. Earlier briefings grouped Crossroads with Lihim ng Nayon as an engineering fixture and pointed the publish gate elsewhere; that operating assumption is retired. The depictive-fidelity, verified-identity and sourced-narrative work run on Crossroads is directly relevant foundation progress. It becomes roadmap proof only when a Crossroads reel stays live and produces an audience reading.
 
@@ -80,7 +80,7 @@ Customer Zero consistently publishes high-quality stories using Kendrix.
 
 Priority 1
 
-**Produce Crossroads reel #2 without changing the system.** The retained-publish zero and first non-zero viewer signal were cleared on 2026-08-24. Ten early views do not justify tuning. The next proof is whether the same workflow can produce another artifact we leave up.
+**Publish the approved Crossroads reel #2 without another creative pass.** The same factual/visual-truth workflow produced a second artifact that cleared the final spot-check. The remaining proof is external and durable: upload it, confirm liveness, and leave it up.
 
 Priority 2
 
@@ -130,8 +130,8 @@ Priority 3
 | ----------------------------- | ------: | :---: | ---------: | ----- |
 | Generation Success Rate       | Not yet measured |   →   |       >95% | Two long-form `generate_story` runs were reaped for exceeding the stuck threshold (08-12, 08-17) on a fixture channel — the only reliability signal in the window |
 | Average Story Generation Time | Not yet measured |   →   |     Stable |       |
-| Average AI Cost per Story     | Crossroads reviewable reels: $6.55–10.63 |   ↑   | Decreasing — never at taste's expense | Published reel: **$10.63**. Exact measured Crossroads reel spend: **$25.20**, including one $0.09 failed start. Other channels are excluded from the active proof metric |
-| Production Reliability        | Improving |   ↑   |  Improving | Unattended operation still unproven — and auto-publish could not have run at all until 2026-08-21 |
+| Average AI Cost per Story     | Crossroads approved reels: $4.92–10.63 |   ↓   | Decreasing — never at taste's expense | Published reel: **$10.63**; approved reel #2: **$4.92**. Exact measured Crossroads spend: **$30.24**, including reel #2's $0.02 pre-reel research and $0.10 rejected candidate. Other channels are excluded from the active proof metric |
+| Production Reliability        | Two approved artifacts, one retained publish |   ↑   |  Improving | Reel #2 required bounded human recovery at both creative gates; unattended operation and repeat publishing remain unproven |
 
 ---
 
@@ -168,6 +168,8 @@ Each experiment tests a named assumption in company/assumptions.md.
 ## Current Risks
 
 * **The first proof channel is deliberately narrower and technically harder.** Crossroads is the sole evidence source and exercises factual grounding, depictive fidelity and verified identity. It still cleared the first retained publish; do not escape the remaining repeatability and audience questions by switching channels.
+* **Evidence acquisition can still overstate sufficiency.** Reel #2's first dossier contained only two secondary sources and was marked sufficient; the downstream story gate caught unsupported death claims and the candidate was rejected for $0.10 before visual spend. One occurrence justifies an observation, not a new subsystem.
+* **A truth-safe board can still need source curation at Gate 2.** Reel #2's automated gates rejected invented memo staging and misleading orbital diagrams, but two surviving generated beats were not publishable. Replacing them with verified public-domain Apollo media produced the approved board. Treat this as operator friction until it recurs.
 * **A per-channel migration that converted one caller left three reading a world that no longer existed.** Fixed for YouTube on 2026-08-21, but the pattern is the risk — TikTok and Facebook are still honest manual destinations, and whatever converts them next should convert every caller in the same commit.
 * **Testing-mode OAuth grants expire in seven days**, which taxes every publish. Measurement is now decoupled from this via `YOUTUBE_API_KEY`; **publishing is not**, and cannot be.
 * **Every render before 2026-08-21 burned a roaming Kendrix watermark.** Any Crossroads candidate from before that date must be re-rendered before publishing, or the logo ships. The render pass is free (`render` books `costCents: 0`).
@@ -208,6 +210,8 @@ Major decisions are recorded in company/decision-log.md; this section lists the 
 * **2026-08-10-001** — The bottleneck was packaging, not story (the decision this period's Priority 1 closed out).
 
 Shipped this period without needing a decision entry: the storyboard cutting room rebuilt to the design spec, the caption system matched to design, per-channel YouTube authorization and direct publish, cover-frame ranking with per-step spend attribution, the saturated-database auth fix, and the access-inbox notification fix.
+
+Operational compatibility fix this period: OpenAI's retired search-preview model was replaced by the Responses API `web_search` tool on `gpt-4.1-mini`; its fixed input-token floor and per-call search fee are now included in spend accounting.
 
 ---
 

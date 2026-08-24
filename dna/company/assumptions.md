@@ -161,7 +161,7 @@ Operating Crossroads identifies recurring product improvements before external c
 
 Evidence to Date
 
-On 2026-08-24 Crossroads completed the factual/visual-truth workflow and published its first retained YouTube reel (`6gcyx9bK2mE`). The public read reached 10 views / 0 likes / 0 comments after fourteen minutes. This supports workflow completion and audience readability at n=1; it does not yet support consistency or audience value.
+On 2026-08-24 Crossroads completed the factual/visual-truth workflow and published its first retained YouTube reel (`6gcyx9bK2mE`). The public read reached 10 views / 0 likes / 0 comments after fourteen minutes. A second reel, *Apollo 11's One Chance to Leave the Moon* (`869103c8`), subsequently cleared factual fidelity, visual truth, render QA and the final spot-check at a measured reel cost of $4.92; it is approved but not yet uploaded. This supports production repeatability at n=2 approved artifacts and audience readability at n=1 retained publish. It does not yet support publishing consistency or audience value.
 
 Invalidation Signal
 

@@ -46,12 +46,27 @@ first non-zero viewer signal, but far too small a sample for a creative interven
 2026-08-21, `YOUTUBE_API_KEY` is configured, and the six-hourly schedule needs no OAuth grant. The first
 scheduled write into `metrics`, the 24-hour snapshot and the seven-day snapshot remain open observations.
 
-### 3. Produce Crossroads reel #2 without changing the system — active
+### 3. Produce Crossroads reel #2 without changing the creative system — approved, publication open
 
-The early number says only that the reel is reachable. It does not justify tuning the hook, visuals, sound,
-packaging or models. Run a second Crossroads story through the same factual/visual-truth workflow and the
-same publish bar. This tests repeatability while reel #1 accumulates evidence. Choose an engineering
-intervention only after a recurring failure or a meaningful audience pattern appears.
+The early number says only that reel #1 is reachable. It did not justify tuning the hook, visuals, sound or
+packaging. Reel #2, *Apollo 11's One Chance to Leave the Moon* (`869103c8`), has now cleared story fidelity,
+Crossroads essence, visual truth, render QA and the final spot-check. It is internally approved at
+82.6 seconds, −14.17 LUFS, with a measured reel cost of **$4.92**. It has **not** been uploaded yet, so
+Stories Published remains 1 and publishing consistency remains unproven.
+
+The lap cost **$5.04 end to end**: $0.02 evidence acquisition before a reel existed, $0.10 for a rejected
+first candidate whose thin two-source dossier led to unsupported death claims, and $4.92 for the approved
+replacement. The story gate caught the false claims before visuals. The visual-truth gate then rejected
+invented historical staging before image spend; Gate 2 later replaced ambiguous generated diagrams with
+verified public-domain Apollo media instead of brute-force re-rolling. Those are production observations,
+not yet mandates for new machinery.
+
+One compatibility repair was necessary: OpenAI had retired `gpt-4o-mini-search-preview`, so evidence search
+was moved to the Responses API's `web_search` tool on `gpt-4.1-mini`, with its 8,000-token billing floor and
+per-search fee included in exact cost accounting. The creative settings stayed unchanged.
+
+**Next action:** publish the approved reel to the connected Crossroads YouTube account, confirm public
+liveness, and leave it up. Then observe both retained publishes before choosing an engineering lap.
 
 ### What was fixed to get here (2026-08-21)
 

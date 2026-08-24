@@ -1,7 +1,19 @@
 import { describe, it, expect } from 'vitest'
 import { z } from 'zod'
 import { buildInputHash } from './input-hash.js'
-import { tryParse } from './client.js'
+import { calcWebSearchCostCents, OPENAI_WEB_SEARCH_MODEL, tryParse } from './client.js'
+
+describe('web-search transport', () => {
+  it('uses a current general model rather than the retired search-preview model', () => {
+    expect(OPENAI_WEB_SEARCH_MODEL).toBe('gpt-4.1-mini')
+    expect(OPENAI_WEB_SEARCH_MODEL).not.toContain('search-preview')
+  })
+
+  it('bills the tool call and the fixed 8k search-content floor', () => {
+    expect(calcWebSearchCostCents('gpt-4.1-mini', 100, 0, 1)).toBe(2)
+    expect(calcWebSearchCostCents('gpt-4.1-mini', 100, 0, 2)).toBe(3)
+  })
+})
 
 // Unit tests for parsing/validation logic — no network calls.
 // Integration tests (real provider APIs) are env-flagged and live elsewhere.

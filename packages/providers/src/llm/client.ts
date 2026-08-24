@@ -34,9 +34,8 @@ export interface LlmCallOptions<T> {
   model?: string
   maxTokens?: number
   temperature?: number // 0–1 (Anthropic's range; OpenAI accepts it too). Omit = provider default.
-  // OpenAI only: answer from LIVE web results via the search-preview model (defaults the model to
-  // gpt-4o-mini-search-preview). Those models reject `temperature`, so it's ignored when set here.
-  // Each transport call adds OPENAI_WEB_SEARCH_FEE_CENTS on top of token cost.
+  // OpenAI only: answer from LIVE web results through the Responses API's web_search tool (defaults
+  // to OPENAI_WEB_SEARCH_MODEL). Tool-backed responses ignore `temperature` here.
   webSearch?: boolean
 }
 
@@ -56,7 +55,8 @@ const MODEL_PRICING: Record<string, { input: number; output: number }> = {
   // OpenAI (USD/M → cents/M)
   'gpt-4o': { input: 250, output: 1000 },
   'gpt-4o-mini': { input: 15, output: 60 },
-  'gpt-4o-mini-search-preview': { input: 15, output: 60 }, // token rates match mini; search fee added separately
+  // OpenAI list price, 2026-08: $0.40/M input, $1.60/M output.
+  'gpt-4.1-mini': { input: 40, output: 160 },
   // Anthropic (QA) — cents per Mtok, matching published USD pricing ($/Mtok × 100)
   'claude-opus-4-8': { input: 500, output: 2500 },       // $5 / $25
   'claude-sonnet-4-6': { input: 300, output: 1500 },     // $3 / $15
@@ -65,14 +65,25 @@ const MODEL_PRICING: Record<string, { input: number; output: number }> = {
 
 const JSON_INSTRUCTION = '\n\nRespond with valid JSON only. No markdown, no code fences.'
 
-// Per-call web-search tool fee for the search-preview models — OpenAI lists ~$27.50/1k calls
-// (gpt-4o-mini-search-preview, medium search context, pricing page as of 2026-07). Rounded UP per
-// the cost-accounting rule (never undercount); re-verify at each model bump.
-const OPENAI_WEB_SEARCH_FEE_CENTS = 3
+// Search uses the general Responses API tool rather than a dedicated preview model. OpenAI pricing,
+// 2026-08: $10/1k calls (= 1¢ each). For gpt-4.1-mini, search content is billed as a fixed 8,000-input-
+// token block per tool call. Both constants are kept here so a pricing/model bump cannot silently make
+// evidence acquisition look free.
+export const OPENAI_WEB_SEARCH_MODEL = 'gpt-4.1-mini'
+const OPENAI_WEB_SEARCH_FEE_CENTS = 1
+const OPENAI_WEB_SEARCH_INPUT_TOKENS_PER_CALL = 8_000
 
 function calcCostCents(model: string, inputTokens: number, outputTokens: number): number {
   const rate = MODEL_PRICING[model] ?? MODEL_PRICING['gpt-4o']!
   return Math.ceil((inputTokens * rate.input + outputTokens * rate.output) / 1_000_000)
+}
+
+export function calcWebSearchCostCents(model: string, inputTokens: number, outputTokens: number, searchCalls: number): number {
+  const calls = Math.max(1, searchCalls)
+  // The API may report fewer input tokens than the separately-billed search-content block. Bill the
+  // larger value so the estimate never understates a multi-search response.
+  const billedInputTokens = Math.max(inputTokens, OPENAI_WEB_SEARCH_INPUT_TOKENS_PER_CALL * calls)
+  return calcCostCents(model, billedInputTokens, outputTokens) + calls * OPENAI_WEB_SEARCH_FEE_CENTS
 }
 
 function stripFences(raw: string): string {
@@ -132,6 +143,9 @@ interface TransportResult {
   // schema validation for a reason that has nothing to do with the prompt, and the repair attempt — same
   // ceiling, longer input — fails the same way. Worth naming instead of guessing.
   truncated: boolean
+  // Responses web_search may make more than one tool call. Count the returned tool-call items so cost
+  // accounting follows actual calls rather than assuming one.
+  webSearchCalls: number
 }
 
 function toAnthropicMessages(messages: LlmMessage[]): Anthropic.MessageParam[] {
@@ -164,6 +178,7 @@ async function callAnthropic(model: string, system: string, messages: LlmMessage
     inputTokens: res.usage.input_tokens,
     outputTokens: res.usage.output_tokens,
     truncated: res.stop_reason === 'max_tokens',
+    webSearchCalls: 0,
   }
 }
 
@@ -181,14 +196,35 @@ function toOpenAIMessages(system: string, messages: LlmMessage[]): OpenAI.Chat.C
 }
 
 async function callOpenAI(model: string, system: string, messages: LlmMessage[], maxTokens: number, temperature?: number, webSearch?: boolean): Promise<TransportResult> {
-  // Search-preview models reject `temperature`; `web_search_options` may lag in the SDK's param type,
-  // so the params object is widened rather than the field cast away.
-  const params: OpenAI.Chat.ChatCompletionCreateParamsNonStreaming & { web_search_options?: Record<string, never> } = {
+  if (webSearch) {
+    // Every current search caller is text-only. Fail explicitly if a future caller tries to smuggle a
+    // vision message through this transport instead of silently dropping the image.
+    const input = messages.map((m) => {
+      if (typeof m.content !== 'string') throw new Error('OpenAI web search currently supports text-only messages')
+      return { role: m.role, content: m.content }
+    })
+    const res = await getOpenAI().responses.create({
+      model,
+      instructions: system + JSON_INSTRUCTION,
+      input,
+      tools: [{ type: 'web_search' }],
+      tool_choice: 'required',
+      max_output_tokens: maxTokens,
+    })
+    return {
+      text: res.output_text,
+      inputTokens: res.usage?.input_tokens ?? 0,
+      outputTokens: res.usage?.output_tokens ?? 0,
+      truncated: res.status === 'incomplete' && res.incomplete_details?.reason === 'max_output_tokens',
+      webSearchCalls: res.output.filter((item) => item.type === 'web_search_call').length,
+    }
+  }
+
+  const params: OpenAI.Chat.ChatCompletionCreateParamsNonStreaming = {
     model,
     max_tokens: maxTokens,
     messages: toOpenAIMessages(system, messages),
-    ...(temperature !== undefined && !webSearch ? { temperature } : {}),
-    ...(webSearch ? { web_search_options: {} } : {}),
+    ...(temperature !== undefined ? { temperature } : {}),
   }
   const res = await getOpenAI().chat.completions.create(params)
   return {
@@ -196,6 +232,7 @@ async function callOpenAI(model: string, system: string, messages: LlmMessage[],
     inputTokens: res.usage?.prompt_tokens ?? 0,
     outputTokens: res.usage?.completion_tokens ?? 0,
     truncated: res.choices[0]?.finish_reason === 'length',
+    webSearchCalls: 0,
   }
 }
 
@@ -231,8 +268,7 @@ async function transport(provider: LlmProvider, model: string, system: string, m
 export async function llmCall<T>(opts: LlmCallOptions<T>): Promise<LlmResult<T>> {
   const provider = opts.provider ?? 'openai'
   const webSearch = provider === 'openai' && opts.webSearch === true
-  const model = opts.model ?? (webSearch ? 'gpt-4o-mini-search-preview' : DEFAULT_MODEL[provider])
-  const searchFee = webSearch ? OPENAI_WEB_SEARCH_FEE_CENTS : 0
+  const model = opts.model ?? (webSearch ? OPENAI_WEB_SEARCH_MODEL : DEFAULT_MODEL[provider])
   const maxTokens = opts.maxTokens ?? 4096
   const inputHash = buildInputHash(opts.templateVersion, {
     system: opts.system,
@@ -243,7 +279,9 @@ export async function llmCall<T>(opts: LlmCallOptions<T>): Promise<LlmResult<T>>
 
   // ── First attempt ─────────────────────────────────────────────────────────
   const res1 = await transport(provider, model, opts.system, opts.messages, maxTokens, opts.temperature, webSearch)
-  const cost1 = calcCostCents(model, res1.inputTokens, res1.outputTokens) + searchFee
+  const cost1 = webSearch
+    ? calcWebSearchCostCents(model, res1.inputTokens, res1.outputTokens, res1.webSearchCalls)
+    : calcCostCents(model, res1.inputTokens, res1.outputTokens)
   const parsed1 = tryParse(res1.text, opts.schema)
 
   if (parsed1.ok) {
@@ -276,7 +314,10 @@ export async function llmCall<T>(opts: LlmCallOptions<T>): Promise<LlmResult<T>>
   } catch (err) {
     throw attachSpend(err, cost1)
   }
-  const totalCost = cost1 + calcCostCents(model, res2.inputTokens, res2.outputTokens) + searchFee
+  const cost2 = webSearch
+    ? calcWebSearchCostCents(model, res2.inputTokens, res2.outputTokens, res2.webSearchCalls)
+    : calcCostCents(model, res2.inputTokens, res2.outputTokens)
+  const totalCost = cost1 + cost2
 
   const parsed2 = tryParse(res2.text, opts.schema)
   if (parsed2.ok) {
