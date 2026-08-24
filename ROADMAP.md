@@ -15,34 +15,65 @@ sequenced this way — lives in `dna/company/roadmap.md` (company DNA starts at
 
 ---
 
-## Now — publish, observe, repeat (2026-08-11)
+## Now — publish one reel that stays up (2026-08-22)
 
 Everything below this section is backlog. This is the only active item.
 
-**Stories Published moved 0 → 1.** Edge of Everything was posted publicly to YouTube from the
-Storyboard through Kendrix's real per-channel authorization path on 2026-08-11. YouTube reports the
-upload processed, public, embeddable, and public-stats-viewable. The Phase 0 → Phase 1 gate has been
-crossed once; consistency is not proven.
+**Stories Published is 0.** *Edge of Everything* did go public on 2026-08-11 through Kendrix's own
+per-channel authorization path — real id `RRvU0b1TFAc`, processed, served publicly — but it was a
+**proving run for the OAuth path, never meant to stay up**, and it was taken down. The channel reports
+`videoCount: 0`. The publish PATH is demonstrated end-to-end; the act is not.
+**Kendrix has never published a reel intended to stay up.** That is the gate (decision-log 2026-08-22-001).
 
-**Open action — publish the next reel through the same path, then read the first audience signal.**
-Do not turn one successful upload into a platform-integration lap. The next proof is that Customer
-Zero can repeat the workflow without setup assistance and begin collecting retention/performance
-evidence from actual viewers. Packaging and watched-artifact judgment remain the quality gate.
+### 1. Publish one reel that stays up — the whole gate
 
-**What changed:**
+**Emberlight** is the nearest candidate: `spot_check`, finished render, full packaging repair already
+applied (cover plus *"A Ladder for Stars"*). Three steps:
 
-- Channel creation's selected destinations now reach Settings and the approved-reel gate.
-- Publishing accounts are owned per channel (`platform_connections → channels.userId`), OAuth-bound
-  to the signed-in owner, and encrypted at rest. One creator can connect different brand accounts to
-  different channels without a global refresh token.
-- YouTube direct publish is live: video, title/description, hashtags, disclosure, best-effort custom
-  thumbnail, and native captions. A YouTube-only reel becomes `published`; a multi-platform reel stays
-  `approved` until its remaining destinations are confirmed.
-- TikTok and Facebook Reels remain honest manual destinations through the post package. Direct TikTok
-  requires Content Posting API audit; Facebook requires Meta Page publishing review. Neither blocks
-  Customer Zero from publishing now.
+1. **Re-render it — free.** Every render before 2026-08-21 burned a roaming Kendrix watermark, so both
+   existing reels still carry one. `watermark` left the render fingerprint, so the next pass drops it,
+   and `render` books `costCents: 0` — the pass is CPU-only and costs nothing. Do this before posting
+   anything, or the logo ships.
+2. **Watch it and decide.** The 2026-08-10 audit proved this is the most reliable instrument we own.
+   The question is not "is this approvable" but **"would you leave this up."**
+3. **Connect that channel and post.** Accounts are owned per channel, so Emberlight needs its own
+   connection — that step is not friction to route around, it is Phase 1's *"repeat the workflow without
+   setup assistance"* asked for real on a second channel. Free port 3000 first; the OAuth redirect is
+   pinned there.
 
-**Launch boundary — implemented is not the same as generally available:**
+### 2. The first audience number — arrives on its own
+
+No work pending. The poller was repaired 2026-08-21, `YOUTUBE_API_KEY` is configured and verified
+against a control video, and the six-hourly schedule needs no OAuth grant. Within ~6 hours of anything
+going live, real views/likes/comments land in `metrics` — the first external evidence in the company's
+history. Until then every instrument we own is internal.
+
+### 3. Then choose the next lap from the numbers
+
+Deliberately unassigned, on the principle that made the 2026-08-10 packaging audit work: the seat is
+chosen by evidence, not prediction.
+
+### What was fixed to get here (2026-08-21)
+
+The performance poller was **dead at its own first line for ten days**. `runMetricsPoll` gated on
+`isYouTubeConfigured()`, which required an installation-wide `YOUTUBE_REFRESH_TOKEN` — the exact
+credential the 08-11 per-channel migration replaced. `metrics` held zero rows and nothing said so.
+
+Every call site now resolves the channel's own grant through one function, `resolveYouTubeAuth` in
+`@reels/db`, and the operator-wide path is **removed** rather than left as a fallback. Two siblings were
+stranded the same way and are fixed with it: the worker's auto-publish (gated on the dead check, and
+calling `uploadToYouTube` with no per-channel auth at all — an env token would have uploaded to whichever
+account minted it) and the Settings gate (which hid auto-publish on connected channels and offered it on
+unconnected ones). Public view counts now read via `YOUTUBE_API_KEY` with no grant at all; watch-time and
+retention still need the OAuth grant (YouTube Analytics API, `yt-analytics.readonly`) and remain a
+deliberate later step. See decision-log 2026-08-21-002.
+
+**What NOT to do:** turn one successful upload into a platform-integration lap. And note where the last
+ten days went — depictive fidelity, the cutting room, captions, the auth fix — all real work, all
+verified on **Crossroads and Lihim ng Nayon, which are engineering fixtures rather than Customer Zero
+evidence.** The two channels Phase 0 is measured by went untouched from 08-12.
+
+**Launch boundary — implemented is not generally available:**
 
 - The Google OAuth app is in **Testing**. Listed test users can connect, but grants expire after seven
   days and arbitrary Kendrix users cannot use the path reliably.
@@ -52,8 +83,16 @@ evidence from actual viewers. Packaging and watched-artifact judgment remain the
 - This verification is **not the active bottleneck while Customer Zero is proving repeat publishing**.
   Promote it to Now when inviting external creators becomes the next committed action.
 
-**Still worth knowing:** `STORY_PLAN_GATE` is on main and unset. The three original declined reels were
-made without it; the first public upload does not establish whether enabling it improves watched output.
+**Still worth knowing:**
+
+- `STORY_PLAN_GATE` is on main and unset. The one published reel does not establish whether enabling it
+  improves watched output.
+- The watermark is off as of 2026-08-21, but both existing reels were rendered before that and still carry
+  it. Re-render before posting (free, CPU-only). No delete-and-reupload dilemma remains — the 08-11 upload
+  is gone (decision-log 2026-08-21-001).
+- TikTok and Facebook Reels remain honest manual destinations through the post package. Whatever converts
+  them to direct publishing should convert **every** caller in the same commit — that omission is exactly
+  what cost ten days of audience data here.
 
 ---
 

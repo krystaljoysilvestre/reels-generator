@@ -802,6 +802,202 @@ packages/core/src/types/post-meta.ts (`thumbnailText`, `thumbnailOverlay`, `thum
 ---
 
 
+### 2026-08-11-001
+
+Status: Accepted — **partially corrected by 2026-08-22-001.** The upload described here was a proving run and was taken down; the per-channel authorization decision stands, the "published for the first time" reading does not.
+
+Title: Publishing Accounts Are Owned Per Channel — and Customer Zero Published for the First Time
+
+Decision
+
+Own platform authorization on the **channel**, not the installation. One creator connects different brand accounts to different Kendrix channels; `platform_connections` holds the grant, bound to the signed-in owner and encrypted at rest with AES-256-GCM. Then publish for real: *Edge of Everything* went public on YouTube on 2026-08-11 as `RRvU0b1TFAc`, through that path.
+
+Why
+
+The Phase 0 → Phase 1 gate is *"Customer Zero can consistently produce publishable content"*, and for seven weeks the count was zero. The packaging repair (2026-08-10-001) removed the founder's three named disqualifiers, and the reel that followed cleared the bar. **Stories Published moved 0 → 1.**
+
+Per-channel ownership was not a convenience. A single operator-wide refresh token uploads to whichever YouTube account minted it, so a portfolio of channels either shares one destination or publishes to the wrong one. Since Kendrix's model is *one operator, multiple channels*, installation-wide credentials contradict the product's own shape.
+
+Alternatives Considered
+
+**One operator-wide token, deferring per-channel ownership.** Rejected — and the code comment that deferred it (*"a per-channel token store is a deliberate later step; Phase 1 assumes the operator's primary channel"*) is exactly the assumption that would have broken on the second channel.
+
+**Direct TikTok and Facebook publishing in the same lap.** Rejected. TikTok needs Content Posting API audit and Facebook needs Meta Page review; both stay honest manual destinations through the post package, and neither blocks Customer Zero from publishing today.
+
+Expected Impact
+
+The gate is crossed once. **Consistency is not proven, and one publish must not be read as the exit criterion met** — the criterion is an adverb.
+
+Review Trigger
+
+General availability is a separate question from implementation: the Google OAuth app is in **Testing**, so grants expire after seven days and arbitrary users cannot rely on the path. Production verification is not the bottleneck while Customer Zero proves repeat publishing — promote it when inviting external creators becomes the committed action.
+
+Related Documents
+
+apps/web/src/app/api/pipeline/publish-youtube/route.ts, apps/web/src/app/api/publishing/youtube/, packages/db (platform_connections), migration 0060, decision-log 2026-08-10-001, decision-log 2026-08-21-002 (the callers this entry left behind)
+
+---
+
+### 2026-08-17-001
+
+Status: Accepted
+
+Title: Depictive Fidelity Covers Every Real Subject — and a Lexical Tag-Detector Is Rejected on Measurement
+
+Decision
+
+Extend depictive fidelity past places to **objects, animals and real people**. A subject classifier (`entity-source.v1`) routes each entity to one of three media modes, resolved once and read by every downstream gate: `generated`, `reference_plate` (a real image conditions the frame), or `archival_only` (a real image is presented as itself and never conditions anything). Graduate `hypotheses/real-places.md` to `specs/depictive-fidelity.md`.
+
+Why
+
+The real-photograph path was gated to a single line — `policy.realPlaces && kind === 'location'` — so a documentary about the Titanic, a Philippine eagle, or José Rizal invented all three. The human path is split by the depictive-ethics floor's own carve-outs: long-dead figures get a conditioning plate gated on a Wikidata `P570` death date ≥100 years, living people get genuine licensed archival photographs, and an identity we cannot verify is never sourced on either path. Four invariants are enforced in code with unit tests, the most important being that an `archival_only` person reaches a generated frame neither as a reference plate **nor as a name in the prompt** — the 2026-07-24 fabricated-press-photo failure.
+
+**Running it for real is what found the defects.** A live paid reel surfaced five: a Commons licence guarantee resting on a regex miss, an identity anchor that never checked it anchored a *person* (a query for Duchamp resolved onto his artwork), a 1600px request that served the full-resolution original, archival fulfilment firing when a person was merely *present*, and vision QA failing identity-withheld scenes for obeying the floor — burning a paid re-roll each time.
+
+Alternatives Considered
+
+**A lexical "depicts an entity it doesn't tag" detector — REJECTED ON MEASUREMENT.** It scored 1 true positive to 2–3 false on the real reel and would have stamped `R.MUTT 1917` onto shop-window plumbing. The failure is conceptual, not a threshold to tune. Two guards were kept instead: `scene-qa` Check C2 errors when a scene's primary entity is a character but the prose describes no person, and invariant 2 now keys off the person being **named in the prose** rather than tagged — which closed a live path back to the 2026-07-24 failure.
+
+Expected Impact
+
+Depictive truth holds under real-world subjects. No change to fictional channels.
+
+Review Trigger
+
+Tagging is now load-bearing: a mis-tag costs depictive truth rather than a continuity wobble. Verified on one reel; watch the first factual channel with many entities per scene.
+
+Related Documents
+
+specs/depictive-fidelity.md, hypotheses/identity-conditioning.md, packages/core/src/prompts/entity-source.v1.ts, story-analyzer.v1.23, migration 0061, decision-log 2026-07-25 (the floor this obeys)
+
+---
+
+### 2026-08-21-001
+
+Status: Accepted
+
+Title: The Kendrix Watermark Comes Off Our Own Videos — Removed, Not Switched Off
+
+Decision
+
+Delete the roaming watermark overlay entirely: `WatermarkOverlay`, its wiring through the composition and render types, the dead `PlatformPreset.watermark` field, and `channels.watermark_key` (migration 0063).
+
+Why
+
+Every reel carried a Kendrix logo at 0.28 opacity, 26% of frame width, hopping position every three seconds so it could not be cropped out. It was on by default and **no surface in the app could ever set the per-channel override** — so the mechanism only ever branded our own output, including the one published video.
+
+Removed rather than disabled because there is no creator-branding feature to serve today, and an unreachable overlay left in the renderer is dead configuration that drifts back on. `git revert` restores the whole mechanism if creator branding ever earns its place.
+
+Alternatives Considered
+
+**Switching the default off and keeping the mechanism.** Rejected on the same reasoning the bounded-edit chassis was kept *out* of main: a capability with no reachable surface is not a feature, it is a trap for the next reader.
+
+**Keeping the negative-prompt guards.** Kept — those stop the image model *drawing* a watermark into a frame, which is the opposite problem.
+
+Expected Impact
+
+`watermark` leaves the render fingerprint, so existing reels re-render on the next pass and lose the logo. That pass is CPU-only (`render` books `costCents: 0`), so clearing it off an already-rendered reel is free.
+
+Review Trigger
+
+**YouTube cannot replace a published video's file.** `RRvU0b1TFAc` still carries the logo, so fixing publish #1 means delete-and-reupload, losing the URL. Whether that is worth doing is a founder call about public proof, not an engineering one.
+
+Related Documents
+
+packages/render/src/remotion/, apps/worker/src/pipeline/steps/render-step.ts, migration 0063, commit 07d424e
+
+---
+
+### 2026-08-21-002
+
+Status: Accepted
+
+Title: Publishing Credentials Are Per Channel *Everywhere* — the Operator-Wide Token Path Is Removed, and the Audience Read Stops Depending on It
+
+Decision
+
+Resolve YouTube credentials from the channel's own connection at **every** call site, through one function (`resolveYouTubeAuth` in `@reels/db`). Delete the operator-wide `YOUTUBE_REFRESH_TOKEN` path from the provider rather than leaving it as a fallback. Separately, let the performance poller read public statistics with a `YOUTUBE_API_KEY` when one is present, so measuring performance does not require permission to publish.
+
+Why
+
+The 2026-08-11 per-channel migration converted the one path a human clicks and left three callers reading a credential that the same commit had made meaningless:
+
+* **The performance poller** returned at its first line for ten days. `metrics` held zero rows, no reel ever recorded an audience number, and `performanceScore` few-shot weighting could never receive data. Nothing failed and nothing logged — the only evidence was an empty table.
+* **The worker's auto-publish** was gated on the same dead check *and* called `uploadToYouTube` with no per-channel auth at all. That is worse than dead: had the env token been set, an auto channel would have uploaded to whichever account minted it, ignoring the connection the creator made. Unattended operation was not merely unproven — its last mile was unreachable.
+* **The Settings gate** hid the auto-publish option on a connected channel and offered it on an unconnected one, because it asked about the installation instead of the channel.
+
+The second half is a design correction, not a workaround. **View counts on a public video are public data.** Reading them through the publishing grant coupled the performance loop to a token that expires in seven days under a Testing-mode OAuth app — so the instrument we most needed was the most fragile thing we owned. Watch-time and retention genuinely do need the grant (YouTube Analytics API, `yt-analytics.readonly`); public counts never did.
+
+Alternatives Considered
+
+**Keeping the env-token path as a fallback.** Rejected, on the precedent set the same day by 2026-08-21-001: an unreachable path left in place is dead configuration that drifts back on — and this one drifts back on as a *wrong-account upload*, which is the most expensive kind of quiet failure available to us.
+
+**Fixing only the poller, which is what the approved action asked for.** Rejected as knowingly leaving a live mis-routing hazard one file away, on the same seam, in the path that runs unattended.
+
+**A SQL or manual reconnect as the fix.** Rejected as a fix; a reconnect is still *required*, but it addresses the lapsed grant, not the code that could never have used it.
+
+Expected Impact
+
+Audience evidence goes from structurally impossible to one browser action away. Auto-publish becomes reachable for the first time. A lapsed grant now marks the connection (`status: 'error'`, `lastError`) so Settings asks for a reconnect, instead of a performance history that silently stops growing.
+
+Verified: full workspace typecheck, 0 lint errors, 560 unit tests passing including three new ones pinning which credential the stats call presents and how — an API key in the query string, a grant in a header, and no request at all when nothing is published. Run against the real publication, the poller resolved the channel's grant, called Google, and returned `invalid_grant: Token has been expired or revoked` — the predicted lapse, now visible.
+
+Review Trigger
+
+**The pattern is the risk, not this instance.** TikTok and Facebook are still manual destinations; whatever converts them should convert every caller in the same commit. When a credential's *ownership* changes, grep for every reader before calling the migration done.
+
+Related Documents
+
+packages/db/src/publishing.ts (new — the single resolver), packages/providers/src/youtube/client.ts, packages/providers/src/youtube/stats-auth.test.ts, apps/worker/src/metrics-poll.ts, apps/worker/src/pipeline/auto-gate.ts, apps/web/src/app/api/pipeline/publish-youtube/route.ts, apps/web/src/app/(app)/channel/[id]/settings/page.tsx, decision-log 2026-08-11-001 (the migration this completes), decision-log 2026-08-21-001 (the removed-not-disabled precedent)
+
+---
+
+
+### 2026-08-22-001
+
+Status: Accepted
+
+Title: The 2026-08-11 Upload Was a Proving Run, Not a Publish — Stories Published Is Redefined by Liveness
+
+Decision
+
+Correct the record: **Stories Published is 0.** Track it as *reels a viewer can watch right now*, and track *uploads proven* as a separate, lesser number. Reopen the taste half of the packaging experiment, which was recorded as confirmed on evidence that does not support it.
+
+Why
+
+`RRvU0b1TFAc` went public on YouTube on 2026-08-11 — a real id, processed, served publicly, through Kendrix's own per-channel authorization path. It was a **proving run for the OAuth path, never intended to stay up**, and the founder deleted it. The channel today reports `videoCount: 0` and `viewCount: 0`.
+
+Two errors followed from not knowing that, and both are worth recording because neither was a coding mistake:
+
+**The metric measured an event and reported a state.** "Stories Published" was implemented as *a `publications` row exists*. A row records that an upload SUCCEEDED; the claim being made was that a video is WATCHABLE. Those diverge the moment anyone — a platform, or us — takes the video down, and nothing in the schema, the poller, or the weekly briefing could tell the difference. It read 1 for eleven days.
+
+**A confirmation was read from an act that was not the test.** The packaging experiment's falsifier was *"the founder still declines, and names something new."* They did not decline — so it was recorded as CONFIRMED, and called the first repair in the project's history validated by the instrument that made the complaint. But approving a reel to prove a code path is a different act from deciding to leave it up, and only the second is the bar the 2026-08-10 audit was about. The falsifier was never actually put. **The mechanical half stands** — the thumbnail, title and caption defects are genuinely fixed, and the reel cleared review where three predecessors did not. The taste half is untested.
+
+The honest state is sharper than the one it replaces: **Kendrix has never published a reel intended to stay up.**
+
+Alternatives Considered
+
+**Keeping "Stories Published: 1" with a footnote.** Rejected. The number feeds the Phase 0 → Phase 1 gate, and a gate that can be crossed by an upload nobody kept is not measuring what the roadmap means by *consistently produce publishable content*.
+
+**Rewriting decision-log 2026-08-11-001.** Rejected — the log is append-only. Its Status line now carries a forward pointer instead, so a reader cannot walk away believing a video is live, and its reasoning about per-channel ownership (which was correct and still holds) is untouched.
+
+**Treating this as a reason to distrust the 08-10 audit.** Rejected, and worth saying explicitly: the audit's finding — that the disqualifiers were packaging, and two of three sat outside the video — is unaffected. What is corrected is a claim about the *repair's* validation, made eleven days later.
+
+Expected Impact
+
+Priority 1 becomes *publish one reel that stays up*, which is a smaller and more honest gate than the one it replaces. The audience read stops being a task at all: the poller was repaired 2026-08-21 and `YOUTUBE_API_KEY` is verified, so numbers arrive within ~6 hours of anything going live.
+
+Review Trigger
+
+Apply the liveness test to every other metric that claims a state: does it measure the state, or the event that created it? `publications.status` and `reels.status` are both event-shaped and neither is re-verified against the platform. A periodic liveness check on published rows would have caught this in six hours instead of eleven days — worth building only once more than one reel is live.
+
+Related Documents
+
+dna/company/current-metrics.md, decision-log 2026-08-11-001 (annotated), decision-log 2026-08-10-001 (the audit this does NOT overturn), decision-log 2026-08-21-002 (the poller repair this unblocks), apps/worker/src/metrics-poll.ts
+
+---
+
+
 ## Relationship to the Decision Framework
 
 The Decision Framework explains how decisions are made.
