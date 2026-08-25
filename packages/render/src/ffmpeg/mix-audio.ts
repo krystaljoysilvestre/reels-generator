@@ -8,7 +8,7 @@ import { promisify } from 'node:util'
 import { rename } from 'node:fs/promises'
 import type { MusicTrack } from '@reels/core'
 import type { Timings } from '@reels/core'
-import { buildGainExpr } from '../music/music-sync.js'
+import { buildGainExpr, endingTerminalFadeMs } from '../music/music-sync.js'
 import { selectMusicTrack } from '../music/music-selection.js'
 
 const execFileAsync = promisify(execFile)
@@ -71,6 +71,9 @@ const SFX_BUS_DB = 4
 // hold the peaks; the limiter shaves a little loudness, so we measure and apply one corrective gain.
 const TARGET_LUFS = -14
 const TRUE_PEAK = -1.5
+// AAC can overshoot the PCM limiter ceiling by ~0.8 dB at inter-sample peaks. Limit the premaster lower
+// so the encoded artifact—not merely the pre-codec signal—lands at the actual TRUE_PEAK contract.
+const CODEC_SAFE_TRUE_PEAK = TRUE_PEAK - 0.8
 
 const dbToLin = (db: number): number => 10 ** (db / 20)
 
@@ -84,20 +87,45 @@ function ambientFilter(
   // Outro tail (§4.65): under the held closing image the score has stepped back, so an abruptly
   // truncated room tone becomes the loudest thing in the mix. Ramp it out with the picture.
   tail?: { outroTailMs: number; durationMs: number },
+  ending?: NonNullable<Timings['ending']>,
 ): string {
   // normGainDb brings the ambient FILE to VOICE_REF_LUFS; AMBIENT_DB is then the true offset under the voice.
   const level = normGainDb + AMBIENT_DB
   const nom = dbToLin(level).toFixed(5)
-  const hasTail = !!tail && tail.outroTailMs > 0 && tail.durationMs > tail.outroTailMs
+  const hasEnding = !!ending && ending.endMs > ending.startMs
+  const hasTail = !hasEnding && !!tail && tail.outroTailMs > 0 && tail.durationMs > tail.outroTailMs
   const voiceEnd = hasTail ? ((tail!.durationMs - tail!.outroTailMs) / 1000).toFixed(3) : '0'
-  const tailSec = hasTail ? (tail!.outroTailMs / 1000).toFixed(3) : '1'
-  // rides at nominal until the voice stops, then ramps to silence across the tail
-  const base = hasTail
-    ? `if(lt(t,${voiceEnd}),${nom},${nom}*(1-((t-${voiceEnd})/${tailSec})))`
-    : nom
+  let base = nom
+  if (hasEnding) {
+    const start = ending!.startMs / 1000
+    const voiceEndSec = ending!.voiceEndMs / 1000
+    const end = ending!.endMs / 1000
+    const fadeStart = Math.max(voiceEndSec, end - endingTerminalFadeMs(ending!.shape) / 1000)
+    const smooth = (from: number, to: number, st: number, dur: number): string => {
+      const d = Math.max(0.001, dur)
+      const x = `((t-${st.toFixed(3)})/${d.toFixed(3)})`
+      const s = `((${x})*(${x})*(3-2*(${x})))`
+      return `(${from.toFixed(8)}+(${to.toFixed(8)}-${from.toFixed(8)})*${s})`
+    }
+    if (ending!.focus === 'silence') {
+      const settle = smooth(Number(nom), 0, start, voiceEndSec - start)
+      base = `if(lt(t,${start.toFixed(3)}),${nom},if(lt(t,${voiceEndSec.toFixed(3)}),${settle},0))`
+    } else {
+      const terminal = smooth(Number(nom), 0, fadeStart, end - fadeStart)
+      base = `if(lt(t,${fadeStart.toFixed(3)}),${nom},if(lt(t,${end.toFixed(3)}),${terminal},0))`
+    }
+  } else if (hasTail) {
+    // Legacy migration path: smooth the room tone instead of linearly collapsing it into a hard stop.
+    const end = tail!.durationMs / 1000
+    const start = Number(voiceEnd)
+    const d = Math.max(0.001, end - start)
+    const x = `((t-${start.toFixed(3)})/${d.toFixed(3)})`
+    const s = `((${x})*(${x})*(3-2*(${x})))`
+    base = `if(lt(t,${voiceEnd}),${nom},if(lt(t,${end.toFixed(3)}),${nom}*(1-${s}),0))`
+  }
 
   if (!silenceDrop) {
-    if (!hasTail) return `[1]volume=${level.toFixed(2)}dB,aloop=loop=-1:size=2e9[amb]`
+    if (!hasTail && !hasEnding) return `[1]volume=${level.toFixed(2)}dB,aloop=loop=-1:size=2e9[amb]`
     return `[1]aloop=loop=-1:size=2e9,volume='${base}':eval=frame[amb]`
   }
   const dip = dbToLin(level - AMBIENT_SILENCE_DIP_DB).toFixed(5)
@@ -108,7 +136,9 @@ function ambientFilter(
 
 // The outro-tail window for the ambient ramp, or undefined when this reel has no tail (§4.65).
 function ambientTailOf(timings: Timings): { outroTailMs: number; durationMs: number } | undefined {
-  return timings.outroTailMs ? { outroTailMs: timings.outroTailMs, durationMs: timings.durationMs } : undefined
+  return !timings.ending && timings.outroTailMs
+    ? { outroTailMs: timings.outroTailMs, durationMs: timings.durationMs }
+    : undefined
 }
 
 function parseIntegrated(stderr: string): number | null {
@@ -157,7 +187,7 @@ async function encodeWithLoudnorm(inputs: string[], pre: string[], durationSec: 
   const tail =
     i0 == null
       ? `[premaster]loudnorm=I=${TARGET_LUFS}:TP=${TRUE_PEAK}:LRA=11[out]` // fallback: single-pass loudnorm
-      : `[premaster]volume=${(TARGET_LUFS - i0).toFixed(2)}dB,alimiter=limit=${TRUE_PEAK}dB:level=false[out]`
+      : `[premaster]volume=${(TARGET_LUFS - i0).toFixed(2)}dB,alimiter=limit=${CODEC_SAFE_TRUE_PEAK}dB:level=false[out]`
   await execFileAsync('ffmpeg', [
     ...inputs,
     '-filter_complex', [...pre, tail].join(';'),
@@ -180,7 +210,7 @@ async function encodeWithLoudnorm(inputs: string[], pre: string[], durationSec: 
     // quieter than target), which would push peaks back above the true-peak ceiling the limiter just
     // enforced — inter-sample clipping. A second alimiter caps them again.
     await execFileAsync('ffmpeg', [
-      '-i', outputPath, '-af', `volume=${(TARGET_LUFS - i1).toFixed(2)}dB,alimiter=limit=${TRUE_PEAK}dB:level=false`,
+      '-i', outputPath, '-af', `volume=${(TARGET_LUFS - i1).toFixed(2)}dB,alimiter=limit=${CODEC_SAFE_TRUE_PEAK}dB:level=false`,
       '-c:a', 'aac', '-b:a', '192k', '-y', corrected,
     ])
     await rename(corrected, outputPath)
@@ -234,6 +264,9 @@ export async function mixAudio(params: MixAudioParams): Promise<void> {
   if (params.timings.outroTailMs) {
     gainParams.outroTailMs = params.timings.outroTailMs
   }
+  if (params.timings.ending) {
+    gainParams.ending = params.timings.ending
+  }
   const gainExpr = buildGainExpr(gainParams)
 
   // Room tone resolves with the picture across the outro tail (§4.65).
@@ -245,6 +278,7 @@ export async function mixAudio(params: MixAudioParams): Promise<void> {
   const musicGain = await refGain(track.path, 'music')
   const ambientGain = await refGain(params.ambientPath, 'ambient')
   console.log(`[mix] gain-stage → ref ${VOICE_REF_LUFS} LUFS: voice ${voiceGain.toFixed(1)}dB, music ${musicGain.toFixed(1)}dB, ambient ${ambientGain.toFixed(1)}dB; bed ${bedDb}dB under voice`)
+  const durationSec = params.timings.durationMs / 1000
 
   // §3 Full filtergraph — everything up to [premaster]; the loudnorm tail is added by encodeWithLoudnorm.
   const inputs = [
@@ -255,14 +289,18 @@ export async function mixAudio(params: MixAudioParams): Promise<void> {
   ]
   const pre = [
     // ambient: normalize to ref, then loop to cover full duration at AMBIENT_DB under voice (dips in a drop)
-    ambientFilter(params.timings.silenceDrop, ambientGain, ambientTail),
+    ambientFilter(params.timings.silenceDrop, ambientGain, ambientTail, params.timings.ending ?? undefined),
     // music: normalize the bed to ref, loop to cover the reel, then the bedDb→peakDb volume envelope
     `[2]volume=${musicGain.toFixed(2)}dB,aloop=loop=-1:size=2e9,volume='${gainExpr}':eval=frame[mus0]`,
     // sidechain duck: music dips under the voiceover, but stays PRESENT. ratio 6 held the bed ~8–10dB down
     // for the whole narration (VO is near-continuous) — read as silent/absent (owner 2026-07-06). ratio 3
     // ducked ~4–5dB; Phase A → ratio 2 (~2.5–3.5dB) since the bed now sits at a true, higher baseline — the
     // duck should shade it under the words, not bury it. Still releases (400ms) so it swells back in pauses.
-    `[0]volume=${voiceGain.toFixed(2)}dB,asplit=2[vox][voxkey]`,
+    // Pad ONLY the sidechain key to reel length. Without this, sidechaincompress terminates its music
+    // output when the shorter voice file ends, deleting the entire directed outro even though the music
+    // input and envelope continue. The audible voice branch remains unpadded.
+    `[0]volume=${voiceGain.toFixed(2)}dB,asplit=2[vox][voxkey0]`,
+    `[voxkey0]apad=whole_dur=${durationSec.toFixed(3)}[voxkey]`,
     `[mus0][voxkey]sidechaincompress=threshold=0.04:ratio=2:attack=20:release=400[musduck]`,
     // mix layers (SFX lifted so effects sit clearly under the voice, not buried)
     `[3]volume=${SFX_BUS_DB}dB[sfxb]`,
@@ -270,16 +308,16 @@ export async function mixAudio(params: MixAudioParams): Promise<void> {
     `[base][musduck]amix=inputs=2:normalize=0[withmus]`,
     `[withmus][sfxb]amix=inputs=2:normalize=0[premaster]`,
   ]
-  const durationSec = params.timings.durationMs / 1000
   await encodeWithLoudnorm(inputs, pre, durationSec, params.outputPath)
 
   // Stems (separate run — keeps encodeWithLoudnorm's measure pass free of unconnected outputs). The 4
   // layer nodes are rebuilt here and each mapped to its own file in ONE ffmpeg process.
   if (params.stemPaths) {
     const stemGraph = [
-      ambientFilter(params.timings.silenceDrop, ambientGain, ambientTail),
+      ambientFilter(params.timings.silenceDrop, ambientGain, ambientTail, params.timings.ending ?? undefined),
       `[2]volume=${musicGain.toFixed(2)}dB,aloop=loop=-1:size=2e9,volume='${gainExpr}':eval=frame[mus0]`,
-      `[0]volume=${voiceGain.toFixed(2)}dB,asplit=2[vox][voxkey]`,
+      `[0]volume=${voiceGain.toFixed(2)}dB,asplit=2[vox][voxkey0]`,
+      `[voxkey0]apad=whole_dur=${durationSec.toFixed(3)}[voxkey]`,
       `[mus0][voxkey]sidechaincompress=threshold=0.04:ratio=2:attack=20:release=400[musduck]`,
       `[3]volume=${SFX_BUS_DB}dB[sfxb]`,
     ].join(';')
@@ -305,7 +343,7 @@ async function mixNoMusic(params: MixAudioParams): Promise<void> {
   const ambientGain = await refGain(params.ambientPath, 'ambient')
   const ambientTail = ambientTailOf(params.timings)
   const pre = [
-    ambientFilter(params.timings.silenceDrop, ambientGain, ambientTail),
+    ambientFilter(params.timings.silenceDrop, ambientGain, ambientTail, params.timings.ending ?? undefined),
     `[2]volume=${SFX_BUS_DB}dB[sfxb]`,
     `[0]volume=${voiceGain.toFixed(2)}dB[vox]`,
     `[vox][amb]amix=inputs=2:normalize=0[base]`,
@@ -316,7 +354,7 @@ async function mixNoMusic(params: MixAudioParams): Promise<void> {
 
   if (params.stemPaths) {
     const stemGraph = [
-      ambientFilter(params.timings.silenceDrop, ambientGain, ambientTail),
+      ambientFilter(params.timings.silenceDrop, ambientGain, ambientTail, params.timings.ending ?? undefined),
       `[2]volume=${SFX_BUS_DB}dB[sfxb]`,
       `[0]volume=${voiceGain.toFixed(2)}dB[vox]`,
     ].join(';')
@@ -388,4 +426,3 @@ export async function premixSfx(params: {
     '-c:a', 'aac', '-y', params.outputPath,
   ])
 }
-

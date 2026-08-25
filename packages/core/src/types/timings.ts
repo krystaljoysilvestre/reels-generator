@@ -63,6 +63,15 @@ export const SilenceDropTimingSchema = z.object({
 })
 export type SilenceDropTiming = z.infer<typeof SilenceDropTimingSchema>
 
+export const EndingTimingSchema = z.object({
+  startMs: z.number().int().nonnegative(),
+  voiceEndMs: z.number().int().positive(),
+  endMs: z.number().int().positive(),
+  focus: z.enum(['music', 'ambience', 'silence']),
+  shape: z.enum(['button', 'resolve', 'ring_out']),
+})
+export type EndingTiming = z.infer<typeof EndingTimingSchema>
+
 export const TimingsSchema = z.object({
   durationMs: z.number().int().positive(),
   scenes: z.array(SceneTimingSchema),
@@ -74,6 +83,9 @@ export const TimingsSchema = z.object({
   // (compute-timings §4.65). The mixer resolves the music bed across it instead of hard-cutting at
   // full level. Optional so timings persisted before the tail existed still parse.
   outroTailMs: z.number().int().nonnegative().optional(),
+  // Explicit ending direction, resolved from AudioScript. New mixes use this instead of inferring the
+  // voice boundary from total duration (which is wrong when a climax ring-out extends the reel).
+  ending: EndingTimingSchema.nullable().optional(),
   warnings: z.array(z.string()),
 })
 export type Timings = z.infer<typeof TimingsSchema>

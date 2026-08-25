@@ -64,11 +64,22 @@ export const SilenceDropSchema = z.object({
 })
 export type SilenceDrop = z.infer<typeof SilenceDropSchema>
 
+// Creative intent for the closing phrase. Direction chooses WHAT carries the ending and its shape;
+// compute_timings resolves the anchor, and the renderer owns every millisecond / gain curve. Optional so
+// persisted pre-direction scripts remain readable during migration.
+export const EndingIntentSchema = z.object({
+  anchor: z.string().min(1),
+  focus: z.enum(['music', 'ambience', 'silence']),
+  shape: z.enum(['button', 'resolve', 'ring_out']),
+})
+export type EndingIntent = z.infer<typeof EndingIntentSchema>
+
 export const AudioScriptSchema = z.object({
   ambient: AmbientSchema,
   // Ceiling only (dense quiet realism = many low cues); the designer places what the place needs, not a quota.
   sfx: z.array(SfxCueSchema).max(18),
   silenceDrop: SilenceDropSchema.nullable().default(null),
   music: MusicCueSchema.nullable().default(null),
+  ending: EndingIntentSchema.nullable().optional(),
 })
 export type AudioScript = z.infer<typeof AudioScriptSchema>

@@ -1,5 +1,5 @@
 import React from 'react'
-import { AbsoluteFill, Sequence, useVideoConfig } from 'remotion'
+import { AbsoluteFill, Sequence, interpolate, useCurrentFrame, useVideoConfig } from 'remotion'
 import { SceneClip } from '../components/SceneClip.js'
 import { SceneEffects } from '../components/SceneEffects.js'
 import { CaptionFonts, SubtitleOverlay } from '../components/SubtitleOverlay.js'
@@ -46,9 +46,20 @@ export const ReelComposition: React.FC<ReelCompositionProps> = ({
   captionSafeZonePct,
   grain,
   vignette,
+  endingFadeMs,
   disclosure,
 }) => {
-  const { width, height } = useVideoConfig()
+  const frame = useCurrentFrame()
+  const { width, height, fps, durationInFrames } = useVideoConfig()
+  const fadeFrames = Math.max(0, Math.round(((endingFadeMs ?? 0) / 1000) * fps))
+  const fadeOpacity = fadeFrames > 0
+    ? interpolate(
+        frame,
+        [Math.max(0, durationInFrames - fadeFrames), durationInFrames - 1],
+        [0, 1],
+        { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' },
+      )
+    : 0
 
   return (
     <AbsoluteFill style={{ backgroundColor: '#000', width, height }}>
@@ -108,6 +119,12 @@ export const ReelComposition: React.FC<ReelCompositionProps> = ({
             {disclosure}
           </div>
         </AbsoluteFill>
+      ) : null}
+
+      {/* This sits above picture, captions and disclosure so the reel reaches a genuinely black final
+          frame. Its duration comes from the story-selected ending shape; button endings retain a cut. */}
+      {fadeOpacity > 0 ? (
+        <AbsoluteFill style={{ backgroundColor: '#000', opacity: fadeOpacity, pointerEvents: 'none' }} />
       ) : null}
     </AbsoluteFill>
   )

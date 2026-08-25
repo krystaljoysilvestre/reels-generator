@@ -53,5 +53,8 @@ export interface ReelCompositionProps extends Record<string, unknown> {
   captionSafeZonePct: number // platform caption safe-zone (% of frame height kept clear of platform UI)
   grain: number
   vignette: number
+  // Optional story-directed terminal fade. Zero/undefined preserves a clean cut (for example, a comedy
+  // button); reflective resolves can let the final image, captions and disclosure leave together.
+  endingFadeMs?: number
   disclosure?: string // persistent synthetic-media/illustration label (set for EBN reels); undefined = none
 }

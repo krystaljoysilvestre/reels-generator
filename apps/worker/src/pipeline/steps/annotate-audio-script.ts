@@ -147,6 +147,7 @@ export async function annotateAudioScript(reelId: string): Promise<void> {
           }),
         music,
         silenceDrop: design.silenceDrop,
+        ending: design.ending,
       })
 
       // Owner-set HORROR climax choreography (2026-07-10): deterministically land the ONE hit on the PAYOFF

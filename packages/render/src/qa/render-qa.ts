@@ -28,6 +28,7 @@ const MIN_DURATION_MS = 30_000   // 30s minimum
 const DEFAULT_MAX_DURATION_MS = 180_000  // legacy short-form default — matches Instagram Reels & YouTube Shorts caps
 const TARGET_LUFS = -14
 const LUFS_TOLERANCE = 0.5       // ±0.5 LUFS (docs/07 §5)
+const MAX_TRUE_PEAK_DBTP = -1.0  // encoded-artifact ceiling; mixer targets -1.5 with codec margin
 
 export async function runRenderQa(params: QaParams): Promise<QaResult> {
   const failures: string[] = []
@@ -99,6 +100,12 @@ export async function runRenderQa(params: QaParams): Promise<QaResult> {
       }
     } else {
       failures.push('Could not measure loudness (no input_i from loudnorm) — unverified audio')
+    }
+    const peakMatch = stderr.match(/"input_tp"\s*:\s*"(-?\d+(?:\.\d+)?)"/)
+    if (peakMatch?.[1] && parseFloat(peakMatch[1]) > MAX_TRUE_PEAK_DBTP) {
+      failures.push(
+        `True peak too high: measured ${parseFloat(peakMatch[1]).toFixed(1)} dBTP, maximum ${MAX_TRUE_PEAK_DBTP.toFixed(1)} dBTP`,
+      )
     }
   } catch {
     failures.push('LUFS measurement failed — ffmpeg loudnorm error')

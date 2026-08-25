@@ -1037,6 +1037,158 @@ ROADMAP.md, dna/company/current-metrics.md, dna/company/assumptions.md, decision
 ---
 
 
+### 2026-08-25-001
+
+Status: Accepted
+
+Title: Ending Meaning Belongs to Sound Direction, Not Renderer Guesswork
+
+Decision
+
+Represent the intended final cadence explicitly in the audio script as an anchored ending direction: which existing layer owns the close and whether it should button, resolve or ring out. Resolve that direction into an explicit ending interval with separate start, voice-end and picture-end boundaries. The renderer executes one continuous envelope across those boundaries, and QA measures the focused layer inside the ending window before the terminal fade.
+
+Legacy audio scripts retain their existing genre-tail behavior during migration, but new scripts may not rely on a renderer-invented per-genre outro to communicate closure.
+
+Why
+
+Founder playback of Crossroads reel #2 exposed two different failures that whole-reel audio metrics did not see. The original cut went silent over its final held image because FFmpeg's sidechain-compressed music branch terminated when its shorter narration input ended. A manual post-mux music overlay removed the silence numerically but arrived as a new musical thought after the story, so the reel still felt awkwardly stopped.
+
+The failure was not evidence for a universally longer fade. The story already had the right bed; it needed that same musical thought to begin resolving under the final phrase, survive the narration boundary, and close with the picture. That creative choice belongs upstream in sound direction. Renderer timing and QA can then execute and verify it without inventing taste.
+
+Alternatives Considered
+
+**Extend every genre's outro tail.** Rejected. Duration alone cannot decide whether a story needs a musical resolve, ambient ring-out or intentional silence, and it preserves renderer guesswork.
+
+**Patch the final file with a late music overlay.** Rejected by founder playback. It passes presence thresholds while sounding like a postscript.
+
+**Only lower the silence threshold or add whole-reel loudness checks.** Rejected. The defective cut already passed whole-reel technical review; the missing evidence was continuity inside the ending window.
+
+Expected Impact
+
+Sound direction now owns the meaning of the close, rendering preserves the selected layer across the actual voice boundary, and QA can reject a truncated ending before founder playback. The Crossroads repair used the existing generated music and added no provider cost; measured reel cost stayed $5.11.
+
+Review Trigger
+
+Review after this contract has produced endings across materially different story registers and languages. If anchored focus and three neutral shapes cannot express those endings without genre-specific rules, return with production evidence before expanding the schema.
+
+Related Documents
+
+packages/core/src/types/audio-script.ts, packages/core/src/types/timings.ts, packages/core/src/prompts/sound-designer.v1.ts, packages/core/src/timings/compute-timings.ts, packages/render/src/music/music-sync.ts, packages/render/src/ffmpeg/mix-audio.ts, apps/worker/src/pipeline/steps/render-qa-step.ts, ROADMAP.md, dna/company/current-metrics.md, dna/company/assumptions.md, decision-log 2026-08-06-003
+
+---
+
+
+### 2026-08-25-002
+
+Status: Accepted
+
+Title: Factual Shorts End on One Complete Human Payoff
+
+Decision
+
+For Crossroads factual Shorts, close the story by completing the causal promise and landing once on its human consequence. Stop immediately after that payoff, with only a short established-sound button. A document, object or image that echoes the premise may remain as visual subtext, but narration may not explain the callback again when doing so creates a second ending.
+
+Do not force a grammatical loop, cliffhanger, CTA or moral onto a complete story. Those are format choices, not substitutes for satisfaction.
+
+Why
+
+Crossroads reel #2 passed technical sound review twice and still felt cut short in founder playback. The first failure was mechanical, but fixing it exposed the narrative failure: roughly 46 seconds built the risk, the successful ascent and reunion were compressed into about ten seconds, and the reel then supplied three endings. “Three men came home” completed the emotional arc; “The statement for disaster was never delivered” reopened it as an administrative footnote.
+
+Current platform guidance treats satisfaction alongside engagement, and strong factual Shorts repeatedly use the same underlying shape: unresolved danger → irreversible action → visible result → human consequence → stop. The revised Apollo ending follows that shape without copying a creator's surface style. It gives ignition, lift, orbit and docking distinct beats, holds its longest breath before “Three men came home,” and leaves the disaster memo on screen as the unspoken contrast. Independent editorial, creator and sound review all returned PUBLISH.
+
+Alternatives Considered
+
+**Keep the memo sentence and improve its performance.** Rejected. A more solemn read would strengthen an afterthought, not turn it into the story's human consequence.
+
+**End on the payoff but preserve a long resolving tail.** Rejected by the benchmark and prior playback. Strong short-form endings stop soon after the promise is fulfilled; the accepted cut uses a 650ms button.
+
+**Force the final words to connect grammatically to the hook for an automatic replay loop.** Rejected. It withholds closure and optimizes a retention mechanic at the expense of viewer satisfaction.
+
+Expected Impact
+
+The Apollo reel's final sequence is now 61.8 seconds overall, passed automated QA and three independent perceptual gates, and awaits only founder playback. The bounded ending take cost $0.04, moving measured reel cost from $5.11 to $5.15 while reusing every existing visual and sound asset.
+
+Review Trigger
+
+Review after Crossroads has retention curves for several retained factual Shorts. If viewers consistently leave before the completed payoff or rewatch a different ending shape, use those moment-level curves to revise the pattern. One founder-approved artifact is a bar; it is not yet a universal law.
+
+Related Documents
+
+ROADMAP.md, dna/company/current-metrics.md, dna/company/assumptions.md, decision-log 2026-08-25-001, YouTube Help “Understand your content performance for YouTube's recommendation system,” YouTube Blog “YouTube Shorts deep dive,” Meta Real Talk Creative Playbook
+
+---
+
+
+### 2026-08-25-003
+
+Status: Accepted
+
+Title: The Story Chooses Its Ending Function; Short-Form Does Not Mean Hard-Stop
+
+Decision
+
+Choose the ending's function from the story: completion, relief, irony, redemption, warning, wonder or a
+lesson only when the material earns one. Do not impose a moral, replay loop, CTA or immediate hard-stop as
+a universal Shorts formula. When a counterfactual thread carries the story's meaning, resolve it before the
+final human consequence so the last line remains the emotional destination rather than an administrative
+postscript.
+
+Treat delivery and release as part of that choice. A meaning-bearing coda may slow and warm the voice while
+the action beats stay crisp. A `ring_out` must decay continuously after the final word; holding a flat bed
+and applying a late fade is padding, even when the final duration and loudness pass QA. Reflective picture
+may hold while the sound keeps evolving, then picture, captions and disclosure fade together to black.
+
+Why
+
+Founder playback rejected the 61.8-second Apollo cut that decision 2026-08-25-002 had called ready. That cut
+correctly repaired the rushed launch → orbit → docking chain, but overlearned “stop after the payoff.” The
+Safire memo was not merely visual texture: it was the story's counterfactual device. Leaving it unspoken made
+the reel factual and efficient but emotionally incomplete.
+
+Editorial, creator, sound and visual review converged on **relief sharpened by irony**, not a generic lesson
+or literal redemption. The accepted structure is: the one engine fires; Eagle lifts, reaches orbit and docks;
+“The disaster speech stayed on the page”; “Three men came home.” The memo resolves before the human final,
+the last line changes to a warm plain delivery, and verified Earth/Eagle imagery replaces the document for
+the closing hold. Platform guidance supports viewer satisfaction, cohesive storytelling and transformation;
+ad-specific CTA frameworks do not become rules for an organic Crossroads story.
+
+Alternatives Considered
+
+**Keep the 61.8-second hard payoff because several reviewers passed it.** Rejected by the founder's direct
+playback. A perceptual gate is evidence, not authority over the person operating the channel.
+
+**Add a universal moral after “Three men came home.”** Rejected. “Courage conquers fear” or “always prepare
+for failure” is not earned by this evidence and would create another ending after the human one.
+
+**Put the memo explanation after the human final.** Rejected by the earlier cut. It turns relief into an
+archival footnote. Meaning goes before “home,” not after it.
+
+**Extend the tail without changing its motion.** Rejected by sound review. A flat two-second hold followed by
+a one-second fade still feels padded; the ring-out must move continuously from the voice boundary.
+
+Expected Impact
+
+The Apollo candidate is now 65.7 seconds, remains in `spot_check`, and costs $5.21. The ending-performance
+revisions cost $0.06; all verified visuals and existing sound assets were reused. The product now supports a
+story-selected black fade for `resolve`/`ring_out` endings and a full-tail audio decay for `ring_out`, while
+button endings retain a clean cut. This is one story-specific correction, not a quota for future codas.
+
+Review Trigger
+
+Review after several retained Crossroads reels use materially different ending functions. If creator
+playback repeatedly asks for the same missing function, graduate a semantic ending contract upstream; until
+then, do not turn this Apollo coda into a mandatory template.
+
+Related Documents
+
+ROADMAP.md, dna/company/current-metrics.md, dna/company/assumptions.md, decision-log 2026-08-25-001,
+decision-log 2026-08-25-002, packages/render/src/music/music-sync.ts,
+packages/render/src/remotion/compositions/ReelComposition.tsx, YouTube Help “Understand your content
+performance for YouTube's recommendation system,” TikTok for Business Creative Guide
+
+---
+
+
 ## Relationship to the Decision Framework
 
 The Decision Framework explains how decisions are made.

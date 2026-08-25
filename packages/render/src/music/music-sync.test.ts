@@ -115,19 +115,17 @@ describe('buildGainExpr + evalGainAt — golden tests (docs/07 §5)', () => {
 })
 
 describe('buildGainExpr — outro tail resolve (§4.65)', () => {
-  // The reel now holds its closing image after the last spoken word. The bed must STEP DOWN when the
-  // voice stops (the silent emotional beat) and then RESOLVE to silence — never get guillotined at peak.
+  // Migration behavior for persisted scripts that predate explicit ending direction.
   const base = { startAnchorMs: 10_000, peakAnchorMs: 45_000, bedDb: -22, peakDb: -12, durationMs: 60_000 }
   const tail = 2_000
   const withTail = { ...base, outroTailMs: tail }
   const voiceEndSec = (base.durationMs - tail) / 1000
 
-  it('holds peak until the voice stops, then steps down for the held beat', () => {
+  it('has no gain discontinuity when the voice stops', () => {
     const expr = buildGainExpr(withTail)
-    const atPeakHold = evalGainAt(expr, voiceEndSec - 0.5)
-    const justAfterVoice = evalGainAt(expr, voiceEndSec + 0.01)
-    expect(atPeakHold).toBeCloseTo(Math.pow(10, base.peakDb / 20), 5)
-    expect(justAfterVoice).toBeLessThan(atPeakHold) // the image breathes in near-quiet
+    const before = evalGainAt(expr, voiceEndSec - 0.001)
+    const after = evalGainAt(expr, voiceEndSec + 0.001)
+    expect(Math.abs(before - after)).toBeLessThan(0.001)
   })
 
   it('resolves to (near) silence by the final frame instead of cutting at full level', () => {
@@ -147,5 +145,49 @@ describe('buildGainExpr — outro tail resolve (§4.65)', () => {
     const expr = buildGainExpr(base)
     expect(evalGainAt(expr, base.durationMs / 1000 - 0.01)).toBeCloseTo(Math.pow(10, base.peakDb / 20), 5)
     expect(buildGainExpr({ ...base, outroTailMs: 0 })).toBe(expr)
+  })
+})
+
+describe('buildGainExpr — explicit ending direction', () => {
+  const base = { startAnchorMs: 10_000, peakAnchorMs: 45_000, bedDb: -22, peakDb: -12, durationMs: 60_000 }
+  const ending = {
+    startMs: 54_000,
+    voiceEndMs: 58_000,
+    endMs: 60_000,
+    focus: 'music' as const,
+    shape: 'resolve' as const,
+  }
+
+  it('joins the established score continuously at the final-cadence anchor', () => {
+    const expr = buildGainExpr({ ...base, ending })
+    const before = evalGainAt(expr, ending.startMs / 1000 - 0.001)
+    const after = evalGainAt(expr, ending.startMs / 1000 + 0.001)
+    expect(Math.abs(before - after)).toBeLessThan(0.001)
+  })
+
+  it('settles under the final clause, carries the hold, and fades across the terminal release', () => {
+    const expr = buildGainExpr({ ...base, ending })
+    const bed = Math.pow(10, base.bedDb / 20)
+    expect(evalGainAt(expr, ending.voiceEndMs / 1000)).toBeCloseTo(bed, 5)
+    expect(evalGainAt(expr, 59.2)).toBeCloseTo(bed, 5)
+    expect(evalGainAt(expr, 59.5)).toBeLessThan(bed)
+    expect(evalGainAt(expr, 59.9)).toBeGreaterThan(0)
+    expect(evalGainAt(expr, 60.0)).toBe(0)
+  })
+
+  it('recedes by voice end when another layer owns the ending', () => {
+    const expr = buildGainExpr({ ...base, ending: { ...ending, focus: 'ambience' } })
+    expect(evalGainAt(expr, ending.voiceEndMs / 1000)).toBe(0)
+    expect(evalGainAt(expr, 59.0)).toBe(0)
+  })
+
+  it('keeps a ring-out moving by decaying across the whole post-voice tail', () => {
+    const ring = { ...ending, voiceEndMs: 57_000, shape: 'ring_out' as const }
+    const expr = buildGainExpr({ ...base, ending: ring })
+    const bed = Math.pow(10, base.bedDb / 20)
+    const samples = [57.0, 57.5, 58.0, 59.0, 59.5].map((t) => evalGainAt(expr, t))
+    expect(samples[0]).toBeCloseTo(bed, 5)
+    for (let i = 1; i < samples.length; i++) expect(samples[i]).toBeLessThan(samples[i - 1]!)
+    expect(evalGainAt(expr, 60.0)).toBe(0)
   })
 })

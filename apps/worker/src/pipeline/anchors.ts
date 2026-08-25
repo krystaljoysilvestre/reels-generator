@@ -19,6 +19,7 @@ export function countOccurrences(text: string, sub: string): number {
 interface AnchoredScript {
   sfx: Array<{ anchor: string }>
   silenceDrop?: { anchor: string } | null | undefined
+  ending?: { anchor: string } | null | undefined
 }
 
 // Validate that every SFX / silence anchor appears EXACTLY ONCE in the narration. compute_timings
@@ -30,6 +31,7 @@ export function validateAnchorUniqueness(narration: string, audioScript: Anchore
   const allAnchors: Array<{ anchor: string; field: string }> = [
     ...audioScript.sfx.map((s) => ({ anchor: s.anchor, field: 'sfx' })),
     ...(audioScript.silenceDrop ? [{ anchor: audioScript.silenceDrop.anchor, field: 'silenceDrop' }] : []),
+    ...(audioScript.ending ? [{ anchor: audioScript.ending.anchor, field: 'ending' }] : []),
   ]
 
   for (const { anchor, field } of allAnchors) {

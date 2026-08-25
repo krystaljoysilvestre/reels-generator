@@ -127,6 +127,7 @@ export async function renderStep(reelId: string): Promise<void> {
     disclosure: mediaDisclosure, // in the fingerprint → the label changing (or the media mix changing) re-renders
     platform: platformPreset.label, // the resolved spec, so set order can't churn the fingerprint
     frame: `${platformPreset.width}x${platformPreset.height}`, // output dims (belt-and-suspenders to platform)
+    endingFadeMs: timings.ending?.shape === 'ring_out' ? 1500 : timings.ending?.shape === 'resolve' ? 900 : 0,
   })
 
   // The render step re-runs when the visual OR the audio changes; INSIDE, the expensive Remotion pass is
@@ -264,6 +265,11 @@ export async function renderStep(reelId: string): Promise<void> {
           height: platformPreset.height,
           grain: lutConfig.grain,
           vignette: lutConfig.vignette,
+          ...(timings.ending?.shape === 'ring_out'
+            ? { endingFadeMs: 1500 }
+            : timings.ending?.shape === 'resolve'
+              ? { endingFadeMs: 900 }
+              : {}),
           ...(mediaDisclosure ? { disclosure: mediaDisclosure } : {}),
           outputPath: visualPath,
           onProgress: (p) => {

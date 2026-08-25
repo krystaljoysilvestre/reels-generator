@@ -6,7 +6,7 @@
 // only at a genuine story pivot — a non-narrator voice. Output composes into the existing mixer layers.
 
 import { z } from 'zod'
-import { AmbientSchema, MusicCueSchema, SfxCueSchema, SilenceDropSchema } from '../types/audio-script.js'
+import { AmbientSchema, MusicCueSchema, SfxCueSchema, SilenceDropSchema, EndingIntentSchema } from '../types/audio-script.js'
 
 // Bump on any material prompt/craft change so annotate_audio_script re-plans instead of reusing a cached
 // design. v1.1 = dense-realism + restraint rebalance. v1.2 = audibility fix (foreground detail must be
@@ -72,7 +72,9 @@ import { AmbientSchema, MusicCueSchema, SfxCueSchema, SilenceDropSchema } from '
 // tense register. Presence-tilted: a calm register's default is a still, PRESENT bed (music: null is valid
 // but rare/justified — the founder's "leans calm" was really "no register range"). Probe-validated shape
 // (calm artifacts 3→0, horror preserved); the opt-in flag is removed.
-export const SOUND_DESIGNER_V1_VERSION = 'sound-designer.v1.19'
+// v1.20 = explicit ending direction. The designer chooses the final cadence anchor, the established layer
+// that carries it, and its shape; timing/mixing own all numbers. This replaces renderer-invented genre tails.
+export const SOUND_DESIGNER_V1_VERSION = 'sound-designer.v1.20'
 
 // A non-narrator voice the designer chose to place. Rare + deliberate — resolved to a catalog voice and
 // synthesized as a speech cue downstream. NOT for incidental human noise (that's banned entirely).
@@ -96,6 +98,7 @@ export const SoundDesignSchema = z.object({
   sfx: z.array(SfxCueSchema).max(18),
   voices: z.array(DesignerVoiceSchema).max(2).default([]),
   silenceDrop: SilenceDropSchema.nullable().default(null),
+  ending: EndingIntentSchema,
 })
 export type SoundDesign = z.infer<typeof SoundDesignSchema>
 
@@ -143,7 +146,8 @@ const DEBIAS_NEUTRAL_EXAMPLE = `{
     { "anchor": "<a concrete action or place in the narration>", "offsetMs": 0, "prompt": "<the plain, non-vocal sound that action/place actually makes>", "volumeDb": -8, "targetDurationSec": 2, "impactAtEnd": false }
   ],
   "voices": [],
-  "silenceDrop": null
+  "silenceDrop": null,
+  "ending": { "anchor": "<the exact unique opening of THIS story's final cadence>", "focus": "music | ambience | silence", "shape": "button | resolve | ring_out" }
 }`
 
 export function buildSoundDesignerPrompt(
@@ -176,6 +180,13 @@ Build the soundscape in layers that run together. The mission: the viewer feels 
 4. ONE emotional climax that LANDS — the single moment everything else exists to make feel inevitable (a scare, a revelation, a punchline, a warm turn). This moment MUST make a sound: a single, CLEARLY AUDIBLE impact with real body AND weight (a boom/slam/stab/swell with low-end under it, NOT a pure sub-bass rumble, which is inaudible on phone speakers), set up by a beat of SILENCE right before it. The silence is the wind-up; the impact is the punch — do NOT wind up and never punch. A climax you leave in pure silence with nothing landing on it is the #1 way these reels fall flat. Resist a full hit on every beat, but the one climax is non-negotiable when the story turns (almost every narrative reel does). It usually belongs on the HERO/turn line, built up with impactAtEnd.${horror ? ' In HORROR the climax is a JUMPSCARE: a sudden, DEEP, full-bodied impact felt in the chest — a heavy boom / slam / low-end hit with real body and a short ringing tail (still non-vocal), at the TOP of the loudness range (volumeDb +4..+6), loud enough to make the viewer flinch. Its power is WEIGHT, not shrillness. NEVER a thin, harsh, high-pitched screech, a metallic shriek, or a violin/nails scrape — those HURT the ear on a phone speaker and read as noise, not fear. If a riser leads in, it is a LOW rumble/whoosh swelling into the boom, not a rising screech. A polite boom is a wasted scare; a painful screech is a worse one.' : ''}
 5. AN ENDING THAT HOLDS — the reel must not sag after the hit. The aftermath (a high ringing, an unsettled texture, the room gone wrong) carries the final scene all the way to the last word, and the very LAST line can earn a closing sting — a final jolt as the reel ends${horror ? ' (in horror it usually does: the viewer should leave with their heart still going)' : ''}. Never let the last scene play out over dead, empty air.
 
+ENDING DIRECTION — choose the exact final-cadence anchor and what established layer carries it. focus is
+music when the score should remain the emotional thread, ambience when the story should land inside its
+physical world, or silence only when an earned absence is the ending itself. shape is button for a
+quick decisive stop, resolve for a closing phrase that settles, or ring_out when an existing impact or
+resonance must decay. This is intent, not a request for a new cue: never introduce a fresh musical idea after
+the narration just to fill the hold. Anchor it to the exact unique opening words of the final clause or phrase.
+
 Shaping each cue — you set LENGTH (targetDurationSec), LOUDNESS (volumeDb), and optionally SPAN (endAnchor):
 - LENGTH: use the shortest duration that accomplishes the emotional purpose. A one-shot may be around a second; a texture that needs to breathe may run several seconds; a slow build may last ten or more — ending in its hit, with a ringing decay tail after it. (Any cue is clamped to 1–22s.)
 - SPAN: a cue with "endAnchor" is SUSTAINED — the mixer loops it from its anchor until the end of the endAnchor line, fading it in and out. For sustained cues, targetDurationSec is the length of the loop CLIP (8–12s is ideal); write its prompt as a seamless loop ("slow steady heartbeat, seamless loop"). Sustained cues are impactAtEnd=false. A sustained bed must be LOW and soft (room tone, a low drone/pulse, air) — NEVER a buzzy, whiny, or high-pitched continuous texture (a fluorescent buzz, an electrical whine, an insect shrill): looped for a whole stretch those become a painful wall of noise.
@@ -192,7 +203,7 @@ Hard rules:
 - THE CLIMAX MUST MAKE A SOUND. Place the payoff as an actual sfx cue anchored on the exact turn/reveal line — not just a silenceDrop. If you use a silenceDrop, it is the wind-up: anchor it just before the reveal, then land the impact cue on the reveal (silence → impact → ringing aftermath). A silenceDrop with no sfx after it is a missed payoff, not restraint.
 - The opening must GRIP from the FIRST SECOND at FULL presence — do NOT ease in from quiet or "build up" to the mood. Put a clearly-audible element on the very first line, and almost always a SUSTAINED tension texture (an endAnchor loop — a low pulse, a dread tone, an uneasy hum) running from that first line through the opening act, so the intended feeling (dread for horror) is already there in second one. The bed carries under it; this texture is what the viewer FEELS. A near-silent or slowly-warming-up opening is a failure — the tension is present from frame one, then deepens.
 - voices — at most ${horror ? 2 : 1}, and ONLY when the STORY PIVOTS on hearing a non-narrator voice (a voice answering back, mimicking, a call that changes everything). Otherwise []. One perfect voice transforms the moment; a stray one is just a stranger in the room.
-- Anchor EVERY cue (sfx, silenceDrop, voice) to an EXACT substring of the narration, verbatim and UNIQUE (extend until it appears exactly once). endAnchor follows the same rule and must be a LATER line than the cue's anchor.
+- Anchor EVERY cue (sfx, silenceDrop, voice, ending) to an EXACT substring of the narration, verbatim and UNIQUE (extend until it appears exactly once). endAnchor follows the same rule and must be a LATER line than the cue's anchor.
 
 The target: a soundscape that puts the viewer INSIDE the place${horror ? ' — an apartment at 2am, a school after hours, a dripping bathroom — with dread under their skin from the first second, their pulse in the walk, and one scare that truly detonates.' : ', dense with lived-in reality, an emotional arc the viewer feels in their body, and one climax that truly lands.'}`
 
