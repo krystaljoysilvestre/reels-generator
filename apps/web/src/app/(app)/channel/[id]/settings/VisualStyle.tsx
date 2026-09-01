@@ -13,8 +13,9 @@ type Preview = { loading?: boolean; imageKey?: string; error?: string }
 const assetUrl = (key: string) => `/api/asset?key=${encodeURIComponent(key)}`
 
 export function VisualStyle({
-  genre, niche, tone, worldBible, stylePreset, styleImageKey, onChange,
+  channelId, genre, niche, tone, worldBible, stylePreset, styleImageKey, onChange,
 }: {
+  channelId: string
   genre: string
   niche: string
   tone: ToneConfig
@@ -56,7 +57,7 @@ export function VisualStyle({
     try {
       const res = await fetch('/api/channel/style-image', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stylePreset: p.stylePreset, sampleScene: scene }),
+        body: JSON.stringify({ channelId, stylePreset: p.stylePreset, sampleScene: scene }),
       })
       const json = await res.json()
       if (!res.ok) { setPreviews((s) => ({ ...s, [idx]: { error: json.error ?? 'Preview failed' } })); return }

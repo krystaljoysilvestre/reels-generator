@@ -2,14 +2,14 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { randomUUID } from 'node:crypto'
 import { llmCall, uploadBuffer } from '@reels/providers'
-import { recordSpendEvent } from '@reels/db'
+import { assets, getDb, recordSpendEvent } from '@reels/db'
 import { ToneConfigSchema } from '@reels/core'
 import {
   buildStyleRefPrompt,
   StyleRefSchema,
   STYLE_REF_V1_VERSION,
 } from '@reels/core/prompts/style-ref.v1'
-import { requireApiUser, requireSpendBudget } from '@/lib/api-access'
+import { requireApiUser, requireChannelOwner, requireSpendBudget } from '@/lib/api-access'
 import { recordFailedSpend } from '@/lib/failed-spend'
 
 // Operator uploads 1–3 reference images; a vision pass distills their shared visual
@@ -34,15 +34,19 @@ function sniffMime(buf: Buffer): ImageMedia | null {
 }
 
 export async function POST(req: NextRequest) {
-  const gate = await requireApiUser()
+  const apiGate = await requireApiUser()
+  if (apiGate instanceof NextResponse) return apiGate
+
+  const form = await req.formData().catch(() => null)
+  if (!form) return NextResponse.json({ error: 'Invalid form' }, { status: 400 })
+  const channelId = form.get('channelId')
+  if (typeof channelId !== 'string') return NextResponse.json({ error: 'Missing channel' }, { status: 400 })
+  const gate = await requireChannelOwner(channelId)
   if (gate instanceof NextResponse) return gate
   // Paid call — respect the caller's monthly spend cap before spending (these routes were the gap:
   // setup, preview, and research spend ran with no budget gate at all).
   const budgetGate = await requireSpendBudget(gate)
   if (budgetGate) return budgetGate
-
-  const form = await req.formData().catch(() => null)
-  if (!form) return NextResponse.json({ error: 'Invalid form' }, { status: 400 })
 
   const files = form.getAll('files').filter((f): f is File => f instanceof File)
   if (files.length === 0) return NextResponse.json({ error: 'No image' }, { status: 400 })
@@ -64,7 +68,7 @@ export async function POST(req: NextRequest) {
   // Keep only the first image as the channel's visual reference; the rest inform the
   // vision pass (base64, in-memory) but aren't stored.
   const first = prepared[0]!
-  const imageKey = `style-refs/${randomUUID()}.${EXT[first.media]}`
+  const imageKey = `channels/${channelId}/style-references/${randomUUID()}.${EXT[first.media]}`
 
   const { system, userMessage } = buildStyleRefPrompt({ nicheDescription: niche, toneJson })
   const content = [
@@ -78,6 +82,13 @@ export async function POST(req: NextRequest) {
 
   try {
     await uploadBuffer(imageKey, first.buf, first.media)
+    await getDb().insert(assets).values({
+      channelId,
+      kind: 'image',
+      storageKey: imageKey,
+      provider: 'upload',
+      meta: { surface: 'channel_style_reference' },
+    })
     const result = await llmCall({
       templateVersion: STYLE_REF_V1_VERSION,
       schema: StyleRefSchema,
@@ -86,6 +97,7 @@ export async function POST(req: NextRequest) {
       maxTokens: 700,
     })
     await recordSpendEvent({ userId: gate.id, surface: 'channel_style_ref', provider: 'openai', costCents: result.costCents })
+    console.log(`[audit] asset.upload actor=${gate.id} channel=${channelId} kind=style_reference key=${imageKey}`)
     return NextResponse.json({
       imageKey,
       label: result.data.label,

@@ -33,9 +33,9 @@ export async function GET(req: NextRequest) {
   const key = req.nextUrl.searchParams.get('key')
   if (!key) return NextResponse.json({ error: 'Missing key' }, { status: 400 })
 
-  // Tenant isolation: `reels/<reelId>/...` keys (renders, scenes, voiceover, stems — the sensitive,
-  // structurally-guessable content) must belong to a reel the caller owns. Shared presets and
-  // random-UUID keys (avatars/uploads/beds) are allowed to any active user. 404 hides existence.
+  // Tenant isolation: shared presets are explicitly allowlisted; every private key must resolve to
+  // a channel owner (directly, through a reel/compilation, or through a legacy DB reference).
+  // Randomness is never treated as authorization. 404 hides existence.
   if (!(await callerMayUseStorageKey(user, key))) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }

@@ -3,9 +3,9 @@ export default defineConfig({
   test: {
     include: ['src/**/*.test.ts'],
     passWithNoTests: true,
-    // FFmpeg integration tests spawn several encodes/probes. They finish in ~4–6s alone but can cross
-    // Vitest's 5s default when every workspace package runs concurrently in CI. Keep their assertions
-    // strict and give the subprocess work a realistic ceiling instead of accepting a scheduling flake.
-    testTimeout: 15_000,
+    // FFmpeg integration tests spawn several encodes/probes. They usually finish in 6–14s but can cross
+    // 15s when workspace tests or local builds contend for CPU. Keep their assertions strict and give
+    // the subprocess work a realistic ceiling instead of accepting a scheduling flake.
+    testTimeout: 30_000,
   },
 })

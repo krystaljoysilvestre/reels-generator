@@ -169,6 +169,7 @@ export function StoryboardEditor({
     setMusicUploading(true)
     try {
       const fd = new FormData()
+      fd.append('reelId', reel.id)
       fd.append('file', file)
       const up = await fetch('/api/channel/music-upload', { method: 'POST', body: fd })
       const uj = await up.json().catch(() => null)

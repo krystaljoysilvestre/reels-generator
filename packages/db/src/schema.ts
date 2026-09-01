@@ -522,6 +522,8 @@ export const assets = pgTable(
   },
   (t) => ({
     idxReel: index('idx_assets_reel').on(t.reelId),
+    idxChannel: index('idx_assets_channel').on(t.channelId),
+    idxStorageKey: index('idx_assets_storage_key').on(t.storageKey),
     // One row per logical artifact within a reel. Makes the onConflictDoUpdate upserts in the pipeline
     // meaningful (they were silent no-ops without a matching constraint) and bounds duplicate-row growth.
     // reel_id is nullable (app-level assets like style presets); Postgres treats NULLs as distinct, so

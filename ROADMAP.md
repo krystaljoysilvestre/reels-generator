@@ -35,6 +35,12 @@ One fresh standard short-form reel must complete through the **deployed product*
    and reel/user/global spend boundaries are enforced; and
 6. lint, typecheck, unit/integration tests and production build are green on the acceptance build.
 
+**Engineering evidence landed 2026-09-01:** the storage half of item 5 now has an explicit shared-key
+allowlist, channel/reel/compilation ownership for every private key, DB ownership records for channel uploads,
+and a real Postgres two-user suite proving owner access, foreign denial, ambiguous legacy-key denial, and
+foreign resource IDs returning 404. CI now provisions and migrates Postgres before running it. Suspended-user
+and spend-boundary acceptance coverage, the forced retry lap, and the fresh product-only reel still remain.
+
 Creative review remains allowed and expected. Direct YouTube/TikTok/Facebook publishing, billing, teams,
 long-form, public-launch polish and new creative architecture do **not** block this gate. Direct YouTube may be
 exercised for the founder's connected test channel, but export is the required product boundary.

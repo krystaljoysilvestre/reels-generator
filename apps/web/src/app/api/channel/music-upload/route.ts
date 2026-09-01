@@ -2,7 +2,8 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { randomUUID } from 'node:crypto'
 import { uploadBuffer } from '@reels/providers'
-import { requireApiUser } from '@/lib/api-access'
+import { assets, getDb } from '@reels/db'
+import { requireApiUser, requireChannelOwner, requireReelOwner } from '@/lib/api-access'
 import { looksLikeAudio } from '@/lib/upload'
 
 // Operator-uploaded background track for the Sound step. Stored as the channel's bed.
@@ -25,6 +26,16 @@ export async function POST(req: NextRequest) {
   if (gate instanceof NextResponse) return gate
 
   const form = await req.formData().catch(() => null)
+  if (!form) return NextResponse.json({ error: 'Invalid form' }, { status: 400 })
+  const channelId = form.get('channelId')
+  const reelId = form.get('reelId')
+  if ((typeof channelId === 'string') === (typeof reelId === 'string')) {
+    return NextResponse.json({ error: 'Choose one asset owner' }, { status: 400 })
+  }
+  const ownerGate = typeof channelId === 'string'
+    ? await requireChannelOwner(channelId)
+    : await requireReelOwner(reelId)
+  if (ownerGate instanceof NextResponse) return ownerGate
   const file = form?.get('file')
   if (!(file instanceof File)) {
     return NextResponse.json({ error: 'No file' }, { status: 400 })
@@ -42,9 +53,20 @@ export async function POST(req: NextRequest) {
   if (!looksLikeAudio(buf)) {
     return NextResponse.json({ error: "That file doesn't look like audio. Use MP3, M4A, WAV, AAC, or OGG." }, { status: 400 })
   }
-  const key = `channel-music/${randomUUID()}.${ext}`
+  const key = typeof channelId === 'string'
+    ? `channels/${channelId}/music/${randomUUID()}.${ext}`
+    : `reels/${reelId}/uploads/music/${randomUUID()}.${ext}`
   try {
     await uploadBuffer(key, buf, file.type)
+    await getDb().insert(assets).values({
+      channelId: typeof channelId === 'string' ? channelId : null,
+      reelId: typeof reelId === 'string' ? reelId : null,
+      kind: 'music',
+      storageKey: key,
+      provider: 'upload',
+      meta: { surface: typeof channelId === 'string' ? 'channel_music_upload' : 'reel_music_upload' },
+    })
+    console.log(`[audit] asset.upload actor=${gate.id} ${typeof channelId === 'string' ? `channel=${channelId}` : `reel=${reelId}`} kind=music key=${key}`)
     return NextResponse.json({ key })
   } catch (err) {
     console.error('[music-upload] upload failed:', err)

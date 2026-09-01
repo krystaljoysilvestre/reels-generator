@@ -773,6 +773,7 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
 
         {/* Visual style — preset gallery + opt-in custom generation */}
         <VisualStyle
+          channelId={id}
           genre={genreCategory}
           niche={niche}
           tone={tone}

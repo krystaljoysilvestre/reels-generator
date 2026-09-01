@@ -7,7 +7,7 @@ import { SourcePolicySchema, ToneConfigSchema, WorldBibleSchema, CaptionStyleSch
 import { STYLE_VALUES } from '@reels/core/prompts/story-styles.v1'
 import { GENRE_MODULE_VALUES } from '@reels/core/prompts/scenes.v1'
 import { VOICE_VALUES } from '@reels/core/prompts/story-voices.v1'
-import { requireChannelOwner } from '@/lib/api-access'
+import { callerMayUseStorageKey, requireChannelOwner } from '@/lib/api-access'
 
 // Edit a channel's creative bible after creation. Only the fields below are editable here;
 // voices/avatar/language stay out of V1 (each needs its own picker flow). Every field is
@@ -77,6 +77,9 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   if (!parsed.success) {
     return NextResponse.json({ error: 'Invalid input', issues: parsed.error.flatten() }, { status: 400 })
   }
+  if (parsed.data.styleImageKey && !(await callerMayUseStorageKey(gate, parsed.data.styleImageKey))) {
+    return NextResponse.json({ error: 'Selected asset is unavailable' }, { status: 400 })
+  }
 
   const db = getDb()
   const existing = await db.query.channels.findFirst({ where: eq(channels.id, id) })
@@ -122,6 +125,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   }
 
   await db.update(channels).set(updates).where(eq(channels.id, id))
+  console.log(`[audit] channel.update actor=${gate.id} channel=${id} fields=${Object.keys(updates).filter((key) => key !== 'updatedAt').join(',')}`)
   return NextResponse.json({ ok: true })
 }
 

@@ -15,6 +15,7 @@ records what was fixed and what remains.
 | Area | Fix |
 |---|---|
 | **Tenant isolation** | `lib/api-access.ts` gates (`requireApiUser` / `require{Reel,Channel,Story}Owner`, admin bypass, uuid-guard, 404-hides-existence) applied to all ~47 API routes; `/api/asset` authorizes by key; `callerMayUseStorageKey` blocks client keys pointing at another tenant's `reels/` object; coarse cookie pre-filter middleware. |
+| **Private storage ownership** | Explicit shared-key allowlist; channel/reel/compilation-scoped private namespaces; legacy keys require an unambiguous DB ownership edge; channel uploads create `assets` rows and audit logs; client-supplied avatar/style/music keys are re-authorized before persistence. Database-backed tests run two real users through owner/foreign/ambiguous cases. |
 | **Account gating** | Every API gate requires `status === 'active'` (pending/suspended can no longer drive the API on a valid JWT). Invite email-binding enforced + single-use made atomic. Register/sign-in rate-limited. `AUTH_SECRET` documented. |
 | **Cost safety** | Global daily spend kill-switch (`GLOBAL_DAILY_SPEND_CAP_CENTS`, default off). Per-user monthly budget enforced **mid-pipeline** (terminal) + in-flight reel concurrency cap. Partial-failure cost capture (the harness cost sink persists spend on failure too, so the budget stops under-counting). |
 | **Pipeline liveness** | Per-step job timeout frees the BullMQ slot on a hung call (instead of parking it forever and starving tenants); boot-time reaper recovers reels a dead worker left `running`. |
@@ -66,8 +67,5 @@ of the liveness work.
 
 ## Not worth doing (acceptable permanent states)
 
-- **DB-verify ownership for avatar/upload keys** — these are random-UUID keys that no longer leak after the
-  P0 metadata-IDOR fixes, so guessing one is infeasible; the current "any active user" rule on non-`reels/`
-  keys is fine. (Revisit only if these keys ever become enumerable.)
 - **Split-config `authorized` middleware** — the per-route gates already fully enforce auth + ownership; a
   cryptographic middleware would be redundant. The current coarse cookie pre-filter is adequate defense-in-depth.

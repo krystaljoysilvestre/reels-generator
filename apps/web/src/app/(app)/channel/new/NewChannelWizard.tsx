@@ -387,6 +387,7 @@ export function NewChannelWizard({
   // re-saves update the same row and finishing promotes it to 'active' instead of orphaning a draft.
   const [draftChannelId, setDraftChannelId] = useState<string | null>(initialDraftChannelId)
   const [savingDraft, setSavingDraft] = useState(false)
+  const draftCreateRef = useRef<Promise<string> | null>(null)
 
   // Chosen style image = the previewed image of the selected card, if it was previewed.
   const chosenStyleImageKey =
@@ -591,6 +592,41 @@ export function NewChannelWizard({
     return false
   }
 
+  // Private uploads need a durable ownership root before bytes enter storage. Create the same draft
+  // row used by "Leave & save" on the first upload, and deduplicate concurrent upload clicks.
+  async function ensureDraftChannel(): Promise<string> {
+    if (draftChannelId) return draftChannelId
+    if (draftCreateRef.current) return draftCreateRef.current
+    const pending = (async () => {
+      const res = await fetch('/api/channel/save-draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          draftChannelId: null,
+          name,
+          nicheDescription: niche.trim().slice(0, NICHE_MAX),
+          draftState: buildDraft(),
+        }),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) {
+        noteAuthFailure(res)
+        throw new Error(json?.error ?? 'Couldn’t save this channel yet')
+      }
+      const channelId = json?.channelId
+      if (typeof channelId !== 'string') throw new Error('Couldn’t save this channel yet')
+      setDraftChannelId(channelId)
+      try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...buildDraft(), draftChannelId: channelId })) } catch { /* noop */ }
+      return channelId
+    })()
+    draftCreateRef.current = pending
+    try {
+      return await pending
+    } finally {
+      draftCreateRef.current = null
+    }
+  }
+
   // Requested an exit: prompt if there's progress, otherwise just go.
   function requestLeave(href: string) {
     if (hasProgress) setLeaveTo(href)
@@ -789,6 +825,7 @@ export function NewChannelWizard({
     setRefError('')
     try {
       const fd = new FormData()
+      fd.append('channelId', await ensureDraftChannel())
       Array.from(files).slice(0, 3).forEach((f) => fd.append('files', f))
       fd.append('nicheDescription', niche.trim())
       fd.append('toneConfig', JSON.stringify(tone))
@@ -1135,6 +1172,7 @@ export function NewChannelWizard({
     setAvatarUploading(true)
     try {
       const fd = new FormData()
+      fd.append('channelId', await ensureDraftChannel())
       fd.append('file', file)
       const res = await fetch('/api/channel/avatar', { method: 'POST', body: fd })
       const json = await res.json()
@@ -1337,6 +1375,7 @@ export function NewChannelWizard({
     try {
       for (const file of Array.from(files)) {
         const fd = new FormData()
+        fd.append('channelId', await ensureDraftChannel())
         fd.append('file', file)
         const res = await fetch('/api/channel/music-upload', { method: 'POST', body: fd })
         const json = await res.json()

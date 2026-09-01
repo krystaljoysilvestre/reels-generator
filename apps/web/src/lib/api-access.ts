@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
 import { and, count, eq, inArray } from 'drizzle-orm'
-import { getDb, channels, reels, stories, getUserUsage, getGlobalSpendTodayCents } from '@reels/db'
+import { getDb, assets, channels, compilations, reels, stories, getUserUsage, getGlobalSpendTodayCents } from '@reels/db'
 import { assertGlobalDailyBudget, GlobalBudgetExceededError, GLOBAL_DAILY_SPEND_CAP_CENTS, DEFAULT_USER_LIMITS, checkUserLimits, MAX_INFLIGHT_REELS_PER_USER, UNSHIPPED_REEL_STATUSES } from '@reels/core'
 import { getCurrentUser, type SessionUser } from '@/lib/auth'
 import { ACCOUNT_UNAVAILABLE } from '@/lib/user-profile'
-import { isLegacyUnownedUploadKey, isUuid, reelIdFromKey } from '@/lib/storage-key'
+import { isUuid, storageScopeFromKey } from '@/lib/storage-key'
 
 export { isUuid, reelIdFromKey } from '@/lib/storage-key'
 
@@ -58,14 +58,13 @@ export async function requireChannelOwner(channelId: unknown): Promise<SessionUs
   if (gate instanceof NextResponse) return gate
   const user = gate
   if (!isUuid(channelId)) return deny(404, 'Not found')
-  if (user.role === 'admin') return user
   const db = getDb()
   const row = await db
     .select({ ownerId: channels.userId })
     .from(channels)
     .where(eq(channels.id, channelId))
     .then((r) => r[0])
-  if (!row || row.ownerId !== user.id) return deny(404, 'Not found')
+  if (!row || (user.role !== 'admin' && row.ownerId !== user.id)) return deny(404, 'Not found')
   return user
 }
 
@@ -75,7 +74,6 @@ export async function requireReelOwner(reelId: unknown): Promise<SessionUser | D
   if (gate instanceof NextResponse) return gate
   const user = gate
   if (!isUuid(reelId)) return deny(404, 'Not found')
-  if (user.role === 'admin') return user
   const db = getDb()
   const row = await db
     .select({ ownerId: channels.userId })
@@ -83,7 +81,7 @@ export async function requireReelOwner(reelId: unknown): Promise<SessionUser | D
     .innerJoin(channels, eq(reels.channelId, channels.id))
     .where(eq(reels.id, reelId))
     .then((r) => r[0])
-  if (!row || row.ownerId !== user.id) return deny(404, 'Not found')
+  if (!row || (user.role !== 'admin' && row.ownerId !== user.id)) return deny(404, 'Not found')
   return user
 }
 
@@ -93,7 +91,6 @@ export async function requireStoryOwner(storyId: unknown): Promise<SessionUser |
   if (gate instanceof NextResponse) return gate
   const user = gate
   if (!isUuid(storyId)) return deny(404, 'Not found')
-  if (user.role === 'admin') return user
   const db = getDb()
   const row = await db
     .select({ ownerId: channels.userId })
@@ -101,30 +98,43 @@ export async function requireStoryOwner(storyId: unknown): Promise<SessionUser |
     .innerJoin(channels, eq(stories.channelId, channels.id))
     .where(eq(stories.id, storyId))
     .then((r) => r[0])
-  if (!row || row.ownerId !== user.id) return deny(404, 'Not found')
+  if (!row || (user.role !== 'admin' && row.ownerId !== user.id)) return deny(404, 'Not found')
   return user
 }
 
 // Does `key` name an R2 object the user is allowed to reference (as an image reference, uploaded
-// bed, etc.)? Used to stop routes that accept a client-supplied storageKey from pointing a render
-// at another tenant's object. `reels/<reelId>/...` keys must resolve to a reel the caller owns;
-// Legacy `uploads/` keys have no ownership edge and are rejected — randomness is not authorization.
-// Other non-reel keys are existing shared/channel surfaces with their own migration path.
+// bed, etc.)? Public objects live in a deliberately small allowlist. Every private namespace resolves
+// through a channel owner; old unscoped keys are accepted only when an existing DB record supplies
+// that missing ownership edge. Unknown keys fail closed.
 export async function callerMayUseStorageKey(user: SessionUser, key: unknown): Promise<boolean> {
   if (typeof key !== 'string' || key.length === 0) return false
-  if (isLegacyUnownedUploadKey(key)) return false
-  const reelId = reelIdFromKey(key)
-  if (reelId === undefined) return true // not a reel-scoped key → not another tenant's derived asset
-  if (reelId === null) return false // malformed reels/ key
-  if (user.role === 'admin') return true
   const db = getDb()
-  const row = await db
-    .select({ ownerId: channels.userId })
-    .from(reels)
-    .innerJoin(channels, eq(reels.channelId, channels.id))
-    .where(eq(reels.id, reelId))
-    .then((r) => r[0])
-  return !!row && row.ownerId === user.id
+  const scope = storageScopeFromKey(key)
+  if (scope.kind === 'shared') return true
+
+  let ownerId: string | null | undefined
+  if (scope.kind === 'channel') {
+    ownerId = await db.select({ ownerId: channels.userId }).from(channels).where(eq(channels.id, scope.id)).then((r) => r[0]?.ownerId)
+  } else if (scope.kind === 'reel') {
+    ownerId = await db.select({ ownerId: channels.userId }).from(reels).innerJoin(channels, eq(reels.channelId, channels.id)).where(eq(reels.id, scope.id)).then((r) => r[0]?.ownerId)
+  } else if (scope.kind === 'compilation') {
+    ownerId = await db.select({ ownerId: channels.userId }).from(compilations).innerJoin(channels, eq(compilations.channelId, channels.id)).where(eq(compilations.id, scope.id)).then((r) => r[0]?.ownerId)
+  }
+  if (ownerId !== undefined) return user.role === 'admin' || ownerId === user.id
+
+  // Compatibility for historical objects whose path predates tenant scoping. Migration 0066
+  // materializes their known channel/reel references into this indexed ownership ledger.
+  const [channelAssetOwners, reelAssetOwners] = await Promise.all([
+    db.select({ ownerId: channels.userId }).from(assets).innerJoin(channels, eq(assets.channelId, channels.id)).where(eq(assets.storageKey, key)),
+    db.select({ ownerId: channels.userId }).from(assets).innerJoin(reels, eq(assets.reelId, reels.id)).innerJoin(channels, eq(reels.channelId, channels.id)).where(eq(assets.storageKey, key)),
+  ])
+  const references = [...channelAssetOwners, ...reelAssetOwners]
+  if (references.length === 0) return false
+  if (user.role === 'admin') return true
+  const ownerIds = new Set(references.map((row) => row.ownerId).filter((id): id is string => typeof id === 'string'))
+  // A historical key linked to multiple tenants is already ambiguous at the bucket layer. Deny it to
+  // everyone rather than let query ordering decide who sees the shared object.
+  return ownerIds.size === 1 && ownerIds.has(user.id)
 }
 
 // Cost-safety gate for ON-DEMAND paid actions (previews, image/motion regen, add-sound) that spend
