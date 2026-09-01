@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { checkUserLimits, budgetCapForSeconds, DEFAULT_BUDGET_CAPS_CENTS, BUDGET_CAP_MAX_CENTS } from './cost.js'
+import {
+  assertBudget,
+  BudgetExceededError,
+  checkUserLimits,
+  budgetCapForSeconds,
+  DEFAULT_BUDGET_CAPS_CENTS,
+  BUDGET_CAP_MAX_CENTS,
+} from './cost.js'
 
 const LIMITS = { monthlyBudgetCents: 5000, dailyReelQuota: 20 }
 
@@ -51,5 +58,15 @@ describe('budgetCapForSeconds', () => {
 
   it('grows with length', () => {
     expect(budgetCapForSeconds(180)).toBeGreaterThan(budgetCapForSeconds(75))
+  })
+})
+
+describe('assertBudget', () => {
+  it('halts before another paid call when the reel is exactly at its cap', () => {
+    expect(() => assertBudget('reel-1', 800, 800)).toThrow(BudgetExceededError)
+  })
+
+  it('allows the next paid step while budget remains', () => {
+    expect(() => assertBudget('reel-1', 799, 800)).not.toThrow()
   })
 })

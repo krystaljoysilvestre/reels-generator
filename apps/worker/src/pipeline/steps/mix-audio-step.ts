@@ -105,7 +105,7 @@ export async function mixAudioStep(reelId: string): Promise<void> {
   })
 
   const result = await runStep(
-    { reelId, stepName: 'mix_audio', inputHash },
+    { reelId, stepName: 'mix_audio', inputHash, spendsProviderMoney: false },
     async () => {
       const tmp = join(tmpdir(), `reels-${reelId}`)
       await mkdir(tmp, { recursive: true })

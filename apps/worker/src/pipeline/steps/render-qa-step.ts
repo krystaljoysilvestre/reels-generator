@@ -131,7 +131,7 @@ export async function renderQaStep(reelId: string): Promise<void> {
   })
 
   const result = await runStep(
-    { reelId, stepName: 'render_qa', inputHash },
+    { reelId, stepName: 'render_qa', inputHash, spendsProviderMoney: false },
     async () => {
       const tmp = join(tmpdir(), `reels-qa-${reelId}`)
       await mkdir(tmp, { recursive: true })

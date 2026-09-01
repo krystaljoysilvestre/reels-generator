@@ -99,7 +99,7 @@ export async function runComputeTimings(reelId: string): Promise<void> {
   })
 
   const result = await runStep(
-    { reelId, stepName: 'compute_timings', inputHash },
+    { reelId, stepName: 'compute_timings', inputHash, spendsProviderMoney: false },
     async () => {
       const timingsInput: ComputeTimingsInput = {
         narration: story.body,

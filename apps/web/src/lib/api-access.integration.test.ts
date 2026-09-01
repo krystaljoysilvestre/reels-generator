@@ -9,7 +9,7 @@ const { getCurrentUser } = vi.hoisted(() => ({
 }))
 vi.mock('@/lib/auth', () => ({ getCurrentUser }))
 
-import { callerMayUseStorageKey, requireChannelOwner } from './api-access.js'
+import { callerMayUseStorageKey, requireApiUser, requireChannelOwner } from './api-access.js'
 
 const TEST_DATABASE_URL = process.env['TEST_DATABASE_URL']
 const USER_A_ID = randomUUID()
@@ -20,13 +20,25 @@ const REEL_A_ID = randomUUID()
 const REEL_B_ID = randomUUID()
 const COMPILATION_A_ID = randomUUID()
 
-const user = (id: string, role = 'tester'): SessionUser => ({
+const user = (id: string, role = 'tester', status = 'active'): SessionUser => ({
   id,
   role,
-  status: 'active',
+  status,
   email: `${id}@example.test`,
   name: null,
   image: null,
+})
+
+describe('account status gate', () => {
+  it.each(['pending', 'suspended'])('blocks a signed-in %s account before API work begins', async (status) => {
+    getCurrentUser.mockResolvedValue(user(USER_A_ID, 'tester', status))
+
+    const denied = await requireApiUser()
+
+    expect(denied).toBeInstanceOf(Response)
+    expect((denied as Response).status).toBe(403)
+    await expect((denied as Response).json()).resolves.toEqual({ error: 'Account is not active' })
+  })
 })
 
 describe.skipIf(!TEST_DATABASE_URL)('database-backed tenant isolation', () => {
