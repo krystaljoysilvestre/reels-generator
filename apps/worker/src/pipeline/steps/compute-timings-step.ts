@@ -80,7 +80,9 @@ export async function runComputeTimings(reelId: string): Promise<void> {
   // v8: genre resolves PER REEL (series). Hashing the channel column would collide two reels on the same
   // channel that ran under different genres — identical narration + scenes, different outro tail, one
   // cache entry. The version bump also re-times every existing reel once, deliberately.
-  const inputHash = buildInputHash('compute_timings.v9', {
+  // v10: explicit `resolve` endings hold 2.6s after voice (owner playback, 2026-09-01). Bust persisted
+  // 1.8s timing plans so every future re-run receives the longer, shape-owned landing.
+  const inputHash = buildInputHash('compute_timings.v10', {
     narration: story.body,
     genreCategory: genre,
     // Alignment IS the master clock; a re-synthesized voiceover has new timestamps under a new row

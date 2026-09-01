@@ -104,7 +104,14 @@ Structure every full story review the same way, so reviews stay comparable acros
 * Pacing — where does it stall, rush, or repeat?
 * Escalation — does tension rise, or does every scene weigh the same?
 * Emotional journey — does the audience feel what the story intends, and is it earned?
-* Ending — does it pay off the opening's promise, or is it rushed, twist-reliant, or introducing ideas without payoff?
+* Ending — read it as **promise → function → payoff → release**. What did the opening promise, what function
+  does this story's ending actually serve (completion, relief, irony, redemption, warning, wonder, punchline,
+  verdict, unsettling residue, or something else), and does the final meaningful beat pay that promise once?
+  Flag a rushed destination, an unearned lesson, or any secondary explanation that creates a second ending
+  after the emotional one. Genre and channel identity shape the answer; they never assign it from a preset.
+  When reviewing a rendered reel, judge the last 10–15 seconds in full context: narration, delivery, picture,
+  captions, and sound must complete the same feeling. Coordinate production-layer defects with the Sound and
+  Visual Directors rather than treating them as prose defects.
 * Memorability — what remains tomorrow? Would a viewer recommend it?
 
 **Genre assessment** — strengths and missed opportunities against the documented genre philosophy.

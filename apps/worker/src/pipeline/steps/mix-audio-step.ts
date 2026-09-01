@@ -85,7 +85,10 @@ export async function mixAudioStep(reelId: string): Promise<void> {
     sfxNewestAt: sfxAssets[0]?.createdAt ?? 'none',
     // Placement identity: re-timed events (moved anchors, new sustained endMs spans) must re-mix even
     // when the assets themselves are unchanged — the premix is built FROM these timestamps.
-    sfxSpans: timings.sfxEvents.map((e) => `${e.atMs}-${e.endMs ?? ''}@${e.volumeDb}`).join('|'),
+    sfxSpans: timings.sfxEvents.map((e) =>
+      `${e.atMs}-${e.endMs ?? ''}@${e.volumeDb}:fi${e.fadeInMs ?? 0}:fo${e.fadeOutMs ?? 0}`,
+    ).join('|'),
+    sfxDuck: timings.sfxDuck ? JSON.stringify(timings.sfxDuck) : 'none',
     // Foley identity: placement derives from scene spans + clip times, so both must re-mix on change.
     foleyNewestAt: foleyAssets[0]?.createdAt ?? 'none',
     foleySpans: foleyAssets
@@ -137,7 +140,7 @@ export async function mixAudioStep(reelId: string): Promise<void> {
       // Pre-mix SFX. sfxAssets is newest-first (allAssets is desc by createdAt), so take the FIRST asset
       // per anchor — the current design's take — and skip the rest. Without this, the 50+ accumulated
       // assets from past renders whose anchors coincidentally match get layered in as stale duplicates.
-      const sfxEvents: { storageKey: string; atMs: number; volumeDb: number; endMs?: number }[] = []
+      const sfxEvents: { storageKey: string; atMs: number; volumeDb: number; endMs?: number; durationMs?: number; fadeInMs?: number; fadeOutMs?: number }[] = []
       const usedAnchors = new Set<string>()
       for (const sfxAsset of sfxAssets) {
         const meta = sfxAsset.meta as { anchor?: string; durationMs?: number; impactAtEnd?: boolean }
@@ -159,7 +162,15 @@ export async function mixAudioStep(reelId: string): Promise<void> {
             startMs = Math.max(0, event.atMs - impactMs)
           }
           // Sustained cue: carry the span end through — premixSfx loops the clip to fill [atMs, endMs].
-          sfxEvents.push({ storageKey: localPath, atMs: startMs, volumeDb: event.volumeDb, ...(event.endMs != null ? { endMs: event.endMs } : {}) })
+          sfxEvents.push({
+            storageKey: localPath,
+            atMs: startMs,
+            volumeDb: event.volumeDb,
+            ...(event.endMs != null ? { endMs: event.endMs } : {}),
+            ...(meta.durationMs != null ? { durationMs: meta.durationMs } : {}),
+            ...(event.fadeInMs != null ? { fadeInMs: event.fadeInMs } : {}),
+            ...(event.fadeOutMs != null ? { fadeOutMs: event.fadeOutMs } : {}),
+          })
         }
       }
       // Foley: map each spotted clip-motion cue to reel time (scene span + shared playback math), dedupe

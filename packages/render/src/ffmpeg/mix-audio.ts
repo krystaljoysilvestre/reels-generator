@@ -279,6 +279,17 @@ export async function mixAudio(params: MixAudioParams): Promise<void> {
   const ambientGain = await refGain(params.ambientPath, 'ambient')
   console.log(`[mix] gain-stage → ref ${VOICE_REF_LUFS} LUFS: voice ${voiceGain.toFixed(1)}dB, music ${musicGain.toFixed(1)}dB, ambient ${ambientGain.toFixed(1)}dB; bed ${bedDb}dB under voice`)
   const durationSec = params.timings.durationMs / 1000
+  const sfxDuck = params.timings.sfxDuck
+  const voiceSplit = sfxDuck
+    ? `[0]volume=${voiceGain.toFixed(2)}dB,asplit=3[vox][voxkey0][sfxkey0]`
+    : `[0]volume=${voiceGain.toFixed(2)}dB,asplit=2[vox][voxkey0]`
+  const sfxFilters = sfxDuck
+    ? [
+        `[sfxkey0]apad=whole_dur=${durationSec.toFixed(3)}[sfxkey]`,
+        `[3]volume=${SFX_BUS_DB}dB[sfxraw]`,
+        `[sfxraw][sfxkey]sidechaincompress=threshold=${sfxDuck.threshold}:ratio=${sfxDuck.ratio}:attack=${sfxDuck.attackMs}:release=${sfxDuck.releaseMs}[sfxb]`,
+      ]
+    : [`[3]volume=${SFX_BUS_DB}dB[sfxb]`]
 
   // §3 Full filtergraph — everything up to [premaster]; the loudnorm tail is added by encodeWithLoudnorm.
   const inputs = [
@@ -299,11 +310,11 @@ export async function mixAudio(params: MixAudioParams): Promise<void> {
     // Pad ONLY the sidechain key to reel length. Without this, sidechaincompress terminates its music
     // output when the shorter voice file ends, deleting the entire directed outro even though the music
     // input and envelope continue. The audible voice branch remains unpadded.
-    `[0]volume=${voiceGain.toFixed(2)}dB,asplit=2[vox][voxkey0]`,
+    voiceSplit,
     `[voxkey0]apad=whole_dur=${durationSec.toFixed(3)}[voxkey]`,
     `[mus0][voxkey]sidechaincompress=threshold=0.04:ratio=2:attack=20:release=400[musduck]`,
     // mix layers (SFX lifted so effects sit clearly under the voice, not buried)
-    `[3]volume=${SFX_BUS_DB}dB[sfxb]`,
+    ...sfxFilters,
     `[vox][amb]amix=inputs=2:normalize=0[base]`,
     `[base][musduck]amix=inputs=2:normalize=0[withmus]`,
     `[withmus][sfxb]amix=inputs=2:normalize=0[premaster]`,
@@ -316,10 +327,10 @@ export async function mixAudio(params: MixAudioParams): Promise<void> {
     const stemGraph = [
       ambientFilter(params.timings.silenceDrop, ambientGain, ambientTail, params.timings.ending ?? undefined),
       `[2]volume=${musicGain.toFixed(2)}dB,aloop=loop=-1:size=2e9,volume='${gainExpr}':eval=frame[mus0]`,
-      `[0]volume=${voiceGain.toFixed(2)}dB,asplit=2[vox][voxkey0]`,
+      voiceSplit,
       `[voxkey0]apad=whole_dur=${durationSec.toFixed(3)}[voxkey]`,
       `[mus0][voxkey]sidechaincompress=threshold=0.04:ratio=2:attack=20:release=400[musduck]`,
-      `[3]volume=${SFX_BUS_DB}dB[sfxb]`,
+      ...sfxFilters,
     ].join(';')
     await execFileAsync('ffmpeg', [
       ...inputs, '-filter_complex', stemGraph, '-y',
@@ -342,21 +353,34 @@ async function mixNoMusic(params: MixAudioParams): Promise<void> {
   const voiceGain = await refGain(params.voiceoverPath, 'voice')
   const ambientGain = await refGain(params.ambientPath, 'ambient')
   const ambientTail = ambientTailOf(params.timings)
+  const durationSec = params.timings.durationMs / 1000
+  const sfxDuck = params.timings.sfxDuck
+  const voiceFilters = sfxDuck
+    ? [
+        `[0]volume=${voiceGain.toFixed(2)}dB,asplit=2[vox][sfxkey0]`,
+        `[sfxkey0]apad=whole_dur=${durationSec.toFixed(3)}[sfxkey]`,
+      ]
+    : [`[0]volume=${voiceGain.toFixed(2)}dB[vox]`]
+  const sfxFilters = sfxDuck
+    ? [
+        `[2]volume=${SFX_BUS_DB}dB[sfxraw]`,
+        `[sfxraw][sfxkey]sidechaincompress=threshold=${sfxDuck.threshold}:ratio=${sfxDuck.ratio}:attack=${sfxDuck.attackMs}:release=${sfxDuck.releaseMs}[sfxb]`,
+      ]
+    : [`[2]volume=${SFX_BUS_DB}dB[sfxb]`]
   const pre = [
     ambientFilter(params.timings.silenceDrop, ambientGain, ambientTail, params.timings.ending ?? undefined),
-    `[2]volume=${SFX_BUS_DB}dB[sfxb]`,
-    `[0]volume=${voiceGain.toFixed(2)}dB[vox]`,
+    ...voiceFilters,
+    ...sfxFilters,
     `[vox][amb]amix=inputs=2:normalize=0[base]`,
     `[base][sfxb]amix=inputs=2:normalize=0[premaster]`,
   ]
-  const durationSec = params.timings.durationMs / 1000
   await encodeWithLoudnorm(inputs, pre, durationSec, params.outputPath)
 
   if (params.stemPaths) {
     const stemGraph = [
       ambientFilter(params.timings.silenceDrop, ambientGain, ambientTail, params.timings.ending ?? undefined),
-      `[2]volume=${SFX_BUS_DB}dB[sfxb]`,
-      `[0]volume=${voiceGain.toFixed(2)}dB[vox]`,
+      ...voiceFilters,
+      ...sfxFilters,
     ].join(';')
     await execFileAsync('ffmpeg', [
       ...inputs, '-filter_complex', stemGraph, '-y',
@@ -374,7 +398,15 @@ async function mixNoMusic(params: MixAudioParams): Promise<void> {
 // instead of clicking on and off — this is what carries a heartbeat under a whole walk, or a corridor
 // tone under a scene, from a single ~10s seamless-loop clip.
 export async function premixSfx(params: {
-  sfxEvents: Array<{ storageKey: string; atMs: number; volumeDb: number; endMs?: number | undefined }>
+  sfxEvents: Array<{
+    storageKey: string
+    atMs: number
+    volumeDb: number
+    endMs?: number | undefined
+    durationMs?: number | undefined
+    fadeInMs?: number | undefined
+    fadeOutMs?: number | undefined
+  }>
   durationMs: number
   outputPath: string
   tmpDir: string
@@ -408,7 +440,15 @@ export async function premixSfx(params: {
         `volume=${ev.volumeDb}dB,adelay=${ev.atMs}|${ev.atMs}[sfx${i}]`,
       )
     } else {
-      delayFilters.push(`[${i}]volume=${ev.volumeDb}dB,adelay=${ev.atMs}|${ev.atMs}[sfx${i}]`)
+      const durationSec = ev.durationMs != null ? ev.durationMs / 1000 : null
+      const fadeInSec = Math.min(durationSec ?? Infinity, (ev.fadeInMs ?? 0) / 1000)
+      const fadeOutSec = Math.min(durationSec ?? Infinity, (ev.fadeOutMs ?? 0) / 1000)
+      const trims = durationSec != null ? `atrim=0:${durationSec.toFixed(3)},` : ''
+      const fadeIn = fadeInSec > 0 ? `afade=t=in:d=${fadeInSec.toFixed(3)},` : ''
+      const fadeOut = fadeOutSec > 0 && durationSec != null
+        ? `afade=t=out:st=${Math.max(0, durationSec - fadeOutSec).toFixed(3)}:d=${fadeOutSec.toFixed(3)},`
+        : ''
+      delayFilters.push(`[${i}]${trims}${fadeIn}${fadeOut}volume=${ev.volumeDb}dB,adelay=${ev.atMs}|${ev.atMs}[sfx${i}]`)
     }
     mixInputs.push(`[sfx${i}]`)
   })

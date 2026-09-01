@@ -196,8 +196,16 @@ describe('F1b — outro tail (§4.65)', () => {
       focus: 'music',
       shape: 'resolve',
     })
-    expect(r.durationMs).toBe(11_800)
+    expect(r.durationMs).toBe(12_600)
     expect(r.outroTailMs).toBeUndefined()
+  })
+
+  it('gives a resolve enough post-voice hold to land before its terminal release', () => {
+    expect(endingTailMs('button', 'music')).toBe(650)
+    expect(endingTailMs('resolve', 'music')).toBe(2600)
+    expect(endingTailMs('ring_out', 'music')).toBe(3000)
+    // Silence remains a deliberate short hold, not generic dead air.
+    expect(endingTailMs('resolve', 'silence')).toBe(900)
   })
 
   it('caps an explicitly intentional silent hold', () => {

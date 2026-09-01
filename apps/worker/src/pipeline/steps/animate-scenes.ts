@@ -134,7 +134,13 @@ export async function animateScenes(reelId: string): Promise<void> {
   // protected, so the guard would have "succeeded" and then stranded the reel at the music step anyway).
   // The rest (mix, render, render_qa) is local ffmpeg plus one vision QA call.
   const QA_AND_MIX_RESERVE_CENTS = 30
-  const DOWNSTREAM_RESERVE_CENTS = musicCostCents((channel?.targetSeconds ?? 75) * 1000) + QA_AND_MIX_RESERVE_CENTS
+  // Reserve against the COMPUTED reel length when available. Explicit ending tails intentionally extend
+  // past the channel target, and Eleven Music bills by requested milliseconds; using targetSeconds would
+  // let animation consume money already committed to the ending's music bed.
+  const downstreamDurationMs = timings?.success
+    ? timings.data.durationMs
+    : (channel?.targetSeconds ?? 75) * 1000
+  const DOWNSTREAM_RESERVE_CENTS = musicCostCents(downstreamDurationMs) + QA_AND_MIX_RESERVE_CENTS
   const budgetCap = budgetCapForSeconds(channel?.targetSeconds)
 
   // ── Budget admission (decided up front, before any clip is generated) ──────────────────────────────

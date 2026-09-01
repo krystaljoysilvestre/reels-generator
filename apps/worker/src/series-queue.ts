@@ -11,7 +11,7 @@
 // scheduling policy — freshness/engagement weighting is deliberately out of scope (RFC).
 import { and, asc, eq, inArray, sql } from 'drizzle-orm'
 import { getDb, channelSeries, seriesTopics, reels, recordSpendEvent } from '@reels/db'
-import { llmCall } from '@reels/providers'
+import { llmCall, spendFromError } from '@reels/providers'
 import { buildSeriesTopicsPrompt, SeriesTopicsSchema, SERIES_TOPICS_V1_VERSION } from '@reels/core/prompts/series-topics.v1'
 import { resolveChannelPolicy, requiresRealSubjects } from '@reels/core'
 import { buildEvidenceAcquirePrompt, EvidenceAcquireSchema, EVIDENCE_ACQUIRE_V1_VERSION, renderDossier } from '@reels/core/prompts/evidence-acquire.v1'
@@ -175,8 +175,23 @@ export async function acquireEvidence(
     console.log(`[evidence] "${subject}" — ${sources.length} source(s) (${r.costCents}¢)`)
     return { dossier: `${dossier}\n\nSOURCES:\n${sourceBlock}`, sources }
   } catch (err) {
+    // A schema-repair failure can bill both transports before throwing. Pre-reel spend has no harness to
+    // catch error-attached usage, so carry it into the same owner-attributed ledger as successful calls.
+    const failedCostCents = spendFromError(err)
+    if (channel.userId && failedCostCents > 0) {
+      await recordSpendEvent({
+        userId: channel.userId,
+        channelId: channel.id,
+        surface: 'evidence_acquire',
+        provider: 'openai',
+        costCents: failedCostCents,
+      })
+    }
     // Fail CLOSED: an acquisition error must never fall through to writing from memory.
-    console.warn(`[evidence] "${subject}" failed: ${err instanceof Error ? err.message : String(err)}`)
+    console.warn(
+      `[evidence] "${subject}" failed: ${err instanceof Error ? err.message : String(err)}` +
+        `${failedCostCents > 0 ? ` (${failedCostCents}¢ spent and recorded)` : ''}`,
+    )
     return null
   }
 }

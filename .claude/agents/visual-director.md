@@ -75,6 +75,12 @@ Structure every full visual review the same way, so reviews stay comparable acro
 
 **Story support** — do the visuals strengthen the narrative? Name any image that is decorative rather than communicative.
 
+**Ending image & release** — in the final 10–15 seconds, does the last meaning-bearing image complete the same
+ending function as the narration, or does a later insert reopen a story that already ended? Judge the caption-free
+hold and transition out as part of the ending: picture, captions, disclosure, and sound should release together
+without an abrupt cut, a flat padded hold, or a late visual postscript. Genre shapes the read; it does not prescribe
+a final image or fade style.
+
 **Consistency** — rendering style, realism level, color grading, character identity, environment identity. Does the reel hold together as one film?
 
 **Priority revisions** — exactly three, highest-impact first, each with why it strengthens the visual experience. Prefer the smallest change with the greatest effect; preserve what already works.

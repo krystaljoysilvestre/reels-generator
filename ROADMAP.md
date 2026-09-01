@@ -14,15 +14,41 @@ sequenced this way — lives in `dna/company/roadmap.md` (company DNA starts at
 
 ---
 
-## Now — repeat Crossroads while the audience accumulates (2026-08-24)
+## Now — exit Phase 0 through the product, not the terminal (2026-09-01)
 
 Everything below this section is backlog. This is the only active item.
 
-**Stories Published is 1.** Crossroads' *The Urinal Rejected but Immortalized* went live on YouTube on
-2026-08-24 (`6gcyx9bK2mE`) and is intended to stay up. YouTube's Data API confirmed the public video
-immediately after upload. This is Kendrix's first retained Customer Zero publish. *Edge of Everything*
-remains correctly classified as the earlier OAuth proving run that was taken down
-(decision-log 2026-08-22-001).
+**Founder decision 2026-09-01:** Crossroads reel #5 is frozen. Run a **ten-working-day Phase 0 exit sprint**.
+Four retained publishes are enough to establish repeated creative production provisionally; the unresolved blocker
+is that the latest lap still needed scripts, queue inspection and engineering salvage. Existing reels stay live and
+keep collecting metrics, but a fifth reel is not the roadmap.
+
+### Phase 0 exit gate
+
+One fresh standard short-form reel must complete through the **deployed product**:
+
+1. invite/sign-in → channel → story → storyboard → production → review → export;
+2. no terminal commands, direct SQL, one-off scripts or manual infrastructure salvage;
+3. a forced recoverable provider or queue failure is visible in-product and one-click retry reuses durable work;
+4. retry does not repeat paid provider calls or add the same cost twice;
+5. automated checks prove foreign tenant IDs return 404, suspended users are blocked, storage ownership holds,
+   and reel/user/global spend boundaries are enforced; and
+6. lint, typecheck, unit/integration tests and production build are green on the acceptance build.
+
+Creative review remains allowed and expected. Direct YouTube/TikTok/Facebook publishing, billing, teams,
+long-form, public-launch polish and new creative architecture do **not** block this gate. Direct YouTube may be
+exercised for the founder's connected test channel, but export is the required product boundary.
+
+When the gate clears, the founder makes an explicit Phase 0 → Phase 1 decision. Crossroads then becomes a release
+canary or bounded every-two-to-four-week product check—not the default work queue.
+
+**Stories Published is 4.** Crossroads' *The Urinal Rejected but Immortalized* went live on YouTube on
+2026-08-24 (`6gcyx9bK2mE`); *Apollo 11's One Chance to Leave the Moon* followed on 2026-08-26
+(`DTi3ZhEuPpk`); *Could Binoculars Have Saved the Titanic?* followed on 2026-08-29 (`xIeZIn46B_o`); and
+*The 31 Million Bottle Decision* followed on 2026-09-01 (`WCRkYws2Kho`). All four are intended to stay up,
+and YouTube's Data API confirmed each public video after upload. *Edge of
+Everything* remains correctly classified as the earlier OAuth proving run that was taken down (decision-log
+2026-08-22-001).
 
 ### 1. Publish one Crossroads reel that stays up — complete, observation open
 
@@ -36,17 +62,31 @@ The 2026-08-24 lap completed all three steps:
 3. **Crossroads posted.** The channel-owned YouTube grant published `6gcyx9bK2mE`; the public API confirmed
    liveness. TikTok and Facebook Reels remain manual destinations and do not block the first retained proof.
 
-Do not call consistency proven. One retained publish clears the zero; the active question is whether it
-stays up, produces audience evidence, and can be repeated.
+Do not call weekly consistency or audience value proven. Four retained publishes establish a repeatable creative
+production path; those audience questions continue in observation while product-only completion is the active
+bottleneck.
 
-### 2. The first audience signal — arrived, observation open
+### 2. The first audience signal — automated write verified, observation open
 
-The public read reached 10 views / 0 likes / 0 comments fourteen minutes after upload. This is Kendrix's
-first non-zero viewer signal, but far too small a sample for a creative intervention. The poller was repaired
-2026-08-21, `YOUTUBE_API_KEY` is configured, and the six-hourly schedule needs no OAuth grant. The first
-scheduled write into `metrics`, the 24-hour snapshot and the seven-day snapshot remain open observations.
+Reel #2's 24-hour read landed on 2026-08-27: **112 views / 4 likes / 0 comments** at ~22.5 hours. Reel #1
+reads **88 / 0 / 0** on day three. Nine snapshots now exist across the two publications, all written by the
+scheduled poll through `YOUTUBE_API_KEY`, so the automated write is proven end to end. Reel #2 is ahead of
+reel #1 at every comparable point and carries the first likes any Kendrix reel has drawn — a change from zero,
+not a pattern. The next useful reads are the seven-day snapshots. Do not tune hook, visuals, sound or packaging
+from two reels.
 
-### 3. Produce Crossroads reel #2 — founder playback pending on the meaning-bearing ending
+**The poll only runs while the worker runs.** `registerMetricsPollSchedule` is a repeatable BullMQ job
+(`0 */6 * * *`) inside the worker process; a laptop with no worker on it collects nothing, and BullMQ does not
+backfill the missed hours. `trending_refresh` already has a catch-up call on boot for exactly this reason and
+`metrics_poll` does not — the cheapest possible fix if the gap recurs. Verified 2026-08-27: all five schedules
+registered, next metrics poll 10:00 UTC.
+
+**The deleted proving run still reads as `published`.** `RRvU0b1TFAc` sits in `publications` with
+`status=published` and zero snapshots; every poll asks YouTube for a video that no longer exists and gets
+nothing back, silently. This is decision-log 2026-08-22-001's event-versus-state defect still present in the
+data, and it is the same silent-return shape as the ten-day poller outage.
+
+### 3. Crossroads reel #2 published — observation open
 
 The early number says only that reel #1 is reachable. It did not justify tuning the hook, visuals, sound or
 packaging. Reel #2, *Apollo 11's One Chance to Leave the Moon* (`869103c8`), cleared factual fidelity and
@@ -59,11 +99,12 @@ resolution. The **65.7-second** creator cut now uses fast causal beats for ignit
 then shifts to a slower, warmer coda: “The disaster speech stayed on the page. Three men came home.” The
 final payoff alone receives an additional 12.5% slowdown. The memo is the hinge, Earth/Eagle is the final
 image, and the established bed decays continuously across a three-second release while picture and captions
-fade to black over the final 1.5 seconds. The cut passed
-render QA and independent creator, visual and sound **PUBLISH** review; reel status remains `spot_check`
-until founder playback clears this exact artifact. Measured reel cost is **$5.21** and
-it has **not** been uploaded, so
-Stories Published remains 1 and publishing consistency remains unproven.
+fade to black over the final 1.5 seconds. The cut passed render QA and independent creator, visual and sound
+**PUBLISH** review. Founder playback then cleared this exact artifact after the final payoff alone was slowed.
+The channel-owned grant published it to YouTube as `DTi3ZhEuPpk`; the public Data API confirmed liveness and
+the disclosure flag is recorded. Kendrix keeps the reel itself at `approved` because TikTok and Facebook remain
+manual destinations, while the YouTube `publication` is correctly `published`. Measured reel cost is **$5.21**
+and the YouTube upload cost **$0** (quota-metered, not billed).
 
 The lap cost **$5.33 end to end**: $0.02 evidence acquisition before a reel existed, $0.10 for a rejected
 first candidate whose thin two-source dossier led to unsupported death claims, and $5.21 for the current
@@ -77,9 +118,59 @@ One compatibility repair was necessary: OpenAI had retired `gpt-4o-mini-search-p
 was moved to the Responses API's `web_search` tool on `gpt-4.1-mini`, with its 8,000-token billing floor and
 per-search fee included in exact cost accounting. The creative settings stayed unchanged.
 
-**Next action:** clear founder playback on the 65.7-second creator cut. If it clears, publish it to the
-connected Crossroads YouTube account, confirm public liveness, and leave it up.
-Then observe both retained publishes before choosing an engineering lap.
+### 4. Crossroads reel #3 published — observation open
+
+*Could Binoculars Have Saved the Titanic?* (`d5bec144`) passed factual, visual and technical gates, then
+improved through founder playback: the first mix let effects overpower the opening voice and used arbitrary
+red-word emphasis; the next overcorrected the effects and dropped meaningful emphasis while exposing stray
+top labels. The approved cut keeps seven audible, ducked effects, six semantic red words, and no top labels.
+Its ending resolves the counterfactual without pretending one missing key caused the disaster: the final
+meaningful beat returns to the official finding that **22 knots in known proximity to ice** was the cause.
+No local narration-delivery change was needed; the audio uses a resolving release. Founder corrections were
+provider-free local remix/render work. Measured reel cost is **$6.70**, plus **$0.02** evidence acquisition;
+the YouTube upload cost **$0** (quota-metered, not billed). The channel-owned grant published it as
+`xIeZIn46B_o` on 2026-08-29, and the public Data API confirmed liveness. YouTube rejected the custom Shorts
+thumbnail, so its automatically selected frame remains. Kendrix keeps the reel at `approved` while TikTok and
+Facebook remain manual destinations; its YouTube publication is correctly `published` with disclosure recorded.
+
+### 5. Crossroads reel #4 published — observation open
+
+*The 31 Million Bottle Decision* (`91ebdcf9`) passed render QA after bounded operator recovery preserved
+already-paid work: two failed motion beats degraded to approved stills, and a durable graded visual was salvaged
+after a queue-lock failure rather than rendered again. Manual storyboard review replaced six fabricated product
+labels and document text that automated visual-truth QA had missed. Founder first playback liked the cut and
+supplied one forward note—future endings should hold longer after the final word—so the future `resolve` tail is
+now 2.6 seconds instead of 1.8 seconds. The watched artifact itself was approved without semantic or delivery
+repair. Its measured cost is **$9.32** against an $11.20 cap, including a conservative $5.60 estimate for eight
+timed-out submitted motion calls. The YouTube upload cost **$0**. After the seven-day testing-mode OAuth grant
+expired, the founder renewed the Crossroads connection and the guarded uploader published `WCRkYws2Kho` on
+2026-09-01. The public Data API confirmed liveness and the metrics poll recorded the zero baseline. YouTube
+rejected the custom Shorts thumbnail on account eligibility and retained an automatic frame. TikTok and Facebook
+remain manual destinations, so the reel stays `approved` while its YouTube publication is correctly `published`.
+
+**Next action:** leave all four retained publishes up and observe their scheduled metrics while the Phase 0 exit
+sprint runs. Do not start Reel #5 until the exit gate has cleared and the founder deliberately resumes the ending
+experiment.
+
+For the next **three materially different Crossroads reels**, record the ending's intended function, its final
+meaningful beat, whether the final narration needed a local delivery shift, the selected audio release
+(`button` / `resolve` / `ring_out`), founder first-playback verdict, and revision cost. Genre and channel DNA
+are context; neither assigns the answer. If at least two of the three again need manual repair to ending meaning
+or final-line delivery, graduate the smallest semantic handoff from the story's existing plan into narration and
+sound direction. If they land without it, add no new architecture. Automated QA continues to verify timing,
+continuity, intelligibility, and fades—not whether a lesson, redemption, or unresolved ending was creatively right.
+
+**The ending ledger — 2 of 3 recorded, paused by the 2026-09-01 pivot.** Reel #2 is the motivating case, not
+one of the three. Pausing preserves the preregistered threshold; it does not count as a third result.
+
+| # | Subject | Intended ending function | Final meaningful beat | Delivery shift? | Release | Founder first playback | Revision cost |
+| - | ------- | ------------------------ | --------------------- | --------------- | ------- | ---------------------- | ------------- |
+| 3 | Titanic's missing binoculars — the locked cabinet and the ice warning that never reached the bridge (founder-selected 2026-08-27) | Resolve the counterfactual by separating a documented missed possibility from a single-cause myth | The official finding: 22 knots in known proximity to ice was the cause | No | `resolve` | Revise — effects overpowered the opening voice and emphasis felt arbitrary; approved after local mix/caption repair | $0 provider cost for founder corrections; $6.70 reel + $0.02 evidence |
+| 4 | The 1982 Tylenol crisis — the nationwide withdrawal while the poisoner remained unknown | Resolve the decision by joining the corporate withdrawal and later federal rules without claiming either solved the crime | Two separate decisions answered the same crisis: when certainty was impossible, what risk should remain on the shelf? | No | `resolve` | Like — no repair to ending meaning or delivery; future reels should hold longer after the final word | $0 provider cost for founder correction; $9.32 reel, including conservative timeout cost |
+| 5 | *paused — select only after Phase 0 exit* | — | — | — | — | — | — |
+
+Fill each row from the actual lap, not from the plan. A row becomes evidence only once the founder has watched
+the artifact.
 
 ### What was fixed to get here (2026-08-21)
 
@@ -102,8 +193,9 @@ another channel; that operating assumption is retired. The Crossroads work on de
 identity and sourced narrative is directly relevant foundation work, but it becomes roadmap evidence only
 when a Crossroads reel stays live and produces an audience reading.
 
-**What NOT to do:** turn one retained upload into a platform-integration lap, or split the active proof
-across channels. Observe Crossroads and choose the next lap from its evidence.
+**What NOT to do:** turn the retained uploads into a platform-integration lap, split the active proof across
+channels, or start Reel #5 while the product-only exit gate is open. Observe Crossroads passively; the next
+production artifact is the acceptance lap, not a cadence commitment.
 
 **Launch boundary — implemented is not generally available:**
 
@@ -112,14 +204,14 @@ across channels. Observe Crossroads and choose the next lap from its evidence.
 - Before external users: deploy the production callback, publish homepage/privacy/terms on the verified
   domain, move the OAuth app to Production, submit scope justifications and an end-to-end demo, and pass
   Google verification for `youtube.upload`, `youtube.force-ssl`, and `youtube.readonly`.
-- This verification is **not the active bottleneck while Customer Zero is proving repeat publishing**.
-  Promote it to Now when inviting external creators becomes the next committed action.
+- This verification is **not part of the Phase 0 export gate**. Promote it to Now when arbitrary creators need
+  direct YouTube publishing; the acceptance lap may use manual export or the founder's test-user connection.
 
 **Still worth knowing:**
 
-- `STORY_PLAN_GATE` is on main and unset. The one published reel does not establish whether enabling it
+- `STORY_PLAN_GATE` is on main and unset. Four published reels do not establish whether enabling it
   improves watched output.
-- The watermark is off as of 2026-08-21. The retained Crossroads reel was freshly rendered after removal;
+- The watermark is off as of 2026-08-21. All four retained Crossroads reels were freshly rendered after removal;
   older artifacts still carry it and must not be republished without a free CPU-only re-render.
 - TikTok and Facebook Reels remain honest manual destinations through the post package. Whatever converts
   them to direct publishing should convert **every** caller in the same commit — that omission is exactly

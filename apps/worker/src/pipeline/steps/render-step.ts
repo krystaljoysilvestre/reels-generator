@@ -110,7 +110,9 @@ export async function renderStep(reelId: string): Promise<void> {
   const visualFingerprint = buildInputHash('reel.visual.v1', {
     durationMs: timings.durationMs,
     scenes: timings.scenes.map((s) => `${s.idx}:${s.startMs}:${s.endMs}:${s.tier}`).join('|'), // cut points
-    subtitles: timings.subtitles.map((c) => `${c.startMs}-${c.endMs}:${c.text}`).join('|'),     // burned in
+    subtitles: timings.subtitles.map((c) =>
+      `${c.startMs}-${c.endMs}:${c.text}:${c.words.map((w) => `${w.startMs}-${w.endMs}:${w.text}:${w.emphasis == null ? 'auto' : w.emphasis ? 'on' : 'off'}`).join(',')}`,
+    ).join('|'), // burned in — word marks/timing affect both entrance motion and semantic accent
     images: reelScenes.map((s) => s.imageAssetId ?? 'none').join('|'),
     videos: reelScenes
       .map((s) => (s.tier === 'video' ? (pickVideoAsset(s.idx)?.createdAt.toISOString() ?? 'none') : 'still'))

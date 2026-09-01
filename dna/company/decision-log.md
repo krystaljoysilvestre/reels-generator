@@ -1189,6 +1189,129 @@ performance for YouTube's recommendation system,” TikTok for Business Creative
 ---
 
 
+### 2026-08-31-001
+
+Status: Accepted
+
+Title: Retire the Cited EBN Editor Mechanism
+
+Decision
+
+Do not add a cited-Editor stage to the Evidence-Based Narrative path. Keep ordinary prose correction with the
+Writer and gather the next ending/selection evidence from actual Crossroads production laps. Do not loosen
+sentence lineage to rescue the mechanism; an Editor allowed to select new evidence or cross claim boundaries
+would be a second Writer under another name.
+
+Why
+
+The preregistered nine-draft probe compared one bounded cited-Editor pass with a same-model fresh Writer
+regeneration and the frozen Writer input. Only **1/9** Editor outputs passed the deterministic provenance and
+176–216-word contract. Eight remained over budget; one also cited a fact outside its claim boundary. Fresh
+Writer regeneration was **0/9** mechanically valid. Consequently, 17 of 18 comparisons resolved automatically
+on hard constraints rather than taste. The one valid Editor draft won its blind comparison against the frozen
+input, but one taste win cannot justify a mechanism that failed its defining responsibility on eight inputs.
+
+The result validates the hypothesis's strongest objection: preserving every supported obligation leaves too
+much material to compress, while relaxing evidence ownership turns repair into re-authoring. Exact Anthropic
+spend was **$0.76**, including one failed schema/repair attempt whose attached cost was preserved. Production
+and database rows were unchanged.
+
+Alternatives Considered
+
+**Loosen the lineage contract and rerun.** Rejected. That removes the boundary distinguishing an Editor from a
+second Writer and would make a positive result architecturally uninterpretable.
+
+**Judge all outputs despite duration/provenance failures.** Rejected. Blind preference cannot launder a failed
+hard constraint; the preregistered bar deliberately makes provenance and duration vetoes.
+
+**Add the stage provisionally because the architecture already names an Editor.** Rejected. Architecture names
+a responsibility to test, not an implementation entitlement. Evidence-first development permits dormant
+slots to remain dormant or be retired.
+
+Expected Impact
+
+No production code or pipeline stage is added. The active roadmap stays focused on the next materially
+different Crossroads reel and the ending ledger. Engineering work on semantic handoffs remains gated on
+recurring founder-playback evidence from those production laps.
+
+Review Trigger
+
+Reopen only after multiple new Crossroads stories show the same repair-shaped failure while the Writer's
+evidence selection is demonstrably sound. Any future proposal must explain why it is not the same bounded
+lineage mechanism tested here.
+
+Related Documents
+
+hypotheses/ebn-cited-editor.md, apps/worker/probe-ebn-cited-editor.json,
+apps/worker/scripts/probe-ebn-cited-editor.ts, ROADMAP.md
+
+---
+
+
+### 2026-09-01-001
+
+Status: Accepted
+
+Title: Crossroads Becomes a Release Canary; Phase 0 Exit Becomes the Active Work
+
+Decision
+
+Freeze production of Crossroads reel #5 and run a ten-working-day Phase 0 exit sprint. The sprint succeeds only
+when one fresh standard short-form reel completes through the deployed product from invite/sign-in through
+channel, story, storyboard, production, review and export without terminal commands, direct SQL, one-off scripts
+or engineering salvage. Creative judgment and review remain part of the workflow; invisible engineering rescue
+does not.
+
+The acceptance lap must also prove that a recoverable failure is visible to the creator, one-click retry resumes
+from durable work without repeating paid calls or cost, tenant isolation and spend limits hold in automated tests,
+and lint, typecheck, tests and build are green. Direct social publishing, billing, teams, long-form and public-launch
+polish are outside this exit gate.
+
+Leave the four retained Crossroads reels live and keep collecting their audience data. After Phase 0 exits,
+Crossroads becomes a canary for meaningful releases or a bounded every-two-to-four-week product check, not the
+default roadmap. The unfinished three-reel ending experiment remains paused at two observations rather than being
+silently completed or discarded. Phase 1 begins only after the acceptance lap and an explicit founder decision.
+
+Why
+
+Four retained publishes establish that Kendrix can repeatedly produce founder-approved work. The fourth lap also
+made the real bottleneck unmistakable: paid motion timeouts, a lost queue lock and durable-artifact recovery were
+handled with operator scripts and infrastructure inspection. Another reel would add little proof of creative
+repeatability while reinforcing a workflow that still depends on the builder. Phase 0's own exit criteria require
+a stable end-to-end product and resolved critical production blockers; publishing more artifacts is not a
+substitute for that reliability.
+
+Alternatives Considered
+
+**Produce reel #5 to complete the ending ledger.** Rejected for now. The experiment remains valid, but its marginal
+learning value is lower than proving that the product can complete a reel without engineering intervention.
+
+**Jump directly to Private Alpha.** Rejected. External creators should not be used to discover failures already
+visible in Customer Zero's operator-dependent workflow.
+
+**Treat “finish the SaaS” as a broad feature-building mandate.** Rejected. Billing, teams, long-form and launch
+polish do not determine whether the founder-default short-form workflow can complete reliably.
+
+Expected Impact
+
+Workflow completion, recovery reliability, tenant safety, cost integrity and release confidence should improve.
+New Crossroads production spend pauses during the sprint while the four live reels continue collecting passive
+audience evidence.
+
+Review Trigger
+
+Review when one fresh standard short-form acceptance reel has completed through the deployed product with no
+engineering intervention and all automated exit checks are green. The founder then decides whether Phase 0 exits
+to Phase 1 or whether a specific failed criterion remains the bottleneck.
+
+Related Documents
+
+ROADMAP.md, dna/company/roadmap.md, dna/company/current-metrics.md, dna/company/assumptions.md,
+ARCHITECTURE.md
+
+---
+
+
 ## Relationship to the Decision Framework
 
 The Decision Framework explains how decisions are made.

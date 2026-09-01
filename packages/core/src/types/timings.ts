@@ -45,10 +45,25 @@ export const SfxEventSchema = z.object({
   prompt: z.string(),
   atMs: z.number().int().nonnegative(),
   volumeDb: z.number(),
+  // Optional source-edge shaping for a founder/operator mix correction. Point cues normally keep the
+  // provider clip intact; these fields let a retained cue enter/leave gently without regenerating it.
+  fadeInMs: z.number().int().nonnegative().optional(),
+  fadeOutMs: z.number().int().nonnegative().optional(),
   // Sustained cue: the loop runs from atMs until endMs (resolved from the cue's endAnchor). Absent = point cue.
   endMs: z.number().int().nonnegative().optional(),
 })
 export type SfxEvent = z.infer<typeof SfxEventSchema>
+
+// Optional reel-local SFX duck. This is deliberately persisted with timings rather than made a mixer
+// default: some genres need a foreground hit, while evidence-led narration may need every effect shaded
+// under the spoken record. Values map directly to ffmpeg's sidechain compressor.
+export const SfxDuckSchema = z.object({
+  threshold: z.number().positive().max(1),
+  ratio: z.number().min(1).max(20),
+  attackMs: z.number().int().positive().max(2000),
+  releaseMs: z.number().int().positive().max(5000),
+})
+export type SfxDuck = z.infer<typeof SfxDuckSchema>
 
 export const MusicTimingSchema = z.object({
   type: z.enum(['low_drone', 'drone_swell', 'riser_sting']),
@@ -77,6 +92,7 @@ export const TimingsSchema = z.object({
   scenes: z.array(SceneTimingSchema),
   subtitles: z.array(SubtitleChunkSchema),
   sfxEvents: z.array(SfxEventSchema),
+  sfxDuck: SfxDuckSchema.optional(),
   music: MusicTimingSchema.nullable(),
   silenceDrop: SilenceDropTimingSchema.nullable(),
   // How much of durationMs is the outro tail — the held closing beat AFTER the last spoken word

@@ -102,7 +102,10 @@ export function outroTailMs(genreCategory?: string): number {
 // a long dead hold merely because silence was selected.
 const ENDING_TAIL_MS = {
   button: 650,
-  resolve: 1800,
+  // Owner playback, 2026-09-01: 1.8s left only 1.1s of carried focus before the 0.7s terminal release,
+  // which made an otherwise complete ending feel hurried. 2.6s gives the story-selected layer 1.9s to
+  // land, then preserves the same short release. Shape remains Direction's per-story choice.
+  resolve: 2600,
   ring_out: 3000,
 } as const
 const INTENTIONAL_SILENCE_MAX_MS = 900

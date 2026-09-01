@@ -19,7 +19,14 @@
 
 import { z } from 'zod'
 
-export const EVIDENCE_ACQUIRE_V1_VERSION = 'evidence-acquire.v1'
+export const EVIDENCE_ACQUIRE_V1_VERSION = 'evidence-acquire.v1.1'
+
+// Output ceilings, not content quotas. The acquisition feeds an ~80-second short and runs with a bounded
+// JSON output budget; an unbounded fact list can be factually good and still become unparsable when the
+// transport cuts it mid-string. The researcher chooses what matters within these maxima.
+export const EVIDENCE_MAX_FACTS = 14
+export const EVIDENCE_MAX_FACT_WORDS = 45
+export const EVIDENCE_MAX_SOURCES = 8
 
 export const EvidenceAcquireSchema = z.object({
   // false ⇒ the caller must NOT create a reel. Thin, contradictory or unfindable material is a correct
@@ -32,13 +39,21 @@ export const EvidenceAcquireSchema = z.object({
   // pipeline stores. Fighting the model into prose here would have thrown away the better shape.
   dossier: z
     .union([
-      z.string(),
-      z.array(z.object({ fact: z.string(), date: z.string().default(''), source: z.string().default('') })),
+      z.string().max(8_000),
+      z.array(z.object({
+        fact: z.string().min(1).max(500),
+        date: z.string().max(80).default(''),
+        source: z.string().max(160).default(''),
+      })).max(EVIDENCE_MAX_FACTS),
     ])
     .default(''),
   sources: z
-    .array(z.object({ title: z.string(), url: z.string(), outlet: z.string().default('') }))
-    .max(12)
+    .array(z.object({
+      title: z.string().max(300),
+      url: z.string().max(2_000),
+      outlet: z.string().max(160).default(''),
+    }))
+    .max(EVIDENCE_MAX_SOURCES)
     .default([]),
   // One short line for the operator/digest when sufficient is false ("only one outlet, and it is a
   // tabloid"), so an unsourceable subject is legible rather than mysterious.
@@ -70,6 +85,7 @@ WHAT TO WRITE when the material IS sufficient:
 - Facts, attributed and dated: what happened, when, who said or did it, what the numbers are, and who reported it.
 - Where sources DISAGREE, say so explicitly and give both — the video's job is to present that honestly, and it cannot if you flatten it here.
 - Mark what is confirmed versus alleged, claimed, or still developing. Do not upgrade a claim into a fact.
+- Select only the evidence necessary to understand this subject's crossroads and causal consequence: at most ${EVIDENCE_MAX_FACTS} atomic facts, each at most ${EVIDENCE_MAX_FACT_WORDS} words, and at most ${EVIDENCE_MAX_SOURCES} sources. These are maximums, not targets; return fewer when fewer are enough.
 - No narrative, no hook, no framing, no opinion. Raw material only.${
     v.allowPeople
       ? ''
@@ -86,7 +102,7 @@ Search for current, real reporting on this subject and assemble the source mater
 OUTPUT (JSON only):
 {
   "sufficient": true only if you found real, retrievable reporting solid enough to build a factual video on,
-  "dossier": the attributed, dated facts. EITHER one string, OR a list of { "fact": "", "date": "", "source": "" } — a list is preferred when the material is genuinely a set of dated claims. "" if insufficient,
+  "dossier": the attributed, dated facts. EITHER one concise string, OR a list of at most ${EVIDENCE_MAX_FACTS} objects { "fact": "at most ${EVIDENCE_MAX_FACT_WORDS} words", "date": "", "source": "" }. A list is preferred when the material is genuinely a set of dated claims. "" if insufficient,
   "sources": [{ "title": "", "url": "", "outlet": "" }],
   "reason": "one line; required when sufficient is false"
 }`
