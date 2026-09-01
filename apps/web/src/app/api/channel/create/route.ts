@@ -8,7 +8,7 @@ import { SourcePolicySchema, ToneConfigSchema, WorldBibleSchema, ChannelVoiceSch
 import { classifyGenre, GENRE_MODULE_VALUES, asGenreModule } from '@reels/core/prompts/scenes.v1'
 import { STYLE_VALUES, resolveStyle } from '@reels/core/prompts/story-styles.v1'
 import { VOICE_VALUES, resolveVoice } from '@reels/core/prompts/story-voices.v1'
-import { requireApiUser } from '@/lib/api-access'
+import { callerMayUseStorageKey, requireApiUser, requireChannelOwner } from '@/lib/api-access'
 
 const InputSchema = z.object({
   name: z.string().trim().min(1).max(80),
@@ -102,6 +102,16 @@ export async function POST(req: NextRequest) {
   }
 
   const c = parsed.data
+  if (c.draftChannelId) {
+    const draftGate = await requireChannelOwner(c.draftChannelId)
+    if (draftGate instanceof NextResponse) return draftGate
+  }
+  const suppliedStorageKeys = [c.avatarKey, c.styleImageKey, ...c.sound.tracks.map((track) => track.path)]
+    .filter((key): key is string => typeof key === 'string')
+  const storageAccess = await Promise.all(suppliedStorageKeys.map((key) => callerMayUseStorageKey(user, key)))
+  if (storageAccess.some((allowed) => !allowed)) {
+    return NextResponse.json({ error: 'One or more selected assets are unavailable' }, { status: 400 })
+  }
   if (c.voiceMode === 'single' && c.voicePool.length < 1) {
     return NextResponse.json({ error: 'Pick a voice for single-voice channels' }, { status: 400 })
   }
@@ -257,5 +267,6 @@ export async function POST(req: NextRequest) {
   // AI-music channels compose a fresh, story-fit bed PER REEL at render time (generate_music) seeded by
   // the channel's audioMood — nothing to pre-generate here. (Was: a bespoke channel bed pool at creation.)
 
+  console.log(`[audit] channel.create actor=${user.id} channel=${channel!.id} outcome=${c.draftChannelId ? 'promoted' : 'created'}`)
   return NextResponse.json({ channelId: channel!.id })
 }

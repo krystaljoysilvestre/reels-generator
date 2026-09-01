@@ -88,6 +88,7 @@ export interface RemotionRenderInput {
   height?: number
   grain: number
   vignette: number
+  endingFadeMs?: number
   disclosure?: string // persistent synthetic-media/illustration label (EBN reels); undefined = none
   outputPath: string
   onProgress?: (progress: number) => void
@@ -278,6 +279,7 @@ export async function renderReelWithRemotion(input: RemotionRenderInput): Promis
     captionSafeZonePct: input.captionSafeZonePct,
     grain: input.grain,
     vignette: input.vignette,
+    ...(input.endingFadeMs ? { endingFadeMs: input.endingFadeMs } : {}),
     ...(input.disclosure ? { disclosure: input.disclosure } : {}),
   }
 
@@ -444,4 +446,3 @@ export async function renderThumbnailStill(input: {
     ...(browserExecutable ? { browserExecutable } : {}),
   })
 }
-

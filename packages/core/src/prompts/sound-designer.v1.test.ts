@@ -8,7 +8,7 @@ const SCENES: DesignerScene[] = [
 
 describe('buildSoundDesignerPrompt', () => {
   it('marks hero scenes and includes each scene lead', () => {
-    const { system, userMessage } = buildSoundDesignerPrompt('Gabi na noon… May sumagot sa likod ko.', SCENES, 'horror')
+    const { userMessage } = buildSoundDesignerPrompt('Gabi na noon… May sumagot sa likod ko.', SCENES, 'horror')
     expect(userMessage).toContain('HERO')
     expect(userMessage).toContain('May sumagot sa likod ko')
   })
@@ -214,6 +214,7 @@ describe('SoundDesignSchema', () => {
       music: { type: 'low_drone', peakAnchor: 'May sumagot' },
       sfx: [{ anchor: 'sumagot', prompt: 'low boom sting', impactAtEnd: true }],
       silenceDrop: { anchor: 'May sumagot sa likod ko', durationMs: 900 },
+      ending: { anchor: 'May sumagot', focus: 'ambience', shape: 'ring_out' },
     })
     expect(parsed.voices).toEqual([])
     expect(parsed.sfx[0]!.impactAtEnd).toBe(true)
@@ -224,6 +225,7 @@ describe('SoundDesignSchema', () => {
     const mk = (n: number) => ({
       ambient: { packTags: ['x'] },
       sfx: [],
+      ending: { anchor: 'ending', focus: 'music' as const, shape: 'resolve' as const },
       voices: Array.from({ length: n }, (_, i) => ({ anchor: `a${i}`, words: 'hi' })),
     })
     expect(() => SoundDesignSchema.parse(mk(2))).not.toThrow()
@@ -234,7 +236,18 @@ describe('SoundDesignSchema', () => {
     SoundDesignSchema.parse({
       ambient: { packTags: ['x'] },
       sfx: [{ anchor: 'a', prompt: 'p', ...extra }],
+      ending: { anchor: 'ending', focus: 'music', shape: 'resolve' },
     }).sfx[0]!
+
+  it('requires explicit, number-free ending direction', () => {
+    const parsed = SoundDesignSchema.parse({
+      ambient: { packTags: ['x'] },
+      sfx: [],
+      ending: { anchor: 'final clause', focus: 'music', shape: 'resolve' },
+    })
+    expect(parsed.ending).toEqual({ anchor: 'final clause', focus: 'music', shape: 'resolve' })
+    expect(() => SoundDesignSchema.parse({ ambient: { packTags: ['x'] }, sfx: [] })).toThrow()
+  })
 
   it('clamps targetDurationSec into [1, 22] and leaves it undefined when absent', () => {
     expect(oneCue({ targetDurationSec: 0.5 }).targetDurationSec).toBe(1)

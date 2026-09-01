@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   computeTimings,
   outroTailMs,
+  endingTailMs,
   AlignmentLengthError,
   SceneCoverageError,
   type ComputeTimingsInput,
@@ -178,6 +179,44 @@ describe('F1b — outro tail (§4.65)', () => {
     })
     expect(r.durationMs).toBe(20000 + outroTailMs('horror'))
     expect(r.warnings.some((w) => w.includes('ring-out'))).toBe(false)
+  })
+
+  it('resolves explicit ending intent without a genre-authored duration', () => {
+    const input = baseTailInput('informational')
+    input.audioScript = {
+      ...input.audioScript,
+      ending: { anchor: 'May nakatayo sa dulo.', focus: 'music', shape: 'resolve' },
+    }
+    const r = computeTimings(input)
+    const expectedStart = input.alignment[narration.indexOf('May nakatayo')]!.startMs
+    expect(r.ending).toEqual({
+      startMs: expectedStart,
+      voiceEndMs: 10_000,
+      endMs: 10_000 + endingTailMs('resolve', 'music'),
+      focus: 'music',
+      shape: 'resolve',
+    })
+    expect(r.durationMs).toBe(12_600)
+    expect(r.outroTailMs).toBeUndefined()
+  })
+
+  it('gives a resolve enough post-voice hold to land before its terminal release', () => {
+    expect(endingTailMs('button', 'music')).toBe(650)
+    expect(endingTailMs('resolve', 'music')).toBe(2600)
+    expect(endingTailMs('ring_out', 'music')).toBe(3000)
+    // Silence remains a deliberate short hold, not generic dead air.
+    expect(endingTailMs('resolve', 'silence')).toBe(900)
+  })
+
+  it('caps an explicitly intentional silent hold', () => {
+    const input = baseTailInput()
+    input.audioScript = {
+      ...input.audioScript,
+      ending: { anchor: 'May nakatayo sa dulo.', focus: 'silence', shape: 'ring_out' },
+    }
+    const r = computeTimings(input)
+    expect(r.durationMs).toBe(10_900)
+    expect(r.ending?.voiceEndMs).toBe(10_000)
   })
 })
 

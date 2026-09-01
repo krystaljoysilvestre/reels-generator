@@ -40,6 +40,14 @@ describe('pickEmphasis', () => {
     expect(pickEmphasis(words)).toBe(0)
   })
 
+  it('respects an explicitly unaccented line', () => {
+    const words = [
+      { ...w('Southampton', 900, 0), emphasis: false },
+      { ...w('lookouts', 300, 920), emphasis: false },
+    ]
+    expect(pickEmphasis(words)).toBe(-1)
+  })
+
   it('returns -1 when there is nothing to land on', () => {
     expect(pickEmphasis([])).toBe(-1)
     expect(pickEmphasis([w('—', 400, 0), w('a', 300, 500)])).toBe(-1)

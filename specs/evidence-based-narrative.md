@@ -207,22 +207,24 @@ evidence discipline in full and explicitly does not want the rendering — its b
 cinematic … realistic or editorial imagery, maps, diagrams, data visualization". Routing it into `ebn`
 to get the evidence guarantees would have silently overwritten the creator's stated visual identity.
 
-So **Source Policy deliberately routes `evidenceRequired` → `factCheck` and NEVER → `storyMode`**
-([source-policy.ts](../packages/core/src/types/source-policy.ts)). Evidence discipline for a non-EBN
-channel is delivered by requiring a dossier and acquiring one when autopilot runs
-([evidence-acquire.v1](../packages/core/src/prompts/evidence-acquire.v1.ts)) — not by adopting EBN.
+So **Source Policy deliberately routes `evidenceRequired` → the evidence-constrained story chain and
+NEVER → `storyMode`** ([source-policy.ts](../packages/core/src/types/source-policy.ts)). A non-EBN
+channel that requires evidence starts from a dossier, freezes an Evidence Bible, writes cited prose, and
+runs the Fact-Fidelity Checker. It still keeps its own rendering profile. `storyMode='ebn'` remains the
+separate choice that activates EBN's never-photoreal illustrative treatment and disclosure.
 
-**Nothing may deepen this weld.** Splitting EBN into `evidence discipline × rendering profile` is a
-separate lap; until then, do not design as though the bundling were intended. The visual guardrail above
-remains absolutely correct for EBN — the point is only that it is a *rendering* decision that happens to
-live inside a *narrative* mode flag.
+This split was completed after a live Crossroads failure (2026-08-22): a post-hoc checker correctly
+caught an unrelated generated story, but only after the system had paid to write it. The fix moves
+evidence upstream as the substrate for every `evidenceRequired` reel while leaving visual identity
+downstream and mode-specific. The EBN visual guardrail remains absolute for EBN; standard factual
+channels do not inherit it merely because they share the evidence discipline.
 
 ## Two checkers, cleanly separated
 
 The existing gate conflates craft and correctness. EBN splits them:
 
 - **Fact-Fidelity Checker (NEW — factual only).** Runs against the citation map + Evidence Bible, and asks *only*: Was anything **added** (a sentence with no citation, or reaching beyond its claim's evidence)? Anything **removed** (a `Critical` fact absent)? Was **attribution preserved**? Was **certainty changed** (a stance upgraded)? Was **actual chronology distorted**? Did **dialogue** appear? Were **motives invented**? It ignores prose quality entirely, and citability makes most of these a lookup rather than a judgment call.
-- **Narrative-Quality Checker (existing).** The story gate + finishing-QA judge already built — prose, turn-landing, naturalness, rhythm.
+- **Narrative-Quality Checker (existing, now shared by both story paths).** The final story gate runs on evidence-constrained narration before storyboarding, just as it does on the standard Writer path. Its structured essence verdict rejects a factually faithful script that still leaves a first-time listener unable to state the central change and consequence. It judges sufficiency relative to the story's promise — never through a minimum duration, beat quota, or prescribed surface pattern. The finishing-QA judge remains an optional advisory punch-list.
 
 Then **Publisher** (with disclosure). Clean responsibilities: one stage owns *is it true to the evidence*, the other owns *is it good*.
 

@@ -1,6 +1,6 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
-import { getDb, reels, channels, publications } from '@reels/db'
+import { getDb, reels, channels, publications, visualTruthBlockers } from '@reels/db'
 import { eq } from 'drizzle-orm'
 import { transition } from '@reels/core'
 import { requireReelOwner } from '@/lib/api-access'
@@ -18,6 +18,10 @@ export async function POST(req: NextRequest) {
 
   const reel = await db.query.reels.findFirst({ where: eq(reels.id, reelId) })
   if (!reel) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  const truthBlockers = await visualTruthBlockers(reelId)
+  if (truthBlockers.length > 0) {
+    return NextResponse.json({ error: 'Fix the flagged visual-truth scenes before publishing.', blockers: truthBlockers }, { status: 409 })
+  }
 
   // Publishing is allowed only from approved/scheduled — return 409 (not an opaque 500) otherwise.
   try {

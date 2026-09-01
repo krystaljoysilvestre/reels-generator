@@ -1,14 +1,13 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { eq, and } from 'drizzle-orm'
-import { getDb, reels, channels, assets, publications, platformConnections, sceneImageOrigins } from '@reels/db'
+import { getDb, reels, channels, assets, publications, sceneImageOrigins, resolveYouTubeAuth, markConnectionError, visualTruthBlockers } from '@reels/db'
 import { transition, PostMetaSchema, formatPostCaption, formatImageCredits, StoryBibleSchema, resolveSidecarSrt } from '@reels/core'
 import { downloadBuffer, uploadToYouTube, toElevenLabsLang } from '@reels/providers'
 import { requireReelOwner } from '@/lib/api-access'
-import { decryptCredential } from '@/lib/publishing-credentials'
 
-// Post an approved reel straight to YouTube (env-gated — the manual zip flow is untouched when the
-// YOUTUBE_* vars are unset). Uploads the render with the reel's post package as title/description,
+// Post an approved reel straight to YouTube using the CHANNEL's own connection (the manual zip flow is
+// untouched when the channel isn't connected). Uploads the render with the reel's post package as title/description,
 // records the yt publications row, and marks the reel published. The worker's auto-publish path
 // (auto-gate) mirrors this — keep the two in sync.
 export async function POST(req: NextRequest) {
@@ -21,16 +20,12 @@ export async function POST(req: NextRequest) {
   const db = getDb()
   const reel = await db.query.reels.findFirst({ where: eq(reels.id, reelId), with: { story: true } })
   if (!reel) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  const connection = await db.query.platformConnections.findFirst({
-    where: and(
-      eq(platformConnections.channelId, reel.channelId),
-      eq(platformConnections.platform, 'yt'),
-      eq(platformConnections.status, 'active'),
-    ),
-  })
-  const youtubeClientId = process.env['YOUTUBE_CLIENT_ID']
-  const youtubeClientSecret = process.env['YOUTUBE_CLIENT_SECRET']
-  if (!connection?.refreshTokenEncrypted || !youtubeClientId || !youtubeClientSecret) {
+  const truthBlockers = await visualTruthBlockers(reelId)
+  if (truthBlockers.length > 0) {
+    return NextResponse.json({ error: 'Fix the flagged visual-truth scenes before publishing.', blockers: truthBlockers }, { status: 409 })
+  }
+  const auth = await resolveYouTubeAuth(reel.channelId)
+  if (!auth) {
     return NextResponse.json({ error: 'Connect this channel to YouTube first.' }, { status: 409 })
   }
 
@@ -83,17 +78,11 @@ export async function POST(req: NextRequest) {
       tags,
       ...(thumbnailJpeg ? { thumbnailJpeg } : {}),
       ...(captionsSrt ? { captionsSrt, captionsLanguage } : {}),
-      auth: {
-        clientId: youtubeClientId,
-        clientSecret: youtubeClientSecret,
-        refreshToken: decryptCredential(connection.refreshTokenEncrypted),
-      },
+      auth,
     })
   } catch (err) {
     console.error(`[publishing] YouTube upload failed for reel ${reelId}:`, err)
-    await db.update(platformConnections).set({
-      status: 'error', lastError: err instanceof Error ? err.message.slice(0, 500) : String(err).slice(0, 500), updatedAt: new Date(),
-    }).where(eq(platformConnections.id, connection.id))
+    await markConnectionError(reel.channelId, 'yt', err instanceof Error ? err.message : String(err))
     return NextResponse.json(
       { error: 'The YouTube upload didn’t go through. Reconnect the account and try again.' },
       { status: 502 },
@@ -122,7 +111,7 @@ export async function POST(req: NextRequest) {
   if (youtubeOnly) {
     await db.update(reels).set({ status: 'published', updatedAt: new Date() }).where(eq(reels.id, reelId))
   }
-  console.log(`[publishing] reel ${reelId} published to YouTube account ${connection.providerAccountId}`)
+  console.log(`[publishing] reel ${reelId} published to YouTube`)
 
   return NextResponse.json({ ok: true, videoUrl: result.url, allDestinationsPublished: youtubeOnly })
 }

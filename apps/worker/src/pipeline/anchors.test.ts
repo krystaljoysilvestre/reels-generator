@@ -40,6 +40,14 @@ describe('validateAnchorUniqueness', () => {
     expect(errs).toHaveLength(1)
     expect(errs[0]).toContain('silenceDrop')
   })
+  it('validates the ending-direction anchor too', () => {
+    const errs = validateAnchorUniqueness(narration, {
+      sfx: [],
+      ending: { anchor: 'missing final cadence' },
+    })
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('ending')
+  })
   it('skips empty anchor strings and handles no cues', () => {
     expect(validateAnchorUniqueness(narration, { sfx: [{ anchor: '' }] })).toEqual([])
     expect(validateAnchorUniqueness(narration, { sfx: [], silenceDrop: null })).toEqual([])

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { assembleImagePrompt, castNationality } from './imageprompt.js'
+import { assembleImagePrompt, castNationality, historicalEraDirective } from './imageprompt.js'
 import { StoryBibleSchema, EMPTY_STORY_BIBLE, type StoryBible } from '../types/story-bible.js'
 
 const STYLE = 'grainy 16mm horror still, desaturated palette'
@@ -138,5 +138,19 @@ describe('assembleImagePrompt — cast directive', () => {
   })
   it('omits the clause when cast is empty (unchanged behavior)', () => {
     expect(assembleImagePrompt(ACTION, STYLE, undefined, undefined, '')).toBe(`${STYLE}, ${ACTION}`)
+  })
+})
+
+describe('historicalEraDirective', () => {
+  it('carries a historical era and region into independent image calls', () => {
+    expect(historicalEraDirective('1917', 'New York City')).toContain('historically accurate to 1917 in New York City')
+    expect(historicalEraDirective('1917', 'New York City')).toContain('artworks, and display conventions are period-authentic')
+    expect(historicalEraDirective('1917', 'New York City')).toContain('no later-era features')
+  })
+
+  it('does not force a historical treatment onto modern or unspecified stories', () => {
+    expect(historicalEraDirective('modern-day', 'Manila')).toBeUndefined()
+    expect(historicalEraDirective('unknown')).toBeUndefined()
+    expect(historicalEraDirective('')).toBeUndefined()
   })
 })

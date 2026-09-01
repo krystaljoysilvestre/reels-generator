@@ -16,6 +16,10 @@ dist/
 # Claude Code (local/personal settings)
 .claude/settings.local.json
 
+# Codex desktop hooks (machine-local paths and personal automation)
+.codex/hooks.json
+.codex/hooks/
+
 # OS
 .DS_Store
 Thumbs.db

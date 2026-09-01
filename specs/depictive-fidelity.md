@@ -114,6 +114,87 @@ identical and semantically opposite. Reference conditioning also transfers an ar
 (signature, plinth, exhibition tag) wholesale, which fights any counterfactual beat needing the object
 stripped of exactly those marks. Unlike a place or a person, a titled artwork's markings **are** its identity.
 
+### Verified visual identity is inherited, not attached scene-by-scene (2026-08-23)
+
+**Founder decision.** When a factual story depicts a specific real subject whose identity is load-bearing,
+Kendrix resolves one verified, rights-eligible visual anchor on the Story Bible entity and every scene that
+depicts that exact subject and state inherits it automatically. This is a correctness constraint, independent
+of genre or language; shot choice, composition, lighting, and channel style remain the director's judgment.
+
+Crossroads exposed a consumption failure rather than a missing sourcing mechanism. The verified Stieglitz
+image was installed on one scene, not on `duchamp-fountain`, while other scenes were mis-bound or unbound.
+They therefore invented unrelated fixtures even though the reel already held the right source.
+
+The rule is deliberately **identity-and-state aware**, not "source anything searchable":
+
+- A named real place, object, animal, or eligible historical person gets a canonical source anchor only when
+  the source is verified and the subject's identity matters to the story.
+- A materially different story-time state selects one appearance of the same identity. For *Fountain*, the
+  unmarked shop fixture and the signed, rotated artwork are distinct visual states; the signature, plinth,
+  and exhibition orientation must not leak backward.
+- Generic, anonymous, fictional, incidental, unverifiable, or wrong-era subjects remain generated or
+  withheld under the existing depiction mode. The existence of a searchable image is not itself a reason to
+  use it.
+- Presented archival media remains untouched and separate from a conditioning reference. Provenance,
+  disclosure, human eligibility, and subject-rights review remain load-bearing.
+
+**Pipeline consequence.** Subject routing must be available to scene planning, before it chooses entity
+bindings. After the director chooses the exact entity/state visible in each shot, deterministic code resolves
+the corresponding reference key for every automatic generation and reshoot consumer. A scene claiming a
+`reference_plate` identity without a verified sourced anchor is a bounded pre-image failure, not a silent
+text-only or independently generated fallback. QA judges the rendered identity; it does not infer or rewrite
+the director's entity intent after image spend.
+
+**Smallest proof on Crossroads.** Hand-label the eight scenes as `generic precursor`, `canonical Fountain`,
+`presented archival`, or `not depicted`; require the source-enriched plan to match those labels before any
+image call; then regenerate only canonical-*Fountain* scenes from the same plate. The proof fails if the
+object changes identity, if finished-artwork details leak into a precursor beat, or if the anchor flattens
+the intended shot variety.
+
+### Source identity is exact, and only depictable subjects become entities (2026-08-23)
+
+The next Crossroads board exposed two different errors that looked like one generic “bad history image”
+problem:
+
+1. `society-of-independent-artists-exhibition` conflated an organization/event with a physical venue. The
+   analyzer therefore froze an invented modern gallery as a recurring location and the renderer faithfully
+   repeated that invention across document close-ups.
+2. *The Blind Man* resolved to the article's April 1917 lead image even though the scene required the May
+   issue containing *Fountain*. The parent publication matched; the edition did not.
+
+These produce two universal constraints:
+
+- **An organization, institution, committee, movement, or historical event is story context, not by itself a
+  visual Story Bible identity.** Extract the actual named building/site, document, artifact, person, or other
+  concrete subject only when the narration supports it. A voiceover itinerary may name the event in
+  `locationLabel`, but `locationEntityId` stays null unless the physical venue itself is established.
+- **A single factual shot can still carry a load-bearing real identity.** The ordinary Story Bible favours
+  recurring subjects because continuity has no value for a disposable prop. Depictive fidelity has a narrower
+  exception: when even one shot explicitly depicts a named real artwork, dated publication issue, document,
+  landmark, vehicle, animal, or other concrete subject whose exact identity matters, it must enter the Bible
+  so routing can source it. Merely mentioning a person, organization, or event does not trigger the exception.
+- **A dated, editioned, versioned, marked, damaged, restored, or otherwise state-specific source matches only
+  when that exact state matches.** The article lead is one candidate, never the verdict. If it fails the
+  state/edition check, non-human sourcing may search Commons directly for a better candidate; every candidate
+  still passes the same identity-and-state verifier. Human sourcing never gains that free-text fallback.
+
+The director still chooses the most truthful shot for the beat. These rules do not force an archival image
+into a scene it cannot support, and they do not prescribe a visual style. They prevent the system from
+anchoring a scene to the wrong kind of subject or the wrong historical instance.
+
+#### Present the source when the source is the claim
+
+A verified source has two different legitimate uses, and the scene plan must choose between them:
+
+- **Condition** — the source anchors identity while a new reconstruction is generated.
+- **Present** — the untouched source pixels are the shot because the narration is discussing that photograph,
+  issue page, document, artwork reproduction, map, or piece of evidence itself.
+
+Never ask an image model to recreate a source that the audience is meant to inspect. A plausible facsimile is
+more misleading than an unrelated illustration. Conversely, a source that is merely mentioned, belongs to a
+later moment, or depicts a different state must not leak into the generated frame. `sourcePresentationEntity`
+records the explicit per-scene choice; it is valid only for the sourced primary entity in its base state.
+
 ### Boundary with the depictive-ethics floor
 
 The floor governs what a depiction may **claim**; this governs what may be **sourced** and how. Both are required and neither exempts the other — the 2026-07-24 DTI failure violated depiction with zero sourced references involved. Where they touch (long-dead figures), this defers to the floor's CARE tier.

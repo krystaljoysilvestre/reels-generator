@@ -2,9 +2,8 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { and, eq } from 'drizzle-orm'
 import { z } from 'zod'
-import { getDb, platformConnections } from '@reels/db'
+import { getDb, platformConnections, decryptCredential } from '@reels/db'
 import { requireChannelOwner } from '@/lib/api-access'
-import { decryptCredential } from '@/lib/publishing-credentials'
 
 const Body = z.object({ channelId: z.string().uuid() })
 

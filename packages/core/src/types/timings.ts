@@ -45,10 +45,25 @@ export const SfxEventSchema = z.object({
   prompt: z.string(),
   atMs: z.number().int().nonnegative(),
   volumeDb: z.number(),
+  // Optional source-edge shaping for a founder/operator mix correction. Point cues normally keep the
+  // provider clip intact; these fields let a retained cue enter/leave gently without regenerating it.
+  fadeInMs: z.number().int().nonnegative().optional(),
+  fadeOutMs: z.number().int().nonnegative().optional(),
   // Sustained cue: the loop runs from atMs until endMs (resolved from the cue's endAnchor). Absent = point cue.
   endMs: z.number().int().nonnegative().optional(),
 })
 export type SfxEvent = z.infer<typeof SfxEventSchema>
+
+// Optional reel-local SFX duck. This is deliberately persisted with timings rather than made a mixer
+// default: some genres need a foreground hit, while evidence-led narration may need every effect shaded
+// under the spoken record. Values map directly to ffmpeg's sidechain compressor.
+export const SfxDuckSchema = z.object({
+  threshold: z.number().positive().max(1),
+  ratio: z.number().min(1).max(20),
+  attackMs: z.number().int().positive().max(2000),
+  releaseMs: z.number().int().positive().max(5000),
+})
+export type SfxDuck = z.infer<typeof SfxDuckSchema>
 
 export const MusicTimingSchema = z.object({
   type: z.enum(['low_drone', 'drone_swell', 'riser_sting']),
@@ -63,17 +78,30 @@ export const SilenceDropTimingSchema = z.object({
 })
 export type SilenceDropTiming = z.infer<typeof SilenceDropTimingSchema>
 
+export const EndingTimingSchema = z.object({
+  startMs: z.number().int().nonnegative(),
+  voiceEndMs: z.number().int().positive(),
+  endMs: z.number().int().positive(),
+  focus: z.enum(['music', 'ambience', 'silence']),
+  shape: z.enum(['button', 'resolve', 'ring_out']),
+})
+export type EndingTiming = z.infer<typeof EndingTimingSchema>
+
 export const TimingsSchema = z.object({
   durationMs: z.number().int().positive(),
   scenes: z.array(SceneTimingSchema),
   subtitles: z.array(SubtitleChunkSchema),
   sfxEvents: z.array(SfxEventSchema),
+  sfxDuck: SfxDuckSchema.optional(),
   music: MusicTimingSchema.nullable(),
   silenceDrop: SilenceDropTimingSchema.nullable(),
   // How much of durationMs is the outro tail — the held closing beat AFTER the last spoken word
   // (compute-timings §4.65). The mixer resolves the music bed across it instead of hard-cutting at
   // full level. Optional so timings persisted before the tail existed still parse.
   outroTailMs: z.number().int().nonnegative().optional(),
+  // Explicit ending direction, resolved from AudioScript. New mixes use this instead of inferring the
+  // voice boundary from total duration (which is wrong when a climax ring-out extends the reel).
+  ending: EndingTimingSchema.nullable().optional(),
   warnings: z.array(z.string()),
 })
 export type Timings = z.infer<typeof TimingsSchema>

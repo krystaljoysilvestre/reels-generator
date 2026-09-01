@@ -802,6 +802,516 @@ packages/core/src/types/post-meta.ts (`thumbnailText`, `thumbnailOverlay`, `thum
 ---
 
 
+### 2026-08-11-001
+
+Status: Accepted — **partially corrected by 2026-08-22-001.** The upload described here was a proving run and was taken down; the per-channel authorization decision stands, the "published for the first time" reading does not.
+
+Title: Publishing Accounts Are Owned Per Channel — and Customer Zero Published for the First Time
+
+Decision
+
+Own platform authorization on the **channel**, not the installation. One creator connects different brand accounts to different Kendrix channels; `platform_connections` holds the grant, bound to the signed-in owner and encrypted at rest with AES-256-GCM. Then publish for real: *Edge of Everything* went public on YouTube on 2026-08-11 as `RRvU0b1TFAc`, through that path.
+
+Why
+
+The Phase 0 → Phase 1 gate is *"Customer Zero can consistently produce publishable content"*, and for seven weeks the count was zero. The packaging repair (2026-08-10-001) removed the founder's three named disqualifiers, and the reel that followed cleared the bar. **Stories Published moved 0 → 1.**
+
+Per-channel ownership was not a convenience. A single operator-wide refresh token uploads to whichever YouTube account minted it, so a portfolio of channels either shares one destination or publishes to the wrong one. Since Kendrix's model is *one operator, multiple channels*, installation-wide credentials contradict the product's own shape.
+
+Alternatives Considered
+
+**One operator-wide token, deferring per-channel ownership.** Rejected — and the code comment that deferred it (*"a per-channel token store is a deliberate later step; Phase 1 assumes the operator's primary channel"*) is exactly the assumption that would have broken on the second channel.
+
+**Direct TikTok and Facebook publishing in the same lap.** Rejected. TikTok needs Content Posting API audit and Facebook needs Meta Page review; both stay honest manual destinations through the post package, and neither blocks Customer Zero from publishing today.
+
+Expected Impact
+
+The gate is crossed once. **Consistency is not proven, and one publish must not be read as the exit criterion met** — the criterion is an adverb.
+
+Review Trigger
+
+General availability is a separate question from implementation: the Google OAuth app is in **Testing**, so grants expire after seven days and arbitrary users cannot rely on the path. Production verification is not the bottleneck while Customer Zero proves repeat publishing — promote it when inviting external creators becomes the committed action.
+
+Related Documents
+
+apps/web/src/app/api/pipeline/publish-youtube/route.ts, apps/web/src/app/api/publishing/youtube/, packages/db (platform_connections), migration 0060, decision-log 2026-08-10-001, decision-log 2026-08-21-002 (the callers this entry left behind)
+
+---
+
+### 2026-08-17-001
+
+Status: Accepted
+
+Title: Depictive Fidelity Covers Every Real Subject — and a Lexical Tag-Detector Is Rejected on Measurement
+
+Decision
+
+Extend depictive fidelity past places to **objects, animals and real people**. A subject classifier (`entity-source.v1`) routes each entity to one of three media modes, resolved once and read by every downstream gate: `generated`, `reference_plate` (a real image conditions the frame), or `archival_only` (a real image is presented as itself and never conditions anything). Graduate `hypotheses/real-places.md` to `specs/depictive-fidelity.md`.
+
+Why
+
+The real-photograph path was gated to a single line — `policy.realPlaces && kind === 'location'` — so a documentary about the Titanic, a Philippine eagle, or José Rizal invented all three. The human path is split by the depictive-ethics floor's own carve-outs: long-dead figures get a conditioning plate gated on a Wikidata `P570` death date ≥100 years, living people get genuine licensed archival photographs, and an identity we cannot verify is never sourced on either path. Four invariants are enforced in code with unit tests, the most important being that an `archival_only` person reaches a generated frame neither as a reference plate **nor as a name in the prompt** — the 2026-07-24 fabricated-press-photo failure.
+
+**Running it for real is what found the defects.** A live paid reel surfaced five: a Commons licence guarantee resting on a regex miss, an identity anchor that never checked it anchored a *person* (a query for Duchamp resolved onto his artwork), a 1600px request that served the full-resolution original, archival fulfilment firing when a person was merely *present*, and vision QA failing identity-withheld scenes for obeying the floor — burning a paid re-roll each time.
+
+Alternatives Considered
+
+**A lexical "depicts an entity it doesn't tag" detector — REJECTED ON MEASUREMENT.** It scored 1 true positive to 2–3 false on the real reel and would have stamped `R.MUTT 1917` onto shop-window plumbing. The failure is conceptual, not a threshold to tune. Two guards were kept instead: `scene-qa` Check C2 errors when a scene's primary entity is a character but the prose describes no person, and invariant 2 now keys off the person being **named in the prose** rather than tagged — which closed a live path back to the 2026-07-24 failure.
+
+Expected Impact
+
+Depictive truth holds under real-world subjects. No change to fictional channels.
+
+Review Trigger
+
+Tagging is now load-bearing: a mis-tag costs depictive truth rather than a continuity wobble. Verified on one reel; watch the first factual channel with many entities per scene.
+
+Related Documents
+
+specs/depictive-fidelity.md, hypotheses/identity-conditioning.md, packages/core/src/prompts/entity-source.v1.ts, story-analyzer.v1.23, migration 0061, decision-log 2026-07-25 (the floor this obeys)
+
+---
+
+### 2026-08-21-001
+
+Status: Accepted
+
+Title: The Kendrix Watermark Comes Off Our Own Videos — Removed, Not Switched Off
+
+Decision
+
+Delete the roaming watermark overlay entirely: `WatermarkOverlay`, its wiring through the composition and render types, the dead `PlatformPreset.watermark` field, and `channels.watermark_key` (migration 0063).
+
+Why
+
+Every reel carried a Kendrix logo at 0.28 opacity, 26% of frame width, hopping position every three seconds so it could not be cropped out. It was on by default and **no surface in the app could ever set the per-channel override** — so the mechanism only ever branded our own output, including the one published video.
+
+Removed rather than disabled because there is no creator-branding feature to serve today, and an unreachable overlay left in the renderer is dead configuration that drifts back on. `git revert` restores the whole mechanism if creator branding ever earns its place.
+
+Alternatives Considered
+
+**Switching the default off and keeping the mechanism.** Rejected on the same reasoning the bounded-edit chassis was kept *out* of main: a capability with no reachable surface is not a feature, it is a trap for the next reader.
+
+**Keeping the negative-prompt guards.** Kept — those stop the image model *drawing* a watermark into a frame, which is the opposite problem.
+
+Expected Impact
+
+`watermark` leaves the render fingerprint, so existing reels re-render on the next pass and lose the logo. That pass is CPU-only (`render` books `costCents: 0`), so clearing it off an already-rendered reel is free.
+
+Review Trigger
+
+**YouTube cannot replace a published video's file.** `RRvU0b1TFAc` still carries the logo, so fixing publish #1 means delete-and-reupload, losing the URL. Whether that is worth doing is a founder call about public proof, not an engineering one.
+
+Related Documents
+
+packages/render/src/remotion/, apps/worker/src/pipeline/steps/render-step.ts, migration 0063, commit 07d424e
+
+---
+
+### 2026-08-21-002
+
+Status: Accepted
+
+Title: Publishing Credentials Are Per Channel *Everywhere* — the Operator-Wide Token Path Is Removed, and the Audience Read Stops Depending on It
+
+Decision
+
+Resolve YouTube credentials from the channel's own connection at **every** call site, through one function (`resolveYouTubeAuth` in `@reels/db`). Delete the operator-wide `YOUTUBE_REFRESH_TOKEN` path from the provider rather than leaving it as a fallback. Separately, let the performance poller read public statistics with a `YOUTUBE_API_KEY` when one is present, so measuring performance does not require permission to publish.
+
+Why
+
+The 2026-08-11 per-channel migration converted the one path a human clicks and left three callers reading a credential that the same commit had made meaningless:
+
+* **The performance poller** returned at its first line for ten days. `metrics` held zero rows, no reel ever recorded an audience number, and `performanceScore` few-shot weighting could never receive data. Nothing failed and nothing logged — the only evidence was an empty table.
+* **The worker's auto-publish** was gated on the same dead check *and* called `uploadToYouTube` with no per-channel auth at all. That is worse than dead: had the env token been set, an auto channel would have uploaded to whichever account minted it, ignoring the connection the creator made. Unattended operation was not merely unproven — its last mile was unreachable.
+* **The Settings gate** hid the auto-publish option on a connected channel and offered it on an unconnected one, because it asked about the installation instead of the channel.
+
+The second half is a design correction, not a workaround. **View counts on a public video are public data.** Reading them through the publishing grant coupled the performance loop to a token that expires in seven days under a Testing-mode OAuth app — so the instrument we most needed was the most fragile thing we owned. Watch-time and retention genuinely do need the grant (YouTube Analytics API, `yt-analytics.readonly`); public counts never did.
+
+Alternatives Considered
+
+**Keeping the env-token path as a fallback.** Rejected, on the precedent set the same day by 2026-08-21-001: an unreachable path left in place is dead configuration that drifts back on — and this one drifts back on as a *wrong-account upload*, which is the most expensive kind of quiet failure available to us.
+
+**Fixing only the poller, which is what the approved action asked for.** Rejected as knowingly leaving a live mis-routing hazard one file away, on the same seam, in the path that runs unattended.
+
+**A SQL or manual reconnect as the fix.** Rejected as a fix; a reconnect is still *required*, but it addresses the lapsed grant, not the code that could never have used it.
+
+Expected Impact
+
+Audience evidence goes from structurally impossible to one browser action away. Auto-publish becomes reachable for the first time. A lapsed grant now marks the connection (`status: 'error'`, `lastError`) so Settings asks for a reconnect, instead of a performance history that silently stops growing.
+
+Verified: full workspace typecheck, 0 lint errors, 560 unit tests passing including three new ones pinning which credential the stats call presents and how — an API key in the query string, a grant in a header, and no request at all when nothing is published. Run against the real publication, the poller resolved the channel's grant, called Google, and returned `invalid_grant: Token has been expired or revoked` — the predicted lapse, now visible.
+
+Review Trigger
+
+**The pattern is the risk, not this instance.** TikTok and Facebook are still manual destinations; whatever converts them should convert every caller in the same commit. When a credential's *ownership* changes, grep for every reader before calling the migration done.
+
+Related Documents
+
+packages/db/src/publishing.ts (new — the single resolver), packages/providers/src/youtube/client.ts, packages/providers/src/youtube/stats-auth.test.ts, apps/worker/src/metrics-poll.ts, apps/worker/src/pipeline/auto-gate.ts, apps/web/src/app/api/pipeline/publish-youtube/route.ts, apps/web/src/app/(app)/channel/[id]/settings/page.tsx, decision-log 2026-08-11-001 (the migration this completes), decision-log 2026-08-21-001 (the removed-not-disabled precedent)
+
+---
+
+
+### 2026-08-22-001
+
+Status: Accepted
+
+Title: The 2026-08-11 Upload Was a Proving Run, Not a Publish — Stories Published Is Redefined by Liveness
+
+Decision
+
+Correct the record: **Stories Published is 0.** Track it as *reels a viewer can watch right now*, and track *uploads proven* as a separate, lesser number. Reopen the taste half of the packaging experiment, which was recorded as confirmed on evidence that does not support it.
+
+Why
+
+`RRvU0b1TFAc` went public on YouTube on 2026-08-11 — a real id, processed, served publicly, through Kendrix's own per-channel authorization path. It was a **proving run for the OAuth path, never intended to stay up**, and the founder deleted it. The channel today reports `videoCount: 0` and `viewCount: 0`.
+
+Two errors followed from not knowing that, and both are worth recording because neither was a coding mistake:
+
+**The metric measured an event and reported a state.** "Stories Published" was implemented as *a `publications` row exists*. A row records that an upload SUCCEEDED; the claim being made was that a video is WATCHABLE. Those diverge the moment anyone — a platform, or us — takes the video down, and nothing in the schema, the poller, or the weekly briefing could tell the difference. It read 1 for eleven days.
+
+**A confirmation was read from an act that was not the test.** The packaging experiment's falsifier was *"the founder still declines, and names something new."* They did not decline — so it was recorded as CONFIRMED, and called the first repair in the project's history validated by the instrument that made the complaint. But approving a reel to prove a code path is a different act from deciding to leave it up, and only the second is the bar the 2026-08-10 audit was about. The falsifier was never actually put. **The mechanical half stands** — the thumbnail, title and caption defects are genuinely fixed, and the reel cleared review where three predecessors did not. The taste half is untested.
+
+The honest state is sharper than the one it replaces: **Kendrix has never published a reel intended to stay up.**
+
+Alternatives Considered
+
+**Keeping "Stories Published: 1" with a footnote.** Rejected. The number feeds the Phase 0 → Phase 1 gate, and a gate that can be crossed by an upload nobody kept is not measuring what the roadmap means by *consistently produce publishable content*.
+
+**Rewriting decision-log 2026-08-11-001.** Rejected — the log is append-only. Its Status line now carries a forward pointer instead, so a reader cannot walk away believing a video is live, and its reasoning about per-channel ownership (which was correct and still holds) is untouched.
+
+**Treating this as a reason to distrust the 08-10 audit.** Rejected, and worth saying explicitly: the audit's finding — that the disqualifiers were packaging, and two of three sat outside the video — is unaffected. What is corrected is a claim about the *repair's* validation, made eleven days later.
+
+Expected Impact
+
+Priority 1 becomes *publish one reel that stays up*, which is a smaller and more honest gate than the one it replaces. The audience read stops being a task at all: the poller was repaired 2026-08-21 and `YOUTUBE_API_KEY` is verified, so numbers arrive within ~6 hours of anything going live.
+
+Review Trigger
+
+Apply the liveness test to every other metric that claims a state: does it measure the state, or the event that created it? `publications.status` and `reels.status` are both event-shaped and neither is re-verified against the platform. A periodic liveness check on published rows would have caught this in six hours instead of eleven days — worth building only once more than one reel is live.
+
+Related Documents
+
+dna/company/current-metrics.md, decision-log 2026-08-11-001 (annotated), decision-log 2026-08-10-001 (the audit this does NOT overturn), decision-log 2026-08-21-002 (the poller repair this unblocks), apps/worker/src/metrics-poll.ts
+
+---
+
+
+### 2026-08-24-001
+
+Status: Accepted
+
+Title: Crossroads Is the Sole Customer Zero Channel for the Current Proof Lap
+
+Decision
+
+Focus the active Phase 0 proof loop entirely on **Crossroads**. Other channels do not count toward current roadmap progress, even when their historical artifacts remain useful for regression tests or past decision context. Reclassify Crossroads from an engineering fixture to the founder's Customer Zero channel and point the immediate gate at one Crossroads reel that stays live.
+
+Why
+
+The founder explicitly chose Crossroads as *our channel*. Splitting the proof across channels obscured the question the roadmap is trying to answer: whether Kendrix can repeatedly produce work the founder genuinely wants to publish on the channel they intend to operate. Crossroads also exercises the factual-grounding, depictive-fidelity and verified-identity foundations that have received the most recent production work, so completing its loop converts that work from internal verification into relevant Customer Zero evidence.
+
+This decision changes the subject of the experiment, not the phase or its exit criteria. Phase 0 still requires a reliable storytelling engine; the immediate evidence remains a reel that stays live, followed by a real audience reading.
+
+Alternatives Considered
+
+**Publish the previous nearest candidate.** Rejected by the founder. Nearness is not useful if success on that channel is not the proof they want to pursue.
+
+**Count all internal channels equally.** Rejected. It permits work to migrate toward whichever artifact is easiest to finish and makes Customer Zero evidence ambiguous.
+
+**Erase historical references to other channels.** Rejected. The decision log is append-only, and technical specs should retain real historical examples. They no longer control current priorities or metrics.
+
+Expected Impact
+
+Roadmap attention, workflow metrics and audience evidence now have one subject. Engineering work on Crossroads can move the company state when it ends in a retained publish; work on other channels cannot silently substitute for that proof.
+
+Review Trigger
+
+Review only after Crossroads has published consistently enough to reveal whether the single-channel focus is producing useful learning, or if the founder explicitly changes the Customer Zero channel again.
+
+Related Documents
+
+ROADMAP.md, dna/company/current-metrics.md, dna/company/assumptions.md, decision-log 2026-08-22-001
+
+---
+
+
+### 2026-08-25-001
+
+Status: Accepted
+
+Title: Ending Meaning Belongs to Sound Direction, Not Renderer Guesswork
+
+Decision
+
+Represent the intended final cadence explicitly in the audio script as an anchored ending direction: which existing layer owns the close and whether it should button, resolve or ring out. Resolve that direction into an explicit ending interval with separate start, voice-end and picture-end boundaries. The renderer executes one continuous envelope across those boundaries, and QA measures the focused layer inside the ending window before the terminal fade.
+
+Legacy audio scripts retain their existing genre-tail behavior during migration, but new scripts may not rely on a renderer-invented per-genre outro to communicate closure.
+
+Why
+
+Founder playback of Crossroads reel #2 exposed two different failures that whole-reel audio metrics did not see. The original cut went silent over its final held image because FFmpeg's sidechain-compressed music branch terminated when its shorter narration input ended. A manual post-mux music overlay removed the silence numerically but arrived as a new musical thought after the story, so the reel still felt awkwardly stopped.
+
+The failure was not evidence for a universally longer fade. The story already had the right bed; it needed that same musical thought to begin resolving under the final phrase, survive the narration boundary, and close with the picture. That creative choice belongs upstream in sound direction. Renderer timing and QA can then execute and verify it without inventing taste.
+
+Alternatives Considered
+
+**Extend every genre's outro tail.** Rejected. Duration alone cannot decide whether a story needs a musical resolve, ambient ring-out or intentional silence, and it preserves renderer guesswork.
+
+**Patch the final file with a late music overlay.** Rejected by founder playback. It passes presence thresholds while sounding like a postscript.
+
+**Only lower the silence threshold or add whole-reel loudness checks.** Rejected. The defective cut already passed whole-reel technical review; the missing evidence was continuity inside the ending window.
+
+Expected Impact
+
+Sound direction now owns the meaning of the close, rendering preserves the selected layer across the actual voice boundary, and QA can reject a truncated ending before founder playback. The Crossroads repair used the existing generated music and added no provider cost; measured reel cost stayed $5.11.
+
+Review Trigger
+
+Review after this contract has produced endings across materially different story registers and languages. If anchored focus and three neutral shapes cannot express those endings without genre-specific rules, return with production evidence before expanding the schema.
+
+Related Documents
+
+packages/core/src/types/audio-script.ts, packages/core/src/types/timings.ts, packages/core/src/prompts/sound-designer.v1.ts, packages/core/src/timings/compute-timings.ts, packages/render/src/music/music-sync.ts, packages/render/src/ffmpeg/mix-audio.ts, apps/worker/src/pipeline/steps/render-qa-step.ts, ROADMAP.md, dna/company/current-metrics.md, dna/company/assumptions.md, decision-log 2026-08-06-003
+
+---
+
+
+### 2026-08-25-002
+
+Status: Accepted
+
+Title: Factual Shorts End on One Complete Human Payoff
+
+Decision
+
+For Crossroads factual Shorts, close the story by completing the causal promise and landing once on its human consequence. Stop immediately after that payoff, with only a short established-sound button. A document, object or image that echoes the premise may remain as visual subtext, but narration may not explain the callback again when doing so creates a second ending.
+
+Do not force a grammatical loop, cliffhanger, CTA or moral onto a complete story. Those are format choices, not substitutes for satisfaction.
+
+Why
+
+Crossroads reel #2 passed technical sound review twice and still felt cut short in founder playback. The first failure was mechanical, but fixing it exposed the narrative failure: roughly 46 seconds built the risk, the successful ascent and reunion were compressed into about ten seconds, and the reel then supplied three endings. “Three men came home” completed the emotional arc; “The statement for disaster was never delivered” reopened it as an administrative footnote.
+
+Current platform guidance treats satisfaction alongside engagement, and strong factual Shorts repeatedly use the same underlying shape: unresolved danger → irreversible action → visible result → human consequence → stop. The revised Apollo ending follows that shape without copying a creator's surface style. It gives ignition, lift, orbit and docking distinct beats, holds its longest breath before “Three men came home,” and leaves the disaster memo on screen as the unspoken contrast. Independent editorial, creator and sound review all returned PUBLISH.
+
+Alternatives Considered
+
+**Keep the memo sentence and improve its performance.** Rejected. A more solemn read would strengthen an afterthought, not turn it into the story's human consequence.
+
+**End on the payoff but preserve a long resolving tail.** Rejected by the benchmark and prior playback. Strong short-form endings stop soon after the promise is fulfilled; the accepted cut uses a 650ms button.
+
+**Force the final words to connect grammatically to the hook for an automatic replay loop.** Rejected. It withholds closure and optimizes a retention mechanic at the expense of viewer satisfaction.
+
+Expected Impact
+
+The Apollo reel's final sequence is now 61.8 seconds overall, passed automated QA and three independent perceptual gates, and awaits only founder playback. The bounded ending take cost $0.04, moving measured reel cost from $5.11 to $5.15 while reusing every existing visual and sound asset.
+
+Review Trigger
+
+Review after Crossroads has retention curves for several retained factual Shorts. If viewers consistently leave before the completed payoff or rewatch a different ending shape, use those moment-level curves to revise the pattern. One founder-approved artifact is a bar; it is not yet a universal law.
+
+Related Documents
+
+ROADMAP.md, dna/company/current-metrics.md, dna/company/assumptions.md, decision-log 2026-08-25-001, YouTube Help “Understand your content performance for YouTube's recommendation system,” YouTube Blog “YouTube Shorts deep dive,” Meta Real Talk Creative Playbook
+
+---
+
+
+### 2026-08-25-003
+
+Status: Accepted
+
+Title: The Story Chooses Its Ending Function; Short-Form Does Not Mean Hard-Stop
+
+Decision
+
+Choose the ending's function from the story: completion, relief, irony, redemption, warning, wonder or a
+lesson only when the material earns one. Do not impose a moral, replay loop, CTA or immediate hard-stop as
+a universal Shorts formula. When a counterfactual thread carries the story's meaning, resolve it before the
+final human consequence so the last line remains the emotional destination rather than an administrative
+postscript.
+
+Treat delivery and release as part of that choice. A meaning-bearing coda may slow and warm the voice while
+the action beats stay crisp. A `ring_out` must decay continuously after the final word; holding a flat bed
+and applying a late fade is padding, even when the final duration and loudness pass QA. Reflective picture
+may hold while the sound keeps evolving, then picture, captions and disclosure fade together to black.
+
+Why
+
+Founder playback rejected the 61.8-second Apollo cut that decision 2026-08-25-002 had called ready. That cut
+correctly repaired the rushed launch → orbit → docking chain, but overlearned “stop after the payoff.” The
+Safire memo was not merely visual texture: it was the story's counterfactual device. Leaving it unspoken made
+the reel factual and efficient but emotionally incomplete.
+
+Editorial, creator, sound and visual review converged on **relief sharpened by irony**, not a generic lesson
+or literal redemption. The accepted structure is: the one engine fires; Eagle lifts, reaches orbit and docks;
+“The disaster speech stayed on the page”; “Three men came home.” The memo resolves before the human final,
+the last line changes to a warm plain delivery, and verified Earth/Eagle imagery replaces the document for
+the closing hold. Platform guidance supports viewer satisfaction, cohesive storytelling and transformation;
+ad-specific CTA frameworks do not become rules for an organic Crossroads story.
+
+Alternatives Considered
+
+**Keep the 61.8-second hard payoff because several reviewers passed it.** Rejected by the founder's direct
+playback. A perceptual gate is evidence, not authority over the person operating the channel.
+
+**Add a universal moral after “Three men came home.”** Rejected. “Courage conquers fear” or “always prepare
+for failure” is not earned by this evidence and would create another ending after the human one.
+
+**Put the memo explanation after the human final.** Rejected by the earlier cut. It turns relief into an
+archival footnote. Meaning goes before “home,” not after it.
+
+**Extend the tail without changing its motion.** Rejected by sound review. A flat two-second hold followed by
+a one-second fade still feels padded; the ring-out must move continuously from the voice boundary.
+
+Expected Impact
+
+The Apollo candidate is now 65.7 seconds, remains in `spot_check`, and costs $5.21. The ending-performance
+revisions cost $0.06; all verified visuals and existing sound assets were reused. The product now supports a
+story-selected black fade for `resolve`/`ring_out` endings and a full-tail audio decay for `ring_out`, while
+button endings retain a clean cut. This is one story-specific correction, not a quota for future codas.
+
+Review Trigger
+
+Review after several retained Crossroads reels use materially different ending functions. If creator
+playback repeatedly asks for the same missing function, graduate a semantic ending contract upstream; until
+then, do not turn this Apollo coda into a mandatory template.
+
+Related Documents
+
+ROADMAP.md, dna/company/current-metrics.md, dna/company/assumptions.md, decision-log 2026-08-25-001,
+decision-log 2026-08-25-002, packages/render/src/music/music-sync.ts,
+packages/render/src/remotion/compositions/ReelComposition.tsx, YouTube Help “Understand your content
+performance for YouTube's recommendation system,” TikTok for Business Creative Guide
+
+---
+
+
+### 2026-08-31-001
+
+Status: Accepted
+
+Title: Retire the Cited EBN Editor Mechanism
+
+Decision
+
+Do not add a cited-Editor stage to the Evidence-Based Narrative path. Keep ordinary prose correction with the
+Writer and gather the next ending/selection evidence from actual Crossroads production laps. Do not loosen
+sentence lineage to rescue the mechanism; an Editor allowed to select new evidence or cross claim boundaries
+would be a second Writer under another name.
+
+Why
+
+The preregistered nine-draft probe compared one bounded cited-Editor pass with a same-model fresh Writer
+regeneration and the frozen Writer input. Only **1/9** Editor outputs passed the deterministic provenance and
+176–216-word contract. Eight remained over budget; one also cited a fact outside its claim boundary. Fresh
+Writer regeneration was **0/9** mechanically valid. Consequently, 17 of 18 comparisons resolved automatically
+on hard constraints rather than taste. The one valid Editor draft won its blind comparison against the frozen
+input, but one taste win cannot justify a mechanism that failed its defining responsibility on eight inputs.
+
+The result validates the hypothesis's strongest objection: preserving every supported obligation leaves too
+much material to compress, while relaxing evidence ownership turns repair into re-authoring. Exact Anthropic
+spend was **$0.76**, including one failed schema/repair attempt whose attached cost was preserved. Production
+and database rows were unchanged.
+
+Alternatives Considered
+
+**Loosen the lineage contract and rerun.** Rejected. That removes the boundary distinguishing an Editor from a
+second Writer and would make a positive result architecturally uninterpretable.
+
+**Judge all outputs despite duration/provenance failures.** Rejected. Blind preference cannot launder a failed
+hard constraint; the preregistered bar deliberately makes provenance and duration vetoes.
+
+**Add the stage provisionally because the architecture already names an Editor.** Rejected. Architecture names
+a responsibility to test, not an implementation entitlement. Evidence-first development permits dormant
+slots to remain dormant or be retired.
+
+Expected Impact
+
+No production code or pipeline stage is added. The active roadmap stays focused on the next materially
+different Crossroads reel and the ending ledger. Engineering work on semantic handoffs remains gated on
+recurring founder-playback evidence from those production laps.
+
+Review Trigger
+
+Reopen only after multiple new Crossroads stories show the same repair-shaped failure while the Writer's
+evidence selection is demonstrably sound. Any future proposal must explain why it is not the same bounded
+lineage mechanism tested here.
+
+Related Documents
+
+hypotheses/ebn-cited-editor.md, apps/worker/probe-ebn-cited-editor.json,
+apps/worker/scripts/probe-ebn-cited-editor.ts, ROADMAP.md
+
+---
+
+
+### 2026-09-01-001
+
+Status: Accepted
+
+Title: Crossroads Becomes a Release Canary; Phase 0 Exit Becomes the Active Work
+
+Decision
+
+Freeze production of Crossroads reel #5 and run a ten-working-day Phase 0 exit sprint. The sprint succeeds only
+when one fresh standard short-form reel completes through the deployed product from invite/sign-in through
+channel, story, storyboard, production, review and export without terminal commands, direct SQL, one-off scripts
+or engineering salvage. Creative judgment and review remain part of the workflow; invisible engineering rescue
+does not.
+
+The acceptance lap must also prove that a recoverable failure is visible to the creator, one-click retry resumes
+from durable work without repeating paid calls or cost, tenant isolation and spend limits hold in automated tests,
+and lint, typecheck, tests and build are green. Direct social publishing, billing, teams, long-form and public-launch
+polish are outside this exit gate.
+
+Leave the four retained Crossroads reels live and keep collecting their audience data. After Phase 0 exits,
+Crossroads becomes a canary for meaningful releases or a bounded every-two-to-four-week product check, not the
+default roadmap. The unfinished three-reel ending experiment remains paused at two observations rather than being
+silently completed or discarded. Phase 1 begins only after the acceptance lap and an explicit founder decision.
+
+Why
+
+Four retained publishes establish that Kendrix can repeatedly produce founder-approved work. The fourth lap also
+made the real bottleneck unmistakable: paid motion timeouts, a lost queue lock and durable-artifact recovery were
+handled with operator scripts and infrastructure inspection. Another reel would add little proof of creative
+repeatability while reinforcing a workflow that still depends on the builder. Phase 0's own exit criteria require
+a stable end-to-end product and resolved critical production blockers; publishing more artifacts is not a
+substitute for that reliability.
+
+Alternatives Considered
+
+**Produce reel #5 to complete the ending ledger.** Rejected for now. The experiment remains valid, but its marginal
+learning value is lower than proving that the product can complete a reel without engineering intervention.
+
+**Jump directly to Private Alpha.** Rejected. External creators should not be used to discover failures already
+visible in Customer Zero's operator-dependent workflow.
+
+**Treat “finish the SaaS” as a broad feature-building mandate.** Rejected. Billing, teams, long-form and launch
+polish do not determine whether the founder-default short-form workflow can complete reliably.
+
+Expected Impact
+
+Workflow completion, recovery reliability, tenant safety, cost integrity and release confidence should improve.
+New Crossroads production spend pauses during the sprint while the four live reels continue collecting passive
+audience evidence.
+
+Review Trigger
+
+Review when one fresh standard short-form acceptance reel has completed through the deployed product with no
+engineering intervention and all automated exit checks are green. The founder then decides whether Phase 0 exits
+to Phase 1 or whether a specific failed criterion remains the bottleneck.
+
+Related Documents
+
+ROADMAP.md, dna/company/roadmap.md, dna/company/current-metrics.md, dna/company/assumptions.md,
+ARCHITECTURE.md
+
+---
+
+
 ## Relationship to the Decision Framework
 
 The Decision Framework explains how decisions are made.

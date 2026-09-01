@@ -75,14 +75,16 @@ export class BudgetExceededError extends Error {
     public readonly capCents: number,
   ) {
     super(
-      `Reel ${reelId} exceeded budget cap: ${costCents}¢ > ${capCents}¢ (~$${(capCents / 100).toFixed(2)})`,
+      `Reel ${reelId} reached its budget cap: ${costCents}¢ >= ${capCents}¢ (~$${(capCents / 100).toFixed(2)})`,
     )
     this.name = 'BudgetExceededError'
   }
 }
 
 export function assertBudget(reelId: string, costCents: number, capCents: number): void {
-  if (costCents > capCents) {
+  // This check runs immediately before another paid step. At the cap there is no budget left for
+  // that call, so equality must halt too; allowing it would guarantee an overshoot by one provider call.
+  if (costCents >= capCents) {
     throw new BudgetExceededError(reelId, costCents, capCents)
   }
 }

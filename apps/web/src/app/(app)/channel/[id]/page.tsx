@@ -22,6 +22,7 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
 
   const channel = await db.query.channels.findFirst({ where: eq(channels.id, id) })
   if (!channel) notFound()
+  const requiresSources = requiresEvidence(resolveChannelPolicy(null, null, channel))
 
   const reelRows = await db.query.reels.findMany({
     where: eq(reels.channelId, id),
@@ -43,8 +44,9 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
   const reusableScripts = savedScripts
     .filter((s) => s.reels.length === 0)
     .map((s) => ({ id: s.id, title: s.title, source: s.source }))
-  // The setup script the wizard left behind — the first reel's obvious starting point.
-  const firstScript = reusableScripts[0] ?? null
+  // The setup script the wizard left behind is a production option only when the channel does not
+  // require evidence. On a factual channel it stays on the shelf as a voice preview/note.
+  const firstScript = requiresSources ? null : (reusableScripts[0] ?? null)
   // What the creator is about to spend, named before they commit: an estimate to the storyboard gate,
   // and the enforced ceiling for the whole reel (a cap the pipeline actually halts on, not a guess).
   const storyboardCents = estimateStoryboardCents(channel.targetSeconds)
@@ -194,7 +196,7 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
                   reelCapCents={reelCapCents}
                   isEbn={channel.storyMode === 'ebn'}
                   factCheck={channel.factCheck}
-                  requiresSources={requiresEvidence(resolveChannelPolicy(null, null, channel))}
+                  requiresSources={requiresSources}
                 />
               </div>
             </div>
@@ -211,7 +213,7 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
                   reelCapCents={reelCapCents}
                   isEbn={channel.storyMode === 'ebn'}
                   factCheck={channel.factCheck}
-                  requiresSources={requiresEvidence(resolveChannelPolicy(null, null, channel))}
+                  requiresSources={requiresSources}
                 />
               </div>
               <div className="card overflow-hidden divide-y divide-border-soft">
@@ -252,7 +254,11 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
             <div className="mb-3.5 flex items-end justify-between gap-3">
               <div>
                 <h2 className="font-display text-[15px] font-700 text-ink">Saved scripts</h2>
-                <p className="mt-0.5 text-xs text-muted">The voice this channel starts from — ready to become reels.</p>
+                <p className="mt-0.5 text-xs text-muted">
+                  {requiresSources
+                    ? 'Voice references and notes — factual reels start from source material.'
+                    : 'The voice this channel starts from — ready to become reels.'}
+                </p>
               </div>
               <Link href={`/channel/${channel.id}/scripts`} className="btn-secondary btn-sm">See all scripts</Link>
             </div>

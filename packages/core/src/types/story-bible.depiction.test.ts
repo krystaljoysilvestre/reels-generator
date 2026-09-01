@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { BibleEntitySchema, StoryBibleSchema, conditionableReferenceKeys, formatImageCredits, identityWithheldEntities, splitSceneDepiction, type BibleEntity } from './story-bible.js'
-import { archivalShotTarget } from '../assembly/story-bible.js'
+import { BibleEntitySchema, StoryBibleSchema, conditionableReferenceKeys, formatImageCredits, identityWithheldEntities, missingRequiredIdentityReferences, splitSceneDepiction, type BibleEntity } from './story-bible.js'
+import { archivalShotTarget, presentableSourceEntity, presentedSourceTarget } from '../assembly/story-bible.js'
 import type { DepictionMode, MediaOrigin } from './depiction.js'
 
 const entity = (id: string, mode: DepictionMode | null, key?: string): BibleEntity =>
@@ -9,6 +9,7 @@ const entity = (id: string, mode: DepictionMode | null, key?: string): BibleEnti
     kind: 'character',
     description: `a description of ${id}`,
     ...(key ? { referenceImageKey: key } : {}),
+    ...(key && mode === 'reference_plate' ? { referenceOrigin: { type: 'sourced', provider: 'wikimedia', usage: 'conditioning_reference' } } : {}),
     ...(mode ? { depiction: { subjectClass: 'human', depictionMode: mode, eligibilityReason: 'real_subject', query: id } } : {}),
   })
 
@@ -33,6 +34,26 @@ describe('invariant 1 — an archival_only entity never contributes a reference 
 
   it('treats an unrouted entity as generated, preserving pre-existing behaviour', () => {
     expect(conditionableReferenceKeys([entity('ashley', null, 'refs/ashley.webp')])).toEqual(['refs/ashley.webp'])
+  })
+
+  it('rejects a generated fallback plate for a real identity', () => {
+    const generatedFallback = BibleEntitySchema.parse({
+      id: 'duchamp-fountain', kind: 'object', description: 'the 1917 readymade',
+      referenceImageKey: 'refs/generated-fallback.webp', referenceOrigin: { type: 'generated' },
+      depiction: { subjectClass: 'object', depictionMode: 'reference_plate', eligibilityReason: 'real_subject', query: 'Duchamp Fountain' },
+    })
+    expect(conditionableReferenceKeys([generatedFallback])).toEqual([])
+    expect(missingRequiredIdentityReferences([generatedFallback]).map((e) => e.id)).toEqual(['duchamp-fountain'])
+  })
+
+  it('requires the exact selected state to carry its own sourced anchor', () => {
+    const unsigned = BibleEntitySchema.parse({
+      ...entity('duchamp-fountain', 'reference_plate', 'refs/fountain.webp'),
+      referenceImageKey: undefined,
+      referenceOrigin: undefined,
+      description: 'the same porcelain fixture, unsigned and upright',
+    })
+    expect(missingRequiredIdentityReferences([unsigned]).map((e) => e.id)).toEqual(['duchamp-fountain'])
   })
 })
 
@@ -134,6 +155,11 @@ describe('archival fulfilment — presence withholds an identity; it does not ma
     expect(archivalShotTarget([duchamp], 'porcelain-urinal')).toBeNull()
   })
 
+  it('does not replace an event containing another exact sourced subject with a portrait', () => {
+    const fountain = entity('duchamp-fountain', 'reference_plate', 'refs/fountain.webp')
+    expect(archivalShotTarget([duchamp], 'marcel-duchamp', [fountain])).toBeNull()
+  })
+
   it('does not fulfil with two archival subjects — compositing real people is forbidden', () => {
     expect(archivalShotTarget([duchamp, entity('someone-else', 'archival_only')], 'marcel-duchamp')).toBeNull()
   })
@@ -145,5 +171,74 @@ describe('archival fulfilment — presence withholds an identity; it does not ma
 
   it('matches on the normalized id, not raw text', () => {
     expect(archivalShotTarget([duchamp], 'Marcel_Duchamp')?.id).toBe('marcel-duchamp')
+  })
+})
+
+describe('verified source presentation', () => {
+  const exactPage = BibleEntitySchema.parse({
+    ...entity('the-blind-man-magazine', 'reference_plate', 'refs/magazine.webp'),
+    kind: 'object',
+    referenceOrigin: {
+      type: 'sourced',
+      provider: 'wikimedia',
+      usage: 'conditioning_reference',
+      sourceAssetKey: 'refs/magazine-source.webp',
+    },
+  })
+
+  it('presents an explicitly requested sourced primary entity', () => {
+    expect(presentedSourceTarget([exactPage], 'the-blind-man-magazine', 'the-blind-man-magazine', {}))
+      .toBe(exactPage)
+  })
+
+  it('does not turn a supporting mention into the whole shot', () => {
+    expect(presentedSourceTarget([exactPage], 'the-blind-man-magazine', 'duchamp-fountain', {})).toBeNull()
+  })
+
+  it('does not present a parent source as a selected time-bound state', () => {
+    expect(presentedSourceTarget(
+      [exactPage],
+      'the-blind-man-magazine',
+      'the-blind-man-magazine',
+      { 'the-blind-man-magazine': 'draft-before-publication' },
+    )).toBeNull()
+  })
+
+  it('requires untouched source bytes, not merely a conditioning plate', () => {
+    const withoutSourceBytes = BibleEntitySchema.parse({
+      ...exactPage,
+      referenceOrigin: { type: 'sourced', provider: 'wikimedia', usage: 'conditioning_reference' },
+    })
+    expect(presentedSourceTarget(
+      [withoutSourceBytes],
+      'the-blind-man-magazine',
+      'the-blind-man-magazine',
+      {},
+    )).toBeNull()
+  })
+
+  it('promotes an appearance source only when that state exactly matches the canonical entity', () => {
+    const fountain = BibleEntitySchema.parse({
+      ...entity('duchamp-fountain', 'reference_plate'),
+      kind: 'object',
+      description: "a porcelain urinal turned on its back, marked 'R. Mutt 1917'",
+      appearances: [
+        {
+          id: 'precursor',
+          description: 'an upright unmarked porcelain urinal',
+          referenceOrigin: { type: 'sourced', provider: 'wikimedia', usage: 'conditioning_reference', sourceAssetKey: 'refs/fountain-source.webp' },
+        },
+        {
+          id: 'transformed',
+          description: "a porcelain urinal turned on its back, marked 'R. Mutt 1917'",
+          referenceOrigin: { type: 'sourced', provider: 'wikimedia', usage: 'conditioning_reference', sourceAssetKey: 'refs/fountain-source.webp' },
+        },
+      ],
+    })
+    expect(presentableSourceEntity(fountain)?.referenceOrigin?.sourceAssetKey).toBe('refs/fountain-source.webp')
+    expect(presentedSourceTarget([fountain], 'duchamp-fountain', 'duchamp-fountain', {})?.referenceOrigin?.sourceAssetKey)
+      .toBe('refs/fountain-source.webp')
+    expect(presentedSourceTarget([fountain], 'duchamp-fountain', 'duchamp-fountain', { 'duchamp-fountain': 'precursor' }))
+      .toBeNull()
   })
 })

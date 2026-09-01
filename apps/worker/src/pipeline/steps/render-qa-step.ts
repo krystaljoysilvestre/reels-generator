@@ -4,8 +4,9 @@ import { join } from 'node:path'
 import { mkdir, writeFile, rm } from 'node:fs/promises'
 import { getDb, reels, assets, channels } from '@reels/db'
 import { downloadBuffer, buildInputHash } from '@reels/providers'
-import { TimingsSchema, channelPlatformPreset, AudioScriptSchema, AudioPacksSchema, musicIntensityToDb } from '@reels/core'
+import { TimingsSchema, channelPlatformPreset, AudioScriptSchema, AudioPacksSchema, musicIntensityToDb, type Timings } from '@reels/core'
 import { runRenderQa } from '@reels/render/qa/render-qa'
+import { endingTerminalFadeMs } from '@reels/render/music/music-sync'
 import { runStep, setReelStatus } from '../harness.js'
 
 // ── Bed-presence QA (Phase A, 2026-07-24) ─────────────────────────────────────────────────────────────
@@ -60,6 +61,44 @@ async function checkBedPresence(reelId: string, bedDb: number, tmp: string): Pro
   return null
 }
 
+// Ending-window craftsmanship guard. It does not decide what the ending should be; Direction already
+// chose the focused layer. QA only verifies that the selected layer actually survives the hold and that
+// the mixer did not create a dead gap before its short terminal fade.
+async function checkEndingPresence(reelId: string, timings: Timings, tmp: string): Promise<string | null> {
+  const ending = timings.ending
+  if (!ending || ending.focus === 'silence') return null
+  const layer = ending.focus === 'music' ? 'music' : 'ambient'
+  let buf: Buffer
+  try {
+    buf = await downloadBuffer(`reels/${reelId}/stems/${layer}.m4a`)
+  } catch {
+    return `ending focus is ${layer}, but its stem is absent`
+  }
+  const path = join(tmp, `ending_${layer}.m4a`)
+  await writeFile(path, buf)
+  const startSec = ending.voiceEndMs / 1000
+  const endSec = (ending.endMs - endingTerminalFadeMs(ending.shape)) / 1000
+  const durationSec = endSec - startSec
+  if (durationSec <= 0.1) return null
+  try {
+    const { execFile } = await import('node:child_process')
+    const { promisify } = await import('node:util')
+    const exec = promisify(execFile)
+    const { stderr } = await exec('ffmpeg', [
+      '-ss', startSec.toFixed(3), '-i', path, '-t', durationSec.toFixed(3),
+      '-af', 'volumedetect', '-f', 'null', '-',
+    ])
+    const mean = stderr.match(/mean_volume:\s*(-?[\d.]+)\s*dB/)
+    if (!mean?.[1] || parseFloat(mean[1]) < -55) {
+      return `ending focus ${layer} is inaudible before the terminal fade`
+    }
+    console.log(`[qa] ${reelId} ending ${layer} present: ${mean[1]} dB mean before terminal fade`)
+    return null
+  } catch {
+    return `ending focus ${layer} could not be measured`
+  }
+}
+
 export async function renderQaStep(reelId: string): Promise<void> {
   const db = getDb()
 
@@ -85,14 +124,14 @@ export async function renderQaStep(reelId: string): Promise<void> {
     where: and(eq(assets.reelId, reelId), eq(assets.kind, 'render')),
     orderBy: [desc(assets.createdAt)],
   })
-  const inputHash = buildInputHash('render_qa.v2', {
+  const inputHash = buildInputHash('render_qa.v4', {
     renderUrl: reel.renderUrl,
     reelId,
     renderAt: renderAsset?.createdAt ?? null,
   })
 
   const result = await runStep(
-    { reelId, stepName: 'render_qa', inputHash },
+    { reelId, stepName: 'render_qa', inputHash, spendsProviderMoney: false },
     async () => {
       const tmp = join(tmpdir(), `reels-qa-${reelId}`)
       await mkdir(tmp, { recursive: true })
@@ -118,6 +157,8 @@ export async function renderQaStep(reelId: string): Promise<void> {
         const bedFail = await checkBedPresence(reelId, bedDb, tmp)
         if (bedFail) bedFailures.push(bedFail)
       }
+      const endingFailure = await checkEndingPresence(reelId, timings, tmp)
+      if (endingFailure) bedFailures.push(endingFailure)
 
       const allFailures = [...qa.failures, ...bedFailures]
       if (allFailures.length > 0) {

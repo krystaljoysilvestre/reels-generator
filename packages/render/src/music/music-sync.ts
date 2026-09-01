@@ -54,7 +54,29 @@ export interface GainEnvelopeParams {
   // The bed RESOLVES across it instead of being hard-cut at full level by ffmpeg's `-t`. Omit/0 → the
   // legacy hold-peak-to-the-last-sample behaviour.
   outroTailMs?: number
+  ending?: {
+    startMs: number
+    voiceEndMs: number
+    endMs: number
+    focus: 'music' | 'ambience' | 'silence'
+    shape: 'button' | 'resolve' | 'ring_out'
+  }
   silenceDropMs?: { atMs: number; durationMs: number }
+}
+
+/** Fade window at the terminal edge. A ring-out decays across its whole three-second tail; a resolve or
+ * button carries first, then uses a shorter final release. The story-level shape remains Direction. */
+export function endingTerminalFadeMs(shape: 'button' | 'resolve' | 'ring_out'): number {
+  if (shape === 'button') return 150
+  if (shape === 'ring_out') return 3000
+  return 700
+}
+
+function smoothLerpExpr(from: number, to: number, startSec: number, durationSec: number): string {
+  const d = Math.max(0.001, durationSec)
+  const x = `((t-${startSec.toFixed(3)})/${d.toFixed(3)})`
+  const smooth = `((${x})*(${x})*(3-2*(${x})))`
+  return `(${from.toFixed(8)}+(${to.toFixed(8)}-${from.toFixed(8)})*${smooth})`
 }
 
 /**
@@ -62,7 +84,8 @@ export interface GainEnvelopeParams {
  *  - fades in from 0 to bedDb over 0..startAnchorMs+2s
  *  - holds bedDb from startAnchorMs to build-start
  *  - rises linearly bedDb→peakDb over startAnchorMs..peakAnchorMs
- *  - RESOLVES across the outro tail: steps back to bedDb when the voice stops, then ramps to silence
+ *  - executes explicit ending intent as one continuous phrase, with only a short terminal fade
+ *  - smooths legacy outro tails without the old peak→bed gain discontinuity
  *  - hard-zeros during the silence drop window (highest priority)
  *
  * The expression is used with `eval=frame` so it updates per-sample.
@@ -77,35 +100,55 @@ export function buildGainExpr(p: GainEnvelopeParams): string {
   // designer's opening texture, not from ramping up out of silence.
   const fadeIn = 0.25 // seconds
 
-  // The outro tail's two stages (owner 2026-08-06 — "the reel should not just stop"):
-  //   1. the voice stops → the bed STEPS DOWN from peak to bed level, so the closing image breathes in
-  //      near-quiet instead of under a wall of score. This is the silent emotional beat.
-  //   2. across the rest of the tail the bed RAMPS to silence, so the piece resolves rather than being
-  //      guillotined by ffmpeg's `-t` at full level (which is what "it just stops" actually sounded like).
-  const tail = Math.max(0, p.outroTailMs ?? 0)
-  const voiceEnd = (p.durationMs - tail) / 1000   // last spoken word
-  const hasTail = tail > 0 && voiceEnd > pk
+  const bedGain = 10 ** (p.bedDb / 20)
+  const peakGain = 10 ** (p.peakDb / 20)
+  const gainAt = (sec: number): number => {
+    if (sec < fadeIn) return (sec / fadeIn) * bedGain
+    if (sec < a) return bedGain
+    if (sec < pk) return bedGain + (peakGain - bedGain) * ((sec - a) / (pk - a))
+    return peakGain
+  }
 
-  // piecewise gain: fade-in → bed → linear rise → hold peak [→ step down → resolve to silence]
-  const held = hasTail
-    ? `if(lt(t,${voiceEnd.toFixed(3)}),` +
-        `${db(p.peakDb)},` +
-        // stage 2: bedDb → silence across the remaining tail
-        `${db(p.bedDb)}*(1-((t-${voiceEnd.toFixed(3)})/${(tail / 1000).toFixed(3)}))` +
-      `)`
-    : `${db(p.peakDb)}`
-
-  const piecewise =
+  const basePiecewise =
     `if(lt(t,${fadeIn}),` +
       `(t/${fadeIn})*${db(p.bedDb)},` +
       `if(lt(t,${a.toFixed(3)}),` +
         `${db(p.bedDb)},` +
         `if(lt(t,${pk.toFixed(3)}),` +
           `${db(p.bedDb)}+(${db(p.peakDb)}-${db(p.bedDb)})*((t-${a.toFixed(3)})/(${pk.toFixed(3)}-${a.toFixed(3)})),` +
-          held +
+          `${db(p.peakDb)}` +
         `)` +
       `)` +
     `)`
+
+  let piecewise = basePiecewise
+  if (p.ending) {
+    const start = p.ending.startMs / 1000
+    const voiceEnd = p.ending.voiceEndMs / 1000
+    const end = p.ending.endMs / 1000
+    const terminalSec = endingTerminalFadeMs(p.ending.shape) / 1000
+    const fadeStart = Math.max(voiceEnd, end - terminalSec)
+    const carriedGain = p.ending.focus === 'music' ? bedGain : 0
+    const settle = smoothLerpExpr(gainAt(start), carriedGain, start, voiceEnd - start)
+    const terminal = smoothLerpExpr(carriedGain, 0, fadeStart, end - fadeStart)
+    const endingExpr =
+      `if(lt(t,${voiceEnd.toFixed(3)}),${settle},` +
+        `if(lt(t,${fadeStart.toFixed(3)}),${carriedGain.toFixed(8)},` +
+          `if(lt(t,${end.toFixed(3)}),${terminal},0)` +
+        `)` +
+      `)`
+    piecewise = `if(lt(t,${start.toFixed(3)}),${basePiecewise},${endingExpr})`
+  } else {
+    // Migration path for persisted scripts without ending intent: preserve their held picture, but remove
+    // the old instantaneous peak→bed step. The current gain decays continuously to zero across the tail.
+    const tail = Math.max(0, p.outroTailMs ?? 0)
+    const voiceEnd = (p.durationMs - tail) / 1000
+    if (tail > 0 && voiceEnd > 0) {
+      const end = p.durationMs / 1000
+      const release = smoothLerpExpr(gainAt(voiceEnd), 0, voiceEnd, tail / 1000)
+      piecewise = `if(lt(t,${voiceEnd.toFixed(3)}),${basePiecewise},if(lt(t,${end.toFixed(3)}),${release},0))`
+    }
+  }
 
   if (!p.silenceDropMs) return piecewise
 

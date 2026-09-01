@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { randomUUID } from 'node:crypto'
 import { uploadBuffer } from '@reels/providers'
-import { requireApiUser } from '@/lib/api-access'
+import { requireReelOwner } from '@/lib/api-access'
 import { sniffImageMime, IMAGE_EXT } from '@/lib/upload'
 
 // Operator image upload → R2. The returned key is used two ways: (1) as an extra REFERENCE in a scene
@@ -11,10 +11,11 @@ import { sniffImageMime, IMAGE_EXT } from '@/lib/upload'
 const MAX_BYTES = 12 * 1024 * 1024 // 12 MB
 
 export async function POST(req: NextRequest) {
-  const gate = await requireApiUser()
+  const form = await req.formData().catch(() => null)
+  const reelId = form?.get('reelId')
+  const gate = await requireReelOwner(reelId)
   if (gate instanceof NextResponse) return gate
 
-  const form = await req.formData().catch(() => null)
   const file = form?.get('file')
   if (!(file instanceof File)) return NextResponse.json({ error: 'No file' }, { status: 400 })
   if (file.size > MAX_BYTES) return NextResponse.json({ error: 'Image too large (max 12 MB)' }, { status: 400 })
@@ -24,7 +25,9 @@ export async function POST(req: NextRequest) {
   const media = sniffImageMime(buf)
   if (!media) return NextResponse.json({ error: 'Unsupported image type (use JPG, PNG, or WEBP)' }, { status: 400 })
 
-  const key = `uploads/${randomUUID()}.${IMAGE_EXT[media]}`
+  // Storage ownership follows the same reel → channel → user chain as every derived asset. The old
+  // `uploads/<uuid>` namespace had no tenant edge; an unguessable key is not an authorization boundary.
+  const key = `reels/${String(reelId)}/uploads/${randomUUID()}.${IMAGE_EXT[media]}`
   try {
     await uploadBuffer(key, buf, media)
     return NextResponse.json({ key })

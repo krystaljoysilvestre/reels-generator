@@ -24,7 +24,7 @@ Phase 0 — Foundation
 
 Last Updated:
 
-2026-08-10
+2026-09-01
 
 ---
 
@@ -50,23 +50,43 @@ Build a reliable storytelling workflow that consistently produces publishable, h
 
 Current Bottleneck
 
-**Packaging and surface — not story.** No reel has yet cleared the founder's own publish bar, and as of 2026-08-10 the reason is diagnosed rather than guessed at.
+**Product-only workflow completion is now the bottleneck.** Crossroads has four retained, publicly verified
+YouTube reels: `6gcyx9bK2mE` (2026-08-24), `DTi3ZhEuPpk` (2026-08-26), `xIeZIn46B_o` (2026-08-29), and
+`WCRkYws2Kho` (2026-09-01). That is enough to establish repeated founder-approved production provisionally.
+It is not enough to establish product reliability: Reel #4 required operator scripts, queue inspection and manual
+salvage after paid motion timeouts and a lost render lock. The active question is whether one fresh short-form reel
+can complete through the deployed product with visible failure, safe retry, tenant isolation and intact cost
+accounting—without the builder becoming an invisible pipeline stage.
 
-**The publish-bar audit ran on 2026-08-10** (Priority 1, open since 08-07). The founder watched all three rendered reels — Crossroads (2026-07-30), Emberlight (2026-08-04), Edge of Everything (2026-08-05) — and named the disqualifiers unprompted:
+The four live reels keep collecting audience data passively. At the 2026-09-01 04:54 UTC poll they read
+**90 / 0 / 0**, **187 / 8 / 0**, **217 / 4 / 0**, and the new reel's **0 / 0 / 0 baseline** respectively.
+Those signals remain too small to justify a creative intervention, and a fifth reel is frozen during the ten-day
+Phase 0 exit sprint (decision 2026-09-01-001).
 
-1. *"The thumbnails are not post-worthy. We need to look how current content creators do it. Same goes with their titles."*
-2. *"The burned caption styles look so old."*
-3. *"These 3 reels just ended."*
+**Correction of record (2026-08-22).** This document briefly recorded *Stories Published: 1*. That was wrong, and the error is instructive. On 2026-08-11 *Edge of Everything* did go public on YouTube through Kendrix's own per-channel authorization path — YouTube issued a real id (`RRvU0b1TFAc`), processed it, and served it publicly. But it was a **proving run for the OAuth path, never intended to stay up**, and the founder took it down. The channel today reports `videoCount: 0` and `viewCount: 0`.
 
-**This is the most important result of the last seven weeks, and it relocates the bottleneck.** Nothing named is story quality — not premise, not writing, not believability, not the ending *criteria*, which is what every automated judge and probe has been measuring. Two of the three items are **not even inside the video**: the thumbnail and the title are the packaging a viewer sees before deciding to watch. The third is a surface treatment. The engine was producing publishable *stories* wrapped in unpublishable *packaging*, and **no instrument we own looks at packaging.**
+That made the count **0 live, 1 upload proven** at the time — and the two are different things that our metric could not tell apart. The four retained Crossroads uploads since then make the current state **4 live retained publishes and 5 uploads proven**. Each retained reel was checked for public liveness after upload; none inherits proof from the existence of a `publications` row alone.
 
-This also vindicates this document's own standing risk note: *the most reliable quality instrument we own is the founder declining to publish, and we left it unread for seven weeks.*
+**The zero was not neglect — it was a defect, found and fixed on 2026-08-21.** The performance poller returned at its own first line for ten days. `runMetricsPoll` gated on `isYouTubeConfigured()`, which required an installation-wide `YOUTUBE_REFRESH_TOKEN` — the exact credential the 08-11 per-channel migration replaced. Two sibling callers were stranded the same way: the worker's **auto-publish** was gated on the same dead check *and* called `uploadToYouTube` with no per-channel auth at all (an operator-wide token would have uploaded to whichever account minted it, regardless of which channel asked), and the **Settings gate** hid the auto-publish option on connected channels while offering it on unconnected ones. Every caller now resolves the channel's own grant through one function.
 
-The previous bottleneck entry — *story believability*, from the 2026-07-19 fingerprint audit — is **retired, and now retired with a cause rather than only a suspicion.** The intermediate hypothesis that the defect lived somewhere in the watched artifact (look, voice, timing, mix) was **half right and importantly incomplete**: it was right that the text was not the problem, and wrong to assume the artifact meant the *video*. Two of three disqualifiers sit outside the frame entirely.
+**What remains is a product acceptance lap, not another ordinary production lap.** The active exit gate is one
+fresh standard short-form reel completed from invite/sign-in through export in the deployed product, with no
+terminal, SQL, one-off script or engineering salvage. Creative review is allowed. Recovery must be creator-visible,
+one click, durable-work preserving and cost-idempotent; tenant and spend boundaries must be automated; the
+acceptance build must pass lint, typecheck, tests and build. Direct social publishing, billing, teams, long-form and
+public-launch polish are outside this gate.
+
+**Reel #4 publication read (2026-09-01).** *The 31 Million Bottle Decision* (`91ebdcf9`) is founder-approved and publicly verified on YouTube as `WCRkYws2Kho`. The 84.288-second candidate passed render QA after a zero-cost repair reused a stable passage from its already-paid music source so the music-focused `resolve` ending survived the final narration. Its exact accounted reel spend is **$9.32 against an $11.20 cap**: this includes a conservative **$5.60 estimate** for eight submitted 10-second motion calls that timed out before provider usage returned. One verified clip survived; the other two motion beats degraded to their approved stills. A long final upload also lost its BullMQ lock after the graded visual had committed; the operator recovered that durable visual, remuxed the existing audio, range-verified the final 86,476,595-byte object, and ran QA rather than paying or rendering again. **Founder first playback liked the reel and supplied one forward-looking note: future endings need more room after the final word.** Explicit `resolve` tails now hold 2.6s instead of 1.8s; buttons, ring-outs and deliberate silence retain their own bounded shapes. After the seven-day testing-mode grant expired, the founder renewed the Crossroads connection and authorized publication. The guarded upload cost $0, the public API confirmed liveness, and the metrics poll recorded the 0 / 0 / 0 baseline. YouTube rejected the custom Shorts thumbnail on account eligibility and kept an automatic frame. TikTok and Facebook remain manual, so the reel stays `approved` while its YouTube publication is `published`.
+
+**Scope correction (2026-08-24).** The founder designated **Crossroads** as the sole Customer Zero channel for the current lap. Earlier briefings grouped Crossroads with Lihim ng Nayon as an engineering fixture and pointed the publish gate elsewhere; that operating assumption is retired. The depictive-fidelity, verified-identity and sourced-narrative work run on Crossroads is directly relevant foundation progress. It becomes roadmap proof only when a Crossroads reel stays live and produces an audience reading.
+
+The previous bottleneck — *packaging and surface*, from the 2026-08-10 audit — is **retired as resolved for one
+Crossroads artifact**. The three named disqualifiers are fixed in the product, the Crossroads reel cleared the
+taste decision, and it is being left up. Do not read four retained publishes as Phase 0 exit: product-only
+completion, recovery and boundary proof remain open. Audience value continues in observation rather than driving
+the sprint.
 
 Only one primary bottleneck should exist at any given time.
-
-**Correction of record.** This document previously stated that all three reels sit at `spot_check`. **Crossroads is at `storyboard`** — it has a finished render and a render asset but never advanced. The other two are at `spot_check`. Unrelated to the audit result; recorded because the number was wrong.
 
 ---
 
@@ -82,30 +102,26 @@ Customer Zero consistently publishes high-quality stories using Kendrix.
 
 Priority 1
 
-**Close the packaging gap the audit named, then re-ask the publish question.** The audit is *done* — this is its repair, and it is deliberately scoped to exactly what the founder named. Shipped in the same lap (2026-08-10, uncommitted at time of writing):
-
-* **Thumbnail** — was wrong at the concept level, not the styling level: the composition burned the *whole title* at 64–92px in `system-ui`. Now a separate `thumbnailText` field (3–5 words) and one chosen house treatment. Four candidate treatments × two fittings were rendered from the founder's own hero frames — 28 candidates — and the founder's marks settled it; the losers were **deleted, not left behind a prop**.
-* **A defect found while rendering those candidates, worse than the styling.** A vertical reel's hero frame is 768×1344 and the 16:9 thumbnail cropped it with `objectFit: cover`, keeping **32% of the height, centred**. Vertical composition does not put its subject in the middle — Emberlight's hero is a child atop a glowing ladder in the upper 6%, and the shipped thumbnail discarded them. Portrait frames are no longer cropped.
-* **Titles** — `post-meta.v1` optimised for restraint (*"no clickbait caps… intrigue comes from the story"*) on the one surface that rewards a curiosity gap, producing filenames like *"the one second thing"*. Now requires a real gap while keeping every honesty ban (ALL-CAPS, emoji, fake urgency, unpaid-off promises).
-* **Captions** — `352f3a1` replaced the presets but remapped only the preset *id*; the render step reads the stored **resolved** style, so all three channels kept their old font, size, animation and stroke. A legacy style is now re-resolved through its replacement on read, preserving genuine creator tweaks (Crossroads' `#0057b8` brand blue survives; the two channels storing untouched defaults adopt their replacement whole).
-* **Endings** — **build nothing.** Already fixed by `e712dbe` (08-06); all three reels predate it. An additional text-layer ending fix was built and **reverted** (decision-log 2026-08-06-003) because the founder marked 12/12 unseen closes as ending properly. More ending machinery is the one item here with evidence *against* it.
-
-**Then the question that closes the loop: *would you publish this now?*** Asked on re-rendered reels — the same instrument the audit just proved is the most reliable one we own, pointed at a changed artifact.
+**Run the ten-working-day Phase 0 exit sprint.** Stabilize the current build, prove tenant/cost boundaries and
+creator-visible recovery, then complete one fresh short-form acceptance reel entirely through the deployed product.
 
 Priority 2
 
-**Whatever the re-ask names.** Deliberately unassigned, for the same reason Priority 1 was unassigned before the audit ran: the seat is chosen by evidence, not by prediction. If packaging was the whole of it, this becomes *first publish*. If new reasons surface, they get diagnosed on the same terms — the audit is repeatable.
-
-Note on routing, now that the audit has run: the disqualifiers landed on **packaging**, a surface with no owning coworker seat. Story → Editorial Director, Look → Visual Director, Sound → Sound Director all existed and none of them owns a thumbnail or a title. Worth watching whether that gap recurs.
+**Make failure recoverable without the builder.** Force a provider or queue/render failure, verify the creator sees
+the failed phase, and prove Retry resumes from durable outputs without repeating paid work or double-counting cost.
 
 Priority 3
 
-**First publish.** The Phase 0 → Phase 1 gate, and the only source of the audience evidence Phase 1's exit criteria require. Blocked behind Priority 2 by judgment, not by mechanics: the manual path (`export-post-package` → upload → `mark-published`) is complete, and the API path needs only a ~30-minute OAuth setup (`YOUTUBE_*` keys are unset today).
+**Keep the four published reels live and observe without producing Reel #5.** Audience polling continues while
+the ending ledger stays paused at two of three. Crossroads resumes only as a release canary or deliberate bounded
+experiment after the Phase 0 decision.
 
 **Demoted from the previous period:**
 
-* *Universal Writer fix (was Priority 1)* — the plan-level judge-and-force mechanism is **built, merged, and switched off**. `STORY_PLAN_GATE` exists on main but is unset in the environment, so all three declined reels were produced without it. Turning it on is a one-line experiment, but it is not obviously the constraint and should not be assumed to be.
-* *Factual grounding / EBN (was Priority 2)* — substantially **done and merged**. Slice 1 (factual text path), Slice 2 (illustrative rendering profile + disclosure), the depictive-ethics floor, and the standalone opt-in fact gate are all on main. Remaining work (Tier B data-driven visuals, the paid EBN look-check lap) is deferred behind a real signal.
+* *Crossroads Reel #5 (was Priority 2)* — **paused by founder decision 2026-09-01-001.** Four retained publishes
+  provisionally prove repeated production; another artifact does not resolve operator dependence.
+* *Packaging repair (was Priority 1)* — **confirmed on one retained Crossroads publish.** Thumbnail concept, portrait crop, titles and caption resolution shipped; the current artifact cleared founder-delegated taste review. Repeatability remains unproven.
+* *First publish (was Priority 3)* — **complete at n=1.** `6gcyx9bK2mE` is live and intended to stay up. Consistency is the next standard.
 
 ---
 
@@ -113,10 +129,12 @@ Priority 3
 
 | Metric                     | Current | Trend |     Target | Notes |
 | -------------------------- | ------: | :---: | ---------: | ----- |
-| Stories Published          |       0 |   →   |     Weekly | **Not a pending task — a repeated outcome.** 3 renders, 3 channels, 3 weeks, none approved. Cause now diagnosed: packaging, not story (2026-08-10 audit) |
-| Publishing Consistency     | Not yet started |   →   |     Weekly | Begins when the first reel clears the publish bar |
-| Customer Zero Satisfaction | Failing, first honest reading |   →   |  Improving | The founder declines to publish own output. This is the reading; it was previously recorded as "not yet measured" |
-| Workflow Completion        | 2 at `spot_check`, 1 at `storyboard` |   →   | Increasing | The pipeline completes end-to-end. Approval is where it stops, every time. **Corrected:** Crossroads was previously recorded as `spot_check`; it has a finished render but never advanced past `storyboard` |
+| Stories Published (live)   |       4 |   ↑   |     Weekly | Four retained Crossroads videos are publicly verified and intended to stay up |
+| Uploads Proven             |       5 |   ↑   |          — | One OAuth proving run taken down; four retained Crossroads publishes live |
+| Publishing Consistency     | Repeated, n=4 |   ↑   |     Weekly | Four retained publishes prove repetition; sustained weekly cadence is still open |
+| Customer Zero Satisfaction | Founder-approved four times |   ↑   |  Improving | All four approved artifacts are live on YouTube; audience value remains unresolved |
+| Workflow Completion        | Crossroads active · 4 live |   ↑   | Increasing | Full factual/visual-truth → render → review → YouTube path repeated. TikTok/Facebook remain manual |
+| Audience Evidence          | **#1: 90 / 0 / 0 · #2: 187 / 8 / 0 · #3: 217 / 4 / 0 · #4: 0 / 0 / 0 baseline** |   ↑   | Meaningful 24h/7d reading | 2026-09-01 04:54 UTC poll. Four public videos remain too small a sample for a creative intervention |
 
 ---
 
@@ -124,12 +142,13 @@ Priority 3
 
 | Metric               | Current | Trend |     Target | Notes |
 | -------------------- | ------: | :---: | ---------: | ----- |
-| Editorial Pass Rate  | Not systematically tracked |   →   | 60% first-attempt | First recorded gate pass 2026-07-20 (children's). The ending criteria that were suppressing it were reverted 2026-08-06 |
-| Story Quality Review | No detectable text-level defect |   ↑   |  Improving | 2026-08-06-003: the founder marked 12/12 unseen closes as ending properly; judge/ear agreement was exactly chance. Supersedes the 0/12 fingerprint reading for TEXT |
-| Watched-Reel Quality | **First reading taken: 3/3 declined** |   →   |  Improving | Publish-bar audit 2026-08-10. The named causes were thumbnails, titles and caption styling — **2 of 3 sit outside the video**. Story quality was not named by any of the three |
-| Packaging Quality | **Unmeasured, and it is where the bottleneck moved** |   →   |  Improving | Thumbnail + title + caption surface. No instrument we own examines it, and no coworker seat owns it. Created by the 2026-08-10 audit |
-| Visual Consistency   | Qualitative only |   →   |  Improving | Story Bible + reference conditioning shipped; Visual Director baseline audit still unrun |
-| Audio Quality Review | Qualitative only |   →   |  Improving | Sound Phase A + B shipped; the cross-register blind ear A/B that gates them has not been recorded |
+| Editorial Pass Rate  | Not systematically tracked |   →   | 60% first-attempt | Unchanged this period |
+| Story Quality Review | No detectable text-level defect |   →   |  Improving | Unchanged. 2026-08-06-003 stands |
+| Watched-Reel Quality | Four founder-approved and live |   ↑   |  Improving | Reel #4 was liked on first playback and needed no semantic or delivery repair |
+| Packaging Quality | **Cleared on one Crossroads publish** |   ↑   |  Improving | The three named disqualifiers are gone. Ranked cover and post package shipped; YouTube rejected the custom Shorts thumbnail on account eligibility and kept an automatic frame |
+| Depictive Fidelity | Enforced in code, verified on a live paid reel |   ↑   |  Holding | Four invariants with unit tests; five defects found and fixed by running it for real. `specs/depictive-fidelity.md` |
+| Visual Consistency   | Qualitative only |   →   |  Improving | Visual Director baseline audit still unrun |
+| Audio Quality Review | Qualitative only |   →   |  Improving | The cross-register blind ear A/B that gates Phase B has still not been recorded |
 
 ---
 
@@ -137,10 +156,10 @@ Priority 3
 
 | Metric                        | Current | Trend |     Target | Notes |
 | ----------------------------- | ------: | :---: | ---------: | ----- |
-| Generation Success Rate       | Not yet measured |   →   |       >95% | 3 of 3 recent renders completed; too small a sample to state a rate |
+| Generation Success Rate       | Not yet measured |   →   |       >95% | Two long-form `generate_story` runs were reaped for exceeding the stuck threshold (08-12, 08-17) on a fixture channel — the only reliability signal in the window |
 | Average Story Generation Time | Not yet measured |   →   |     Stable |       |
-| Average AI Cost per Story     | ~$7.60 short-form · ~$8.69 long-form |   →   | Decreasing — never at taste's expense | Two measured laps (2026-07-24, 2026-08-03). Cost accounting is live; residual leaks tracked in the execution backlog |
-| Production Reliability        | Improving |   ↑   |  Improving | Timeouts, reaper, step ceilings sized from a real long-form render; concurrent clip/upload overlap landed |
+| Average AI Cost per Story     | Crossroads retained reels: $5.21–10.63 |   ↓   | Decreasing — never at taste's expense | The lowest retained reel is **$5.21**; Reel #4 is **$9.32**, including a conservative $5.60 timeout estimate, so failed paid calls remain visible rather than reading as free. Other channels are excluded from the active proof metric |
+| Production Reliability        | Four approved artifacts live |   →   |  Improving | Reel #4 completed only through bounded operator recovery: two motion scenes degraded to stills, and a durable visual was salvaged after a render-upload queue-lock failure. Unattended operation and multi-destination publishing remain unproven |
 
 ---
 
@@ -165,42 +184,52 @@ Each experiment tests a named assumption in company/assumptions.md.
 
 | Experiment | Hypothesis | Expected Metric Impact | Status |
 | ---------- | ---------- | ---------------------- | ------ |
-| **Publish-bar audit** | The reason no reel gets published is nameable, and lives in the watched artifact rather than the text | Identifies the true bottleneck | **CLOSED — hypothesis confirmed, and its second half falsified (2026-08-10).** Nameable: yes, in one sitting, unprompted. "In the watched artifact": **wrong for 2 of 3** — thumbnails and titles are outside the video entirely. $0, as predicted. The instrument is repeatable and should be re-run after the packaging repair |
-| Packaging repair | The named disqualifiers are packaging, not story, and fixing them changes the publish answer | Stories published 0 → ≥1 | **OPEN (2026-08-10).** Thumbnail treatment chosen from 28 rendered candidates on the founder's own frames; portrait-crop defect fixed; titles retuned; legacy caption styles re-resolved. Falsifier: the founder still declines, and names something new |
-| Overlay text needs a gate, not guidance | Naming the exact failure in the prompt is enough to stop a thumbnail overlay drifting vaguer than its title | Packaging quality ↑ | **NEGATIVE, n=4 (2026-08-10).** `post-meta.v1.3` names the failure verbatim — *"AI Takes Over?" is WRONG, "HALF THE JOBS" is right* — and the same reel still returned `AI Takes Over Offices`. 2 of 4 improved, 1 clear win. Consistent with craft-needs-judgment-not-asking; **no gate built** — n=4 does not clear the machinery bar |
-| Judge-and-force at the plan level | Structural agency failures are fixed by forced re-planning, not line rewrites | Editorial pass rate ↑ | Built and merged; `STORY_PLAN_GATE` **unset**, so it has never run in production. n=3 probe was clean (3/3 control-FAIL→forced-PASS). Open: does it change a reel the founder would publish? |
-| Bounded edits for weak endings | A weak close can be repaired in place instead of re-rolling the story | Editorial pass rate ↑ | **CLOSED — rejected (2026-08-06-002).** Judge said 6/6 repaired; the founder preferred the repaired close in at most 2/6. Mechanism kept and uncommitted; the taste driving it failed |
-| Endings are three layers | Reels "just stop" because nothing ends — cinematically, narratively, psychologically | Perceived completeness ↑ | **PARTIALLY CLOSED (2026-08-06-003).** TIME layer validated and kept ("it's so much better now"). TEXT layer reverted — it generalized a viewing complaint into a writing complaint |
-| Prescribe variation, not shortness | The sentence-rhythm monoculture is self-inflicted by "short lines" prompts | Story quality review ↑ | Shipped (PR #14, 2026-07-20); children's-validated only. Cross-genre regression sweep still open |
+| **Phase 0 product-only acceptance** | The deployed product can complete and recover one standard short-form reel without its builder becoming a hidden stage | Workflow completion and production reliability ↑ | **ACTIVE (2026-09-01).** Ten-working-day exit sprint; one invited non-admin acceptance lap plus automated tenant, retry, cost and build evidence |
+| Packaging repair | The named disqualifiers are packaging, not story, and fixing them changes the publish answer | Stories published 0 → ≥1 | **CLOSED AT n=1 (2026-08-24).** Crossroads cleared the durable leave-it-up decision and published. Repeatability is tracked under publishing consistency, not this repair experiment |
+| **The audience is readable** | A published reel's real performance can reach `metrics` and feed few-shot selection without manual logging | Audience evidence 0 → ≥1 | **CONFIRMED (2026-08-26).** One scheduled poll read both public videos through `YOUTUBE_API_KEY`, appended both time-series rows, and refreshed both reel snapshots without manual logging. Reel #1 read 81 views; reel #2 established its immediate zero baseline |
+| Depictive fidelity beyond places | A real subject must be *sourced*, and a real person's face must never be invented | Depictive truth held under real-world subjects | **CLOSED — SHIPPED (2026-08-17).** Graduated to `specs/depictive-fidelity.md`. A third guard was **rejected on measurement**: a lexical "depicts what it doesn't tag" detector scored 1 true positive to 2–3 false, and would have stamped `R.MUTT 1917` on shop-window plumbing |
+| Overlay text needs a gate, not guidance | Naming the exact failure in the prompt is enough to stop a thumbnail overlay drifting vaguer than its title | Packaging quality ↑ | **NEGATIVE, n=4 (2026-08-10).** Carried forward unchanged: the fourth independent instance of soft guidance being satisficed, and still no gate built — n=4 does not clear the machinery bar |
+| Judge-and-force at the plan level | Structural agency failures are fixed by forced re-planning, not line rewrites | Editorial pass rate ↑ | Built and merged; `STORY_PLAN_GATE` **still unset**, so it has still never run in production. Four published reels do not settle whether it helps |
+| Prescribe variation, not shortness | The sentence-rhythm monoculture is self-inflicted by "short lines" prompts | Story quality review ↑ | Shipped (PR #14); children's-validated only. Cross-genre regression sweep still open |
 
 ---
 
 ## Current Risks
 
-* **~~The founder's bar is undiagnosed.~~ RETIRED 2026-08-10 — the audit ran.** Replaced by a narrower and more actionable risk: **we have no instrument that looks at packaging.** Every judge, probe and gate we own examines story text or the assembled video. Thumbnails, titles and the caption surface — where the founder's three disqualifiers actually landed — are measured by nothing and owned by no coworker seat. The founder's eye is currently the only reading available, which is exactly the situation the row below warns about.
-* **The repair was scoped by one sitting with three reels, two of them the same 55s vertical format.** A packaging treatment chosen on that sample may not hold for the 7:38 long-form or for a channel whose hero frames are photographic rather than painterly. Cheap to re-test; worth re-testing before it is called settled.
-* **Our automated quality instruments do not track the founder's ear.** Demonstrated twice in one week, in opposite directions (2026-08-06-002, -003). Any plan whose success criterion is an LLM judge should be treated as unvalidated by default.
-* **Marketing surface is running ahead of product proof.** kendrix.io, the landing page and a hero trailer now on its fourth cut all describe a product that has published nothing. Legitimate under the Phase-0 build-in-public mandate, but the gap is widening and the trailer's own acceptance gate (a blind recall test with an outsider) has not been run.
-* **Unattended reliability is unproven.** No production lap has completed without supervision.
-* **Long-form auto-publish is blocked by the YouTube uploader** — whole file held in memory, no resume. Non-issue at short-form sizes; a real blocker at ~1GB.
+* **The builder is still an invisible pipeline stage.** Four retained Crossroads publishes prove creative production,
+  but Reel #4 completed only after scripts, queue inspection and manual durable-artifact recovery. Until the same
+  class of failure is visible and recoverable in-product, another creator cannot reproduce the founder's outcome.
+* **The first proof channel is deliberately narrower and technically harder.** Crossroads remains the sole Customer
+  Zero evidence source and exercises factual grounding, depictive fidelity and verified identity. Its four live reels
+  continue collecting audience evidence while new production is paused for the Phase 0 exit sprint.
+* **Evidence acquisition marks thin dossiers sufficient, and its quality is not stable across runs.** Reel #2's first dossier contained only two secondary sources and was marked sufficient; the story gate caught unsupported death claims and the candidate was rejected for $0.10 before visual spend. Reel #3's pre-production acquisition (2026-08-27, three runs at 2¢) sharpened this: a subject phrased around the *anecdote* returned Wikipedia plus a content-farm blog; the same subject phrased around the *records* returned two primary 1912 inquiry transcripts from titanicinquiry.org; a second run of that identical phrasing returned a fandom wiki instead. A sixth direct observation on 2026-08-31 repeated the failure: despite readily available FDA primary history for the 1982 Tylenol recall, acquisition returned only the Washington Post and PBS in its source list, relied on unlisted Wikipedia citations for three facts, compressed the death chronology, and still reported `sufficient: true`; the operator rejected it before reel creation. **All six results reported `sufficient: true`.** So the variable is not only how the operator names the subject — it is also run-to-run luck in live search. This is now recurring rather than a single occurrence, and it is cheap to see (2¢, before any reel exists). It still does not justify new machinery: the operator can read the dossier before spending, and the story gate has caught the failure downstream both times. What it does justify is never creating an evidence-required reel without looking at the dossier first.
+* **A truth-safe board can still need source curation at Gate 2.** Reel #2's automated gates rejected invented memo staging and misleading orbital diagrams, but two surviving generated beats were not publishable. Replacing them with verified public-domain Apollo media produced the approved board. Reel #4 repeated the instrument gap in a different form: visual-truth QA passed six synthetic frames containing fabricated Tylenol labels or official-document text. Manual review rejected them; targeted conceptual replacements added $0.50 and cleared the board without touching the four safe frames. The gate is necessary but not sufficient for depicted text and branding, and manual storyboard review remains load-bearing.
+* **A provider timeout is not evidence of zero cost, and a queue failure is not evidence that no artifact exists.** Reel #4 submitted nine 10-second motion calls across the bounded retry set; one returned a verified clip and eight timed out without usage. The ledger conservatively attributes all eight at the documented $0.07/sec rate ($5.60) instead of making the failures look free. Later, the render job lost its BullMQ lock after `visual.mp4` had committed but before `render.mp4` and the asset row did. Inspecting the durable boundary recovered the finished visual and avoided another frame pass. This is one operational lap, not yet a mandate for new machinery, but both failure modes must stay visible in unit economics and reliability evidence.
+* **A per-channel migration that converted one caller left three reading a world that no longer existed.** Fixed for YouTube on 2026-08-21, but the pattern is the risk — TikTok and Facebook are still honest manual destinations, and whatever converts them next should convert every caller in the same commit.
+* **Testing-mode OAuth grants expire in seven days**, which taxes every publish. Measurement is now decoupled from this via `YOUTUBE_API_KEY`; **publishing is not**, and cannot be.
+* **Every render before 2026-08-21 burned a roaming Kendrix watermark.** Any Crossroads candidate from before that date must be re-rendered before publishing, or the logo ships. The render pass is free (`render` books `costCents: 0`).
+* **A metric read "1" when the truth was "0 live, 1 upload proven."** A `publications` row records a successful upload, not a watchable video, and neither the schema nor the weekly briefing distinguished them — so a proving run counted as a publish for eleven days. Any metric whose subject can be *undone by someone else* (a platform, or us) needs its liveness re-checked, not just its creation recorded.
+* **Our automated quality instruments do not track the founder's ear.** Standing, and unchallenged this period — no automated instrument predicted that the packaging repair would flip the publish answer.
+* **Marketing surface is still ahead of product proof.** Kendrix now has four retained Customer Zero publishes, but kendrix.io, the landing page and a four-cut hero trailer imply a reliably repeatable product with audience value. Four artifacts narrow the gap; they do not close it.
+* **Unattended reliability is unproven** — and now known to have been unprovable: auto-publish was gated on a credential that no longer existed, so no hands-off lap could have completed its last mile.
+* **Long-form auto-publish is still blocked by the YouTube uploader** — whole file held in memory, no resume. Non-issue at short-form sizes; a real blocker at ~1GB.
 
 ---
 
 ## Key Learnings
 
-From the current period (2026-07-23 → 2026-08-10):
+From the current period (2026-08-11 → 2026-08-26):
 
-* **Ask the instrument.** Seven weeks of story-quality work were aimed at a layer the founder never named. Thirty minutes of watching relocated the bottleneck to a surface no probe had ever examined — and two of the three disqualifiers were not even inside the video. The audit cost $0 and should have run in week one.
-* **"Not the text" did not mean "the video".** The prior bottleneck entry correctly retired story text and then narrowed too fast, assuming the defect had to live in look/voice/timing/mix. It lived in the packaging around the artifact. When eliminating a layer, do not assume the next-nearest layer inherits the blame.
-* **The most reliable quality instrument we own is the founder declining to publish** — and we left it unread for seven weeks while building automated judges that contradicted it.
-* **Rendering the candidates found the real bug.** The thumbnail defect that mattered most — a 16:9 centre crop discarding 68% of a portrait frame, subject included — was invisible in the code and obvious the moment real frames were rendered side by side. Build the cheap preview harness before theorising about a visual surface.
-* **Naming a failure in a prompt does not fix it.** `post-meta.v1.3` states the exact failing overlay and the exact right answer, and the same reel reproduced the failure anyway (n=4). This is the fourth independent instance of soft guidance being satisficed. Treat prompt wording as a weak lever by default and reserve mechanism for what must hold.
-* **A judge that agrees with itself proves nothing.** The ending criteria validated against nothing but their own judge; measured against the founder's ear, agreement was exactly chance.
-* **Diagnose the layer the complaint actually lives in.** "Our reels just stop" was a complaint about watching, and had a timing fix. Generalizing it into a writing complaint cost two laps and shipped criteria that had to be reverted.
-* **Pre-registering the interpretation works.** Both negative results were unarguable afterward because the decision rule was written before the data was seen. Keep doing this.
-* **A negative result is cheap if the mechanism survives.** Bounded edits failed on taste, but the prefix guarantee held 28/28 and all four guards proved load-bearing — a reusable chassis for any future edit region.
+* **A silent `return` is a defect with no symptoms.** The performance poller exited at its first line for ten days. Nothing failed, nothing logged, no dashboard went red — the only evidence was an empty table nobody queried. Any guard that skips work should say that it skipped, and why.
+* **A migration converts callers, not concepts.** Per-channel publishing landed on 08-11 for the one path a human clicks. The worker's auto-publish, the performance poller and the Settings gate went on reading an installation-wide token that the same commit had made meaningless — one of them in a way that would have uploaded to the wrong account. When a credential's *ownership* changes, grep for every reader before calling it done.
+* **Measure with the weakest credential that suffices.** Public view counts are public data. Reading them through the publishing grant coupled the audience signal to a token that expires in seven days, so the instrument we most needed was the most fragile thing we owned.
+* **Name the channel that counts before interpreting its evidence.** Crossroads was previously treated as a fixture and is now the founder-designated Customer Zero channel. Its paid depiction runs were valid foundation evidence all along; from 2026-08-24 forward, its publishing and audience outcomes are the company proof this phase is seeking.
+* **"Ask the instrument" generalizes one level out.** The 08-10 lesson was that we left the founder's judgment unread for seven weeks. The audience is the next instrument in the same chain, and we left it unread for ten days — this time because it was broken, which is the harder version of the same failure.
+* **A repair confirmed by the instrument that made the complaint is worth more than any judge** — but check that the instrument was actually asked. The packaging lap looked like the first intervention validated that way, and it was not: the founder approving a reel *to prove a code path* is a different act from deciding to leave it up, and I recorded the first as if it were the second.
+* **Define a metric by the state it claims, not the event that created it.** "Stories Published" was implemented as "a `publications` row exists", so a proving run that was later deleted counted as a publish for eleven days. The claim was *watchable*; the measurement was *uploaded*.
+* **Timeouts and lost locks make the boundary, not the exception string, the source of truth.** Reel #4's motion exceptions concealed potentially billable submitted work, while its render exception concealed a complete graded visual already stored durably. Account the former conservatively; inspect and reuse the latter before retrying expensive work.
 
-Carried forward from earlier periods and still standing: craft needs judgment not asking; raw writer output ≈ final output; the gate cannot self-check facts; goal-first genre architecture works; prescribed surface features become monoculture.
+Carried forward and still standing: craft needs judgment not asking; naming a failure in a prompt does not fix it; a judge that agrees with itself proves nothing; diagnose the layer the complaint lives in; pre-registering the interpretation works; raw writer output ≈ final output.
 
 ---
 
@@ -208,15 +237,22 @@ Carried forward from earlier periods and still standing: craft needs judgment no
 
 Major decisions are recorded in company/decision-log.md; this section lists the period's entries.
 
-* **2026-08-06-003** — The endings complaint was about TIME, not TEXT; the text-layer criteria rest on a misdiagnosis and were reverted.
-* **2026-08-06-002** — Bounded edits do not ship; a blind read overruled every automated signal.
-* **2026-08-06-001** — Endings are three layers (the TIME layer of which survives).
-* **2026-08-04-001** — Kendrix's public home is kendrix.io.
-* **2026-08-03-001** — EBN accepts no ungrounded narration; one production entrypoint per story mode.
-* **2026-07-24-001** — EBN leads with Historical Events / documentary, not True Crime.
-* **2026-07-25** — The depictive-ethics floor ratified (floors-are-law) and implemented; now on main.
+* **2026-09-01-001** — Freeze Reel #5; make a product-only Phase 0 acceptance lap the active work, then use Crossroads as a release canary.
+* **2026-08-31-001** — Retire the cited EBN Editor mechanism after the preregistered probe failed its hard contract on 8/9 Editor outputs.
+* **2026-08-25-003** — The story chooses its ending function; short-form does not mean a universal moral, CTA, or hard-stop.
+* **2026-08-25-002** — Factual Shorts end on one complete human payoff; archival callbacks stay visual when speaking them would create a second ending.
+* **2026-08-25-001** — Ending meaning belongs to sound direction, not renderer-invented genre tails or post-mux repair.
+* **2026-08-24-001** — Crossroads is the sole Customer Zero channel for the current lap; other channels are excluded from current roadmap progress.
+* **2026-08-22-001** — The 08-11 upload was a proving run, not a publish; Stories Published is 0 live, and the metric is redefined by liveness.
+* **2026-08-21-002** — Publishing credentials are per channel, everywhere; the operator-wide token path is removed rather than switched off.
+* **2026-08-21-001** — The Kendrix watermark comes off our own videos, and the unreachable mechanism is deleted rather than disabled.
+* **2026-08-17-001** — Depictive fidelity covers every real subject; a real person's face is never invented; the lexical tag-detector is rejected on measurement.
+* **2026-08-11-001** — Publishing accounts are owned per channel (corrected by 2026-08-22-001 on what the upload proved).
+* **2026-08-10-001** — The bottleneck was packaging, not story (the decision this period's Priority 1 closed out).
 
-Shipped this period without needing a decision entry: EBN Slices 1 + 2, voiceover perspective + depiction gate, the standalone opt-in fact gate, budget/caption hardening, Sound Phases A and B (Phase C spiked → parked), multi-platform channels, the channel clarify loop, the script shelf, publishing schedules, the storyboard cutting room, the Kendrix rebrand, kendrix.io + landing, and the hero trailer. 61 commits, all pushed.
+Shipped this period without needing a decision entry: the storyboard cutting room rebuilt to the design spec, the caption system matched to design, per-channel YouTube authorization and direct publish, cover-frame ranking with per-step spend attribution, the saturated-database auth fix, and the access-inbox notification fix.
+
+Operational compatibility fix this period: OpenAI's retired search-preview model was replaced by the Responses API `web_search` tool on `gpt-4.1-mini`; its fixed input-token floor and per-call search fee are now included in spend accounting.
 
 ---
 
@@ -224,12 +260,12 @@ Shipped this period without needing a decision entry: EBN Slices 1 + 2, voiceove
 
 Date
 
-2026-08-14
+At the Phase 0 acceptance lap, or 2026-09-15 if the gate has not cleared
 
 Questions
 
-* What did the publish-bar audit name, and which seat owns it?
-* Has the bottleneck statement earned a specific cause yet?
-* Did anything get published?
-* Which assumptions were validated? Which failed?
-* Does the roadmap phase still accurately describe the company?
+* Did one fresh short-form reel complete through the deployed product without engineering intervention?
+* Did a forced failure surface clearly and recover in one click without repeating paid work or cost?
+* Are tenant isolation, suspended-user, storage-ownership and spend-boundary checks automated and green?
+* Are lint, typecheck, tests and production build green on the acceptance build?
+* Does the founder approve Phase 0 → Phase 1, or which single failed criterion remains the bottleneck?

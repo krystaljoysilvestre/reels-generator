@@ -39,7 +39,7 @@ describe('scene QA — appearance boundaries', () => {
         supportingEntities: [],
       }],
     })
-    expect(result.errors).toContain("Scene 1 crosses a journey boundary where a character's time-bound appearance changes — cut the scene at that boundary so one frame resolves to exactly one appearance.")
+    expect(result.errors).toContain("Scene 1 crosses a journey boundary where an entity's time-bound identity state changes — cut the scene at that boundary so one frame resolves to exactly one state.")
   })
 
   it('accepts scenes cut on the appearance transition', () => {

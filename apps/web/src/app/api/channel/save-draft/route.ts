@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { and, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { getDb, channels } from '@reels/db'
-import { requireApiUser } from '@/lib/api-access'
+import { requireApiUser, requireChannelOwner } from '@/lib/api-access'
 
 // Persist an in-progress wizard as a 'draft' channel so the operator can leave and resume later
 // (it shows on the dashboard, separate from finished channels). Lenient by design: a draft may be
@@ -36,17 +36,21 @@ export async function POST(req: NextRequest) {
     updatedAt: new Date(),
   }
 
-  // Update the existing draft only if it's still a draft AND the caller owns it (admins bypass;
-  // legacy null-owner drafts are adoptable); else insert a fresh, owned draft.
+  // Update only an existing owned draft. A client-supplied foreign/missing id is not an instruction
+  // to create a second row, and null-owner legacy rows are never silently adopted by a tester.
   if (draftChannelId) {
+    const ownerGate = await requireChannelOwner(draftChannelId)
+    if (ownerGate instanceof NextResponse) return ownerGate
     const existing = await db.query.channels.findFirst({ where: eq(channels.id, draftChannelId) })
-    const owns = user.role === 'admin' || existing?.userId === user.id || existing?.userId == null
-    if (existing && existing.status === 'draft' && owns) {
-      await db.update(channels).set({ ...fields, userId: user.id }).where(eq(channels.id, draftChannelId))
+    if (existing?.status === 'draft') {
+      await db.update(channels).set(fields).where(eq(channels.id, draftChannelId))
+      console.log(`[audit] channel.draft.save actor=${user.id} channel=${draftChannelId} outcome=updated`)
       return NextResponse.json({ channelId: draftChannelId })
     }
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
   const [row] = await db.insert(channels).values({ ...fields, userId: user.id }).returning({ id: channels.id })
+  console.log(`[audit] channel.draft.save actor=${user.id} channel=${row!.id} outcome=created`)
   return NextResponse.json({ channelId: row!.id })
 }
 
@@ -58,8 +62,10 @@ export async function DELETE(req: NextRequest) {
   const user = gate
   const id = new URL(req.url).searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
+  const ownerGate = await requireChannelOwner(id)
+  if (ownerGate instanceof NextResponse) return ownerGate
   const db = getDb()
-  const ownership = user.role === 'admin' ? undefined : eq(channels.userId, user.id)
-  await db.delete(channels).where(and(eq(channels.id, id), eq(channels.status, 'draft'), ownership))
+  await db.delete(channels).where(and(eq(channels.id, id), eq(channels.status, 'draft')))
+  console.log(`[audit] channel.draft.delete actor=${user.id} channel=${id}`)
   return NextResponse.json({ ok: true })
 }

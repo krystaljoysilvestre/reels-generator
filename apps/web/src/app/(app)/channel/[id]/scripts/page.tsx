@@ -2,6 +2,7 @@ import { getDb, channels, stories } from '@reels/db'
 import { and, desc, eq, inArray } from 'drizzle-orm'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
+import { requiresEvidence, resolveChannelPolicy } from '@reels/core'
 import { assertChannelAccess } from '@/lib/access'
 import { ChannelAvatar } from '@/components/ChannelAvatar'
 import { channelMetadata } from '@/lib/page-metadata'
@@ -25,6 +26,7 @@ export default async function ChannelScriptsPage({ params }: { params: Promise<{
 
   const channel = await db.query.channels.findFirst({ where: eq(channels.id, id) })
   if (!channel) notFound()
+  const requiresSources = requiresEvidence(resolveChannelPolicy(null, null, channel))
 
   const rows = await db.query.stories.findMany({
     where: and(eq(stories.channelId, id), inArray(stories.origin, ['setup', 'library'])),
@@ -47,7 +49,7 @@ export default async function ChannelScriptsPage({ params }: { params: Promise<{
             <h1 className="truncate text-base font-semibold tracking-tight text-ink">Scripts</h1>
             <p className="truncate text-xs text-muted">{channel.name}</p>
           </div>
-          <AddScriptButton channelId={channel.id} isEbn={channel.storyMode === 'ebn'} />
+          <AddScriptButton channelId={channel.id} requiresSources={requiresSources} />
         </div>
       </header>
 
@@ -56,15 +58,16 @@ export default async function ChannelScriptsPage({ params }: { params: Promise<{
           <div className="card flex flex-col items-center justify-center px-6 py-14 text-center">
             <p className="text-sm font-medium text-ink">No scripts saved yet</p>
             <p className="mb-4 mt-1 max-w-sm text-sm text-muted">
-              Keep your scripts here — write your own, or have one written in this channel&apos;s voice. Turn any of
-              them into a reel when you&apos;re ready.
+              {requiresSources
+                ? 'Keep notes and voice references here. Reels on this channel start from source material.'
+                : 'Keep your scripts here — write your own, or have one written in this channel’s voice. Turn any of them into a reel when you’re ready.'}
             </p>
-            <AddScriptButton channelId={channel.id} isEbn={channel.storyMode === 'ebn'} prominent />
+            <AddScriptButton channelId={channel.id} requiresSources={requiresSources} prominent />
           </div>
         ) : (
           <>
             <p className="mb-3.5 text-xs text-muted">
-              {rows.length === 1 ? '1 script' : `${rows.length} scripts`} · ready when you are
+              {rows.length === 1 ? '1 script' : `${rows.length} scripts`} · {requiresSources ? 'notes and voice references' : 'ready when you are'}
             </p>
             <div className="card overflow-hidden divide-y divide-border-soft">
               {rows.map((s) => (
@@ -73,7 +76,7 @@ export default async function ChannelScriptsPage({ params }: { params: Promise<{
                   script={{ id: s.id, title: s.title, body: s.body, source: s.source, isReference: s.isReference }}
                   channelId={channel.id}
                   reel={s.reels[0] ? { id: s.reels[0].id, status: s.reels[0].status } : null}
-                  isEbn={channel.storyMode === 'ebn'}
+                  requiresSources={requiresSources}
                 />
               ))}
             </div>

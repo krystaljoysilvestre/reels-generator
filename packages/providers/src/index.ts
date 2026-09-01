@@ -3,6 +3,7 @@
 
 export * from './shared/types.js'
 export * from './shared/storage.js'
+export * from './shared/media.js'
 export * from './llm/client.js'
 export * from './llm/input-hash.js'
 export * from './fal/client.js'

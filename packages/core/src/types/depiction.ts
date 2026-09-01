@@ -147,7 +147,7 @@ export const MediaOriginSchema = z.object({
   deathYear: z.number().optional(), // the verified P570 year, recorded so eligibility is re-checkable
   sourceAssetKey: z.string().optional(), // untouched sourced bytes
   conditioningAssetKey: z.string().optional(), // what actually conditions scenes (= sourceAssetKey if untransformed)
-  conditioningTransform: z.enum(['colorized']).optional(),
+  conditioningTransform: z.enum(['colorized', 'state_adapted']).optional(),
 })
 export type MediaOrigin = z.infer<typeof MediaOriginSchema>
 

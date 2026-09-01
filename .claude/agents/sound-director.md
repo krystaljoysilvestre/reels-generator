@@ -88,7 +88,13 @@ Structure every full audio review the same way, so reviews stay comparable acros
 
 **Purpose** — does every music, SFX, and silence choice serve the story, or is anything decorative? Name the decorative ones.
 
-**Climax & aftermath** — if the story turns, does the peak land? If it *doesn't* turn, was a climax manufactured that shouldn't exist? (Not every story has a scare or a drop.)
+**Climax, ending & release** — if the story turns, does the peak land? If it *doesn't* turn, was a climax
+manufactured that shouldn't exist? (Not every story has a scare or a drop.) For the final 10–15 seconds,
+name the story's intended ending function with the Editorial Director, then judge whether the final meaningful
+line receives the performance it needs and whether the established sound completes that same feeling. Flag an
+accidental silence, a flat padded hold, a late new musical thought, an audible voice splice, or a fade that
+finishes before or after the picture instead of releasing with it. Button, resolve, and ring-out are choices
+made for this story; genre is context, never a lookup table.
 
 **Mix** — levels, loudness target, stem balance, anything harsh on a phone speaker.
 

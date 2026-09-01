@@ -1,39 +1,9 @@
-import { createCipheriv, createDecipheriv, createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
+// OAuth redirect state — a signed, expiring envelope that carries the channel and user through
+// Google's redirect so the callback can trust what came back. Web-only by nature: the worker never
+// runs a browser redirect. The CREDENTIAL crypto that used to live here moved to @reels/db, which
+// owns the encrypted columns and is reachable from the worker too.
 
-const VERSION = 'v1'
-
-function encryptionKey(): Buffer {
-  const encoded = process.env['PUBLISHING_CREDENTIALS_KEY']
-  if (!encoded) throw new Error('PUBLISHING_CREDENTIALS_KEY is not configured')
-  const key = Buffer.from(encoded, 'base64')
-  if (key.length !== 32) throw new Error('PUBLISHING_CREDENTIALS_KEY must be a base64-encoded 32-byte key')
-  return key
-}
-
-export function publishingCredentialsConfigured(): boolean {
-  try {
-    encryptionKey()
-    return true
-  } catch {
-    return false
-  }
-}
-
-export function encryptCredential(value: string): string {
-  const iv = randomBytes(12)
-  const cipher = createCipheriv('aes-256-gcm', encryptionKey(), iv)
-  const ciphertext = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()])
-  const tag = cipher.getAuthTag()
-  return [VERSION, iv.toString('base64url'), tag.toString('base64url'), ciphertext.toString('base64url')].join('.')
-}
-
-export function decryptCredential(value: string): string {
-  const [version, iv, tag, ciphertext] = value.split('.')
-  if (version !== VERSION || !iv || !tag || !ciphertext) throw new Error('Invalid encrypted credential')
-  const decipher = createDecipheriv('aes-256-gcm', encryptionKey(), Buffer.from(iv, 'base64url'))
-  decipher.setAuthTag(Buffer.from(tag, 'base64url'))
-  return Buffer.concat([decipher.update(Buffer.from(ciphertext, 'base64url')), decipher.final()]).toString('utf8')
-}
+import { createHmac, timingSafeEqual } from 'node:crypto'
 
 type OAuthState = { channelId: string; userId: string; nonce: string; expiresAt: number }
 

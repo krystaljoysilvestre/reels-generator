@@ -12,7 +12,7 @@
 // re-pay — the opposite of compose_cover, which must re-run whenever the creator edits the words.
 import { eq, asc } from 'drizzle-orm'
 import { getDb, reels, scenes, assets } from '@reels/db'
-import { downloadBuffer, llmCall } from '@reels/providers'
+import { downloadBuffer, llmCall, sniffImageMediaType } from '@reels/providers'
 import { PostMetaSchema, ReelCoverSchema, coverIsCreatorChosen, thumbnailOverlay, type ReelCover } from '@reels/core'
 import { buildCoverFramePrompt, CoverFrameRankingSchema, COVER_FRAME_V1_VERSION, normalizeTextSpace } from '@reels/core/prompts/cover-frame.v1'
 import { runStep } from '../harness.js'
@@ -87,7 +87,8 @@ export async function rankCoverFrames(reelId: string): Promise<void> {
       candidates.map(async (s) => {
         const asset = allAssets.find((a) => a.id === s.imageAssetId)
         if (!asset) return null
-        return { sceneIdx: s.idx, assetId: asset.id, buffer: await downloadBuffer(asset.storageKey) }
+        const buffer = await downloadBuffer(asset.storageKey)
+        return { sceneIdx: s.idx, assetId: asset.id, buffer, mediaType: sniffImageMediaType(buffer) }
       }),
     )
     const usable = images.filter((i): i is NonNullable<typeof i> => i !== null)
@@ -106,7 +107,7 @@ export async function rankCoverFrames(reelId: string): Promise<void> {
           content: [
             ...usable.map((i, idx) => ([
               { type: 'text' as const, text: `Candidate ${idx}:` },
-              { type: 'image' as const, mediaType: 'image/webp' as const, base64: i.buffer.toString('base64') },
+              { type: 'image' as const, mediaType: i.mediaType, base64: i.buffer.toString('base64') },
             ])).flat(),
             { type: 'text' as const, text: p.userMessage },
           ],

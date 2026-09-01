@@ -16,7 +16,7 @@ import { isFilipinoRegister } from './story-craft.v1.js'
 // DELETION TEST) are reverted per decision-log 2026-08-06-003. A blind read found no text-level ending
 // defect the founder can see, and these were GATE criteria — a rejection re-rolls the whole chain, so a
 // standard we cannot defend costs real spend and replaces good stories rather than fixing them.
-export const STORY_CRITIC_V2_VERSION = 'story-critic.v2.18'
+export const STORY_CRITIC_V2_VERSION = 'story-critic.v2.19'
 
 export const StoryGateSchema = z.object({
   pass: z.boolean(),
@@ -29,8 +29,25 @@ export const StoryGateSchema = z.object({
   // whole chain and fail again. Optional + safe default: absent or true ⇒ retry (status quo);
   // only an explicit false skips it. Ignored on a pass.
   rewriteCanFix: z.boolean().optional(),
+  // The recurring Customer Zero failure was not bad wording; it was a script that named events without
+  // carrying enough of their meaning for a first-time listener. Keep that judgment explicit so a model
+  // cannot return pass=true while quietly admitting that the story has no intelligible whole.
+  essence: z.object({
+    pass: z.boolean(),
+    reason: z.string().min(1),
+  }),
 })
 export type StoryGateVerdict = z.infer<typeof StoryGateSchema>
+
+/**
+ * The top-level verdict and the structured essence check are a conjunction. Models occasionally emit a
+ * contradictory top-level `pass`; normalize it in code so the structured evidence, not schema luck,
+ * decides whether the story advances. The essence reason is also the useful steering instruction.
+ */
+export function enforceStoryGateEssence(verdict: StoryGateVerdict): StoryGateVerdict {
+  if (verdict.essence.pass) return verdict
+  return { ...verdict, pass: false, reason: verdict.essence.reason }
+}
 
 // Fallback rubrics when the channel has no operator-edited tasteRubric. Terse and checkable on
 // purpose — vague virtues ("engaging", "well-paced") are useless to a gate. The horror entry is
@@ -286,6 +303,7 @@ How you judge:
   · THE DEBT: does the ending answer the question the opening planted — or twist from nowhere?
   · THE CHANGE: is anything different at the end (in the narrator, their world, or the viewer's understanding) — or does it just stop?
   (An explainer or argument answers these in its own terms: a claim advanced, a question paid off, an understanding changed. A Reddit post answers them in ITS terms: AGENCY = the narrator or their target DID something, not just felt something; THE CHANGE = the payoff landed — revenge taken, rule backfired, disaster arrived — OR, for an "am I wrong?" post, the verdict question thrown hard to the viewer. An open verdict is a real ending; a revenge or disaster story that just trails off is not.)
+- ESSENCE — make this separate verdict before the overall decision. A first-time listener, without relying on the title, source dossier, or prior knowledge, must be able to say what the story is centrally about, what changed or was decided, and why that consequence matters. Include the context needed to understand the causal spine; a sequence of names/events, a compressed outline, or a short script that merely gestures at its significance fails. Do NOT reward background for its own sake, demand a minimum duration or beat count, or require the script to state a theme. Judge whether THIS story's own promise is intelligible and felt.
 - SHOW THE TURN — the beat the whole story turns on (the decision, the reversal, the near-failure, the moment of doubt that EARNS the ending) must be dramatized as a concrete, felt moment, not collapsed into a bald summary ("tapos wala", "gusto niyang sumuko", "and everything changed", "napagtanto niya"). Where the payoff depends on a low or doubting beat first, that beat must be FELT (the breath that catches then the light that dies, the trembling voice) so the turn is earned, not asserted. A hollow or summarized turn fails. This is NOT a ban on plainness or warm, directly-stated feeling — only on flattening the one beat the whole story rides on.
 - Then the channel's rubric below. A clear violation of a rubric line fails; judge against the rubric, not your personal taste.
 - You do not rewrite, rank, or score. Pass or fail, with ONE blunt sentence of reason. On fail, the reason must point at the text (what fails and where), because it steers exactly one rewrite.
@@ -306,7 +324,11 @@ OUTPUT (JSON only):
 {
   "pass": true,
   "reason": "",           // one blunt sentence: why it ships, or exactly what fails and where
-  "rewriteCanFix": true   // FAIL only: can a rewrite of this SAME idea fix it? idea/premise-level failure ⇒ false; when unsure, true
+  "rewriteCanFix": true,  // FAIL only: can a rewrite of this SAME idea fix it? idea/premise-level failure ⇒ false; when unsure, true
+  "essence": {
+    "pass": true,
+    "reason": ""          // concrete evidence that the whole is intelligible, or what context/causal meaning is missing
+  }
 }`
 
   return { system, userMessage }

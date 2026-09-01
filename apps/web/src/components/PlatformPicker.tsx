@@ -62,7 +62,7 @@ interface Plat {
 // simply every card ticked, and the resolved spec says what that costs in length.
 const PLATFORMS: Plat[] = [
   { value: 'tiktok', label: 'TikTok', sub: '9:16 · ≤ 3 min', icon: TikTokIcon },
-  { value: 'youtube_shorts', label: 'YouTube Shorts', sub: '9:16 · ≤ 60s', icon: YouTubeIcon },
+  { value: 'youtube_shorts', label: 'YouTube Shorts', sub: '9:16 · ≤ 3 min', icon: YouTubeIcon },
   { value: 'facebook_reels', label: 'Facebook Reels', sub: '9:16 · ≤ 90s', icon: FacebookIcon },
   { value: 'youtube_long', label: 'YouTube long-form', sub: '16:9 · ≤ 20 min', icon: YouTubeLongIcon },
 ]

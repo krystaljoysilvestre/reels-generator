@@ -353,7 +353,7 @@ export function reviewSceneBreakdown(input: SceneQAInput): SceneQAResult {
           if (sceneAt < legEnd && sceneEnd > legAt) signatures.add(appearanceSignature(journeyLeg))
         }
         if (signatures.size > 1) {
-          errors.push(`Scene ${n} crosses a journey boundary where a character's time-bound appearance changes — cut the scene at that boundary so one frame resolves to exactly one appearance.`)
+          errors.push(`Scene ${n} crosses a journey boundary where an entity's time-bound identity state changes — cut the scene at that boundary so one frame resolves to exactly one state.`)
         }
       }
     }
@@ -362,11 +362,11 @@ export function reviewSceneBreakdown(input: SceneQAInput): SceneQAResult {
     for (const [entityRef, appearanceRef] of Object.entries(s.appearanceByEntity ?? {})) {
       const entity = resolve(entityRef)
       if (!entity) {
-        errors.push(`Scene ${n} binds appearance for unknown entity "${entityRef}" — use a Story Bible character id.`)
+        errors.push(`Scene ${n} binds an identity state for unknown entity "${entityRef}" — use a Story Bible entity id.`)
         continue
       }
       if (!refsOf(s).some((ref) => slug(ref) === slug(entity.id))) {
-        errors.push(`Scene ${n} binds an appearance for "${entity.id}" but does not tag that character in primaryEntity/supportingEntities.`)
+        errors.push(`Scene ${n} binds a state for "${entity.id}" but does not tag that entity in primaryEntity/supportingEntities.`)
       }
       if (!entity.appearances?.some((appearance) => slug(appearance.id) === slug(appearanceRef))) {
         errors.push(`Scene ${n} binds "${entity.id}" to unknown appearance "${appearanceRef}".`)

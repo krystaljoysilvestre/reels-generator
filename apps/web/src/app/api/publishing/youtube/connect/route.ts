@@ -2,7 +2,8 @@ import { randomBytes } from 'node:crypto'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { requireChannelOwner } from '@/lib/api-access'
-import { publishingCredentialsConfigured, signOAuthState } from '@/lib/publishing-credentials'
+import { publishingCredentialsConfigured } from '@reels/db'
+import { signOAuthState } from '@/lib/publishing-credentials'
 import { youtubeAuthorizationUrl, youtubeOAuthConfigured } from '@/lib/youtube-oauth'
 
 export async function GET(req: NextRequest) {

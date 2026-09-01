@@ -8,6 +8,23 @@ on:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: reels_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d reels_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/reels_test
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/reels_test
     steps:
       - uses: actions/checkout@v4
 
@@ -24,6 +41,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Migrate test database
+        run: pnpm db:migrate
+
       - name: Typecheck
         run: pnpm typecheck
 
@@ -32,3 +52,6 @@ jobs:
 
       - name: Unit tests
         run: pnpm test:unit
+
+      - name: Production build
+        run: pnpm build

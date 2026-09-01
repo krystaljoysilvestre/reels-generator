@@ -94,19 +94,22 @@ export function resolveEntities(bible: StoryBible, refs: EntityRefs): ResolvedEn
   return { resolved, unresolved }
 }
 
-// Resolve one character appearance by slug-tolerant id. Kept separate from resolveEntityRef because an
-// appearance is never a cast member in its own right — it can only be reached through its parent identity.
-export function resolveCharacterAppearance(entity: BibleEntity, appearanceId: string | null | undefined): CharacterAppearance | null {
+// Resolve one entity appearance by slug-tolerant id. Kept separate from resolveEntityRef because an
+// appearance is never an entity in its own right — it can only be reached through its parent identity.
+export function resolveEntityAppearance(entity: BibleEntity, appearanceId: string | null | undefined): CharacterAppearance | null {
   const target = appearanceId ? slug(appearanceId) : ''
   if (!target) return null
   return entity.appearances?.find((a) => slug(a.id) === target) ?? null
 }
 
+// Backward-compatible name for existing character-facing callers.
+export const resolveCharacterAppearance = resolveEntityAppearance
+
 // Materialize the render-facing entity for one scene. All semantic/safety fields remain on the parent;
 // only the frozen look + plate/provenance are replaced. Returning a BibleEntity keeps every existing
 // assembler/provider boundary unchanged while guaranteeing base and variant are never injected together.
 export function entityAtAppearance(entity: BibleEntity, appearanceId: string | null | undefined): BibleEntity {
-  const appearance = resolveCharacterAppearance(entity, appearanceId)
+  const appearance = resolveEntityAppearance(entity, appearanceId)
   if (!appearance) return entity
   return {
     ...entity,
@@ -142,16 +145,37 @@ export function appearanceBindingsForScene(
   return {}
 }
 
+// Narrow the journey's event-time state to identities the scene actually tags. This is the deterministic
+// inheritance boundary: the director chooses whether an exact identity is visible; once it tags that
+// identity, the analyzer-authored state is ground truth and cannot be silently omitted or replaced.
+export function inheritedAppearanceBindingsForScene(
+  bible: StoryBible,
+  fullNarration: string,
+  sceneNarration: string,
+  refs: Pick<EntityRefs, 'primaryEntity' | 'supportingEntities'>,
+): Record<string, string> {
+  const taggedIds = new Set(
+    resolveEntities(bible, refs).resolved.map((entity) => slug(entity.id)),
+  )
+  const inherited: Record<string, string> = {}
+  for (const [entityRef, appearanceRef] of Object.entries(
+    appearanceBindingsForScene(bible, fullNarration, sceneNarration),
+  )) {
+    const entity = resolveEntityRef(bible, entityRef)
+    if (entity && taggedIds.has(slug(entity.id))) inherited[entity.id] = appearanceRef
+  }
+  return inherited
+}
+
 // Validate analyzer-authored bindings before they become deterministic render input. These are reference
-// integrity checks, not taste: a binding must name one real character variant and only for a character
-// present in that anchored leg. Empty output means the default/base appearance is unambiguous.
+// integrity checks, not taste: a binding must name one real variant of its parent identity. Character
+// variants may only be active while that character is present; location variants may only be active while
+// that location is the journey setting. Objects have no journey-level presence list, so scene QA supplies
+// the final visible/tagged check. Empty output means the default/base appearance is unambiguous.
 export function validateAppearanceBindings(bible: StoryBible): string[] {
   const issues: string[] = []
   const entityById = new Map(bible.entities.map((e) => [slug(e.id), e]))
   for (const entity of bible.entities) {
-    if (entity.kind !== 'character' && (entity.appearances?.length ?? 0) > 0) {
-      issues.push(`Entity "${entity.id}" is ${entity.kind} but declares character appearance variants.`)
-    }
     const seen = new Set<string>()
     for (const appearance of entity.appearances ?? []) {
       const id = slug(appearance.id)
@@ -161,19 +185,51 @@ export function validateAppearanceBindings(bible: StoryBible): string[] {
   }
   bible.continuity.journey.forEach((leg, i) => {
     const present = new Set((leg.present ?? []).map(slug))
+    for (const ref of new Set([...(leg.present ?? []), ...(leg.visible ?? [])])) {
+      const entity = entityById.get(slug(ref))
+      if (entity && entity.kind !== 'character') {
+        issues.push(`Journey leg ${i + 1} lists non-character "${entity.id}" as a present/visible person.`)
+      }
+    }
     for (const [entityRef, appearanceRef] of Object.entries(leg.appearanceByEntity ?? {})) {
       const entity = entityById.get(slug(entityRef))
       if (!entity) {
         issues.push(`Journey leg ${i + 1} binds appearance for unknown entity "${entityRef}".`)
         continue
       }
-      if (entity.kind !== 'character') issues.push(`Journey leg ${i + 1} binds an appearance to non-character "${entity.id}".`)
-      if (!present.has(slug(entity.id))) issues.push(`Journey leg ${i + 1} binds "${entity.id}" but that character is not present in the leg.`)
-      if (!resolveCharacterAppearance(entity, appearanceRef)) {
+      if (entity.kind === 'character' && !present.has(slug(entity.id))) {
+        issues.push(`Journey leg ${i + 1} binds "${entity.id}" but that character is not present in the leg.`)
+      }
+      if (entity.kind === 'location' && slug(leg.locationEntityId ?? '') !== slug(entity.id)) {
+        issues.push(`Journey leg ${i + 1} binds "${entity.id}" but that location is not the leg's setting.`)
+      }
+      if (!resolveEntityAppearance(entity, appearanceRef)) {
         issues.push(`Journey leg ${i + 1} binds "${entity.id}" to unknown appearance "${appearanceRef}".`)
       }
     }
   })
+  return issues
+}
+
+/** Journey spans are authored as verbatim substrings and must tile the finished narration in order. */
+export function validateJourneyTiling(narration: string, journey: JourneyLeg[]): string[] {
+  if (journey.length === 0) return []
+  const text = narration.trim()
+  let cursor = 0
+  const issues: string[] = []
+  journey.forEach((leg, index) => {
+    const span = leg.span.trim()
+    const at = span ? text.indexOf(span, cursor) : -1
+    if (at < 0) {
+      issues.push(`Journey leg ${index + 1} is not a verbatim narration substring in sequence.`)
+      return
+    }
+    if (text.slice(cursor, at).trim()) {
+      issues.push(`Journey leaves uncovered narration before leg ${index + 1}.`)
+    }
+    cursor = at + span.length
+  })
+  if (text.slice(cursor).trim()) issues.push('Journey leaves trailing narration uncovered.')
   return issues
 }
 
@@ -302,6 +358,8 @@ export function validateJourneyTransitions(journey: JourneyLeg[]): string[] {
  *    specific people, and compositing them is forbidden — a composite of two real people is a fabricated
  *    record. Two or more → representative staging.
  * 2. That subject is the scene's PRIMARY one, i.e. its depiction is what the beat is about.
+ * 3. No other exact source-anchored identity is required. A lead portrait cannot fulfil an event whose
+ *    factual subject also includes a specific artwork, place, object, or other conditioned identity.
  *
  * Condition 2 is NOT a retreat to keying media mode off `primaryEntity` — DETECTION still scans the whole
  * entity set, because a real person can matter without being primary. It governs FULFILMENT only. On the
@@ -312,8 +370,45 @@ export function validateJourneyTransitions(journey: JourneyLeg[]): string[] {
 export function archivalShotTarget(
   archivalEntities: readonly BibleEntity[],
   primaryEntityId: string | null | undefined,
+  referenceEntities: readonly BibleEntity[] = [],
 ): BibleEntity | null {
-  if (archivalEntities.length !== 1 || !primaryEntityId) return null
+  if (archivalEntities.length !== 1 || !primaryEntityId || referenceEntities.length > 0) return null
   const only = archivalEntities[0]!
   return slug(only.id) === slug(primaryEntityId) ? only : null
+}
+
+/**
+ * Resolve an exact, already-sourced entity whose untouched source pixels should fulfil a scene.
+ *
+ * This is intentionally narrower than reference conditioning: the director must explicitly request the
+ * presentation, the source must be the shot's primary subject, and a time-bound appearance may not silently
+ * present the parent's wrong-state photograph. The helper does no IO; callers copy sourceAssetKey bytes and
+ * stamp them `presented_archival` so credits/disclosure remain truthful.
+ */
+export function presentedSourceTarget(
+  entities: readonly BibleEntity[],
+  requestedEntityId: string | null | undefined,
+  primaryEntityId: string | null | undefined,
+  appearanceBindings: Record<string, string> | null | undefined,
+): BibleEntity | null {
+  if (!requestedEntityId || !primaryEntityId || slug(requestedEntityId) !== slug(primaryEntityId)) return null
+  if (Object.keys(appearanceBindings ?? {}).some((id) => slug(id) === slug(requestedEntityId))) return null
+  const target = entities.find((entity) => slug(entity.id) === slug(requestedEntityId))
+  if (!target) return null
+  if (target.depiction?.depictionMode !== 'reference_plate') return null
+  return presentableSourceEntity(target)
+}
+
+// Some verified sources are minted while adapting event-time appearances. When one appearance's textual
+// state exactly matches the entity's canonical/base state, its untouched source is also truthful for the
+// base entity. Promote provenance only—not the conditioned plate—and never guess across differing states
+// (the precursor Fountain must not inherit the later signed photograph).
+export function presentableSourceEntity(entity: BibleEntity): BibleEntity | null {
+  if (entity.referenceOrigin?.type === 'sourced' && entity.referenceOrigin.sourceAssetKey) return entity
+  const canonical = entity.description.trim().replace(/\s+/g, ' ').toLowerCase()
+  const exactState = entity.appearances?.find((appearance) => {
+    const state = appearance.description.trim().replace(/\s+/g, ' ').toLowerCase()
+    return state === canonical && appearance.referenceOrigin?.type === 'sourced' && Boolean(appearance.referenceOrigin.sourceAssetKey)
+  })
+  return exactState?.referenceOrigin ? { ...entity, referenceOrigin: exactState.referenceOrigin } : null
 }

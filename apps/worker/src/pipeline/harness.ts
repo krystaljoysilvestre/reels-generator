@@ -27,6 +27,9 @@ export interface StepContext {
   stepName: PipelineStepName
   inputHash: string
   budgetCap?: number  // cents; defaults to short reel cap
+  // False only for deterministic/local work that cannot create provider spend (timings, mix, render,
+  // render QA). Those steps must be allowed to finish a reel that has legitimately reached its cap.
+  spendsProviderMoney?: boolean
 }
 
 export interface StepResult<T> {
@@ -75,26 +78,28 @@ export async function runStep<T>(
   // Per-reel cap: an explicit ctx.budgetCap wins; otherwise scale by the channel's reel length so a
   // long-form or all-animated reel gets proportionate headroom (a flat $8 stranded an 85s animated reel
   // one scene short — 2026-07-24). Still a bounded runaway-spend backstop (budgetCapForSeconds caps it).
-  let cap = ctx.budgetCap
-  if (cap == null) {
-    const channel = await db.query.channels.findFirst({ where: eq(channels.id, reel.channelId), columns: { targetSeconds: true } })
-    cap = budgetCapForSeconds(channel?.targetSeconds)
-  }
-  assertBudget(ctx.reelId, reel.costCents, cap)
+  if (ctx.spendsProviderMoney !== false) {
+    let cap = ctx.budgetCap
+    if (cap == null) {
+      const channel = await db.query.channels.findFirst({ where: eq(channels.id, reel.channelId), columns: { targetSeconds: true } })
+      cap = budgetCapForSeconds(channel?.targetSeconds)
+    }
+    assertBudget(ctx.reelId, reel.costCents, cap)
 
-  // Per-user monthly budget (mid-pipeline). The create-time gate is lagging — a burst of creates all
-  // pass at $0, then accrue in parallel past the cap. Re-check the owner's month-to-date spend before
-  // each paid step; terminal once reached, so the owner's remaining in-flight reels stop too. Admins are
-  // exempt; owner-less legacy reels (null owner) return null and skip the check.
-  const owner = await getReelOwnerUsage(ctx.reelId)
-  if (owner && owner.role !== 'admin') {
-    assertUserBudget(owner.spendCentsThisMonth, owner.monthlyBudgetCents ?? DEFAULT_USER_LIMITS.monthlyBudgetCents)
-  }
+    // Per-user monthly budget (mid-pipeline). The create-time gate is lagging — a burst of creates all
+    // pass at $0, then accrue in parallel past the cap. Re-check the owner's month-to-date spend before
+    // each paid step; terminal once reached, so the owner's remaining in-flight reels stop too. Admins are
+    // exempt; owner-less legacy reels (null owner) return null and skip the check.
+    const owner = await getReelOwnerUsage(ctx.reelId)
+    if (owner && owner.role !== 'admin') {
+      assertUserBudget(owner.spendCentsThisMonth, owner.monthlyBudgetCents ?? DEFAULT_USER_LIMITS.monthlyBudgetCents)
+    }
 
-  // App-wide daily kill-switch (backstop across all tenants). Only queries when a cap is configured, so
-  // it's free in the default (off) case. Terminal when tripped — halts rather than retry-spinning.
-  if (GLOBAL_DAILY_SPEND_CAP_CENTS !== null) {
-    assertGlobalDailyBudget(await getGlobalSpendTodayCents())
+    // App-wide daily kill-switch (backstop across all tenants). Only queries when a cap is configured, so
+    // it's free in the default (off) case. Terminal when tripped — halts rather than retry-spinning.
+    if (GLOBAL_DAILY_SPEND_CAP_CENTS !== null) {
+      assertGlobalDailyBudget(await getGlobalSpendTodayCents())
+    }
   }
 
   // ── 3. Mark step running ──────────────────────────────────────────────────

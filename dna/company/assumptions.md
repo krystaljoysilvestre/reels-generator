@@ -151,9 +151,32 @@ Roadmap Phase
 
 1
 
+Current Test Vehicle
+
+**Crossroads only** (founder decision 2026-08-24). Other channels are excluded from the current Customer Zero proof lap.
+
 Evidence Needed
 
-Customer Zero identifies recurring product improvements before external creators do.
+Operating Crossroads identifies recurring product improvements before external creators do, and the product can
+carry one fresh standard short-form reel from sign-in through export without terminal, SQL, one-off scripts or
+engineering salvage. Once that product-only acceptance lap clears, Crossroads can continue as a release canary
+and audience-evidence source rather than the default roadmap.
+
+Evidence to Date
+
+Crossroads has four retained, publicly verified YouTube reels: `6gcyx9bK2mE` (2026-08-24), `DTi3ZhEuPpk`
+(2026-08-26), `xIeZIn46B_o` (2026-08-29), and `WCRkYws2Kho` (2026-09-01). Apollo required
+bounded ending recovery after founder playback; Titanic cleared after local mix/caption repair; Tylenol was liked
+on first playback and needed no semantic or final-line delivery repair, only a forward note to hold future endings
+longer after the last word. The 2026-09-01 04:54 UTC poll reads 90 / 0 / 0, 187 / 8 / 0, 217 / 4 / 0,
+and the new reel's 0 / 0 / 0 baseline. This supports a repeated retained-publishing path at n=4 and automated
+audience readability.
+
+It also reveals Customer Zero's blind spot: Tylenol needed operator scripts, queue inspection and manual salvage
+after paid motion timeouts and a lost render lock. The assumption now advances to the harder test—whether the
+deployed product can reproduce the workflow without its builder. Reel #5 and the ending experiment are paused at
+two of three observations during the ten-working-day Phase 0 exit sprint (decision 2026-09-01-001); the pause is
+not evidence for or against the semantic ending contract.
 
 Invalidation Signal
 
@@ -197,7 +220,7 @@ Roadmap Phase
 
 Evidence Needed
 
-Once Customer Zero publishes EBN content, its retention curves clear the illustrative explainer/history benchmark. Market evidence (2026-07-24 research) is consistent that the retention discriminator is motion/pacing/narrative craft, not photorealism — the top of factual YouTube is illustrative-only and faceless (Kurzgesagt, the Vox motion-graphics style, OverSimplified, Fall of Civilizations) — but that is competitor evidence, not first-party proof.
+Customer Zero published its first illustrative EBN reel, *The 31 Million Bottle Decision* (`WCRkYws2Kho`), on 2026-09-01. Its zero baseline is recorded; the retention curve is still pending. That curve must clear the illustrative explainer/history benchmark. Market evidence (2026-07-24 research) is consistent that the retention discriminator is motion/pacing/narrative craft, not photorealism — the top of factual YouTube is illustrative-only and faceless (Kurzgesagt, the Vox motion-graphics style, OverSimplified, Fall of Civilizations) — but that remains competitor evidence, not first-party proof.
 
 Invalidation Signal
 

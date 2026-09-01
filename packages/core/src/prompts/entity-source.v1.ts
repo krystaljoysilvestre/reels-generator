@@ -14,7 +14,7 @@
 import { z } from 'zod'
 import { SubjectClassSchema } from '../types/depiction.js'
 
-export const ENTITY_SOURCE_V1_VERSION = 'entity-source.v1'
+export const ENTITY_SOURCE_V1_VERSION = 'entity-source.v1.5'
 
 // (1) DECIDE — what class of real-world thing is this, and is it specific enough that a real photograph
 // would improve the render? The impact≠coverage guard is the whole point: a GENERIC subject (a bedroom, a
@@ -42,10 +42,22 @@ Classify into exactly one subjectClass:
 - "fictional" — invented: a story character, a mythological or folkloric being, a supernatural presence. Use this EVEN IF the name resembles a real person's — an invented character called "Maria Santos" is fictional.
 - "generic" — real in kind but ANONYMOUS and unnamed: "a bedroom", "an office", "a street", "a stray dog", "a cracked mirror", "a rusty key", "a schoolgirl". No specific real instance is meant.
 
+An organization, institution, company, government body, movement, committee, or group of people is NOT a
+visual subject in this taxonomy. Classify the organization itself as "generic" and sourceable FALSE: its logo,
+headquarters, members, and documents are different subjects, and choosing one would make a false visual claim.
+Only classify a separately named physical building/site, specific document/artifact, or eligible individual
+person when that is the entity actually described.
+
+A historical event — an exhibition, ceremony, vote, trial, battle, protest, launch, accident, or meeting — is
+also NOT one visual subject. Classify the event itself as "generic" and sourceable FALSE. Its actual venue,
+participants, documents, vehicles, artifacts, or genuine event photograph are separate visual subjects and
+must be represented by the concrete entity they actually depict. Never classify an event as a "place" merely
+because it happened somewhere.
+
 Judge primarily by the NAME. If the name designates a specific real subject, classify it as that subject even when the description only lists physical features. If the name is a generic noun phrase, it is "generic".
 
 Then set sourceable:
-- TRUE only for "place", "object", "animal", or "human" — a specific real subject a viewer could look up and that plausibly has photographs.
+- TRUE only for "place", "object", "animal", or "human" — a specific real VISUAL subject a viewer could look up and that plausibly has photographs.
 - FALSE for "fictional" and "generic", always. A real photograph of some other bedroom, or of a real person who merely shares a made-up character's name, would be wrong — not helpful.
 
 When sourceable, write the best search query for a clear photograph of that subject: its proper name${region ? ', including the country/region when that disambiguates it' : ''}. For a species, the common English name. For a person, their full commonly-used name. Keep it short, no quotes.`
@@ -77,6 +89,13 @@ export const EntityVerifySchema = z.object({
   note: z.string().default(''),
 })
 
+export const IdentityStateVerifySchema = z.object({
+  identityPreserved: z.boolean(),
+  candidateMatchesTargetExactly: z.boolean(),
+  confidence: z.number().min(0).max(1),
+  note: z.string().default(''),
+})
+
 export function buildEntityVerifyPrompt(
   subjectClass: 'place' | 'object' | 'animal' | 'human',
   name: string,
@@ -86,7 +105,7 @@ export function buildEntityVerifyPrompt(
   // CORRECT result for a person and a disqualifying result for a building.
   const criteria: Record<typeof subjectClass, string> = {
     place: 'the right kind of structure or landscape with matching distinctive features. Fail a different subject, a generic stand-in, a map, a diagram, a logo, or a portrait of a person.',
-    object: 'the named object itself, clearly the subject of the frame. Fail a different object, a generic example of its category, a replica presented as something else, a map, a diagram, or a logo. A museum or archival photograph of the real object passes.',
+    object: 'the named object itself, clearly the subject of the frame. Fail a different object, a generic example of its category, a replica presented as something else, a map, a diagram, or a logo. A museum or archival photograph of the real object passes. When the description requires a dated issue, edition, version, marking, damage state, restoration state, or other exact historical state, that state is part of identity: fail an image that visibly contradicts it or only shows a different edition/state.',
     animal: 'the named species or individual animal, clearly the subject. Fail a different species, an illustration presented as a photograph, a diagram, or a logo. A photograph of the animal in any setting — wild, captive, or archival — passes.',
     human: 'the named person, as a portrait, photograph, painted portrait, or historical image of them. Fail a different person, an anonymous figure, a crowd, a statue or monument OF them rather than an image of them, a map, a document, or a logo. When you are not confident it is this specific person, FAIL — a similar-looking stranger is the failure mode this check exists to stop.',
   }
@@ -100,6 +119,34 @@ Factual description:
 """${description}"""
 
 Return JSON: { "matches": boolean, "confidence": 0..1, "appearsGrayscale": boolean, "note": string }`
+
+  return { system, userMessage }
+}
+
+// (2b) VERIFY A DERIVED IDENTITY STATE — unlike source verification above, provenance is already established
+// by IMAGE 1. IMAGE 2 is allowed to differ exactly where story time requires it (unsigned vs signed, intact
+// vs damaged, original vs restored), so asking whether IMAGE 2 alone "is the historical object" produces a
+// false failure whenever the target state intentionally removes the later identifying mark.
+export function buildIdentityStateVerifyPrompt(
+  name: string,
+  targetState: string,
+): { system: string; userMessage: string } {
+  const system = `You verify a state-adapted visual reference against its verified source identity. Make TWO SEPARATE judgments; never collapse them into a provenance verdict.
+
+IMAGE 1 is the verified source identity. IMAGE 2 is a generated candidate showing that SAME physical subject at a different story-time state.
+
+1. identityPreserved: IMAGE 2 preserves IMAGE 1's stable physical structure — geometry, proportions, openings, rim/edge shape, component arrangement, and other form that the target does not change. Fail a visibly different model, object, building, animal, or person.
+2. candidateMatchesTargetExactly: IMAGE 2 visibly satisfies the target orientation, markings, labels, damage, restoration, age, or other state details below.
+
+The target state is authoritative. Evaluate the TARGET against IMAGE 2 only, never against IMAGE 1. Evaluate identity from stable physical form only, ignoring every source-state attribute that the target changes. When the target says "unmarked," removing IMAGE 1's signature is REQUIRED target compliance and MUST NOT make either boolean false when the geometry remains the same. Provenance was already established from IMAGE 1; never ask IMAGE 2 to prove it independently.
+
+Truth-table example: IMAGE 1 is signed; target says unmarked; IMAGE 2 has the same geometry and is unmarked → identityPreserved=true AND candidateMatchesTargetExactly=true. The fact that IMAGE 2 differs from IMAGE 1 on the requested state is the purpose of adaptation, never a failure.`
+
+  const userMessage = `Subject identity: "${name}"
+Target story-time state:
+"""${targetState}"""
+
+Compare IMAGE 1 with IMAGE 2. Return JSON: { "identityPreserved": boolean, "candidateMatchesTargetExactly": boolean, "confidence": 0..1, "note": string }`
 
   return { system, userMessage }
 }

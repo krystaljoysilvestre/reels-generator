@@ -41,8 +41,10 @@ export {
   buildStoryGatePrompt,
   STORY_CRITIC_V2_VERSION,
   StoryGateSchema,
+  enforceStoryGateEssence,
   defaultTasteRubric,
   composeTasteRubric,
+  type StoryGateVerdict,
 } from '@reels/core/prompts/story-critic.v2'
 // Plan-level judge-and-force (OPT-IN, 2026-07-20): the plan gate + the plan doctor run BETWEEN the
 // planner and the writer when a channel opts into agency-driven planning (see generate-story.ts).
@@ -79,6 +81,7 @@ export {
   EbnWriterSchema,
   TRUE_CRIME_PERMISSIONS,
   type EbnPermissions,
+  type EbnWriter,
 } from '@reels/core/prompts/story-ebn-writer.v1'
 export { buildEbnFidelityPrompt, STORY_EBN_FIDELITY_V1_VERSION, EbnFidelitySchema, type EbnFidelityVerdict } from '@reels/core/prompts/story-ebn-fidelity.v1'
 // Depiction gate (2026-07-25): judge → targeted-repair → re-judge on a scene breakdown's semantic
@@ -116,10 +119,24 @@ export {
 } from '@reels/core/prompts/story-edit-verifier.v1'
 export { buildSoundDesignerPrompt, SOUND_DESIGNER_V1_VERSION, SoundDesignSchema, type DesignerScene } from '@reels/core/prompts/sound-designer.v1'
 export { buildScenesPrompt, SCENES_V1_VERSION, resolveMediaGenre } from '@reels/core/prompts/scenes.v1'
+export {
+  buildEntityBindingCriticPrompt,
+  reconcileVerifiedIdentityBindings,
+  tagVerifiedAppearanceBindings,
+  verifiedIdentityBindingsMatch,
+  ENTITY_BINDING_CRITIC_V1_VERSION,
+  EntityBindingVerdictSchema,
+} from '@reels/core/prompts/entity-binding-critic.v1'
+export {
+  buildIdentityStateCriticPrompt,
+  IDENTITY_STATE_CRITIC_V1_VERSION,
+  IdentityStateCriticSchema,
+} from '@reels/core/prompts/identity-state-critic.v1'
 export { buildStoryAnalyzerPrompt, STORY_ANALYZER_V1_VERSION } from '@reels/core/prompts/story-analyzer.v1'
 export { buildRephrasePrompt, REPHRASE_V1_VERSION } from '@reels/core/prompts/rephrase.v1'
 export { buildPeakExtractPrompt, PEAK_EXTRACT_V1_VERSION, PeakExtractSchema } from '@reels/core/prompts/peak-extract.v1'
-export { buildImageQAPrompt, IMAGE_QA_V1_VERSION, ImageQASchema } from '@reels/core/prompts/image-qa.v1'
+export { buildImageQAPrompt, IMAGE_QA_V1_VERSION, ImageQASchema, isBlockingImageTruthFailure } from '@reels/core/prompts/image-qa.v1'
+export { buildVisualTruthCriticPrompt, VISUAL_TRUTH_CRITIC_V1_VERSION, VisualTruthVerdictSchema } from '@reels/core/prompts/visual-truth-critic.v1'
 export { buildFilterSafePrompt, FILTER_SAFE_V1_VERSION, FilterSafeSchema } from '@reels/core/prompts/filter-safe.v1'
 export { buildVideoQAPrompt, VIDEO_QA_V1_VERSION, VideoQASchema } from '@reels/core/prompts/video-qa.v1'
 export { buildFoleySpotPrompt, FOLEY_SPOT_V1_VERSION, FoleySpotSchema } from '@reels/core/prompts/foley-spot.v1'
@@ -128,9 +145,11 @@ export { buildPostMetaPrompt, PostMetaLlmSchema, POST_META_V1_VERSION } from '@r
 export {
   buildEntitySourceDecidePrompt,
   buildEntityVerifyPrompt,
+  buildIdentityStateVerifyPrompt,
   buildRepresentativeStagingPrompt,
   EntitySourceDecisionSchema,
   EntityVerifySchema,
+  IdentityStateVerifySchema,
   RepresentativeStagingSchema,
   PLATE_COLOURISE_PROMPT,
   ENTITY_SOURCE_V1_VERSION,

@@ -97,6 +97,27 @@ export function outroTailMs(genreCategory?: string): number {
   return Math.min(raw, OUTRO_TAIL_MAX_MS)
 }
 
+// Renderer-owned duration bounds for an EXPLICIT ending shape. These are execution tuning, not genre
+// decisions: Direction chooses the shape per story. An intentional silence is capped so QA never permits
+// a long dead hold merely because silence was selected.
+const ENDING_TAIL_MS = {
+  button: 650,
+  // Owner playback, 2026-09-01: 1.8s left only 1.1s of carried focus before the 0.7s terminal release,
+  // which made an otherwise complete ending feel hurried. 2.6s gives the story-selected layer 1.9s to
+  // land, then preserves the same short release. Shape remains Direction's per-story choice.
+  resolve: 2600,
+  ring_out: 3000,
+} as const
+const INTENTIONAL_SILENCE_MAX_MS = 900
+
+export function endingTailMs(
+  shape: keyof typeof ENDING_TAIL_MS,
+  focus: 'music' | 'ambience' | 'silence',
+): number {
+  const tail = ENDING_TAIL_MS[shape]
+  return focus === 'silence' ? Math.min(tail, INTENTIONAL_SILENCE_MAX_MS) : tail
+}
+
 // ── Input ─────────────────────────────────────────────────────────────────────
 
 export interface SceneSpan {
@@ -353,16 +374,30 @@ export function computeTimings(input: ComputeTimingsInput): Timings {
   // extra time is a held final frame (last scene extends) under the decaying tail.
   let durationMs = input.durationMs
 
-  // §4.65 — Outro tail. Runs BEFORE the ring-out below so the tail is counted as room the hit already
-  // has: a normal end-scare now needs no extension at all, and only a very late hit tops up the
-  // shortfall. Held final frame + resolving bed; see outroTailMs for the per-genre reasoning.
-  const tailMs = outroTailMs(input.genreCategory)
+  // §4.65 — Ending direction. New designs anchor an explicit final cadence and choose what carries it;
+  // timing resolves the anchor and maps its shape to bounded duration. Legacy scripts keep the old tail
+  // during migration, but new rendering never has to infer voiceEnd from total duration.
+  const endingIntent = input.audioScript.ending ?? null
+  const tailMs = endingIntent
+    ? endingTailMs(endingIntent.shape, endingIntent.focus)
+    : outroTailMs(input.genreCategory)
   let appliedTailMs = 0
+  let ending: Timings['ending'] = null
   if (tailMs > 0 && sceneTimings.length > 0) {
     durationMs += tailMs
     appliedTailMs = tailMs
     const lastScene = sceneTimings[sceneTimings.length - 1]
     if (lastScene) lastScene.endMs = durationMs
+    if (endingIntent) {
+      const resolvedEnding = resolveAnchor(cps, input.alignment, endingIntent.anchor)
+      ending = {
+        startMs: resolvedEnding!.startMs,
+        voiceEndMs: input.durationMs,
+        endMs: durationMs,
+        focus: endingIntent.focus,
+        shape: endingIntent.shape,
+      }
+    }
   }
 
   if (sfxEvents.length > 0) {
@@ -374,6 +409,7 @@ export function computeTimings(input: ComputeTimingsInput): Timings {
         durationMs += extendMs
         const last = sceneTimings[sceneTimings.length - 1]
         if (last) last.endMs = durationMs
+        if (ending) ending.endMs = durationMs
         warnings.push(`Climax ring-out: reel extended ${extendMs}ms so the hit tail decays before the cut`)
       }
     }
@@ -386,7 +422,7 @@ export function computeTimings(input: ComputeTimingsInput): Timings {
     sfxEvents,
     music: musicTiming,
     silenceDrop,
-    outroTailMs: appliedTailMs,
+    ...(ending ? { ending } : { outroTailMs: appliedTailMs }),
     warnings,
   }
 }

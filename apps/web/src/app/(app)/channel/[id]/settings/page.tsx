@@ -1,11 +1,9 @@
-import { getDb, channels, platformConnections } from '@reels/db'
+import { getDb, channels, platformConnections, publishingCredentialsConfigured } from '@reels/db'
 import { eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { assertChannelAccess } from '@/lib/access'
 import { resolveChannelPolicy, ToneConfigSchema, WorldBibleSchema, CaptionStyleSchema, AudioPacksSchema, TargetPlatformsSchema, PostingRulesSchema, resolvePublishSlots, resolvePublishDays } from '@reels/core'
-import { publishingCredentialsConfigured } from '@/lib/publishing-credentials'
 import { youtubeOAuthConfigured } from '@/lib/youtube-oauth'
-import { isYouTubeConfigured } from '@reels/providers'
 import { ChannelSettings } from './ChannelSettings'
 import { channelMetadata } from '@/lib/page-metadata'
 
@@ -68,7 +66,11 @@ export default async function ChannelSettingsPage({ params }: { params: Promise<
           slotsUtc: resolvePublishSlots(postingRules),
           daysUtc: resolvePublishDays(postingRules),
         },
-        youtubeConfigured: isYouTubeConfigured(),
+        // Whether auto-publish is offerable for THIS channel — it has its own live YouTube connection.
+        // (This used to read installation-wide YOUTUBE_* env keys, which stopped meaning anything once
+        // accounts became per-channel: the option was hidden on a connected channel and offered on an
+        // unconnected one.)
+        youtubeConfigured: connections.some((c) => c.platform === 'yt' && c.status === 'active'),
         youtubeConnectConfigured: youtubeOAuthConfigured() && publishingCredentialsConfigured(),
         platformConnections: connections.map((c) => ({
           platform: c.platform,

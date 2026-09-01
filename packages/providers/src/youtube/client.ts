@@ -1,11 +1,11 @@
-// YouTube Data API v3 — resumable video upload with an operator-supplied OAuth refresh token.
+// YouTube Data API v3 — resumable video upload against one Kendrix channel's OAuth grant.
 //
-// Env-gated: YOUTUBE_CLIENT_ID + YOUTUBE_CLIENT_SECRET + YOUTUBE_REFRESH_TOKEN. When any is missing,
-// isYouTubeConfigured() is false and callers keep the manual (zip download) flow.
-//
-// One refresh token = one YouTube channel (mint the token while acting as the brand account you want
-// to upload to). Multi-channel operators need one token per channel — a per-channel token store is a
-// deliberate later step; Phase 1 assumes the operator's primary channel.
+// Auth is always PASSED IN, never read from the environment. One refresh token = one YouTube account,
+// so a token resolved from process.env would upload to whichever account minted it regardless of which
+// Kendrix channel asked. Callers get the per-channel grant from resolveYouTubeAuth() in @reels/db and
+// keep the manual (zip download) flow when it returns null. The operator-wide YOUTUBE_REFRESH_TOKEN
+// path this module used to accept was removed on 2026-08-21: the per-channel store replaced it, but
+// three callers were still reading it, and the metrics poller had been dead at its first line since.
 //
 // Cost: the YouTube Data API is free (quota-metered, not billed) — an upload costs ~1600 quota units
 // of the default 10,000/day, i.e. ~6 uploads/day before a quota raise is needed. costCents: 0 is the
@@ -16,6 +16,12 @@
 // the cover compositor can target it at render time instead of discovering it at publish time, when the
 // video is already up and the only remaining option is to drop the thumbnail.
 export const YOUTUBE_THUMBNAIL_MAX_BYTES = 2 * 1024 * 1024
+
+export interface YouTubeAuth {
+  clientId: string
+  clientSecret: string
+  refreshToken: string
+}
 
 export interface YouTubeUploadParams {
   video: Buffer
@@ -37,8 +43,8 @@ export interface YouTubeUploadParams {
   captionsSrt?: string
   // BCP-47 tag for the caption track (e.g. 'en', 'fil'). Defaults to 'en'.
   captionsLanguage?: string
-  // Per-channel OAuth credentials. Omit only for the legacy operator-wide env-token path.
-  auth?: { clientId: string; clientSecret: string; refreshToken: string }
+  // The channel's own OAuth credentials, from resolveYouTubeAuth(). Required — there is no fallback.
+  auth: YouTubeAuth
 }
 
 export interface YouTubeUploadResult {
@@ -47,20 +53,14 @@ export interface YouTubeUploadResult {
   costCents: 0
 }
 
-export function isYouTubeConfigured(): boolean {
-  return Boolean(
-    process.env['YOUTUBE_CLIENT_ID'] && process.env['YOUTUBE_CLIENT_SECRET'] && process.env['YOUTUBE_REFRESH_TOKEN'],
-  )
-}
-
-async function getAccessToken(auth?: YouTubeUploadParams['auth']): Promise<string> {
+async function getAccessToken(auth: YouTubeAuth): Promise<string> {
   const res = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
-      client_id: auth?.clientId ?? process.env['YOUTUBE_CLIENT_ID']!,
-      client_secret: auth?.clientSecret ?? process.env['YOUTUBE_CLIENT_SECRET']!,
-      refresh_token: auth?.refreshToken ?? process.env['YOUTUBE_REFRESH_TOKEN']!,
+      client_id: auth.clientId,
+      client_secret: auth.clientSecret,
+      refresh_token: auth.refreshToken,
       grant_type: 'refresh_token',
     }),
   })
@@ -71,7 +71,6 @@ async function getAccessToken(auth?: YouTubeUploadParams['auth']): Promise<strin
 }
 
 export async function uploadToYouTube(params: YouTubeUploadParams): Promise<YouTubeUploadResult> {
-  if (!params.auth && !isYouTubeConfigured()) throw new Error('YouTube is not connected')
   const accessToken = await getAccessToken(params.auth)
 
   // YouTube rejects titles containing angle brackets; clamp lengths to the API's documented limits.
@@ -196,8 +195,16 @@ async function insertCaptionTrack(accessToken: string, videoId: string, srt: str
 
 // ── Video statistics (metrics polling) ────────────────────────────────────────
 // Data API videos.list — public stats (views/likes/comments), 1 quota unit per call, up to 50 ids.
-// Reuses the upload token (public stats need no extra scope). Watch-time/retention lives in the
-// separate YouTube ANALYTICS API and needs the yt-analytics.readonly scope — a later, deliberate step.
+//
+// Accepts EITHER an API key or a channel's OAuth grant, and the key is the better instrument: view
+// counts on a public video are public data, so measuring performance does not need permission to
+// publish. Reading them through the publishing grant couples the performance loop to a token that
+// expires — a Testing-mode refresh token lasts seven days — which is how the loop went ten days
+// without recording a single number. With a key, one call covers every channel and no grant can
+// expire out from under it; the OAuth path stays for installations that have no key.
+//
+// Watch-time and retention live in the separate YouTube ANALYTICS API, need the yt-analytics.readonly
+// scope, and are per-channel by nature — that one genuinely does require the grant. A later step.
 
 export interface YouTubeVideoStats {
   videoId: string
@@ -206,17 +213,23 @@ export interface YouTubeVideoStats {
   comments: number | null
 }
 
-export async function fetchYouTubeStats(videoIds: string[]): Promise<YouTubeVideoStats[]> {
-  if (!isYouTubeConfigured()) throw new Error('YouTube is not connected (YOUTUBE_* env vars missing)')
+export type YouTubeStatsAuth = YouTubeAuth | { apiKey: string }
+
+export async function fetchYouTubeStats(
+  videoIds: string[],
+  auth: YouTubeStatsAuth,
+): Promise<YouTubeVideoStats[]> {
   if (videoIds.length === 0) return []
-  const accessToken = await getAccessToken()
+  const apiKey = 'apiKey' in auth ? auth.apiKey : null
+  const accessToken = apiKey ? null : await getAccessToken(auth as YouTubeAuth)
 
   const out: YouTubeVideoStats[] = []
   for (let i = 0; i < videoIds.length; i += 50) {
     const batch = videoIds.slice(i, i + 50)
+    const url = `https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${batch.join(',')}`
     const res = await fetch(
-      `https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${batch.join(',')}`,
-      { headers: { Authorization: `Bearer ${accessToken}` } },
+      apiKey ? `${url}&key=${encodeURIComponent(apiKey)}` : url,
+      apiKey ? {} : { headers: { Authorization: `Bearer ${accessToken!}` } },
     )
     if (!res.ok) throw new Error(`YouTube stats fetch failed (${res.status}): ${(await res.text()).slice(0, 300)}`)
     const json = (await res.json()) as {

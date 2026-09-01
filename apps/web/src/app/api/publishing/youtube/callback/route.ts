@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { getDb, platformConnections } from '@reels/db'
+import { getDb, platformConnections, encryptCredential } from '@reels/db'
 import { requireChannelOwner } from '@/lib/api-access'
-import { encryptCredential, verifyOAuthState } from '@/lib/publishing-credentials'
+import { verifyOAuthState } from '@/lib/publishing-credentials'
 import { exchangeYouTubeCode, getYouTubeIdentity, youtubeOAuthConfigured } from '@/lib/youtube-oauth'
 
 function back(req: NextRequest, channelId: string, result: 'connected' | 'failed') {

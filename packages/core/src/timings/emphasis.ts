@@ -49,6 +49,9 @@ function graphemeCount(text: string): number {
 export function pickEmphasis(words: readonly EmphasisCandidate[]): number {
   const flagged = words.findIndex((w) => w.emphasis)
   if (flagged !== -1) return flagged
+  // `false` is an explicit editorial decision too. Once a marking pass has touched a line, an all-false
+  // line means "no accent"; falling back to delivery would silently undo the creator's choice.
+  if (words.some((w) => w.emphasis === false)) return -1
 
   let best = -1
   let bestHeld = -1

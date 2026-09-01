@@ -84,7 +84,7 @@ export async function generateMusicStep(reelId: string): Promise<void> {
       // Content-hash the key on prompt+length so a re-composed bed lands on a NEW key — the mixer hashes
       // reel.musicKey, so a same-key overwrite would NOT trigger a re-mix and the new bed would go unheard.
       const promptHash = createHash('sha1').update(`${prompt}|${lengthMs}`).digest('hex').slice(0, 10)
-      const key = `audio/reel/${reelId}-${promptHash}.mp3`
+      const key = `reels/${reelId}/music/${promptHash}.mp3`
       await uploadBuffer(key, bed.audio, 'audio/mpeg')
       await db
         .update(reels)

@@ -4,7 +4,7 @@ import { promisify } from 'node:util'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { mkdir, writeFile, rm, copyFile } from 'node:fs/promises'
-import { getDb, reels, scenes, assets, channels } from '@reels/db'
+import { getDb, reels, scenes, assets, channels, assertVisualTruthReady } from '@reels/db'
 import { downloadBuffer, uploadFile, buildInputHash } from '@reels/providers'
 import { TimingsSchema, LutConfigSchema, CaptionStyleSchema, channelPlatformPreset, effectsFromSelection, parseMotion, effectiveGenre, computeMediaDisclosure, MediaOriginSchema,} from '@reels/core'
 import { renderReelWithRemotion } from '@reels/render/remotion/render-remotion'
@@ -12,6 +12,7 @@ import { resolveMediaGenre } from '@reels/core/prompts/scenes.v1'
 import { composeCover } from '../compose-cover.js'
 import { runStep, setReelStatus } from '../harness.js'
 import { runPool } from '../pool.js'
+import { visualCheckpointKey, visualCheckpointMatches, visualCheckpointMeta } from '../render-checkpoint.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -53,6 +54,7 @@ export async function renderStep(reelId: string): Promise<void> {
 
   const reel = await db.query.reels.findFirst({ where: eq(reels.id, reelId) })
   if (!reel?.timings) throw new Error(`Reel missing timings: ${reelId}`)
+  await assertVisualTruthReady(reelId)
 
   const timings = TimingsSchema.parse(reel.timings)
   const channel = await db.query.channels.findFirst({ where: eq(channels.id, reel.channelId) })
@@ -109,7 +111,9 @@ export async function renderStep(reelId: string): Promise<void> {
   const visualFingerprint = buildInputHash('reel.visual.v1', {
     durationMs: timings.durationMs,
     scenes: timings.scenes.map((s) => `${s.idx}:${s.startMs}:${s.endMs}:${s.tier}`).join('|'), // cut points
-    subtitles: timings.subtitles.map((c) => `${c.startMs}-${c.endMs}:${c.text}`).join('|'),     // burned in
+    subtitles: timings.subtitles.map((c) =>
+      `${c.startMs}-${c.endMs}:${c.text}:${c.words.map((w) => `${w.startMs}-${w.endMs}:${w.text}:${w.emphasis == null ? 'auto' : w.emphasis ? 'on' : 'off'}`).join(',')}`,
+    ).join('|'), // burned in — word marks/timing affect both entrance motion and semantic accent
     images: reelScenes.map((s) => s.imageAssetId ?? 'none').join('|'),
     videos: reelScenes
       .map((s) => (s.tier === 'video' ? (pickVideoAsset(s.idx)?.createdAt.toISOString() ?? 'none') : 'still'))
@@ -126,6 +130,7 @@ export async function renderStep(reelId: string): Promise<void> {
     disclosure: mediaDisclosure, // in the fingerprint → the label changing (or the media mix changing) re-renders
     platform: platformPreset.label, // the resolved spec, so set order can't churn the fingerprint
     frame: `${platformPreset.width}x${platformPreset.height}`, // output dims (belt-and-suspenders to platform)
+    endingFadeMs: timings.ending?.shape === 'ring_out' ? 1500 : timings.ending?.shape === 'resolve' ? 900 : 0,
   })
 
   // The render step re-runs when the visual OR the audio changes; INSIDE, the expensive Remotion pass is
@@ -138,7 +143,7 @@ export async function renderStep(reelId: string): Promise<void> {
   })
 
   const result = await runStep(
-    { reelId, stepName: 'render', inputHash },
+    { reelId, stepName: 'render', inputHash, spendsProviderMoney: false },
     async () => {
       const tmp = join(tmpdir(), `reels-render-${reelId}`)
       await mkdir(tmp, { recursive: true })
@@ -153,7 +158,7 @@ export async function renderStep(reelId: string): Promise<void> {
       const mixPath = join(tmp, 'mix.m4a')
       await writeFile(mixPath, await downloadBuffer(mixAsset.storageKey))
 
-      const visualKey = `reels/${reelId}/visual.mp4`
+      const visualKey = visualCheckpointKey(reelId)
       const gradedPath = join(tmp, 'graded.mp4') // the final graded visual to mux (cached or freshly rendered)
 
       // The cached-visual upload runs CONCURRENTLY with the mux + final upload below. The two only share the
@@ -173,9 +178,14 @@ export async function renderStep(reelId: string): Promise<void> {
       // ── Reuse the cached graded visual when the fingerprint is unchanged (audio-only re-render) ──────
       // The prior render row records the fingerprint of the visual it produced. If it matches (and the
       // duration agrees — belt-and-suspenders against a fingerprint gap), the cached visual.mp4 is valid.
-      const prevMeta = (allAssets.find((a) => a.kind === 'render')?.meta ?? {}) as Record<string, unknown>
+      // New renders record visual.mp4 as its own durable checkpoint immediately after the upload. Legacy
+      // renders only stored the same fingerprint on render.mp4, so keep that fallback until old reels age out.
+      const previousVisual =
+        allAssets.find((a) => a.kind === 'video' && a.storageKey === visualKey) ??
+        allAssets.find((a) => a.kind === 'render')
+      const prevMeta = (previousVisual?.meta ?? {}) as Record<string, unknown>
       let reused = false
-      if (prevMeta['visualFingerprint'] === visualFingerprint && prevMeta['durationMs'] === timings.durationMs) {
+      if (visualCheckpointMatches(prevMeta, timings.durationMs, visualFingerprint)) {
         try {
           await writeFile(gradedPath, await downloadBuffer(visualKey))
           reused = true
@@ -263,6 +273,11 @@ export async function renderStep(reelId: string): Promise<void> {
           height: platformPreset.height,
           grain: lutConfig.grain,
           vignette: lutConfig.vignette,
+          ...(timings.ending?.shape === 'ring_out'
+            ? { endingFadeMs: 1500 }
+            : timings.ending?.shape === 'resolve'
+              ? { endingFadeMs: 900 }
+              : {}),
           ...(mediaDisclosure ? { disclosure: mediaDisclosure } : {}),
           outputPath: visualPath,
           onProgress: (p) => {
@@ -290,8 +305,37 @@ export async function renderStep(reelId: string): Promise<void> {
         // Cache the finished visual so future audio-only renders skip everything above and just re-mux.
         // Started, not awaited — see the visualUpload declaration above. Streams from disk so a 355 MB file
         // never becomes a heap Buffer, which matters with the final upload running alongside it.
+        const checkpointMeta = visualCheckpointMeta(timings.durationMs, visualFingerprint)
         visualUpload = uploadFile(visualKey, gradedPath, 'video/mp4')
-          .then(() => console.log(`[render] cached visual uploaded at ${sinceStart()}s`))
+          .then(async () => {
+            // Commit the durable boundary as soon as the object exists—not after the final mux/upload.
+            // If the queue loses its lock from here on, Retry can prove these pixels match and skip the
+            // expensive frame pass instead of relying on an operator to inspect R2 and salvage them.
+            await db.insert(assets).values({
+              reelId,
+              channelId: reel.channelId,
+              // Intermediate visual track, never the finished reel. Keeping it out of kind='render'
+              // prevents export/publish consumers from selecting visual.mp4 instead of render.mp4.
+              kind: 'video',
+              storageKey: visualKey,
+              provider: 'local',
+              costCents: 0,
+              meta: checkpointMeta,
+            }).onConflictDoUpdate({
+              target: [assets.reelId, assets.storageKey],
+              // Normalize any legacy row at this key too; otherwise an old kind='render' row could still
+              // be mistaken for the final reel by export/publish consumers after the metadata is refreshed.
+              set: {
+                channelId: reel.channelId,
+                kind: 'video',
+                provider: 'local',
+                costCents: 0,
+                meta: checkpointMeta,
+                createdAt: new Date(),
+              },
+            })
+            console.log(`[render] cached visual checkpoint committed at ${sinceStart()}s`)
+          })
           .catch((err) => { visualUploadError = err })
       }
 
@@ -313,8 +357,15 @@ export async function renderStep(reelId: string): Promise<void> {
 
       // ── Upload the final reel ──────────────────────────────────────────
       const storageKey = `reels/${reelId}/render.mp4`
-      await uploadFile(storageKey, outputPath, 'video/mp4')
-      console.log(`[render] muxed + uploaded final reel at ${sinceStart()}s${reused ? ' (reused cached visual)' : ''}`)
+      let finalUploadError: unknown = null
+      try {
+        await uploadFile(storageKey, outputPath, 'video/mp4')
+        console.log(`[render] muxed + uploaded final reel at ${sinceStart()}s${reused ? ' (reused cached visual)' : ''}`)
+      } catch (err) {
+        // Do not leave yet: a fresh visual upload may still be committing its durable checkpoint.
+        // Settling it first is what lets the manual Retry skip the frame pass after this final upload fails.
+        finalUploadError = err
+      }
 
       // Join point for the concurrent cached-visual upload. Awaited BEFORE the asset row is written, so
       // meta.visualFingerprint never claims a cache that failed to upload — and rethrown, so a cache-upload
@@ -324,10 +375,11 @@ export async function renderStep(reelId: string): Promise<void> {
         if (visualUploadError) throw visualUploadError
         console.log(`[render] all uploads settled at ${sinceStart()}s`)
       }
+      if (finalUploadError) throw finalUploadError
 
       // Constant key per reel → upsert in place; bump createdAt (drives the preview cache-bust + render_qa
       // re-validation). meta.visualFingerprint lets the NEXT render decide whether it can reuse the visual.
-      const meta = { durationMs: timings.durationMs, renderer: 'remotion@4', visualFingerprint }
+      const meta = { type: 'final_render', durationMs: timings.durationMs, renderer: 'remotion@4', visualFingerprint }
       await db.insert(assets).values({
         reelId,
         channelId: reel.channelId,

@@ -110,9 +110,9 @@ export const PLATFORM_PRESETS: Record<TargetPlatform, PlatformPreset> = {
     safeZoneBottomPct: 18,
   },
   youtube_shorts: {
-    label: 'YouTube Shorts', aspect: '9:16', width: 1080, height: 1920, maxSeconds: 60, sweetSpot: [25, 55],
+    label: 'YouTube Shorts', aspect: '9:16', width: 1080, height: 1920, maxSeconds: 180, sweetSpot: [25, 90],
     captionHint: 'clean and legible, sitting a little higher to clear the bottom title/CTA UI',
-    lengthHint: '60s hard cap; 25–55s ideal',
+    lengthHint: 'up to 3 minutes; stay concise, but give a story the time it needs',
     hookHint: 'a clear curiosity/value promise in the first 3s, spoken and on-screen',
     safeZoneBottomPct: 14,
   },

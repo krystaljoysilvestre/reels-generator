@@ -9,7 +9,7 @@
 import { StoryBibleSchema } from '../types/story-bible.js'
 import type { BibleEntity } from '../types/story-bible.js'
 
-export const STORY_ANALYZER_V1_VERSION = 'story-analyzer.v1.23'
+export const STORY_ANALYZER_V1_VERSION = 'story-analyzer.v1.27'
 
 // The analyzer emits a full StoryBible; the caller validates with this schema.
 export { StoryBibleSchema }
@@ -66,6 +66,21 @@ ENTITIES — the recurring people, places, and objects that ANCHOR the story. Ru
   it never reappears, the answer is no — it is NOT an entity. Incidental props the narration mentions in
   passing (earphones, a phone's clock, a fridge light, a glass of water, a single text bubble) are NOT
   entities — they belong in the one scene's inline description, not the bible. When unsure, LEAVE IT OUT.
+- ONE-SCENE FACTUAL IDENTITY EXCEPTION. In a factual/real-world narration, extract a concrete NAMED real
+  visual subject even when it appears in only one beat when that beat explicitly depicts the subject and its
+  exact identity matters: a named artwork or artifact, a dated publication issue or document, a landmark,
+  vessel, vehicle, species/individual animal, or similarly look-up-able thing. Without an entity the sourcing
+  stage cannot anchor it and the renderer invents a generic substitute. This is not permission to pad the
+  Bible: a person, organization, event, idea, or merely mentioned subject does not qualify unless the shot
+  actually depicts a concrete visual identity governed by the existing person/organization rules.
+- ORGANIZATIONS AND EVENTS ARE CONTEXT, NOT LOCATIONS. A named organization, institution, committee,
+  movement, exhibition, ceremony, vote, trial, battle, or other event is not itself a physical Story Bible
+  entity. Never turn it into a "location" merely because events happened somewhere: that freezes an invented
+  venue and makes every later shot repeat it. Extract a location only when the narration establishes the
+  actual physical building/site/room as a recurring visual subject. Extract a separately named document,
+  artwork, artifact, person, or other concrete visual subject when it independently passes the entity test.
+  Under VOICEOVER, an event or organization may remain the leg's locationLabel for subject-matter context,
+  but locationEntityId MUST be null unless the physical venue itself is an extracted location entity.
 - THE PARTICIPANT TEST DECIDES EMBODIMENT, BEFORE ANY NARRATOR IS EXTRACTED. Ask: did the teller LIVE the events (a participant telling what happened to them — a diegetic narrator), or is the teller REPORTING, EXPLAINING, or ARGUING about events from outside them (news, documentary, explainer, essay, recap — a VOICEOVER)? Pronouns are evidence, participation is the verdict: first-person cues ("ako", "ko", "nakita ko", "I", "my", "natin", "sa atin") appear in BOTH kinds of narration, so they alone never decide. A VOICEOVER narrator is a voice above the story's world with NO body in it: do NOT extract a narrator entity for it, ever.
 - THE LIVED FIRST-PERSON NARRATOR IS ALWAYS AN ENTITY. If the narration is told in first person by a teller who LIVED the events, you MUST extract the narrator as a "character" entity with a FULLY committed look (gender + wardrobe + hair + build), EVEN in a solo story where no one else appears and they are only ever seen as their own hands, a reflection, or a partial body. A first-person narrator IS shown — hands on a sink, a face in a mirror, a shoulder edging the frame — so without a locked appearance every such shot renders a DIFFERENT person. Set continuity.narratorEntityId to this entity's id, and list this id in the journey leg's "present" array for every leg the narrator is physically in (for the narrator, that is every leg).
 - FACTS ONLY. Each "description" is a short, depictable noun phrase of OBSERVABLE traits — for a person: gender, apparent age, build, hair, and wardrobe (ALL of these — an under-described person renders as a random, often wrong, figure), plus one distinguishing detail; for a place: layout, key furniture, materials, colours, wear; for an object: count, state, condition. NO mood words, NO adjectives of feeling, NO interpretation (write "an old mirror, dark wood frame, cracked glass", never "a creepy mirror").
@@ -74,19 +89,24 @@ ENTITIES — the recurring people, places, and objects that ANCHOR the story. Ru
 - STABLE IDENTITY ONLY — describe what someone/something permanently IS, never what it is momentarily HOLDING or DOING. Transient props and actions belong to a SCENE, not an entity: a friend who LOSES or goes to LOOK FOR her tumbler must NOT be described as "carrying a tumbler" — she'd be drawn holding the very thing she's searching for. A prop that is lost, sought, only-sometimes-present, or appears in a single beat is either its OWN object entity (if it recurs) or a per-scene detail — never welded onto a person's permanent look.
 - DECLARATIVE looks, NO hedging. Write each description as one committed look — never "possibly", "maybe", "perhaps", "likely", "or". If the narration leaves a RECURRING thing's appearance unspecified, commit to ONE plausible, genre-appropriate concrete look and state it plainly: that single frozen choice is exactly what keeps the thing consistent across shots.
 - DON'T FABRICATE BIOGRAPHY. Committing to a plausible LOOK for something unspecified — a prop, a place, or a person's appearance (gender, wardrobe, hair, build) — is your job (above). But never invent BIOGRAPHICAL facts the narration doesn't give: a specific numeric age, a name, a relationship, a brand, or backstory — and never state an inferred look as if it were a stated fact. Appearance you commit to; biography you don't invent.
-- ONE CHARACTER, TIME-BOUND APPEARANCES. A person remains ONE entity across their life. When — and ONLY
-  when — the narration materially changes that same person's visible state across time (a grandmother now
-  versus "when she was young", a child who returns as an adult), keep ONE parent entity and add an
-  "appearances" variant for each non-default state the story actually depicts. Never create unrelated
-  "old-lola" and "young-lola" characters. The parent "description" is the default/most framing appearance;
-  each variant has an ENGLISH kebab-case id and a COMPLETE standalone character description (gender,
-  story-supported apparent life stage, build, hair, wardrobe, distinguishing continuity detail) — never a
-  delta such as "the same woman but younger". Preserve recognizable identity through stable evidence the
-  story supports; do not invent exact numeric ages. Most stories are linear and MUST return appearances: [].
-  Past tense alone is NOT a reason to create a variant: add one only when a materially different look is
-  depicted. Dreams, hypotheticals, disguises, injuries, and wardrobe changes are not automatically variants;
-  use judgment and leave appearances empty unless persistent visual continuity genuinely requires a
-  separate frozen look.
+- ONE IDENTITY, TIME-BOUND APPEARANCES. A person, place, or object remains ONE entity when its visible state
+  changes across the story. When — and ONLY when — the narration materially depicts different states of that
+  same identity (a grandmother now versus when she was young; one artifact before versus after a documented
+  modification; one building before versus after damage), keep ONE parent entity and add an "appearances"
+  variant for each non-default state actually shown. Never split the same identity into unrelated entities.
+  The parent "description" is the default/most framing appearance; each variant has an ENGLISH kebab-case id
+  and a COMPLETE standalone visual description — never a delta such as "the same object but signed". Preserve
+  the stable geometry and identifying features the story supports, while stating every visible state change
+  concretely. Most stories are linear and MUST return appearances: []. Past tense alone is NOT a reason to
+  create a variant. Dreams, hypotheticals, wardrobe changes, damage, restoration, and transformation are not
+  automatically variants; use judgment and leave appearances empty unless persistent visual continuity
+  genuinely requires a separate frozen look.
+  TRANSFORMATION BOUNDARIES ARE LOAD-BEARING: when one narration span visibly moves an important recurring
+  identity through two or more material states, create the needed variant and split the journey at the exact
+  clause where the visible state changes — even inside one sentence. For example, an artifact acquired
+  upright and unmarked, then rotated and signed, needs an "unsigned-upright" state for the acquisition clause
+  and the canonical signed state afterward. The complete descriptions preserve the same underlying geometry;
+  only narration-supported state details change. Never let the final state's marks leak into the precursor.
 - NEVER MINT A LIKENESS FOR A REAL PERSON (depictive-ethics floor). If a named entity is a real, identifiable living person (a public official, executive, athlete, celebrity) or a named real organization's people, do NOT commit an invented facial/personal likeness — a fabricated committed look splices verbatim into every scene and becomes a fake photo of a real person. Extract them ROLE-REPRESENTATIVE instead (id like "trade-official", description "an anonymous government representative figure, no identifiable face — shown from behind or in silhouette") OR, better, don't mint a person entity at all and let the story's SUBSTANCE carry the beat (the real place, documents, symbolic staging). Fictional characters are unaffected; this is only for real, named, living people and real organizations' personnel.
 - THE SUPERNATURAL THREAT is a CHARACTER entity — but ONLY when it is SEEN. When the narration gives the threat a SEEN physical manifestation (a figure who can't be there, a second face in a reflection, a form that appears, an aswang/multo/white lady), extract it as a "character" with role: "threat". BODILESS THREAT EXCEPTION — do NOT extract it as an entity at all: if the threat is only ever HEARD or FELT and never SEEN in the narration (a voice with no source, a whisper, a "presence", a cold, a knocking), it has NO visible form, so minting it as a character forces the storyboard to render "a presence with no visible form" — which the image model can only draw as smoke, mist, or a distorted figure (the #1 fake-looking-horror failure). Instead: do NOT create an entity for it, do NOT set isReflection/a reveal leg for it, and capture it in ONE directorNotes line as a bodiless threat whose scare is rendered through its EFFECT on real objects (the thing that moved, the coin that returned) and the witness's reaction — never drawn. (A threat that STARTS as a voice and later APPEARS as a seen form IS extracted — from the beat it is seen.) Mark ONLY a SEEN supernatural presence with the role; ordinary people get none. Usually exactly one. THE SCARE IS A CONTRADICTION, NOT A CREATURE — what makes the presence frightening is the rule of reality it BREAKS, not how it looks. Reason in three steps, emitting only the last two: (1) which reality rule does THIS story rely on? ("a reflection corresponds to what stands before the glass", "an unattended object stays where it was left", "a locked house lets no one in", "a photograph preserves what happened"); (2) how does the story break it?; (3) how can BOTH sides of the break be visually VERIFIED — in one frame, or across the reel for a before/after change? Reality A and Reality B may be separated by TIME ("the doll faced the window last night" / "it faces the door now") — extract the pair as FACTS; how it is shown (same frame, or established early and broken at the payoff) is the director's job, not yours. The violated property is one of: Presence (empty but occupied), Location (exists where impossible), Reflection (reflection disagrees with reality), Motion (a still thing moved), Stillness (a thing that never moves), Time (before/after mismatch), Identity (one becomes two), Geometry (impossible proportions), Visibility (seen through what should block it) — pick ONLY what the narration actually supports, never impose an archetype. Then emit TWO things for the threat:
   • Its "description" (RENDER-FACING — spliced verbatim into image prompts): the LOOK only, shadow-native — (a) a base form mostly lost to darkness ("a tall gaunt figure in the dark"); (b) exactly ONE committed anomaly written in LIGHTING language, what the light FINDS, never an anatomy list ("a single wet glint inside each deep-sunken socket", "only the edge of a too-wide grin of crooked teeth emerging into the light", "the silhouette of a head tilted slightly wrong"). Prefer the anomaly that CARRIES the contradiction (position, arrangement, stillness) over facial texture — a facial expression may be part of the look but must NEVER be the load-bearing scare: image models render a "too-wide grin" as a pleasant smile, but they render impossible ARRANGEMENTS faithfully. THE ANOMALY IS THE THREAT'S IDENTITY: one anomaly, committed once, the SAME every scene it haunts — never swapped, never accumulated (unless the story explicitly depicts a transformation). PHYSICAL, never emotional (no "terrifying/sinister" — not renderable, and mood words). ANTI-BLOB: never ONLY "hidden in shadow" / "a dark shape" — name the lit anomaly concretely or the render is an empty dark room. Never pretty, never bloody/gory, never cosmetics-wording ("pale skin + dark eyes" renders as goth makeup). NON-PERSON words — "a tall figure", "a gaunt form", "a shape", never "a woman/man/girl" (naming a PERSON in a dead or menacing state trips the image model's safety filter; the same thing as a "figure/form" renders identically and passes).
@@ -121,10 +141,12 @@ CONTINUITY:
   • locationEntityId: the bible LOCATION entity the narrator is physically INSIDE this leg; null for a transit space with no entity. NEVER the destination they're only heading toward.
   • present: entity ids of the characters PHYSICALLY here this leg — only who the narration actually places here. Someone who left (went back for something, stayed behind) is NOT present until they return. In a first-person story the narrator is present in EVERY leg.
   • visible: the subset of present actually ON-camera. Usually equals present; make it NARROWER for POV / reflection / hidden beats (narrator present but off-camera; a threat seen only in a reflection). [] means "same as present".
-  • appearanceByEntity: map a present character id to ONE of that entity's appearance ids when this span
-    depicts that non-default state. Omit the character to use the parent/default description. Never bind two
-    appearances at once. A framing shot may use the elderly default while the next remembered-event leg binds
-    that same entity to "remembered-youth"; an explicit return to the frame removes the binding.
+  • appearanceByEntity: map an entity id to ONE of that entity's appearance ids when this span depicts that
+    non-default state. For a character, the entity must be present; for a location it must be this leg's
+    setting; an object may be bound when this span depicts its changed state. Omit the entity to use the
+    parent/default description. Never bind two appearances at once. A framing shot may use the elderly
+    default while the next remembered-event leg binds "remembered-youth"; an artifact may use "unsigned"
+    before the narration reaches its signed form.
   • occupancyState: "outside" | "approaching" | "inside" | "leaving" — the narrator's relation to this leg's place; omit if genuinely unclear.
   • isReflection: true only if the narrator sees this leg via a mirror / window / dark glass.
   UNDER VOICEOVER the journey is a SUBJECT-MATTER ITINERARY instead: one leg per contiguous stretch whose SETTING (the place or subject the content is about) stays stable; spans still tile the narration in order; "present" lists ONLY people the narration's content itself depicts (never the narrator — there is none on screen); leave occupancyState out and isReflection false; the itinerary may jump freely between places (an argument is not locomotion).

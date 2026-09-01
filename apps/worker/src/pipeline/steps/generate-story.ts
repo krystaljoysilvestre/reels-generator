@@ -8,7 +8,10 @@ import {
   channelPlatformPreset,
   outroTailMs,
   effectiveGenre,
+  requiresEvidence,
+  resolveChannelPolicy,
   type StoryOutput,
+  type SourcePolicy,
 } from '@reels/core'
 import {
   buildInputHash,
@@ -36,7 +39,9 @@ import {
   buildStoryGatePrompt,
   STORY_CRITIC_V2_VERSION,
   StoryGateSchema,
+  enforceStoryGateEssence,
   composeTasteRubric,
+  type StoryGateVerdict,
   type StyleInfluence,
   buildStoryPlanCriticPrompt,
   STORY_PLAN_CRITIC_V1_VERSION,
@@ -60,6 +65,7 @@ import {
   STORY_EBN_WRITER_V1_VERSION,
   EbnWriterSchema,
   TRUE_CRIME_PERMISSIONS,
+  type EbnWriter,
   buildEbnFidelityPrompt,
   STORY_EBN_FIDELITY_V1_VERSION,
   EbnFidelitySchema,
@@ -148,7 +154,7 @@ interface StudioOutput {
   editor: { status: RewriteStatus; detail?: string }
   naturalizer: { status: RewriteStatus; detail?: string }
   gate:
-    | { status: 'ok'; version: string; verdicts: Array<{ pass: boolean; reason: string }>; retried: boolean }
+    | { status: 'ok'; version: string; verdicts: StoryGateVerdict[]; retried: boolean }
     | { status: 'failed'; error: string }
   // Finishing QA punch-list (only present when STORY_FINISHING_QA is enabled). Detection-only — surfaced
   // to the human at story_review; never edits or gates. `issues` empty ⇒ read clean.
@@ -186,6 +192,26 @@ interface StudioOutput {
 
 function wordCount(s: string): number {
   return s.trim().split(/\s+/).filter(Boolean).length
+}
+
+export function combineEbnStoryReadiness(
+  editorialVerdict: StoryGateVerdict,
+  checks: {
+    fidelityPass: boolean
+    fidelityReason: string
+    lengthPass: boolean
+    lengthReason: string
+  },
+): StoryGateVerdict {
+  return {
+    ...editorialVerdict,
+    pass: editorialVerdict.pass && checks.fidelityPass && checks.lengthPass,
+    reason: !checks.fidelityPass
+      ? checks.fidelityReason
+      : !checks.lengthPass
+        ? checks.lengthReason
+        : editorialVerdict.reason,
+  }
 }
 
 // The peakMoment chain: first candidate that survives as a verbatim substring of the final text.
@@ -230,15 +256,16 @@ export async function generateStory(reelId: string, channelId: string, language:
   if (!channel) throw new Error(`Channel not found: ${channelId}`)
 
   // The operator's per-reel topic request ("make one about …"), set at reel creation. Optional.
-  // dossier: the curated source material for EBN (factual) channels; undefined otherwise.
+  // dossier: the curated source material for every evidence-required reel; undefined otherwise.
   // genreCategory: the genre FROZEN onto this reel at creation (specs/channel-series.md) — a series
   // reel carries its own, a planner-invented one is null and falls back to the channel's.
   const reelRow = await db.query.reels.findFirst({
     where: eq(reels.id, reelId),
-    columns: { seedIdea: true, dossier: true, genreCategory: true },
+    columns: { seedIdea: true, dossier: true, genreCategory: true, sourcePolicy: true },
   })
   const operatorSeed = reelRow?.seedIdea?.trim() || undefined
   const dossier = reelRow?.dossier?.trim() || undefined
+  const sourcePolicy = resolveChannelPolicy(reelRow, null, channel)
   // Resolve ONCE. Everything below — the outro tail, the writer identity, the gate rubric, the studio
   // cache key — reads this, so a later channel edit can never re-judge a story already written.
   const genre = effectiveGenre(reelRow, channel)
@@ -398,6 +425,7 @@ export async function generateStory(reelId: string, channelId: string, language:
       storyMode: channel.storyMode,
       ebnSpecialization: channel.ebnSpecialization,
       factCheck: channel.factCheck ?? false,
+      sourcePolicy,
     },
     dossier,
     basePromptVars,
@@ -484,16 +512,19 @@ interface StudioArgs {
     narrativeStyle: string | null
     narrativeVoice: string | null
     styleInfluence: string | null
-    // Story MODE (a separate axis from genre). 'ebn' routes to the Evidence-Based Narrative factual
-    // path; anything else (default 'standard') runs the untouched fiction studio chain.
+    // Story MODE is the rendering/specialization axis. Evidence-required standard channels also use
+    // the factual narrative chain, but keep their own visual profile downstream.
     storyMode: string | null
     ebnSpecialization: string | null
     // Fact-gate opt-in: check the finished story against this reel's sources (advisory punch-list).
     factCheck: boolean
+    // Frozen source policy for THIS reel. Evidence discipline is independent from rendering mode:
+    // an evidence-required standard channel uses the source-constrained story chain without inheriting
+    // EBN's illustrative visual profile.
+    sourcePolicy: SourcePolicy
   }
-  // The curated SOURCE material for THIS reel. On the EBN path it's the dossier the Extractor freezes
-  // into the Evidence Bible BEFORE writing (required there — the branch fails closed). On the standard
-  // path it's optional, and only used by the opt-in fact gate to check the story AFTER writing.
+  // The curated SOURCE material for THIS reel. Evidence-required reels freeze it into an Evidence Bible
+  // BEFORE writing. On other standard reels it is optional and only powers the post-hoc fact gate.
   dossier: string | undefined
   basePromptVars: {
     channelName: string
@@ -524,11 +555,11 @@ interface StudioArgs {
 }
 
 async function runStudio(a: StudioArgs) {
-  // EBN factual path (opt-in per channel). Delegates to the evidence-constrained chain and returns the
-  // SAME StudioOutput/StoryOutput shape, so the dispatcher, persistStory, and story_review gate are all
-  // untouched. Standard channels fall straight through to the fiction studio below — provably unchanged
-  // (their inputHash never sees an EBN version).
-  if (a.channel.storyMode === 'ebn') return runEbnStudio(a)
+  // Evidence discipline and rendering profile are separate axes. Any reel whose frozen Source Policy
+  // requires evidence uses the dossier → Evidence Bible → cited-writer chain. `storyMode='ebn'` remains
+  // a rendering/specialization choice; a standard channel keeps its own visual identity downstream.
+  // Fictional and optional-fact-check channels fall through to the existing studio unchanged.
+  if (a.channel.storyMode === 'ebn' || requiresEvidence(a.channel.sourcePolicy)) return runEbnStudio(a)
 
   const v = a.basePromptVars
   const genreCategory = a.channel.genreCategory ?? undefined
@@ -856,10 +887,10 @@ async function runStudio(a: StudioArgs) {
         system: prompt.system,
         messages: [{ role: 'user', content: prompt.userMessage }],
         provider: 'anthropic',
-        maxTokens: 512,
+        maxTokens: 768,
       })
       cost.add(res.costCents)
-      return res.data
+      return enforceStoryGateEssence(res.data)
     }
 
     // ── 4.5 ENDING REPAIR — the first bounded edit ───────────────────────────
@@ -902,7 +933,7 @@ async function runStudio(a: StudioArgs) {
     let gate: StudioOutput['gate']
     let retried = false
     try {
-      const verdicts: Array<{ pass: boolean; reason: string }> = []
+      const verdicts: StoryGateVerdict[] = []
       let verdict = await gateOnce(raw, natural.narration)
       verdicts.push(verdict)
       if (!verdict.pass) {
@@ -1034,7 +1065,7 @@ async function runStudio(a: StudioArgs) {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// EVIDENCE-BASED NARRATIVE MODE — dossier → Extractor → (frozen) Evidence Bible → Narrative Claims →
+// EVIDENCE-CONSTRAINED NARRATIVE — dossier → Extractor → (frozen) Evidence Bible → Narrative Claims →
 // cited Writer → Fact-Fidelity Checker. The story is generated STRICTLY from the curated dossier; no
 // stage invents facts (specs/evidence-based-narrative.md). Returns the SAME StudioOutput contract as the
 // fiction chain, so everything after generate_story (persistStory, story_review) is identical.
@@ -1048,25 +1079,54 @@ async function runEbnStudio(a: StudioArgs) {
   const language = a.language
   const specialization = a.channel.ebnSpecialization?.trim() || 'historical_events'
   const dossier = a.dossier?.trim()
+  const tasteRubric = composeTasteRubric({
+    tasteRubric: a.channel.tasteRubric,
+    editorialPrinciples: a.channel.editorialPrinciples,
+    genreCategory: a.channel.genreCategory,
+    niche: a.channel.nicheDescription,
+  })
 
   // The dossier is the ONLY source of facts. No dossier ⇒ fail CLOSED (never fall through to fiction):
   // an evidence-based story with no evidence must not be produced. Thrown before any paid call.
   if (!dossier) {
-    throw new Error('EBN channel requires a curated dossier for this reel; none was supplied (fail-closed: no evidence, no story).')
+    throw new Error('Evidence-required reel has no curated dossier (fail-closed: no evidence, no story).')
   }
 
-  // One hash for the whole EBN round: the dossier text + the four EBN stage versions + specialization +
-  // language. A frozen dossier re-runs idempotently; a standard channel never sees these keys (its hash
-  // is computed in runStudio and is provably unchanged by this branch).
+  // Evidence controls WHAT may be said; the channel contract still controls HOW the story is told.
+  // Keep the brief structurally separate from the Evidence Bible so the model is explicitly forbidden
+  // from treating channel copy or operator feedback as a factual source.
+  const editorialBrief = JSON.stringify({
+    channel: a.channel.name,
+    channelPromise: a.channel.nicheDescription,
+    editorialPrinciples: a.channel.editorialPrinciples,
+    tasteRubric,
+    genre: a.channel.genreCategory,
+    narrativeStyle: a.channel.narrativeStyle,
+    narrativeVoice: a.channel.narrativeVoice,
+    styleInfluence: a.channel.styleInfluence,
+    targetSeconds: a.targetSeconds,
+    targetWords: a.basePromptVars.targetWords,
+    platformHook: a.platformHookHint,
+    operatorRequest: a.operatorSeed,
+    latestRevisionFeedback: a.operatorFeedback,
+  }, null, 2)
+
+  // One hash for the whole evidence-constrained round. Regeneration nonce + editorial brief are
+  // load-bearing: omitting them made "Write another" cache the prior factual take and ignored operator
+  // feedback. A frozen round is still idempotent; an intentional rewrite is a distinct round.
   const inputHash = buildInputHash(GENERATE_STORY_EBN_VERSION, {
     extractorVersion: STORY_EBN_EXTRACTOR_V1_VERSION,
     plannerVersion: STORY_EBN_PLANNER_V1_VERSION,
     writerVersion: STORY_EBN_WRITER_V1_VERSION,
     fidelityVersion: STORY_EBN_FIDELITY_V1_VERSION,
+    narrativeQualityVersion: STORY_CRITIC_V2_VERSION,
     dossier,
     specialization,
     language,
     targetWords: a.basePromptVars.targetWords,
+    regenerationNonce: a.regenerationNonce,
+    editorialBrief,
+    tasteRubric,
   })
 
   return runStep<StudioOutput>({ reelId: a.reelId, stepName: 'generate_story', inputHash }, async (cost) => {
@@ -1096,10 +1156,12 @@ async function runEbnStudio(a: StudioArgs) {
     }))
     const criticalIds = facts.filter((f) => f.weight === 'Critical').map((f) => f.id)
     const factById = new Map(facts.map((f) => [f.id, f]))
+    const targetWords = a.basePromptVars.targetWords
+    const maxClaims = Math.max(4, Math.min(14, Math.round(targetWords / 28)))
 
     // ── 2. Planner → Narrative Claims (ordering only; every claim cites fact ids) ──
-    const targetNote = `a ~${a.basePromptVars.targetWords}-word ${specialization.replace(/_/g, ' ')} recap`
-    const pl = buildEbnPlannerPrompt({ facts: bibleForModel, criticalIds, targetNote })
+    const targetNote = `a ~${targetWords}-word ${specialization.replace(/_/g, ' ')} story that fulfills the editorial brief`
+    const pl = buildEbnPlannerPrompt({ facts: bibleForModel, criticalIds, targetNote, editorialBrief, maxClaims })
     const claimsRes = await llmCall({
       templateVersion: STORY_EBN_PLANNER_V1_VERSION,
       schema: EbnClaimsSchema,
@@ -1109,7 +1171,26 @@ async function runEbnStudio(a: StudioArgs) {
       maxTokens: 2000,
     })
     cost.add(claimsRes.costCents)
-    const claims = claimsRes.data.claims
+    const rawClaims = claimsRes.data.claims.sort((left, right) => left.order - right.order)
+    // Claim count is a structural duration lever. If the planner exceeds its budget, merge adjacent
+    // claims deterministically rather than dropping evidence or asking another paid model to re-plan.
+    // The merged claim keeps the union of fact ids, so citability and Critical-fact coverage survive.
+    const claims = rawClaims.length <= maxClaims
+      ? rawClaims
+      : Array.from({ length: maxClaims }, (_, bucketIndex) => {
+          const start = Math.floor((bucketIndex * rawClaims.length) / maxClaims)
+          const end = Math.floor(((bucketIndex + 1) * rawClaims.length) / maxClaims)
+          const bucket = rawClaims.slice(start, end)
+          return {
+            id: `C${bucketIndex + 1}`,
+            order: bucketIndex + 1,
+            purpose: bucket.map((claim) => claim.purpose).join('; '),
+            evidence: [...new Set(bucket.flatMap((claim) => claim.evidence))],
+          }
+        })
+    if (rawClaims.length > maxClaims) {
+      console.log(`[generate_story:ebn] compacted ${rawClaims.length} claims → ${maxClaims} for ${targetWords}-word budget`)
+    }
 
     // ── 3. Writer → cited prose (the citation map) + framing fields ──────────
     const claimsWithFacts = claims.map((c) => ({
@@ -1121,20 +1202,59 @@ async function runEbnStudio(a: StudioArgs) {
         .filter((f): f is EbnFact => !!f)
         .map((f) => ({ id: f.id, stance: f.stance, attributed_to: f.attributed_to, value: f.value })),
     }))
-    const wr = buildEbnWriterPrompt({ claims: claimsWithFacts, permissions: TRUE_CRIME_PERMISSIONS })
-    const writerRes = await llmCall({
-      templateVersion: STORY_EBN_WRITER_V1_VERSION,
-      schema: EbnWriterSchema,
-      system: wr.system,
-      messages: [{ role: 'user', content: wr.userMessage }],
-      provider: 'anthropic',
-      maxTokens: a.storyMaxTokens,
-    })
-    cost.add(writerRes.costCents)
-    const citationMap = writerRes.data.narrative.flatMap((g) =>
+    const minWords = Math.round(targetWords * 0.9)
+    const maxWords = Math.round(targetWords * 1.1)
+    const write = async (brief: string, previousDraft?: EbnWriter, requestedWords: number = targetWords) => {
+      const wr = buildEbnWriterPrompt({
+        claims: claimsWithFacts,
+        permissions: TRUE_CRIME_PERMISSIONS,
+        editorialBrief: brief,
+        targetWords: requestedWords,
+      })
+      const res = await llmCall({
+        templateVersion: STORY_EBN_WRITER_V1_VERSION,
+        schema: EbnWriterSchema,
+        system: wr.system,
+        messages: [{
+          role: 'user',
+          content: previousDraft
+            ? `${wr.userMessage}\n\nPREVIOUS CITED DRAFT TO COMPRESS:\n${JSON.stringify(previousDraft, null, 2)}\n\nReturn a complete replacement JSON object. Preserve its supported factual spine and citations, but merge or remove redundant sentences until BOTH hard budgets are satisfied. Count the narration words before answering.`
+            : wr.userMessage,
+        }],
+        provider: 'anthropic',
+        maxTokens: a.storyMaxTokens,
+      })
+      cost.add(res.costCents)
+      return res.data
+    }
+    let writerData = await write(editorialBrief)
+    const narrationFrom = (draft: typeof writerData) => draft.narrative
+      .flatMap((g) => g.sentences)
+      .map((s) => s.text)
+      .join(' ')
+    const countWords = (text: string) => text.trim().split(/\s+/u).filter(Boolean).length
+
+    const firstWordCount = countWords(narrationFrom(writerData))
+    if (firstWordCount < minWords || firstWordCount > maxWords) {
+      // A prompt-level target is not a guarantee. One bounded, fully cost-accounted rewrite turns
+      // duration into an enforced production constraint without weakening evidence/citation discipline.
+      // Correct for the observed proportional miss rather than repeating the same nominal request.
+      // Example: 267 words against a 196 target → ask the compressor for ~144; if it repeats its 1.36×
+      // bias, the result lands near 196. The real gate below still judges against 176–216.
+      const correctionWords = Math.max(80, Math.round((targetWords * targetWords) / firstWordCount))
+      writerData = await write(
+        `${editorialBrief}\n\nMANDATORY LENGTH CORRECTION: The previous draft was ${firstWordCount} words. Compress the complete story aggressively. The final production gate requires ${minWords}–${maxWords} words. Preserve every claim and citation requirement; do not add facts.`,
+        writerData,
+        correctionWords,
+      )
+    }
+
+    const citationMap = writerData.narrative.flatMap((g) =>
       g.sentences.map((s) => ({ text: s.text, claimId: g.claimId, factIds: s.factIds })),
     )
     const narration = citationMap.map((s) => s.text).join(' ')
+    const narrationWordCount = countWords(narration)
+    const lengthClean = narrationWordCount >= minWords && narrationWordCount <= maxWords
 
     // ── 4. Fact-Fidelity Checker (fail-SAFE — detection; the human approves at review) ──
     let fidelity: NonNullable<StudioOutput['ebn']>['fidelity']
@@ -1156,29 +1276,71 @@ async function runEbnStudio(a: StudioArgs) {
     }
 
     // ── 5. Shape a StoryOutput winner (the downstream contract) ──────────────
-    const peakMoment = resolvePeak(narration, [writerRes.data.peakSentence])
+    const peakMoment = resolvePeak(narration, [writerData.peakSentence])
     const winner: StoryOutput = {
-      title: writerRes.data.title,
+      title: writerData.title,
       language,
       narration,
-      logline: writerRes.data.logline,
+      logline: writerData.logline,
       subgenreTags: [specialization],
       peakMoment,
       newCanon: [], // EBN reconstructs real, sourced entities; it declares no invented canon.
     }
 
-    // Map the FFC verdict into the existing `gate` slot so the review UI's critic summary reads sensibly;
-    // the full issue list rides in `ebn`. A clean FFC (zero issues) is a pass.
+    // ── 6. Narrative-quality / essence gate ───────────────────────────────────────────────────────
+    // EBN previously stopped after factual fidelity + length. That allowed a faithful list of events to
+    // reach storyboarding even when a first-time listener could not grasp the story's central change or
+    // consequence. Reuse the SAME final editorial gate as the standard Writer path: evidence governs
+    // truth; this call judges whether the supported material became a story. It lives inside runStep and
+    // reports exact token usage through llmCall, so the extra EBN check is charged exactly once.
+    let editorialVerdict: StoryGateVerdict | null = null
+    let editorialError: string | null = null
+    try {
+      const prompt = buildStoryGatePrompt({
+        channelName: a.channel.name,
+        nicheDescription: a.channel.nicheDescription,
+        language,
+        tasteRubric,
+        narration: winner.narration,
+        title: winner.title,
+        logline: winner.logline ?? '',
+        operatorFeedback: a.operatorFeedback,
+      })
+      const res = await llmCall({
+        templateVersion: STORY_CRITIC_V2_VERSION,
+        schema: StoryGateSchema,
+        system: prompt.system,
+        messages: [{ role: 'user', content: prompt.userMessage }],
+        provider: 'anthropic',
+        maxTokens: 768,
+      })
+      cost.add(res.costCents)
+      editorialVerdict = enforceStoryGateEssence(res.data)
+    } catch (err) {
+      editorialError = String(err)
+      console.warn(`[generate_story:ebn] narrative-quality gate failed; holding auto advance for review: ${editorialError}`)
+    }
+
+    // The gate slot is the single pre-storyboard readiness verdict consumed by auto mode. Keep the full
+    // fidelity detail in `ebn`, while deterministically conjoining factual fidelity, duration, and the
+    // editorial/essence result here so none can be bypassed by a contradictory model-level `pass`.
     const ffcClean = fidelity.status === 'ok' && fidelity.issues.length === 0
     const gate: StudioOutput['gate'] =
-      fidelity.status === 'ok'
+      editorialVerdict
         ? {
             status: 'ok',
-            version: STORY_EBN_FIDELITY_V1_VERSION,
-            verdicts: [{ pass: ffcClean, reason: fidelity.summary || (ffcClean ? 'Faithful to the Evidence Bible.' : `${fidelity.issues.length} fidelity issue(s) flagged.`) }],
+            version: STORY_CRITIC_V2_VERSION,
+            verdicts: [combineEbnStoryReadiness(editorialVerdict, {
+              fidelityPass: ffcClean,
+              fidelityReason: fidelity.status !== 'ok'
+                ? 'The factual-fidelity check did not complete; review the story before production.'
+                : fidelity.summary || `${fidelity.issues.length} factual-fidelity issue(s) must be reviewed.`,
+              lengthPass: lengthClean,
+              lengthReason: `Narration is ${narrationWordCount} words; the ${targetWords}-word target allows ${minWords}–${maxWords}.`,
+            })],
             retried: false,
           }
-        : { status: 'failed', error: fidelity.error }
+        : { status: 'failed', error: editorialError ?? 'Narrative-quality gate returned no verdict.' }
 
     const output: StudioOutput = {
       v: 3,

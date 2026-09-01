@@ -37,6 +37,11 @@ Then one falsification question — framed to produce a roadmap, not a debate:
 
 ## Current hypotheses
 
+- ~~[ebn-cited-editor.md](ebn-cited-editor.md)~~ — **RETIRED 2026-08-31.** A controlled nine-draft probe
+  produced only **1/9** mechanically valid Editor candidates; eight missed the duration contract and one also
+  crossed a claim-evidence boundary. Matched regeneration was 0/9 valid, so 17/18 comparisons resolved on hard
+  constraints rather than taste. Loosening lineage would turn the Editor into a second Writer, so no stage is
+  added. Exact Anthropic spend: **$0.76**.
 - [narrative-planning-grammar.md](hypotheses/narrative-planning-grammar.md) — the **selection lens / lens-authoring discipline** that shapes what the Planner *selects* (the "layer" and "five orthogonal dimensions" framing is explicitly under test, not asserted). Earned its evidence by **repeatedly explaining planner behavior** across reddit, informational, and horror. Not blocking anything today.
 - [evidence-bible.md](hypotheses/evidence-bible.md) — the owner of **factual truth**, peer to the Story Bible. Earned its evidence because its **absence causes a product failure no existing layer catches** (a documentary shipped a debunked myth, gate-approved). Will block documentary implementation — but only when documentary is actually built.
 - ~~real-places.md~~ — **GRADUATED 2026-08-12 → [specs/depictive-fidelity.md](../specs/depictive-fidelity.md).** The responsibility outgrew its motivating example: it now covers every class of real subject (places, objects, animals, and real people), with the human path split by the depictive-ethics floor into conditioning plates for long-dead figures and presented archival photographs for living ones. The "depictive fidelity is a responsibility" framing stopped being under test once *four* subject classes needed one answer to the same question.

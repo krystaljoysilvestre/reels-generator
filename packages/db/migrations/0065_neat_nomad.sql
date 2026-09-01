@@ -1,0 +1,1 @@
+ALTER TABLE "scenes" ADD COLUMN "depiction_basis" text DEFAULT 'reconstruction' NOT NULL;
