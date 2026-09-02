@@ -6,6 +6,7 @@ import { type ChannelVoice, type VoiceSettings, moodToVoiceSettings, ToneConfigS
 import { channelMood, MOOD_TINT } from '@/lib/pipeline-phases'
 import { StoryboardEditor } from './StoryboardEditor'
 import { reelMetadata } from '@/lib/page-metadata'
+import { MISSING_FAILURE_DETAIL, recoveryStep } from '@/lib/retry-failure'
 
 export const dynamic = 'force-dynamic'
 
@@ -204,9 +205,19 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
   if (reel.status === 'failed') {
     const failed = await db.query.pipelineSteps.findFirst({
       where: and(eq(pipelineSteps.reelId, reelId), eq(pipelineSteps.status, 'failed')),
-      orderBy: [desc(pipelineSteps.startedAt)],
+      orderBy: [desc(pipelineSteps.finishedAt)],
     })
-    if (failed) failure = { step: failed.stepName, error: (failed.error ?? 'Unknown error').slice(0, 300) }
+    const latestDurable = failed ? null : await db.query.pipelineSteps.findFirst({
+      where: eq(pipelineSteps.reelId, reelId),
+      orderBy: [desc(pipelineSteps.finishedAt)],
+    })
+    const recoverable = recoveryStep(failed, latestDurable)
+    if (recoverable) {
+      failure = {
+        step: recoverable.stepName,
+        error: (recoverable.error ?? MISSING_FAILURE_DETAIL).slice(0, 300),
+      }
+    }
   }
 
   return (
