@@ -59,8 +59,19 @@ export const DepictionRoutingSchema = z.object({
   depictionMode: DepictionModeSchema,
   eligibilityReason: EligibilityReasonSchema,
   query: z.string().default(''), // sourcing query when a real image is permitted; '' otherwise
+  // The classifier prompt that made this decision. Optional so old reel JSON remains readable; an absent
+  // or stale version is deliberately re-routed before the next paid image call, allowing a deployed
+  // classification fix to recover an already-created reel instead of trapping it behind an old verdict.
+  classifierVersion: z.string().optional(),
 })
 export type DepictionRouting = z.infer<typeof DepictionRoutingSchema>
+
+export function depictionRoutingIsCurrent(
+  routing: DepictionRouting | null | undefined,
+  classifierVersion: string,
+): boolean {
+  return routing?.classifierVersion === classifierVersion
+}
 
 /**
  * Conservative depictive-fidelity boundary.

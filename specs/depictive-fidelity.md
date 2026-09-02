@@ -193,6 +193,17 @@ These produce two universal constraints:
   state/edition check, non-human sourcing may search Commons directly for a better candidate; every candidate
   still passes the same identity-and-state verifier. Human sourcing never gains that free-text fallback.
 
+**Live acceptance extension (2026-09-02).** The deployed Crossroads acceptance reel exposed the event/object
+boundary again in a new form: `apollo-12` represented the lunar mission, but routing classified it as a
+sourceable object and substituted the command module Columbia as the search target. One capsule photograph
+cannot verify a mission or truthfully condition scenes about launch, electrical failure, and mission-control
+instruments. The source verifier rejected the generic capsule before image spend, correctly; the defect was
+the earlier identity classification. Missions, operations, expeditions, campaigns, programs, and flights are
+therefore explicit event/context, while their separately named physical participants remain eligible concrete
+entities. Depiction routing now records its classifier version. A retry reclassifies missing or stale routing
+inside the existing cost-accounted step and removes any no-longer-valid source plate, so a deployed classifier
+repair can recover an already-created reel without direct data edits or silently reusing the wrong pixels.
+
 The director still chooses the most truthful shot for the beat. These rules do not force an archival image
 into a scene it cannot support, and they do not prescribe a visual style. They prevent the system from
 anchoring a scene to the wrong kind of subject or the wrong historical instance.

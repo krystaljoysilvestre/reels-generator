@@ -24,6 +24,18 @@ describe('entity source decision', () => {
     expect(prompt.system).toContain('Never classify an event as a "place"')
   })
 
+  it('does not substitute one vehicle for a named mission', () => {
+    const prompt = buildEntitySourceDecidePrompt(
+      'object',
+      'Apollo 12',
+      'the 1969 lunar mission flown by a Saturn V, command module Columbia, and lunar module Intrepid',
+    )
+    expect(prompt.system).toContain('named mission, operation, expedition')
+    expect(prompt.system).toContain('not one physical')
+    expect(prompt.system).toContain('Never silently substitute one participant object')
+    expect(prompt.system).toContain('separately named physical subject')
+  })
+
   it('treats an exact edition or state as part of object identity', () => {
     const prompt = buildEntityVerifyPrompt('object', 'The Blind Man', 'May 1917 issue featuring Fountain')
     expect(prompt.system).toContain('dated issue, edition, version')

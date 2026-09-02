@@ -14,7 +14,7 @@
 import { z } from 'zod'
 import { SubjectClassSchema } from '../types/depiction.js'
 
-export const ENTITY_SOURCE_V1_VERSION = 'entity-source.v1.5'
+export const ENTITY_SOURCE_V1_VERSION = 'entity-source.v1.6'
 
 // (1) DECIDE — what class of real-world thing is this, and is it specific enough that a real photograph
 // would improve the render? The impact≠coverage guard is the whole point: a GENERIC subject (a bedroom, a
@@ -53,6 +53,12 @@ also NOT one visual subject. Classify the event itself as "generic" and sourceab
 participants, documents, vehicles, artifacts, or genuine event photograph are separate visual subjects and
 must be represented by the concrete entity they actually depict. Never classify an event as a "place" merely
 because it happened somewhere.
+
+A named mission, operation, expedition, campaign, program, or flight is event/context too — not one physical
+object. Classify the mission itself as "generic" and sourceable FALSE even when its description mentions the
+vehicle, vessel, aircraft, capsule, or equipment used. Never silently substitute one participant object for
+the whole mission. Only a separately named physical subject — for example a specific command module, launch
+vehicle, ship, aircraft, instrument, or document — may be classified as that concrete object.
 
 Judge primarily by the NAME. If the name designates a specific real subject, classify it as that subject even when the description only lists physical features. If the name is a generic noun phrase, it is "generic".
 

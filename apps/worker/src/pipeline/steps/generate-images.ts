@@ -1,7 +1,7 @@
 import { eq, and } from 'drizzle-orm'
 import { getDb, reels, scenes, assets, channels, stories, assertVisualTruthReady } from '@reels/db'
 import { generateImage, generateImageFal, imageEngineForGenre, FLUX_IMAGE_ENGINE, buildInputHash, ContentFilterError, llmCall, downloadBuffer, uploadBuffer, sourceEntityImage, spendFromError, sniffImageMediaType, SCENE_IMAGE_MODEL, SCENE_IMAGE_QUALITY, type ImageEngine } from '@reels/providers'
-import { archivalShotTarget, presentedSourceTarget, identityWithheldEntities, MODES_WITHOUT_PLATES, normalizeCanon, WorldBibleSchema, EntityPlateStoreSchema, entityDescriptionHash, assembleImagePrompt, assembleNegativePrompt, assembleReferencePrompt, castNationality, historicalEraDirective, reelLightingDirective, sceneEntities, slug, channelPlatformPreset, StoryBibleSchema, AppearanceBindingsSchema, appearanceIdForEntity, entityAtAppearance, resolveEntities, EBN_RENDERING_PROFILE, effectiveGenre, resolveChannelPolicy, requiresEvidence, canUseArchivalHumanShot, splitSceneDepiction, conditionableReferenceKeys, missingRequiredIdentityReferences, personNameVariants, mentionsAny, scrubNames, SAFE_REPRESENTATIVE_STAGING, visualTruthContractErrors, type BibleEntity, type CharacterAppearance, type DepictionRouting, type MediaOrigin, type DepictionBasis, type SourcePolicy } from '@reels/core'
+import { archivalShotTarget, presentedSourceTarget, identityWithheldEntities, MODES_WITHOUT_PLATES, normalizeCanon, WorldBibleSchema, EntityPlateStoreSchema, entityDescriptionHash, assembleImagePrompt, assembleNegativePrompt, assembleReferencePrompt, castNationality, historicalEraDirective, reelLightingDirective, sceneEntities, slug, channelPlatformPreset, StoryBibleSchema, AppearanceBindingsSchema, appearanceIdForEntity, entityAtAppearance, resolveEntities, EBN_RENDERING_PROFILE, effectiveGenre, resolveChannelPolicy, requiresEvidence, canUseArchivalHumanShot, splitSceneDepiction, conditionableReferenceKeys, missingRequiredIdentityReferences, personNameVariants, mentionsAny, scrubNames, SAFE_REPRESENTATIVE_STAGING, visualTruthContractErrors, depictionRoutingIsCurrent, type BibleEntity, type CharacterAppearance, type DepictionRouting, type MediaOrigin, type DepictionBasis, type SourcePolicy } from '@reels/core'
 import { z } from 'zod'
 import { buildRephrasePrompt, REPHRASE_V1_VERSION, buildImageQAPrompt, IMAGE_QA_V1_VERSION, ImageQASchema, isBlockingImageTruthFailure, buildFilterSafePrompt, FILTER_SAFE_V1_VERSION, FilterSafeSchema, buildEntityVerifyPrompt, buildIdentityStateVerifyPrompt, buildRepresentativeStagingPrompt, EntityVerifySchema, IdentityStateVerifySchema, RepresentativeStagingSchema, PLATE_COLOURISE_PROMPT, ENTITY_SOURCE_V1_VERSION } from '../../prompts-bridge.js'
 import { runStep } from '../harness.js'
@@ -34,6 +34,22 @@ const IMAGE_QA_MODEL = 'claude-haiku-4-5-20251001' // vision QA runs on Claude (
 // limit (POV-with-figure, shadow-under-closed-door) never converges, so more attempts just burn cost. When QA
 // still fails, the image is kept and the verdict is flagged on meta.qaIssues for the operator to act on.
 const MAX_QA_REROLLS = 1
+
+export function applyDepictionRouting(entity: BibleEntity, routing: DepictionRouting): void {
+  const previousMode = entity.depiction?.depictionMode
+  entity.depiction = routing
+  // A classifier correction from exact real identity to generated context must not leave the old source
+  // plate attached: conditionableReferenceKeys would otherwise keep using pixels that the new verdict
+  // explicitly says do not represent this entity.
+  if (previousMode === 'reference_plate' && routing.depictionMode !== 'reference_plate') {
+    delete entity.referenceImageKey
+    delete entity.referenceOrigin
+    for (const appearance of entity.appearances ?? []) {
+      delete appearance.referenceImageKey
+      delete appearance.referenceOrigin
+    }
+  }
+}
 
 // Factual truth is a property of the reel's frozen Source Policy, not its creative genre. Keep the legacy
 // informational enrollment for channels that predate Source Policy, while ensuring a factual commentary,
@@ -481,9 +497,11 @@ export async function generateImages(reelId: string): Promise<void> {
     //
     // Runs over every REFERENCED entity, not just `toMint`: an entity holding a reused channel plate still
     // needs a mode, because the scene path consults it (a person may never be conditioned on even when a
-    // plate exists from before). Cheap and idempotent — an entity that already carries routing is skipped,
-    // so a retry doesn't re-pay for the classifier.
-    const needsRouting = storyBible.entities.filter((e) => !e.depiction && referenced.has(slug(e.id)))
+    // plate exists from before). Cheap and idempotent — current-version routing is skipped; a stale decision
+    // re-runs once under a new input hash, records that classifier cost, then becomes cacheable again.
+    const needsRouting = storyBible.entities.filter((e) =>
+      referenced.has(slug(e.id)) && !depictionRoutingIsCurrent(e.depiction, ENTITY_SOURCE_V1_VERSION),
+    )
     if (needsRouting.length > 0) {
       const routeHash = buildInputHash('depiction_routing.v1', {
         reelId,
@@ -499,7 +517,7 @@ export async function generateImages(reelId: string): Promise<void> {
             needsRouting.map(async (entity) => {
               const { routing, costCents } = await routeDepiction(entity, policy, region)
               if (costCents > 0) { routeCost += costCents; cost.add(costCents) }
-              entity.depiction = routing
+              applyDepictionRouting(entity, routing)
             }),
           )
           await db.update(reels).set({ storyBible, updatedAt: new Date() }).where(eq(reels.id, reelId))

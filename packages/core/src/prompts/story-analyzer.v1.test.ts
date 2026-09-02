@@ -43,4 +43,17 @@ describe('story analyzer visual entity boundary', () => {
     expect(prompt.userMessage).toContain('dated publication issue or document')
     expect(prompt.userMessage).toContain('stage cannot anchor it')
   })
+
+  it('keeps a named mission as context and extracts only exact physical subjects', () => {
+    const prompt = buildStoryAnalyzerPrompt({
+      narration: 'Apollo 12 launched on a Saturn V. Pete Conrad later flew Intrepid to the Moon.',
+      channelCanon: [],
+      nicheDescription: 'spaceflight history',
+      era: '1969',
+      regionDescriptor: 'United States',
+    })
+    expect(prompt.userMessage).toContain('MISSIONS ARE EVENTS, NOT VEHICLES')
+    expect(prompt.userMessage).toContain('Do not create one mission entity')
+    expect(prompt.userMessage).toContain('separately named launch vehicle, capsule')
+  })
 })
