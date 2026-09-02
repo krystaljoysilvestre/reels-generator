@@ -9,6 +9,7 @@ import { buildReviseScenePrompt, REVISE_SCENE_V1_VERSION, ReviseSceneSchema } fr
 import { buildFilterSafePrompt, FILTER_SAFE_V1_VERSION, FilterSafeSchema } from '@reels/core/prompts/filter-safe.v1'
 import { requireReelOwner, callerMayUseStorageKey, requireSpendBudget } from '@/lib/api-access'
 import { recordFailedSpend } from '@/lib/failed-spend'
+import { unexpectedRegenImageError } from '@/lib/regen-image-error'
 
 const InputSchema = z.object({
   reelId: z.string().uuid(),
@@ -19,7 +20,7 @@ const InputSchema = z.object({
   anchor: z.enum(['current-first', 'reference-first', 'reference-only']).optional(),
 })
 
-export async function POST(req: NextRequest) {
+async function regenerateImage(req: NextRequest) {
   // `instruction` = an optional plain-language change ("lights off", "make them talk while walking"); it's
   // turned into a proper image prompt by the LLM below, never fed to the image model raw.
   // mode: 'vary' (default) conditions on the CURRENT image so the regen stays close (fix a hand, small
@@ -292,4 +293,12 @@ export async function POST(req: NextRequest) {
   // entityLook (when the change edited a character's look): the UI flags the other scenes she's in so the
   // operator can refresh them to match — "update globally, refresh on demand".
   return NextResponse.json({ ok: true, storageKey: result.asset.storageKey, entityLook })
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    return await regenerateImage(req)
+  } catch (error) {
+    return unexpectedRegenImageError(error)
+  }
 }
