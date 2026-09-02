@@ -190,4 +190,19 @@ describe('buildGainExpr — explicit ending direction', () => {
     for (let i = 1; i < samples.length; i++) expect(samples[i]).toBeLessThan(samples[i - 1]!)
     expect(evalGainAt(expr, 60.0)).toBe(0)
   })
+
+  it('restores a music-focused ending after an overlapping silence drop', () => {
+    const expr = buildGainExpr({
+      ...base,
+      ending,
+      silenceDropMs: { atMs: 57_500, durationMs: 2_500 },
+    })
+    const bed = Math.pow(10, base.bedDb / 20)
+
+    // The drop can still shape the last spoken clause.
+    expect(evalGainAt(expr, 57.8)).toBe(0)
+    // Once the voice ends, the explicitly selected music layer owns the held closing beat.
+    expect(evalGainAt(expr, 58.2)).toBeCloseTo(bed, 5)
+    expect(evalGainAt(expr, 59.2)).toBeCloseTo(bed, 5)
+  })
 })

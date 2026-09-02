@@ -74,7 +74,7 @@ export async function mixAudioStep(reelId: string): Promise<void> {
   // stale even when the inputs hash the same — bump to force a re-mix.
   // v11: the music bed and room tone now RESOLVE across the outro tail instead of being hard-cut at
   // full level (§4.65) — the mix changes for any reel whose timings carry a tail.
-  const inputHash = buildInputHash('mix_audio.v15', {
+  const inputHash = buildInputHash('mix_audio.v16', {
     // Hash the voiceover's row identity (createdAt), not its constant storage key — the key never changes
     // across re-synthesis, so hashing it would reuse a stale mix after a voice change.
     voiceoverAt: voiceover.createdAt,
