@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { mkdir, writeFile, readFile, rm } from 'node:fs/promises'
 import { getDb, reels, scenes, assets, channels } from '@reels/db'
 import { generateVideo, buildInputHash, FalEngineSchema, downloadBuffer, llmCall, musicCostCents } from '@reels/providers'
-import { TimingsSchema, channelPlatformPreset, budgetCapForSeconds } from '@reels/core'
+import { TimingsSchema, channelPlatformPreset, budgetCapForSeconds, planMusicGeneration } from '@reels/core'
 import { buildVideoQAPrompt, VIDEO_QA_V1_VERSION, VideoQASchema } from '../../prompts-bridge.js'
 import { spotFoleyForReel } from './foley-spot.js'
 import { runStep } from '../harness.js'
@@ -140,7 +140,14 @@ export async function animateScenes(reelId: string): Promise<void> {
   const downstreamDurationMs = timings?.success
     ? timings.data.durationMs
     : (channel?.targetSeconds ?? 75) * 1000
-  const DOWNSTREAM_RESERVE_CENTS = musicCostCents(downstreamDurationMs) + QA_AND_MIX_RESERVE_CENTS
+  const downstreamMusicLengthMs = timings?.success
+    ? planMusicGeneration({
+        durationMs: timings.data.durationMs,
+        peakAnchorMs: timings.data.music?.peakAnchorMs,
+        ending: timings.data.ending,
+      }).lengthMs
+    : downstreamDurationMs
+  const DOWNSTREAM_RESERVE_CENTS = musicCostCents(downstreamMusicLengthMs) + QA_AND_MIX_RESERVE_CENTS
   const budgetCap = budgetCapForSeconds(channel?.targetSeconds)
 
   // ── Budget admission (decided up front, before any clip is generated) ──────────────────────────────

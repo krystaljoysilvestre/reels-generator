@@ -5,6 +5,11 @@ import type { AudioMood } from '../types/channel.js'
 
 export const MUSIC_MIN_MS = 10_000
 export const MUSIC_MAX_MS = 300_000
+// Eleven Music bakes a long terminal fade into reel-length compositions (observed ~9s on a 99s bed).
+// A music-owned ending needs audible source material through Kendrix's held closing beat, so compose a
+// little beyond the picture and ask the score to resolve at voice end, then sustain into this headroom.
+export const MUSIC_ENDING_HEADROOM_MS = 12_000
+const MUSIC_ENDING_MIN_SAFE_HEADROOM_MS = 10_000
 
 // Hard constraints: no vocals (they'd fight the narration) and it must stay UNDER a speaking voice.
 // Eleven Music's force_instrumental guarantees the no-vocals part. Crucially, we NO LONGER ask for a
@@ -54,8 +59,44 @@ function musicArc(musicType: string | undefined, peakFrac: number, loops: boolea
 // mixer resolves the bed's LEVEL across it. Ask the composition to resolve MUSICALLY there too, so the
 // ending sounds finished rather than faded: level shaping alone can smooth a cut, but only the piece
 // itself can land a final chord. Best-effort — the mixer's ramp guarantees a graceful end either way.
-const RESOLVE_CLAUSE =
+const DEFAULT_RESOLVE_CLAUSE =
   ' In its final seconds the piece must RESOLVE — arrive somewhere and come to rest (a last sustained chord, a settled note), never stop mid-phrase as though cut off.'
+
+function resolveClause(resolveFrac?: number): string {
+  if (resolveFrac == null) return DEFAULT_RESOLVE_CLAUSE
+  const pct = Math.round(Math.min(0.95, Math.max(0.3, resolveFrac)) * 100)
+  return ` Around ${pct}% of the way through, the piece must RESOLVE — arrive somewhere and come to rest (a last sustained chord, a settled note). Sustain that resolved sound clearly through the remaining audio with no fade-out; the final mix handles the short release.`
+}
+
+export interface MusicGenerationPlan {
+  lengthMs: number
+  loops: boolean
+  peakFrac: number
+  resolveFrac?: number
+}
+
+/** Plan provider length and musical anchors without letting its baked fade erase a directed ending. */
+export function planMusicGeneration(params: {
+  durationMs: number
+  peakAnchorMs?: number | undefined
+  ending?: { voiceEndMs: number; focus: 'music' | 'ambience' | 'silence' } | null | undefined
+}): MusicGenerationPlan {
+  const musicOwnsEnding = params.ending?.focus === 'music'
+  const requestedMs = params.durationMs + (musicOwnsEnding ? MUSIC_ENDING_HEADROOM_MS : 0)
+  const lengthMs = clampMusicLengthMs(requestedMs)
+  const availableHeadroomMs = lengthMs - params.durationMs
+  const hasSafeEndingHeadroom = musicOwnsEnding && availableHeadroomMs >= MUSIC_ENDING_MIN_SAFE_HEADROOM_MS
+  // Near/over the provider's 5-minute ceiling there is not enough headroom to outrun its fade. Ask for a
+  // seamless no-fade composition instead; the mixer still owns the video-level build and release.
+  const loops = params.durationMs > lengthMs || (musicOwnsEnding && !hasSafeEndingHeadroom)
+  const peakAnchorMs = params.peakAnchorMs ?? params.durationMs * 0.8
+  return {
+    lengthMs,
+    loops,
+    peakFrac: peakAnchorMs / lengthMs,
+    ...(hasSafeEndingHeadroom ? { resolveFrac: params.ending!.voiceEndMs / lengthMs } : {}),
+  }
+}
 
 // Compose the full Eleven Music prompt for a reel's bed. ONE coherent bed per reel — the mixer's
 // volume envelope swells it toward the twist and SFX carry the climax hit, so the bed itself stays a
@@ -77,6 +118,7 @@ export function buildMusicPrompt(params: {
   musicType?: string | undefined  // designer's chosen movement (low_drone | drone_swell | riser_sting)
   peakFrac?: number | undefined   // where the story's emotional peak sits (0..1 of the reel)
   loops?: boolean | undefined     // the bed is shorter than the video and will be aloop'd — ask for a seamless cycle
+  resolveFrac?: number | undefined // with ending headroom: resolve here, then sustain audibly for the mix
 }): string {
   const base =
     params.audioMood?.prompt?.trim() ||
@@ -90,7 +132,7 @@ export function buildMusicPrompt(params: {
   const loops = params.loops ?? false
   const arc = musicArc(params.musicType, params.peakFrac ?? 0.8, loops)
   // A looping bed must NOT resolve (it has to flow back into its own opening at the seam).
-  const resolve = loops ? '' : RESOLVE_CLAUSE
+  const resolve = loops ? '' : resolveClause(params.resolveFrac)
   const steer = params.instruction?.trim() ? ` ${params.instruction.trim()}` : ''
   // Operator steer stays the last, strongest directive before the hard constraints.
   return base + mood + arc + resolve + steer + MUSIC_CONSTRAINT

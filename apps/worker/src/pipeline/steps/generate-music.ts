@@ -8,7 +8,7 @@ import {
   AudioScriptSchema,
   TimingsSchema,
   buildMusicPrompt,
-  clampMusicLengthMs,
+  planMusicGeneration,
   resolveMusicMood,
   MusicMoodSchema,
 } from '@reels/core'
@@ -56,11 +56,12 @@ export async function generateMusicStep(reelId: string): Promise<void> {
   )
   // Where the story's emotional peak sits (fraction of the reel) — so the bed builds toward the same beat
   // the mixer's volume envelope swells to. Fall back to a late peak when there's no music timing.
-  const peakFrac = timings.music ? timings.music.peakAnchorMs / timings.durationMs : 0.8
-  const lengthMs = clampMusicLengthMs(timings.durationMs)
-  // Long-form: the provider caps one generation at 5 min; a longer video loops the bed (mixer aloop),
-  // so ask for a seamless cycle and let the volume envelope carry the video-level build.
-  const loops = timings.durationMs > lengthMs
+  const musicPlan = planMusicGeneration({
+    durationMs: timings.durationMs,
+    peakAnchorMs: timings.music?.peakAnchorMs,
+    ending: timings.ending,
+  })
+  const { peakFrac, lengthMs, loops, resolveFrac } = musicPlan
   const prompt = buildMusicPrompt({
     audioMood: audioPacks.audioMood,
     toneIntensity: tone.intensity,
@@ -70,9 +71,10 @@ export async function generateMusicStep(reelId: string): Promise<void> {
     ...(audioScript.music?.type ? { musicType: audioScript.music.type } : {}),
     peakFrac,
     loops,
+    ...(resolveFrac != null ? { resolveFrac } : {}),
   })
-  // v4: evolving bed (was v3: steady wash). Prompt now carries the arc, so the hash changes and re-composes.
-  const inputHash = buildInputHash('generate_music.v4', { prompt, lengthMs, reelId })
+  // v5: music-owned endings get provider headroom so its baked fade cannot erase Kendrix's held release.
+  const inputHash = buildInputHash('generate_music.v5', { prompt, lengthMs, reelId })
 
   await runStep(
     { reelId, stepName: 'generate_music', inputHash },
