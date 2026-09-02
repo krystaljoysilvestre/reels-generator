@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
     "smoke": "tsx src/smoke-test.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit",

@@ -54,6 +54,21 @@ The third row is the subtle one. `archival_only` is the *stronger* claim — "th
 
 Per-subject lead-image sourcing cannot yield a photograph containing two specific people, and compositing them is forbidden by invariant 3 — a composite of two real people is a fabricated record. Multi-person event sourcing is out of scope; the row exists so nobody reaches for compositing later.
 
+### Planning-time fallback for restricted real people (2026-09-02)
+
+The hosted Phase 0 acceptance reel exposed a deadlock before image spend: Apollo 12 scenes tagged John Aaron
+and Alan Bean as `archival_only`, then the depiction doctor was required to preserve those primary tags while
+the truth critic demanded source pixels that had not been sourced yet. Three paid breakdown attempts could
+neither fabricate the people nor remove them, so the storyboard failed correctly but unrecoverably.
+
+The contract is now explicit: `archival_only` and `identity_withheld` are not mandatory shot subjects. When a
+verified source can truthfully carry the visible claim, `archival_only` may be fulfilled by genuine archival
+media. When the beat is an unrecorded decision, realization, recommendation, dialogue, or action, the director
+and doctor must remove the restricted person from the generated frame and carry the claim through a supported
+object, mechanism, document, effect, or anonymous representative/conceptual staging. The truth critic may
+require `source` only when an exact `sourceAssetKey` is actually supplied; depiction mode alone is never proof
+that source pixels exist. This preserves the ethics floor while restoring its intended fail-soft behavior.
+
 ### Disclosure follows the media, not the config
 
 `computeMediaDisclosure()` derives the burned label from what the reel actually contains, because a fixed `'Illustrated · …'` string would call a genuine archival photograph an illustration:

@@ -46,6 +46,14 @@ the fresh product-only reel still remain. The render path now commits `visual.mp
 checkpoint immediately after upload, so the forced lap can lose its queue/render step after that boundary and
 prove one-click Retry skips the already-finished frame pass without R2 inspection or manual salvage.
 
+**Deployment work active 2026-09-01:** `https://app.kendrix.io` currently serves a verified production canary
+through a Cloudflare Tunnel to the founder's Mac. That local stack proved the web, worker, Postgres, Redis and
+private-service boundaries, but it cannot clear the deployment prerequisite because closing the Mac stops the
+product. The accepted Phase 0 topology is Railway Hobby in Singapore with private Postgres and Redis, one web
+service, one all-role worker and the existing R2 assets (`specs/phase0-deployment.md`). Keep the local route only as
+rollback until the hosted health, data, login, queue and storage checks pass. Scheduled production stays off until
+the hosted forced-retry lap and fresh product-only acceptance reel clear the Phase 0 gate.
+
 Creative review remains allowed and expected. Direct YouTube/TikTok/Facebook publishing, billing, teams,
 long-form, public-launch polish and new creative architecture do **not** block this gate. Direct YouTube may be
 exercised for the founder's connected test channel, but export is the required product boundary.

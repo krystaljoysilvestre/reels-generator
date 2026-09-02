@@ -1,6 +1,7 @@
 services:
   postgres:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -19,6 +20,7 @@ services:
 
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     ports:
       # Loopback only — unauthenticated Redis on 0.0.0.0 is a job-injection vector (BullMQ runs on it).
       # 6380 (not the default 6379) so this project's redis can never collide with another local

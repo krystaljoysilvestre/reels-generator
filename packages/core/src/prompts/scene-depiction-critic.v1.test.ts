@@ -32,6 +32,8 @@ describe('visual truth depiction gate', () => {
     expect(prompt.system).toContain('MANDATORY TRUTH CHECKLIST')
     expect(prompt.system).toContain('A generic-looking invented studio is still unsupported')
     expect(prompt.system).toContain('canonical-state appearance source')
+    expect(prompt.system).toContain('Never infer source_should_be_present from depictionMode:"archival_only"')
+    expect(prompt.system).toContain('If no exact sourceAssetKey is supplied, mark sourceUse not_applicable')
     expect(prompt.userMessage).toContain('basis: representative')
     expect(prompt.userMessage).toContain('The work was excluded.')
   })

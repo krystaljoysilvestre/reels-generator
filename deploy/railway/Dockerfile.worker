@@ -1,0 +1,60 @@
+FROM node:22-bookworm-slim
+
+ENV PNPM_HOME=/pnpm
+ENV PATH=$PNPM_HOME:$PATH
+WORKDIR /app
+
+# FFmpeg is part of the product renderer. The remaining libraries are Remotion's documented
+# Chrome Headless Shell dependencies; fonts cover captions and story text across languages.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    dumb-init \
+    ffmpeg \
+    fonts-noto-cjk \
+    fonts-noto-color-emoji \
+    libasound2 \
+    libatk-bridge2.0-0 \
+    libatk1.0-0 \
+    libcairo2 \
+    libcups2 \
+    libdbus-1-3 \
+    libgbm-dev \
+    libnss3 \
+    libpango-1.0-0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxkbcommon-dev \
+    libxrandr2 \
+  && rm -rf /var/lib/apt/lists/*
+
+RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
+COPY apps/access-inbox/package.json apps/access-inbox/package.json
+COPY apps/contact-inbox/package.json apps/contact-inbox/package.json
+COPY apps/web/package.json apps/web/package.json
+COPY apps/worker/package.json apps/worker/package.json
+COPY packages/core/package.json packages/core/package.json
+COPY packages/db/package.json packages/db/package.json
+COPY packages/providers/package.json packages/providers/package.json
+COPY packages/queue/package.json packages/queue/package.json
+COPY packages/render/package.json packages/render/package.json
+RUN pnpm install --frozen-lockfile
+COPY . .
+RUN pnpm --filter worker build
+
+# Download Remotion's version-matched browser while building. Running this from the worker package puts
+# it in the same cache path the production worker resolves, so a first render never needs a network install.
+WORKDIR /app/apps/worker
+RUN node --input-type=module -e \
+  "import {createRequire} from 'node:module'; const require=createRequire('/app/packages/render/package.json'); const {ensureBrowser}=require('@remotion/renderer'); await ensureBrowser({logLevel:'info'});"
+
+ENV NODE_ENV=production
+ENV WORKER_ROLE=all
+ENV PIPELINE_CONCURRENCY=2
+ENV RENDER_CONCURRENCY=1
+ENV REMOTION_CONCURRENCY=2
+USER node
+
+CMD ["dumb-init", "--", "pnpm", "start"]
