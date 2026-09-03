@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { PostMeta } from '@reels/core'
 import { useToast } from '@/components/Toast'
-import { fmtClock } from './scene-timing'
+import { displayDurationSeconds, fmtClock } from './scene-timing'
 
 // ── Your reel is ready ───────────────────────────────────────────────────────────
 // The screen the render lands on (Storyboard v3). It replaces a sticky action bar under the editor, and
@@ -20,7 +20,7 @@ import { fmtClock } from './scene-timing'
 // reel" (publishing is gated on approval, and where it goes depends on which platform is connected, so
 // the primary action is whatever this reel's next real step is).
 export function ReelReady({
-  reelId, channelId, status, title, renderUrl, coverUrl, sceneCount, estSecs, voiceName, musicName, costCents,
+  reelId, channelId, status, title, renderUrl, coverUrl, sceneCount, estSecs, timedSecs, voiceName, musicName, costCents,
   qa, scheduledAt, metricsViews, postMeta, onBack, onRerender, onApprove, onPublish, loading, error,
   coverPicker, publishTools, destinations,
 }: {
@@ -34,6 +34,8 @@ export function ReelReady({
   sceneCount: number
   /** Estimated runtime, until the finished video reports its real one. */
   estSecs: number
+  /** Persisted render clock from compute_timings; null before a reel has timing data. */
+  timedSecs: number | null
   voiceName: string
   musicName: string
   costCents: number
@@ -54,9 +56,10 @@ export function ReelReady({
   publishTools: React.ReactNode
   destinations: Array<{ target: string; connected: boolean; accountName: string | null }>
 }) {
-  // The finished video's real duration, once the browser reads it. Until then, the estimate.
+  // The finished video's real duration once the browser reads it; persisted render timing keeps the
+  // summary truthful before that event, with the storyboard estimate reserved for unrendered reels.
   const [realSecs, setRealSecs] = useState<number | null>(null)
-  const duration = realSecs != null ? fmtClock(realSecs) : fmtClock(estSecs)
+  const duration = fmtClock(displayDurationSeconds(realSecs, timedSecs, estSecs))
 
   const isSpotCheck = status === 'spot_check'
   const isApproved = status === 'approved'

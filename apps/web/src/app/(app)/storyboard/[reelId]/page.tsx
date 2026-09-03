@@ -2,7 +2,7 @@ import { getDb, reels, assets, channels, pipelineSteps, publications, platformCo
 import { and, desc, eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { assertReelAccess } from '@/lib/access'
-import { type ChannelVoice, type VoiceSettings, moodToVoiceSettings, ToneConfigSchema, AudioPacksSchema, OperatorSfxSchema, PostMetaSchema, ReelCoverSchema, CaptionStyleSchema, channelPlatformPreset, PRESET_BEDS } from '@reels/core'
+import { type ChannelVoice, type VoiceSettings, moodToVoiceSettings, ToneConfigSchema, AudioPacksSchema, OperatorSfxSchema, PostMetaSchema, ReelCoverSchema, CaptionStyleSchema, TimingsSchema, channelPlatformPreset, PRESET_BEDS } from '@reels/core'
 import { channelMood, MOOD_TINT } from '@/lib/pipeline-phases'
 import { StoryboardEditor } from './StoryboardEditor'
 import { reelMetadata } from '@/lib/page-metadata'
@@ -96,6 +96,8 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
   const renderUrl = renderAsset
     ? `/api/asset?key=${encodeURIComponent(renderAsset.storageKey)}&v=${new Date(renderAsset.createdAt).getTime()}`
     : null
+  const parsedTimings = TimingsSchema.safeParse(reel.timings)
+  const renderDurationSecs = parsedTimings.success ? parsedTimings.data.durationMs / 1000 : null
 
   // The PACKAGING a viewer meets before pressing play — the platform title and the cover.
   // Passed to the spot-check gate because that is where "would you publish this?" gets answered, and until
@@ -252,6 +254,7 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
       sceneImageHistory={sceneImageHistory}
       sceneVideoVariations={sceneVideoVariations}
       renderUrl={renderUrl}
+      renderDurationSecs={renderDurationSecs}
       packaging={packaging}
       // The whole post package, for the finished-reel screen's inline title + caption fields.
       postMeta={parsedMeta.success ? parsedMeta.data : null}

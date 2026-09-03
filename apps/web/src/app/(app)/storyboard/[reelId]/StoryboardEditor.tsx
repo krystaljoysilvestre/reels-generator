@@ -47,6 +47,7 @@ interface StoryboardEditorProps {
   sceneImageHistory: Record<number, { assetId: string; url: string }[]>
   sceneVideoVariations: Record<number, string[]>
   renderUrl: string | null
+  renderDurationSecs: number | null // persisted compute_timings clock; null before timings exist
   // Title + cover as a viewer would meet them, plus the frames the cover can be built from and the ranked
   // recommendation behind the current pick. Null until the packaging step has run.
   packaging: {
@@ -80,7 +81,7 @@ interface StoryboardEditorProps {
 
 export function StoryboardEditor({
   reel, story, scenes: initialScenes, voicePool, voiceRecommend,
-  sceneImages, sceneImageQa, sceneImageHistory, sceneVideoVariations, renderUrl: initialRenderUrl, packaging,
+  sceneImages, sceneImageQa, sceneImageHistory, sceneVideoVariations, renderUrl: initialRenderUrl, renderDurationSecs, packaging,
   postMeta, renderQa, renderSize, captionStyle,
   musicMood: initialMusicMood, channelMusicMood, aiMusic, musicMode, channelMusicTracks, musicUploadUrl: initialMusicUploadUrl,
   initialVideoEffects, initialOperatorSfx, initialVoiceSettings,
@@ -1265,6 +1266,7 @@ export function StoryboardEditor({
           coverUrl={packaging?.coverUrl ?? null}
           sceneCount={scenes.length}
           estSecs={reelSecs}
+          timedSecs={renderDurationSecs}
           voiceName={currentVoice?.name ?? ''}
           musicName={musicTrackLabel}
           costCents={reel.costCents}
