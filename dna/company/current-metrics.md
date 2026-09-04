@@ -263,7 +263,7 @@ Each experiment tests a named assumption in company/assumptions.md.
   the service confirms the commit. Verified hosted on its first run. Same event-versus-state family as the
   `publications` row that counted a deleted upload as a publish — and the fix is the same shape: measure the
   state, not the event.
-* **Three of the five hosted canary checks are still unrun** (certain / medium). `app.kendrix.io`
+* **Two and a half of the five hosted canary checks are still open** (certain / medium). `app.kendrix.io`
   resolves to Railway while `specs/phase0-deployment.md` says the local tunnel holds until sign-in, data parity,
   queue-restart survival and R2 access pass. A canary log now exists in that spec rather than the checks living in
   memory: health passes and anonymous access is correctly refused. Sign-in completing, row/spend parity, queue

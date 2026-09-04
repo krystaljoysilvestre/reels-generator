@@ -119,7 +119,7 @@ what is believed.
 | `/api/health` returns 200 | **Pass** | External probe 2026-09-03 with Railway edge headers; re-probed 2026-09-04 on `d0a0c59`, body `{"ok":true,"build":"d0a0c59","buildSource":"stamp"}` |
 | Operator sign-in and protected-page redirect | **Half recorded** | 2026-09-04 anonymous probe, re-run on `d0a0c59`: `/api/channel`, `/api/publishing` and `/api/admin/costs` all return 401; `/dashboard` returns 307 to `/signin`; `/signin` itself returns 200. Sign-in completing is unrun — it needs operator credentials |
 | Migrated channel / reel / publication / spend totals match | **Unrun — and the standard has moved** | See "Reading the parity check" below. Local baseline captured 2026-09-04 |
-| One provider-free queue job completes and survives a worker restart | **Unrun** | — |
+| One provider-free queue job completes and survives a worker restart | **Partial** | 2026-09-04, from the 17:34 +08 worker deploy — which is a restart. The worker came back, started all three role workers, re-registered its repeatable schedules, and two scheduled queue jobs then ran to completion: `metrics_poll` (provider-free, \$0) and `trending_refresh`. **Not** shown: a job *in flight* during the restart surviving, or the absence of duplication |
 | R2 reads and writes succeed without exposing credentials | **Unrun** | — |
 
 ### Reading the parity check
@@ -163,9 +163,12 @@ from publications order by published_at;
 is \$2.25 across 163 rows. The two are not required to agree — the ledger post-dates most of that spend — but the
 gap is large enough to be worth one deliberate look before per-reel unit economics are used for pricing.
 
-The three unrun checks can now run: as of 2026-09-04 the stack serves `d0a0c59`, so they would certify the build
-that will produce the acceptance reel. Two of them need what a read-only probe cannot supply — operator
-credentials for sign-in and R2, and a deliberate production mutation to enqueue a job and restart the worker.
+The remaining checks can now run: as of 2026-09-04 the stack serves `d0a0c59`, so they would certify the build
+that will produce the acceptance reel. Note where they land naturally rather than as separate ceremonies — the
+acceptance reel signs in, writes and reads R2 for every image, audio file and render, and drives the queue end to
+end, so three of the five are lap outputs. The stronger reading of queue survival (a job in flight when the
+process dies, resuming from durable work) is exactly what the forced-recovery lap demonstrates; it does not need
+its own separate test. What genuinely needs doing on its own is the parity read.
 
 Hosted behavior observed 2026-09-04 from worker logs, recorded because it is evidence either way:
 
