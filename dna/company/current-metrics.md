@@ -87,9 +87,9 @@ configuration instead of an intervention, and a real-Postgres suite shows the fa
 storyboard/retry predicate seeing it, a completed paid step re-entering as a cache hit with no provider call, and
 the reel's ledger unmoved across failure and recovery. What remains for both is the live hosted lap
 (`specs/phase0-forced-recovery-lap.md`), which the runbook recommends running inside the acceptance reel rather
-than paying for a second one — but that lap is blocked until the hosted stack actually runs the build: on
-2026-09-04 Railway had no auto-deploy and its worker was still on `fa156da`, without the forced-failure code.
-Criteria 1 and 2, the fresh product-only reel, have not started.
+than paying for a second one. That lap was blocked until 2026-09-04 because Railway has no auto-deploy and its
+worker was still on `fa156da`, without the forced-failure code; both services now run `d0a0c59` and report it, so
+the lap is unblocked. Criteria 1 and 2, the fresh product-only reel, have not started.
 
 **The gate's test command is now also the convenient one (fixed 2026-09-04).** Root `pnpm test` recursed into
 `test` scripts, and `apps/web` and `@reels/providers` define only `test:unit`, so the local shorthand exited 0
@@ -250,20 +250,20 @@ Each experiment tests a named assumption in company/assumptions.md.
   but Reel #4 completed only after scripts, queue inspection and manual durable-artifact recovery. Until the same
   class of failure is visible and recoverable in-product, another creator cannot reproduce the founder's outcome.
   The 09-02 failure-recorder repair removes one known cause; the lap that would prove it has not run.
-* **The acceptance build exists and is pushed; the hosted stack is not running it** (certain / high). Resolved
-  half-way on 2026-09-04: `e3f8c9b` carries criterion 5's suites, the deployment work, the reliability repairs and
-  the forced-recovery lap, all four CI steps pass locally against real Postgres, and GitHub CI passed
-  independently on `main`. But Railway has **no auto-deploy** — `web` runs `fb53e7d` and `worker` runs `fa156da`,
-  so the hosted worker has no forced-failure code at all. A lap run today would arm a variable nothing reads and
-  return a clean reel that proved neither criterion 3 nor 4. Redeploy both services before the lap.
-* **Build identity is fixed in code and unverified hosted** (certain / low). Until 2026-09-04 `/api/health`
-  returned only `{"ok": true}`, so "the acceptance reel ran on the verified build" rested on remembering a manual
-  deploy — and that memory had already failed for two services. Health now reports the stamped commit, the worker
-  logs its own on boot, and `scripts/deploy-railway.sh` refuses a dirty or unpushed tree and polls until the
-  service confirms the commit. All of it is green locally and none of it has run against Railway; the first
-  deploy through the script is the proof. Same event-versus-state family as the `publications` row that counted a
-  deleted upload as a publish.
-* **Three and a half of the five hosted canary checks are still unrun** (certain / medium). `app.kendrix.io`
+* **Resolved 2026-09-04: the hosted stack runs the acceptance build.** `d0a0c59` carries criterion 5's suites,
+  the deployment work, the reliability repairs, the forced-recovery lap and build identity; CI passed on `main`;
+  and both Railway services were deployed to it and now report it themselves. The risk this replaces was real and
+  nearly expensive: Railway has no auto-deploy, so the hosted worker had no forced-failure code at all, and a lap
+  run that morning would have armed a variable nothing reads and returned a clean reel proving neither criterion
+  3 nor 4.
+* **Closed 2026-09-04: the running build is readable.** Until that day `/api/health` returned only
+  `{"ok": true}`, so "the acceptance reel ran on the verified build" rested on remembering a manual deploy — and
+  that memory had already failed for two services. Health now reports the stamped commit, the worker logs its own
+  on boot, and `scripts/deploy-railway.sh` refuses a dirty or unpushed tree and will not call a deploy done until
+  the service confirms the commit. Verified hosted on its first run. Same event-versus-state family as the
+  `publications` row that counted a deleted upload as a publish — and the fix is the same shape: measure the
+  state, not the event.
+* **Three of the five hosted canary checks are still unrun** (certain / medium). `app.kendrix.io`
   resolves to Railway while `specs/phase0-deployment.md` says the local tunnel holds until sign-in, data parity,
   queue-restart survival and R2 access pass. A canary log now exists in that spec rather than the checks living in
   memory: health passes and anonymous access is correctly refused. Sign-in completing, row/spend parity, queue

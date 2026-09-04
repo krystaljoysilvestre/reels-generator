@@ -51,7 +51,7 @@ prove one-click Retry skips the already-finished frame pass without R2 inspectio
 | # | Criterion | State |
 | - | --------- | ----- |
 | 1–2 | Fresh reel completes invite/sign-in → export in the deployed product, no terminal/SQL/scripts | **Not started** |
-| 3 | Forced failure visible in-product; one-click Retry reuses durable work | **Automated proof green and committed** (`6e9ff51`, `forced-recovery.integration.test.ts`); hosted lap pending |
+| 3 | Forced failure visible in-product; one-click Retry reuses durable work | **Automated proof green and committed** (`6e9ff51`); hosted lap now **unblocked** — the code is live on the worker as of 2026-09-04 |
 | 4 | Retry repeats no paid provider call and no cost | **Automated proof green and committed** — cached step returns `costCents: 0`, provider never called, ledger unmoved; hosted lap pending |
 | 5 | Automated tenant / suspended-user / storage-ownership / spend-boundary checks | **Green** — `api-access.integration` (5 tests) and `spend-boundaries.integration` (5 tests) pass against real Postgres |
 | 6 | Lint, typecheck, tests, production build green | **Green on the consolidated build `721a987`** — typecheck clean, lint 0 errors (6 pre-existing warnings), **696 passing / 1 skipped of 697** across 80 files with all three integration suites present (5+5+3), clean `pnpm build`, verified 2026-09-04 in CI's environment |
@@ -99,20 +99,21 @@ to `/signin`). Sign-in completing, migrated row/spend parity, a queue job surviv
 read/write are unrun; the Cloudflare Tunnel route to the Mac stays as rollback until they pass. Scheduled
 production stays off until the hosted forced-retry lap and the fresh product-only acceptance reel clear the gate.
 
-**The hosted stack is not running the acceptance build, and nothing on it says so (2026-09-04).** Railway has no
-GitHub auto-deploy: `web` is on `fb53e7d` (deployed 09-03) and `worker` is still on `fa156da` (deployed 09-02),
-so the push of `e3f8c9b` changed nothing hosted. **The worker therefore lacks `6e9ff51` entirely** — arming
-`FORCE_STEP_FAILURE` against it would read nothing and hand back a clean reel that proved neither criterion 3 nor
-criterion 4, the same silent-no-op shape as the dead metrics poller and the test suite that skipped while exiting
-0. It also lacks `2096af3`, the in-product Retry restore that criterion 3 depends on. `scripts/deploy-railway.sh all` is the prerequisite for the lap; the
-worker is idle, so the no-deploy-during-render invariant holds.
+**The hosted stack drifted, and was caught and closed on 2026-09-04.** Railway has no GitHub auto-deploy, so
+pushing changed nothing hosted: `web` sat on `fb53e7d` and `worker` on `fa156da`, meaning **the worker lacked
+`6e9ff51` entirely**. Arming `FORCE_STEP_FAILURE` against it would have read nothing and handed back a clean reel
+that proved neither criterion 3 nor criterion 4 — the same silent-no-op shape as the dead metrics poller and the
+test suite that skipped while exiting 0. It also lacked `2096af3`, the in-product Retry restore criterion 3
+depends on. `scripts/deploy-railway.sh all` then put `d0a0c59` on both services (web 17:31 +08, worker 17:34
++08), and both now report it themselves. **The hosted lap is unblocked.**
 
 **The running build is now readable rather than remembered (2026-09-04).** `/api/health` reports `build` and
 `buildSource`, the worker logs its commit on every boot, and the new deploy script refuses a dirty or unpushed
 tree, stamps the commit into the upload context, and polls until the service reports the commit it just deployed.
-It never infers a SHA: an unstamped process says `unknown`. This is committed and green locally but **unverified
-hosted** — the first deploy through the script is what proves it, and until that runs, `app.kendrix.io` still
-answers without a `build` field at all, which is itself the tell that it predates this change.
+It never infers a SHA: an unstamped process says `unknown`. **Verified hosted the same day:** health returns
+`{"ok":true,"build":"d0a0c59","buildSource":"stamp"}` and the worker logs `[worker] build=d0a0c59 (source=stamp)`.
+`buildSource: stamp` matters — Railway injected no git metadata, as expected for a `railway up` deploy, so without
+the stamp both services would have reported `unknown`.
 
 Creative review remains allowed and expected. Direct YouTube/TikTok/Facebook publishing, billing, teams,
 long-form, public-launch polish and new creative architecture do **not** block this gate. Direct YouTube may be

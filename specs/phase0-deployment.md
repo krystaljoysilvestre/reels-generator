@@ -99,7 +99,12 @@ stamp is deliberately untracked **and** unignored: Railway's uploader does not h
 `.railwayignore` exists, so an unignored file is the one thing certain to reach the image. It is removed on every
 exit path.
 
-None of this is verified hosted yet. The first deploy through the script is its own verification.
+**Verified hosted 2026-09-04 by its own first run.** `scripts/deploy-railway.sh all` deployed `d0a0c59` to both
+services (web SUCCESS 17:31 +08, worker SUCCESS 17:34 +08) and would not report success until each one said so.
+`https://app.kendrix.io/api/health` returns `{"ok":true,"build":"d0a0c59","buildSource":"stamp"}` and the worker
+logs `[worker] build=d0a0c59 (source=stamp)`. `buildSource: stamp` is the load-bearing detail: Railway injected no
+git metadata, exactly as expected for a `railway up` deploy, so without the stamp both services would have
+reported `unknown` and the feature would have been decoration.
 
 **Auto-deploy on `main` remains unmade, and is a founder decision.** It would have prevented the 09-04 drift; it
 also means every push to `main` deploys production.
@@ -111,14 +116,15 @@ what is believed.
 
 | Check | State | Evidence |
 | ----- | ----- | -------- |
-| `/api/health` returns 200 | **Pass** | External probe 2026-09-03 with Railway edge headers; re-probed 2026-09-04, body `{"ok":true}` |
-| Operator sign-in and protected-page redirect | **Half recorded** | 2026-09-04 anonymous probe: `/api/channel`, `/api/publishing` and `/api/admin/costs` all return 401; `/dashboard` returns 307 to `/signin`. Sign-in completing is unrun — it needs operator credentials |
+| `/api/health` returns 200 | **Pass** | External probe 2026-09-03 with Railway edge headers; re-probed 2026-09-04 on `d0a0c59`, body `{"ok":true,"build":"d0a0c59","buildSource":"stamp"}` |
+| Operator sign-in and protected-page redirect | **Half recorded** | 2026-09-04 anonymous probe, re-run on `d0a0c59`: `/api/channel`, `/api/publishing` and `/api/admin/costs` all return 401; `/dashboard` returns 307 to `/signin`; `/signin` itself returns 200. Sign-in completing is unrun — it needs operator credentials |
 | Migrated channel / reel / publication / spend totals match | **Unrun** | — |
 | One provider-free queue job completes and survives a worker restart | **Unrun** | — |
 | R2 reads and writes succeed without exposing credentials | **Unrun** | — |
 
-Run the three unrun checks **after** the stack is redeployed, or they certify a build that will not produce the
-acceptance reel.
+The three unrun checks can now run: as of 2026-09-04 the stack serves `d0a0c59`, so they would certify the build
+that will produce the acceptance reel. Two of them need what a read-only probe cannot supply — operator
+credentials for sign-in and R2, and a deliberate production mutation to enqueue a job and restart the worker.
 
 Hosted behavior observed 2026-09-04 from worker logs, recorded because it is evidence either way:
 
