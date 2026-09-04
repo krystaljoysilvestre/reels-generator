@@ -118,9 +118,50 @@ what is believed.
 | ----- | ----- | -------- |
 | `/api/health` returns 200 | **Pass** | External probe 2026-09-03 with Railway edge headers; re-probed 2026-09-04 on `d0a0c59`, body `{"ok":true,"build":"d0a0c59","buildSource":"stamp"}` |
 | Operator sign-in and protected-page redirect | **Half recorded** | 2026-09-04 anonymous probe, re-run on `d0a0c59`: `/api/channel`, `/api/publishing` and `/api/admin/costs` all return 401; `/dashboard` returns 307 to `/signin`; `/signin` itself returns 200. Sign-in completing is unrun — it needs operator credentials |
-| Migrated channel / reel / publication / spend totals match | **Unrun** | — |
+| Migrated channel / reel / publication / spend totals match | **Unrun — and the standard has moved** | See "Reading the parity check" below. Local baseline captured 2026-09-04 |
 | One provider-free queue job completes and survives a worker restart | **Unrun** | — |
 | R2 reads and writes succeed without exposing credentials | **Unrun** | — |
+
+### Reading the parity check
+
+This check was written as a **migration-time** comparison — step 6 of the data migration, run before accepting the
+import. It was not recorded on 2026-09-02, and it can no longer be read as "the two databases match", because
+production has legitimately diverged since: a full render completed hosted, the metrics poll has been writing
+snapshots, and `trending_refresh` has spent. Equal counts would now be the *wrong* result.
+
+What is still worth verifying is that the migration lost and corrupted nothing: the publication history, the
+channels, and the recorded costs of the paid reels should all still be present in the hosted database with the
+same values. Judge the check against that, and do not mark it pass on equal totals.
+
+The local baseline, captured 2026-09-04 from `reels_dev` (read-only):
+
+| | Local (`reels_dev`) |
+| - | - |
+| users / channels / reels | 1 / 4 / 13 |
+| publications (all `published`, all `yt`, all disclosure applied) | 5 — `RRvU0b1TFAc` (08-11), `6gcyx9bK2mE` (08-24), `DTi3ZhEuPpk` (08-26), `xIeZIn46B_o` (08-29), `WCRkYws2Kho` (09-01) |
+| `sum(reels.cost_cents)` | 6050 (\$60.50) |
+| `spend_events` rows / `sum(cost_cents)` | 163 / 225 (\$2.25) |
+| paid Crossroads reels, cents | 1063, 932, 793, 683, 670, 521, 10, 9 |
+
+To capture the hosted side, `railway connect Postgres` and run:
+
+```sql
+select (select count(*) from users) as users,
+       (select count(*) from channels) as channels,
+       (select count(*) from reels) as reels,
+       (select count(*) from publications) as publications,
+       (select coalesce(sum(cost_cents),0) from reels) as reel_cents,
+       (select count(*) from spend_events) as spend_rows,
+       (select coalesce(sum(cost_cents),0) from spend_events) as spend_cents;
+
+select platform, platform_post_id, status, disclosure_applied,
+       to_char(published_at,'YYYY-MM-DD') as published
+from publications order by published_at;
+```
+
+**Unverified observation, not a finding:** locally `sum(reels.cost_cents)` is \$60.50 while `sum(spend_events.cost_cents)`
+is \$2.25 across 163 rows. The two are not required to agree — the ledger post-dates most of that spend — but the
+gap is large enough to be worth one deliberate look before per-reel unit economics are used for pricing.
 
 The three unrun checks can now run: as of 2026-09-04 the stack serves `d0a0c59`, so they would certify the build
 that will produce the acceptance reel. Two of them need what a read-only probe cannot supply — operator
