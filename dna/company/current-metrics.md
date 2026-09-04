@@ -87,7 +87,9 @@ configuration instead of an intervention, and a real-Postgres suite shows the fa
 storyboard/retry predicate seeing it, a completed paid step re-entering as a cache hit with no provider call, and
 the reel's ledger unmoved across failure and recovery. What remains for both is the live hosted lap
 (`specs/phase0-forced-recovery-lap.md`), which the runbook recommends running inside the acceptance reel rather
-than paying for a second one. Criteria 1 and 2, the fresh product-only reel, have not started.
+than paying for a second one — but that lap is blocked until the hosted stack actually runs the build: on
+2026-09-04 Railway had no auto-deploy and its worker was still on `fa156da`, without the forced-failure code.
+Criteria 1 and 2, the fresh product-only reel, have not started.
 
 **The gate's test command is now also the convenient one (fixed 2026-09-04).** Root `pnpm test` recursed into
 `test` scripts, and `apps/web` and `@reels/providers` define only `test:unit`, so the local shorthand exited 0
@@ -248,14 +250,22 @@ Each experiment tests a named assumption in company/assumptions.md.
   but Reel #4 completed only after scripts, queue inspection and manual durable-artifact recovery. Until the same
   class of failure is visible and recoverable in-product, another creator cannot reproduce the founder's outcome.
   The 09-02 failure-recorder repair removes one known cause; the lap that would prove it has not run.
-* **The acceptance build is green but unpushed** (certain / medium). Resolved on 2026-09-04: one build,
-  `721a987`, now carries criterion 5's suites, the deployment work, the reliability repairs and the
-  forced-recovery lap, and all four CI steps pass on it. `origin/main` still stops at `ddce1c9`, so the Railway
-  stack is serving pre-merge code — the hosted lap would not exercise the build that was verified.
-* **Four of the five hosted canary checks are unrecorded.** `app.kendrix.io` already resolves to Railway while
-  `specs/phase0-deployment.md` says the local tunnel holds until sign-in, data parity, queue-restart survival and
-  R2 access pass. Either they passed and went unwritten, or the cutover ran ahead of its own rollback boundary —
-  and an unwritten check is the same event-versus-state gap that let a deleted upload count as a publish.
+* **The acceptance build exists and is pushed; the hosted stack is not running it** (certain / high). Resolved
+  half-way on 2026-09-04: `e3f8c9b` carries criterion 5's suites, the deployment work, the reliability repairs and
+  the forced-recovery lap, all four CI steps pass locally against real Postgres, and GitHub CI passed
+  independently on `main`. But Railway has **no auto-deploy** — `web` runs `fb53e7d` and `worker` runs `fa156da`,
+  so the hosted worker has no forced-failure code at all. A lap run today would arm a variable nothing reads and
+  return a clean reel that proved neither criterion 3 nor 4. Redeploy both services before the lap.
+* **Nothing on the running stack reports which build it is** (certain / medium). `/api/health` returns only
+  `{"ok": true}` by design, so "the acceptance reel ran on the verified build" would rest on remembering a manual
+  deploy — and on 2026-09-04 that memory had already failed for two services. Same event-versus-state family as
+  the `publications` row that counted a deleted upload as a publish.
+* **Three and a half of the five hosted canary checks are still unrun** (certain / medium). `app.kendrix.io`
+  resolves to Railway while `specs/phase0-deployment.md` says the local tunnel holds until sign-in, data parity,
+  queue-restart survival and R2 access pass. A canary log now exists in that spec rather than the checks living in
+  memory: health passes and anonymous access is correctly refused. Sign-in completing, row/spend parity, queue
+  survival and R2 read/write must run **after** the redeploy, or they certify a build that will not produce the
+  acceptance reel.
 * **The first proof channel is deliberately narrower and technically harder.** Crossroads remains the sole Customer
   Zero evidence source and exercises factual grounding, depictive fidelity and verified identity. Its four live reels
   continue collecting audience evidence while new production is paused for the Phase 0 exit sprint.
@@ -295,6 +305,15 @@ From the current period (2026-08-11 → 2026-09-03):
   stale factual identity routing, endings that lost their music, a duration the UI never showed — came from
   operating the workflow end to end rather than reading it.
 * **Timeouts and lost locks make the boundary, not the exception string, the source of truth.** Reel #4's motion exceptions concealed potentially billable submitted work, while its render exception concealed a complete graded visual already stored durably. Account the former conservatively; inspect and reuse the latter before retrying expensive work.
+
+* **An armed switch proves nothing if the code that reads it was never deployed.** The forced-failure boundary
+  was committed, tested against real Postgres and pushed, and CI passed — while the hosted worker still ran a
+  build from two days earlier that contained none of it. Setting `FORCE_STEP_FAILURE` there would have produced a
+  clean reel and a false gate pass. Configuration is only evidence about the build that can read it, so a lap has
+  to establish which commit is running before it establishes anything else.
+* **A deploy you have to remember is a deploy that drifts.** Railway has no auto-deploy, and its two services had
+  silently diverged by two days and two critical commits. Nothing was broken and nothing reported it — the same
+  shape as the poller's silent `return`, one layer out in the infrastructure.
 
 Carried forward and still standing: craft needs judgment not asking; naming a failure in a prompt does not fix it; a judge that agrees with itself proves nothing; diagnose the layer the complaint lives in; pre-registering the interpretation works; raw writer output ≈ final output.
 

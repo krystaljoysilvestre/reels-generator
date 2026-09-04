@@ -85,17 +85,29 @@ therefore never run in CI** — a small real gap, not a reason to loosen the rul
 **Consolidated onto one acceptance build 2026-09-04 (`721a987`).** The tenancy and spend suites had reached
 `main` as PR #23 (`ddce1c9`) while the nine deployment and reliability commits from 09-02/09-03 sat only on
 `codex/verified-visual-identity`. `main` now carries both plus the forced-recovery lap, both refs point at the
-same commit, and the four CI steps were re-run against real Postgres on it. **It is not pushed** — `origin/main`
-still stops at `ddce1c9`, so the Railway stack serves pre-merge code until the founder pushes.
+same commit, and the four CI steps were re-run against real Postgres on it. It is **pushed**: `origin/main` and
+`origin/codex/verified-visual-identity` both stop at `e3f8c9b`, and GitHub CI passed independently on `main` in
+4m54s (run 33852453636).
 
 **Deployment cut over 2026-09-02:** `https://app.kendrix.io` now answers from the Railway Hobby stack in
 Singapore — one public web service, one private all-role worker, private Postgres and Redis, and the existing R2
 assets (`specs/phase0-deployment.md`). An external probe on 2026-09-03 returned `/api/health` 200 with Railway edge
-headers, so the origin no longer depends on the founder's Mac being awake. **Health is the only one of the spec's
-five canary checks recorded.** Operator sign-in, migrated row/spend parity, one queue job surviving a worker
-restart, and R2 read/write still need to be run and written down; the Cloudflare Tunnel route to the Mac stays as
-rollback until they are. Scheduled production stays off until the hosted forced-retry lap and the fresh
-product-only acceptance reel clear the Phase 0 gate.
+headers, so the origin no longer depends on the founder's Mac being awake. **One and a half of the spec's five
+canary checks are now recorded** in `specs/phase0-deployment.md`'s canary log: health passes, and anonymous
+requests are correctly refused (`/api/channel`, `/api/publishing`, `/api/admin/costs` → 401; `/dashboard` → 307
+to `/signin`). Sign-in completing, migrated row/spend parity, a queue job surviving a worker restart, and R2
+read/write are unrun; the Cloudflare Tunnel route to the Mac stays as rollback until they pass. Scheduled
+production stays off until the hosted forced-retry lap and the fresh product-only acceptance reel clear the gate.
+
+**The hosted stack is not running the acceptance build, and nothing on it says so (2026-09-04).** Railway has no
+GitHub auto-deploy: `web` is on `fb53e7d` (deployed 09-03) and `worker` is still on `fa156da` (deployed 09-02),
+so the push of `e3f8c9b` changed nothing hosted. **The worker therefore lacks `6e9ff51` entirely** — arming
+`FORCE_STEP_FAILURE` against it would read nothing and hand back a clean reel that proved neither criterion 3 nor
+criterion 4, the same silent-no-op shape as the dead metrics poller and the test suite that skipped while exiting
+0. It also lacks `2096af3`, the in-product Retry restore that criterion 3 depends on. `railway up -s web` then
+`railway up -s worker` from a clean `e3f8c9b` checkout is the prerequisite for the lap; the worker is idle, so the
+no-deploy-during-render invariant holds. And because `/api/health` returns only `{"ok": true}`, the running commit
+is remembered rather than read — see the spec's build-identity note.
 
 Creative review remains allowed and expected. Direct YouTube/TikTok/Facebook publishing, billing, teams,
 long-form, public-launch polish and new creative architecture do **not** block this gate. Direct YouTube may be

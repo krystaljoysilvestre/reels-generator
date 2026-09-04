@@ -66,6 +66,53 @@ routes. Direct-to-R2 upload redesign is not required to prove the current workfl
 - The local deployment remains a rollback path only until Railway passes login, health, persistence, render, and
   recovery checks. It does not count as Phase 0 deployment evidence.
 
+## Deploy trigger and build identity
+
+Railway has **no GitHub auto-deploy** on either service. Both are deployed by hand with `railway up -s <service>`
+from a clean checkout, which is why `.railwayignore` bounds the upload context. Verified 2026-09-04 from
+deployment history: pushing `e3f8c9b` to `main` triggered nothing.
+
+The cost of that is drift, and the drift already happened. On 2026-09-04 `web` was running `fb53e7d` (deployed
+09-03 09:58 +08) while `worker` was still running `fa156da` (deployed 09-02 19:06 +08) — so the worker was
+missing both the in-product Retry restore for stranded reels (`2096af3`) and the forced-failure boundary
+(`6e9ff51`). Arming `FORCE_STEP_FAILURE` against that worker would have read nothing and produced a clean reel
+that proved neither criterion 3 nor criterion 4.
+
+`/api/health` deliberately returns only `{"ok": true}`, so **nothing on the running stack reports which commit it
+is.** Both halves are the same event-versus-state gap the metrics poller taught: the deployed build is currently
+remembered, not read. Two cheap fixes, neither made: enable auto-deploy on `main` — a policy change, since every
+push would then deploy production — and return the commit SHA from a build-info response, so an acceptance lap can
+name the build that produced the reel.
+
+Deploy order is web, then worker: migrations run from web's pre-deploy command only, and the worker must never be
+restarted while a render is active.
+
+## Canary check log
+
+The five checks that gate removing the Cloudflare Tunnel rollback. Each row records what was actually run, not
+what is believed.
+
+| Check | State | Evidence |
+| ----- | ----- | -------- |
+| `/api/health` returns 200 | **Pass** | External probe 2026-09-03 with Railway edge headers; re-probed 2026-09-04, body `{"ok":true}` |
+| Operator sign-in and protected-page redirect | **Half recorded** | 2026-09-04 anonymous probe: `/api/channel`, `/api/publishing` and `/api/admin/costs` all return 401; `/dashboard` returns 307 to `/signin`. Sign-in completing is unrun — it needs operator credentials |
+| Migrated channel / reel / publication / spend totals match | **Unrun** | — |
+| One provider-free queue job completes and survives a worker restart | **Unrun** | — |
+| R2 reads and writes succeed without exposing credentials | **Unrun** | — |
+
+Run the three unrun checks **after** the stack is redeployed, or they certify a build that will not produce the
+acceptance reel.
+
+Hosted behavior observed 2026-09-04 from worker logs, recorded because it is evidence either way:
+
+- The scheduled metrics poll runs hosted (`refreshed 4 video(s) across 1 channel(s)`), so the audience instrument
+  no longer depends on the founder's Mac being awake.
+- A full render completed hosted (reel `a0b521b1`): cached visual reused, audio re-muxed, uploaded, `render_qa`
+  passed on bed presence and ending music.
+- `trending_refresh` spends autonomously on the hosted worker — 2¢ on 2026-09-03.
+- Every hosted render re-bundles from scratch: `EACCES: permission denied, mkdir
+  '/app/packages/render/node_modules/.cache'`. Not fatal, pure waste on every render, unfixed.
+
 ## Rollback
 
 Before import, keep an encrypted local database dump and leave the existing local database untouched. If the hosted
