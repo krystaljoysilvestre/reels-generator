@@ -256,10 +256,13 @@ Each experiment tests a named assumption in company/assumptions.md.
   independently on `main`. But Railway has **no auto-deploy** — `web` runs `fb53e7d` and `worker` runs `fa156da`,
   so the hosted worker has no forced-failure code at all. A lap run today would arm a variable nothing reads and
   return a clean reel that proved neither criterion 3 nor 4. Redeploy both services before the lap.
-* **Nothing on the running stack reports which build it is** (certain / medium). `/api/health` returns only
-  `{"ok": true}` by design, so "the acceptance reel ran on the verified build" would rest on remembering a manual
-  deploy — and on 2026-09-04 that memory had already failed for two services. Same event-versus-state family as
-  the `publications` row that counted a deleted upload as a publish.
+* **Build identity is fixed in code and unverified hosted** (certain / low). Until 2026-09-04 `/api/health`
+  returned only `{"ok": true}`, so "the acceptance reel ran on the verified build" rested on remembering a manual
+  deploy — and that memory had already failed for two services. Health now reports the stamped commit, the worker
+  logs its own on boot, and `scripts/deploy-railway.sh` refuses a dirty or unpushed tree and polls until the
+  service confirms the commit. All of it is green locally and none of it has run against Railway; the first
+  deploy through the script is the proof. Same event-versus-state family as the `publications` row that counted a
+  deleted upload as a publish.
 * **Three and a half of the five hosted canary checks are still unrun** (certain / medium). `app.kendrix.io`
   resolves to Railway while `specs/phase0-deployment.md` says the local tunnel holds until sign-in, data parity,
   queue-restart survival and R2 access pass. A canary log now exists in that spec rather than the checks living in

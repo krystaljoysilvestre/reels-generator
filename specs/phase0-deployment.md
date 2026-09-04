@@ -78,14 +78,31 @@ missing both the in-product Retry restore for stranded reels (`2096af3`) and the
 (`6e9ff51`). Arming `FORCE_STEP_FAILURE` against that worker would have read nothing and produced a clean reel
 that proved neither criterion 3 nor criterion 4.
 
-`/api/health` deliberately returns only `{"ok": true}`, so **nothing on the running stack reports which commit it
-is.** Both halves are the same event-versus-state gap the metrics poller taught: the deployed build is currently
-remembered, not read. Two cheap fixes, neither made: enable auto-deploy on `main` — a policy change, since every
-push would then deploy production — and return the commit SHA from a build-info response, so an acceptance lap can
-name the build that produced the reel.
+`/api/health` used to return only `{"ok": true}`, so nothing on the running stack reported which commit it was —
+the same event-versus-state gap the metrics poller taught, one layer out in the infrastructure.
 
-Deploy order is web, then worker: migrations run from web's pre-deploy command only, and the worker must never be
-restarted while a render is active.
+**Build identity is now reported (2026-09-04).** `/api/health` returns `build` and `buildSource` beside `ok`: the
+short commit the running **web** service was stamped with, or `unknown`. It never infers one — a value that is not
+a plausible SHA reads as unstamped, because a wrong commit would be asserted with the same confidence as a right
+one. The worker is private and has no HTTP surface, so it logs `[worker] build=<short> (source=<source>)` on every
+boot; `railway logs -s worker` is where the worker's build is read. Resolution order is `BUILD_COMMIT`, then
+`RAILWAY_GIT_COMMIT_SHA` (which Railway injects only for GitHub-triggered deploys), then the `/app/.build-commit`
+stamp, then `unknown`.
+
+**`scripts/deploy-railway.sh web|worker|all` is now the deploy path.** `railway up` uploads a tarball with no git
+context, so a hand deploy could not otherwise say what it was. The script refuses a dirty tree, refuses a commit
+that is on no remote branch (`ALLOW_UNPUSHED=1` overrides, loudly), writes the `.build-commit` stamp into the
+upload context, deploys web before worker because migrations run from web's pre-deploy command only, asks before
+restarting a worker whose recent logs look mid-render, and then polls until the running service reports the commit
+it just deployed — a deploy is finished when the service says which build it is, not when a command exits. The
+stamp is deliberately untracked **and** unignored: Railway's uploader does not honor `.gitignore`, which is why
+`.railwayignore` exists, so an unignored file is the one thing certain to reach the image. It is removed on every
+exit path.
+
+None of this is verified hosted yet. The first deploy through the script is its own verification.
+
+**Auto-deploy on `main` remains unmade, and is a founder decision.** It would have prevented the 09-04 drift; it
+also means every push to `main` deploys production.
 
 ## Canary check log
 

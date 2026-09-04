@@ -1,4 +1,5 @@
 import './env.js'
+import { buildInfo } from '@reels/core/build-info'
 import type { Worker } from 'bullmq'
 import { initSentry, captureException } from './monitoring/sentry.js'
 import { startBullBoard } from './monitoring/bull-board.js'
@@ -129,4 +130,9 @@ async function shutdown() {
 process.on('SIGTERM', shutdown)
 process.on('SIGINT', shutdown)
 
+// The worker is the service that produces reels and the one that silently ran a stale build on
+// 2026-09-04, so it says which commit it is on every boot. `railway logs -s worker` is the only place
+// this is readable: the worker is private and exposes no HTTP surface of its own.
+const build = buildInfo()
+console.log(`[worker] build=${build.short} (source=${build.source})`)
 console.log(`[worker] started — role=${ROLE}`)

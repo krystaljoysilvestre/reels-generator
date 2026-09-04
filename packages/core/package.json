@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./build-info": "./src/build-info.ts",
     "./timings": "./src/timings/index.ts",
     "./timings/emphasis": "./src/timings/emphasis.ts",
     "./captions/legibility": "./src/captions/legibility.ts",

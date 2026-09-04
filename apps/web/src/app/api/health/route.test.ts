@@ -30,7 +30,9 @@ describe('GET /api/health', () => {
     const result = await GET()
 
     expect(result.status).toBe(200)
-    await expect(result.json()).resolves.toEqual({ ok: true })
+    // `unknown` is the correct answer in a test process: nothing stamped this build, and the probe
+    // must say so rather than infer a commit from the working tree.
+    await expect(result.json()).resolves.toEqual({ ok: true, build: 'unknown', buildSource: 'none' })
     expect(mocks.execute).toHaveBeenCalledOnce()
     expect(mocks.waitUntilReady).toHaveBeenCalledOnce()
     expect(result.headers.get('cache-control')).toBe('no-store, max-age=0')
@@ -44,6 +46,24 @@ describe('GET /api/health', () => {
     const result = await GET()
 
     expect(result.status).toBe(503)
-    await expect(result.json()).resolves.toEqual({ ok: false })
+    // Still exactly three keys, and the build is reported on failure too — a broken dependency is when
+    // "which build is this?" matters most. The point of this test is unchanged: no dependency detail.
+    const body = await result.json()
+    expect(body).toEqual({ ok: false, build: 'unknown', buildSource: 'none' })
+    expect(JSON.stringify(body)).not.toContain('postgres')
+  })
+
+  it('reports the stamped commit when the image carries one', async () => {
+    vi.stubEnv('BUILD_COMMIT', 'ffd4d5661f2a3b4c5d6e7f8091a2b3c4d5e6f708')
+
+    const { GET } = await import('./route')
+    const result = await GET()
+
+    await expect(result.json()).resolves.toEqual({
+      ok: true,
+      build: 'ffd4d56',
+      buildSource: 'env',
+    })
+    vi.unstubAllEnvs()
   })
 })

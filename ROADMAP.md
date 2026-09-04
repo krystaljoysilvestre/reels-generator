@@ -104,10 +104,15 @@ GitHub auto-deploy: `web` is on `fb53e7d` (deployed 09-03) and `worker` is still
 so the push of `e3f8c9b` changed nothing hosted. **The worker therefore lacks `6e9ff51` entirely** — arming
 `FORCE_STEP_FAILURE` against it would read nothing and hand back a clean reel that proved neither criterion 3 nor
 criterion 4, the same silent-no-op shape as the dead metrics poller and the test suite that skipped while exiting
-0. It also lacks `2096af3`, the in-product Retry restore that criterion 3 depends on. `railway up -s web` then
-`railway up -s worker` from a clean `e3f8c9b` checkout is the prerequisite for the lap; the worker is idle, so the
-no-deploy-during-render invariant holds. And because `/api/health` returns only `{"ok": true}`, the running commit
-is remembered rather than read — see the spec's build-identity note.
+0. It also lacks `2096af3`, the in-product Retry restore that criterion 3 depends on. `scripts/deploy-railway.sh all` is the prerequisite for the lap; the
+worker is idle, so the no-deploy-during-render invariant holds.
+
+**The running build is now readable rather than remembered (2026-09-04).** `/api/health` reports `build` and
+`buildSource`, the worker logs its commit on every boot, and the new deploy script refuses a dirty or unpushed
+tree, stamps the commit into the upload context, and polls until the service reports the commit it just deployed.
+It never infers a SHA: an unstamped process says `unknown`. This is committed and green locally but **unverified
+hosted** — the first deploy through the script is what proves it, and until that runs, `app.kendrix.io` still
+answers without a `build` field at all, which is itself the tell that it predates this change.
 
 Creative review remains allowed and expected. Direct YouTube/TikTok/Facebook publishing, billing, teams,
 long-form, public-launch polish and new creative architecture do **not** block this gate. Direct YouTube may be
