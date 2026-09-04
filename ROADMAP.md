@@ -14,7 +14,7 @@ sequenced this way — lives in `dna/company/roadmap.md` (company DNA starts at
 
 ---
 
-## Now — exit Phase 0 through the product, not the terminal (2026-09-01)
+## Now — exit Phase 0 through the product, not the terminal (2026-09-01, updated 2026-09-04)
 
 Everything below this section is backlog. This is the only active item.
 
@@ -46,13 +46,56 @@ the fresh product-only reel still remain. The render path now commits `visual.mp
 checkpoint immediately after upload, so the forced lap can lose its queue/render step after that boundary and
 prove one-click Retry skips the already-finished frame pass without R2 inspection or manual salvage.
 
-**Deployment work active 2026-09-01:** `https://app.kendrix.io` currently serves a verified production canary
-through a Cloudflare Tunnel to the founder's Mac. That local stack proved the web, worker, Postgres, Redis and
-private-service boundaries, but it cannot clear the deployment prerequisite because closing the Mac stops the
-product. The accepted Phase 0 topology is Railway Hobby in Singapore with private Postgres and Redis, one web
-service, one all-role worker and the existing R2 assets (`specs/phase0-deployment.md`). Keep the local route only as
-rollback until the hosted health, data, login, queue and storage checks pass. Scheduled production stays off until
-the hosted forced-retry lap and fresh product-only acceptance reel clear the Phase 0 gate.
+**Sprint status — 2026-09-04, day 4 of 10 working days; the window closes 2026-09-14:**
+
+| # | Criterion | State |
+| - | --------- | ----- |
+| 1–2 | Fresh reel completes invite/sign-in → export in the deployed product, no terminal/SQL/scripts | **Not started** |
+| 3 | Forced failure visible in-product; one-click Retry reuses durable work | **Automated proof green and committed** (`6e9ff51`, `forced-recovery.integration.test.ts`); hosted lap pending |
+| 4 | Retry repeats no paid provider call and no cost | **Automated proof green and committed** — cached step returns `costCents: 0`, provider never called, ledger unmoved; hosted lap pending |
+| 5 | Automated tenant / suspended-user / storage-ownership / spend-boundary checks | **Green** — `api-access.integration` (5 tests) and `spend-boundaries.integration` (5 tests) pass against real Postgres |
+| 6 | Lint, typecheck, tests, production build green | **Green on the consolidated build `721a987`** — typecheck clean, lint 0 errors (6 pre-existing warnings), **696 passing / 1 skipped of 697** across 80 files with all three integration suites present (5+5+3), clean `pnpm build`, verified 2026-09-04 in CI's environment |
+
+**The forced failure is now configuration, not an intervention (2026-09-03).** `FORCE_STEP_FAILURE` names
+boundaries to fail at; unset — the shipped state — is a no-op that does not even query. The one boundary that
+exists, `render:after_visual`, fails immediately after the graded visual checkpoint commits and `render.mp4`
+reaches R2 but before the render asset row is written: the exact shape of the 2026-09-01 lost-lock failure that
+needed manual salvage. It fires only on a step's first attempt (read from that step's own durable row), so one
+click of Retry clears it and an armed variable can never trap a reel in a loop, and it throws
+`UnrecoverableError` so BullMQ cannot quietly succeed on its own second attempt instead of showing the creator a
+failed phase. `forced-recovery.integration.test.ts` proves against real Postgres that the failure is recorded,
+that the storyboard/retry predicate sees it, that a completed paid step re-enters as a cache hit with
+`costCents: 0` and no provider call, and that the reel's ledger reads the same before the failure and after the
+recovery. The runbook for the live lap — arm, produce one reel, watch it fail, click Retry, verify the ledger,
+disarm — is `specs/phase0-forced-recovery-lap.md`, and it recommends running it **inside** the acceptance reel
+rather than paying for a second one.
+
+**The root `test` script now runs what CI runs (`6e9ff51`).** It recursed into `test` scripts, and both
+`apps/web` and `@reels/providers` define only `test:unit` — so the convenient local command reported all-green
+while running **neither** of criterion 5's suites. It is now `pnpm -r test:unit`, identical to
+`.github/workflows/ci.yml`.
+
+**Read the run by which suites appear, not by the exit code or a skip count.** `TEST_DATABASE_URL` must be set or
+all three integration suites self-skip silently, so the assertion for the acceptance build is that
+`api-access.integration` (5), `spend-boundaries.integration` (5) and `forced-recovery.integration` (3) are each
+present with those counts. A global "0 skipped" is the wrong rule: `redis-limiter.test.ts` skips without
+`REDIS_URL`, and CI provisions no Redis, so a correct CI run reads 696 passing / 1 skipped. **That suite has
+therefore never run in CI** — a small real gap, not a reason to loosen the rule.
+
+**Consolidated onto one acceptance build 2026-09-04 (`721a987`).** The tenancy and spend suites had reached
+`main` as PR #23 (`ddce1c9`) while the nine deployment and reliability commits from 09-02/09-03 sat only on
+`codex/verified-visual-identity`. `main` now carries both plus the forced-recovery lap, both refs point at the
+same commit, and the four CI steps were re-run against real Postgres on it. **It is not pushed** — `origin/main`
+still stops at `ddce1c9`, so the Railway stack serves pre-merge code until the founder pushes.
+
+**Deployment cut over 2026-09-02:** `https://app.kendrix.io` now answers from the Railway Hobby stack in
+Singapore — one public web service, one private all-role worker, private Postgres and Redis, and the existing R2
+assets (`specs/phase0-deployment.md`). An external probe on 2026-09-03 returned `/api/health` 200 with Railway edge
+headers, so the origin no longer depends on the founder's Mac being awake. **Health is the only one of the spec's
+five canary checks recorded.** Operator sign-in, migrated row/spend parity, one queue job surviving a worker
+restart, and R2 read/write still need to be run and written down; the Cloudflare Tunnel route to the Mac stays as
+rollback until they are. Scheduled production stays off until the hosted forced-retry lap and the fresh
+product-only acceptance reel clear the Phase 0 gate.
 
 Creative review remains allowed and expected. Direct YouTube/TikTok/Facebook publishing, billing, teams,
 long-form, public-launch polish and new creative architecture do **not** block this gate. Direct YouTube may be
