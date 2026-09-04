@@ -9,11 +9,11 @@ import {
   GLOBAL_DAILY_SPEND_CAP_CENTS,
   budgetCapForSeconds,
   DEFAULT_USER_LIMITS,
-  baseStepName,
   canTransition,
   type PipelineStepName,
   type ReelStatus,
 } from '@reels/core'
+import { hasFailedAttemptForStep } from './failure-record.js'
 
 // Worker harness — every pipeline step calls runStep() instead of doing raw DB work.
 // Guarantees:
@@ -228,11 +228,18 @@ export async function markReelFailed(reelId: string, stepName: string, error: st
   // so scanning the reel's step rows is cheap.
   const rows = await db.query.pipelineSteps.findMany({
     where: eq(pipelineSteps.reelId, reelId),
-    columns: { stepName: true },
+    columns: { stepName: true, status: true },
   })
-  if (rows.some((r) => baseStepName(r.stepName) === stepName)) return
+  if (hasFailedAttemptForStep(rows, stepName)) return
   await db
     .insert(pipelineSteps)
     .values({ reelId, stepName: stepName as never, status: 'failed', attempt: 1, error, finishedAt: new Date() })
-    .onConflictDoNothing()
+    .onConflictDoUpdate({
+      target: [pipelineSteps.reelId, pipelineSteps.stepName],
+      set: {
+        status: 'failed',
+        error,
+        finishedAt: new Date(),
+      },
+    })
 }

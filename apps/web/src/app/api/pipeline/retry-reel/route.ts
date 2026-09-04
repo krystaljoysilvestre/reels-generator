@@ -5,6 +5,7 @@ import { and, desc, eq } from 'drizzle-orm'
 import { enqueueStep } from '@reels/queue'
 import { baseStepName } from '@reels/core'
 import { requireReelOwner } from '@/lib/api-access'
+import { recoveryStep } from '@/lib/retry-failure'
 
 // Recover a reel that hard-failed: re-enqueue the step that failed (its prior steps are cached, so
 // they skip — no re-pay) and reset the reel to the in-progress status that step belongs to. The
@@ -39,15 +40,26 @@ export async function POST(req: NextRequest) {
   // The step that stopped the chain (most recent failed step for this reel).
   const failed = await db.query.pipelineSteps.findFirst({
     where: and(eq(pipelineSteps.reelId, reelId), eq(pipelineSteps.status, 'failed')),
-    orderBy: [desc(pipelineSteps.startedAt)],
+    orderBy: [desc(pipelineSteps.finishedAt)],
   })
-  if (!failed) return NextResponse.json({ error: 'No failed step to retry' }, { status: 400 })
+  const latestDurable = failed ? null : await db.query.pipelineSteps.findFirst({
+    where: eq(pipelineSteps.reelId, reelId),
+    orderBy: [desc(pipelineSteps.finishedAt)],
+  })
+  const recoverable = recoveryStep(failed, latestDurable)
+  if (!recoverable) return NextResponse.json({ error: 'No failed step to retry' }, { status: 400 })
 
   // Fan-out steps record per-sub-unit rows ('generate_images:scene3'); re-enqueue the CANONICAL step
   // ('generate_images') the dispatcher knows, and resolve its reset status from the base name.
-  const retryStep = baseStepName(failed.stepName)
+  const retryStep = baseStepName(recoverable.stepName)
   const resetStatus = STEP_RESET_STATUS[retryStep] ?? 'rendering'
   await db.update(reels).set({ status: resetStatus as never, updatedAt: new Date() }).where(eq(reels.id, reelId))
+
+  // Clear the selected failed row before re-enqueueing. runStep will replace its status for ordinary
+  // canonical/fan-out rows; fallback canonical rows can otherwise remain failed forever after recovery.
+  if (recoverable.status === 'failed') {
+    await db.update(pipelineSteps).set({ status: 'pending', error: null, finishedAt: null }).where(eq(pipelineSteps.id, recoverable.id))
+  }
 
   await enqueueStep({
     reelId,

@@ -54,6 +54,21 @@ The third row is the subtle one. `archival_only` is the *stronger* claim — "th
 
 Per-subject lead-image sourcing cannot yield a photograph containing two specific people, and compositing them is forbidden by invariant 3 — a composite of two real people is a fabricated record. Multi-person event sourcing is out of scope; the row exists so nobody reaches for compositing later.
 
+### Planning-time fallback for restricted real people (2026-09-02)
+
+The hosted Phase 0 acceptance reel exposed a deadlock before image spend: Apollo 12 scenes tagged John Aaron
+and Alan Bean as `archival_only`, then the depiction doctor was required to preserve those primary tags while
+the truth critic demanded source pixels that had not been sourced yet. Three paid breakdown attempts could
+neither fabricate the people nor remove them, so the storyboard failed correctly but unrecoverably.
+
+The contract is now explicit: `archival_only` and `identity_withheld` are not mandatory shot subjects. When a
+verified source can truthfully carry the visible claim, `archival_only` may be fulfilled by genuine archival
+media. When the beat is an unrecorded decision, realization, recommendation, dialogue, or action, the director
+and doctor must remove the restricted person from the generated frame and carry the claim through a supported
+object, mechanism, document, effect, or anonymous representative/conceptual staging. The truth critic may
+require `source` only when an exact `sourceAssetKey` is actually supplied; depiction mode alone is never proof
+that source pixels exist. This preserves the ethics floor while restoring its intended fail-soft behavior.
+
 ### Disclosure follows the media, not the config
 
 `computeMediaDisclosure()` derives the burned label from what the reel actually contains, because a fixed `'Illustrated · …'` string would call a genuine archival photograph an illustration:
@@ -177,6 +192,17 @@ These produce two universal constraints:
   when that exact state matches.** The article lead is one candidate, never the verdict. If it fails the
   state/edition check, non-human sourcing may search Commons directly for a better candidate; every candidate
   still passes the same identity-and-state verifier. Human sourcing never gains that free-text fallback.
+
+**Live acceptance extension (2026-09-02).** The deployed Crossroads acceptance reel exposed the event/object
+boundary again in a new form: `apollo-12` represented the lunar mission, but routing classified it as a
+sourceable object and substituted the command module Columbia as the search target. One capsule photograph
+cannot verify a mission or truthfully condition scenes about launch, electrical failure, and mission-control
+instruments. The source verifier rejected the generic capsule before image spend, correctly; the defect was
+the earlier identity classification. Missions, operations, expeditions, campaigns, programs, and flights are
+therefore explicit event/context, while their separately named physical participants remain eligible concrete
+entities. Depiction routing now records its classifier version. A retry reclassifies missing or stale routing
+inside the existing cost-accounted step and removes any no-longer-valid source plate, so a deployed classifier
+repair can recover an already-created reel without direct data edits or silently reusing the wrong pixels.
 
 The director still chooses the most truthful shot for the beat. These rules do not force an archival image
 into a scene it cannot support, and they do not prescribe a visual style. They prevent the system from

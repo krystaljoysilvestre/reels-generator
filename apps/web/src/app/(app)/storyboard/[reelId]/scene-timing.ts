@@ -43,6 +43,17 @@ export function fmtClock(secs: number): string {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
+/** Finished-cut runtime: measured media wins, then persisted render timing, then storyboard estimate. */
+export function displayDurationSeconds(
+  mediaSecs: number | null,
+  timedSecs: number | null,
+  estimatedSecs: number,
+): number {
+  if (mediaSecs != null && Number.isFinite(mediaSecs) && mediaSecs > 0) return mediaSecs
+  if (timedSecs != null && Number.isFinite(timedSecs) && timedSecs > 0) return timedSecs
+  return estimatedSecs
+}
+
 /** Five evenly-spaced ruler labels across the reel: 0, ¼, ½, ¾, end. */
 export function rulerTicks(total: number): string[] {
   return [0, 0.25, 0.5, 0.75, 1].map((f) => fmtClock(total * f))

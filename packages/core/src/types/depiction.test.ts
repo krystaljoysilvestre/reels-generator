@@ -4,6 +4,7 @@ import {
   SAFE_REPRESENTATIVE_STAGING,
   computeMediaDisclosure,
   depictionModeForHuman,
+  depictionRoutingIsCurrent,
   isHistoricallyEligible,
   mentionsAny,
   personNameVariants,
@@ -19,6 +20,24 @@ import { SourcePolicySchema } from './source-policy.js'
 // real person could be depicted as someone they are not, or real media misrepresented as synthetic.
 
 const YEAR = 2026
+
+describe('depiction routing version', () => {
+  const routing = {
+    subjectClass: 'object' as const,
+    depictionMode: 'reference_plate' as const,
+    eligibilityReason: 'real_subject' as const,
+    query: 'Command module Columbia',
+  }
+
+  it('refreshes legacy and stale classifier decisions before image spend', () => {
+    expect(depictionRoutingIsCurrent(routing, 'entity-source.v1.6')).toBe(false)
+    expect(depictionRoutingIsCurrent({ ...routing, classifierVersion: 'entity-source.v1.5' }, 'entity-source.v1.6')).toBe(false)
+  })
+
+  it('reuses a decision made by the current classifier version', () => {
+    expect(depictionRoutingIsCurrent({ ...routing, classifierVersion: 'entity-source.v1.6' }, 'entity-source.v1.6')).toBe(true)
+  })
+})
 
 describe('invariant 4 — identity and eligibility are verified separately, and fail differently', () => {
   it('grants a conditioning plate only to a verified, long-dead identity', () => {

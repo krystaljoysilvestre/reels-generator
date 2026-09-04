@@ -92,4 +92,24 @@ describe('buildScenesPrompt', () => {
     expect(userMessage).toContain('verified source pixels untouched')
     expect(userMessage).toContain('future publication not yet present')
   })
+
+  it('routes unsourced restricted real people to representative staging', () => {
+    const { userMessage } = buildScenesPrompt({
+      bibleEntitiesJson: JSON.stringify([
+        { id: 'john-aaron', kind: 'character', depiction: { depictionMode: 'archival_only' } },
+      ]),
+      era: '1969',
+      regionDescriptor: 'United States',
+      nicheDescription: 'documentary space history',
+      narration: 'John Aaron recognized the telemetry pattern and recommended SCE to AUX.',
+      minScenes: 1,
+      maxScenes: 2,
+      peakMoment: '',
+      maxVideoTiers: 0,
+    })
+
+    expect(userMessage).toContain('ARCHIVAL-ONLY AND IDENTITY-WITHHELD PEOPLE')
+    expect(userMessage).toContain('Do not tag either person merely because the narration names them')
+    expect(userMessage).toContain('A portrait cannot depict an unrecorded decision, realization, recommendation, dialogue, or switch action')
+  })
 })

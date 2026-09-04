@@ -20,7 +20,7 @@
 // Versioned source; bump on any prompt-affecting edit.
 import { z } from 'zod'
 
-export const SCENE_DEPICTION_CRITIC_V1_VERSION = 'scene-depiction-critic.v1.6'
+export const SCENE_DEPICTION_CRITIC_V1_VERSION = 'scene-depiction-critic.v1.7'
 
 export const VisualTruthViolationSchema = z.enum([
   'unsupported_specificity',
@@ -122,7 +122,7 @@ Use only the narration span and supplied anchors below. Do not use outside knowl
 - modality_collapse: a claim, proposal, hypothesis, counterfactual, or uncertainty is rendered as an observed fact;
 - wrong_identity_state: the exact person/place/object is shown in the wrong event-time state;
 - source_context_mismatch: source pixels are real but do not match the source the span asks the audience to inspect;
-- source_should_be_present: the scene asks viewers to inspect available verified evidence but proposes a generated substitute.
+- source_should_be_present: the scene asks viewers to inspect available verified evidence but proposes a generated substitute. "Available verified evidence" means the supplied entity/state has an exact sourceAssetKey. Never infer source_should_be_present from depictionMode:"archival_only", a sourcing query, or the mere absence of a sourceAssetKey. When no exact sourceAssetKey is supplied, judge representative/conceptual staging on its own truth and depiction; a weak or incomplete representation may fail depiction, but sourceUse remains not_applicable rather than unsupported.
 
 truthPass is false on any violation. When either depiction or truth fails, reason must name the concrete repair needed without inventing a shot. This is a correctness gate, not a taste review.`
 
@@ -143,7 +143,7 @@ MANDATORY TRUTH CHECKLIST — answer every dimension independently before truthP
 - chronology: do all visible objects, publications, people, and states exist in this beat?
 - modality: does the frame preserve fact vs claim/inference/hypothesis/counterfactual?
 - identityState: does every exact identity match its one event-time state, with no unanchored duplicate state?
-- sourceUse: when the narration asks viewers to see a photograph, page, document, artwork, map, or other evidence and the supplied entity has exact sourceAssetKey pixels (including a canonical-state appearance source), are those pixels presented with basis:source instead of reconstructed? Does a selected source match the span?
+- sourceUse: when the narration asks viewers to see a photograph, page, document, artwork, map, or other evidence and the supplied entity has exact sourceAssetKey pixels (including a canonical-state appearance source), are those pixels presented with basis:source instead of reconstructed? Does a selected source match the span? If no exact sourceAssetKey is supplied, mark sourceUse not_applicable; depictionMode alone is never a source.
 - unsupportedSpecificity: does any other concrete visible detail assert a fact absent from the anchors?
 
 For each check return supported, not_applicable, or unsupported. In truthCheckReasons include ONE short grounded reason only for checks marked unsupported; use [] when all pass. Any unsupported check MUST make truthPass:false and add its mapped violation. Do not skip a check because the overall scene feels plausible.`

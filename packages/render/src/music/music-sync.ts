@@ -153,9 +153,18 @@ export function buildGainExpr(p: GainEnvelopeParams): string {
   if (!p.silenceDropMs) return piecewise
 
   const s = p.silenceDropMs.atMs / 1000
-  const en = (p.silenceDropMs.atMs + p.silenceDropMs.durationMs) / 1000
+  let en = (p.silenceDropMs.atMs + p.silenceDropMs.durationMs) / 1000
 
-  // silence_drop overrides everything — hard zero in that window
+  // A silence drop may shade the final spoken clause, but it cannot erase a later, explicitly
+  // music-focused hold. Direction has already chosen music as the ending's owner and render QA verifies
+  // that choice survives until the terminal release. Clamp an overlapping drop just before voice end so
+  // the bed returns for the held closing beat instead of leaving a dead gap.
+  if (p.ending?.focus === 'music') {
+    en = Math.min(en, p.ending.voiceEndMs / 1000 - 0.001)
+    if (en < s) return piecewise
+  }
+
+  // silence_drop hard-zeros its bounded window; an explicit music-owned hold resumes afterward.
   return `if(between(t,${s.toFixed(3)},${en.toFixed(3)}),0,${piecewise})`
 }
 

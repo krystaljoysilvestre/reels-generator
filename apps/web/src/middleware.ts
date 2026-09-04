@@ -17,8 +17,8 @@ import { edgeAuth } from '@/auth.edge'
 // it was. Scoped to /api/* as before — any real use of the app is API traffic, so the rolling refresh
 // lands without putting a JWT decode on every page render.
 
-// Login + self-signup must stay reachable without a session.
-const PUBLIC_API = [/^\/api\/auth(\/|$)/, /^\/api\/register(\/|$)/]
+// Login, self-signup, and the detail-free supervisor probe must stay reachable without a session.
+const PUBLIC_API = [/^\/api\/auth(\/|$)/, /^\/api\/register(\/|$)/, /^\/api\/health$/]
 
 // auth.js session cookie: "authjs.session-token" (http/dev) or "__Secure-authjs.session-token" (https).
 const SESSION_COOKIE_NAMES = ['authjs.session-token', '__Secure-authjs.session-token']

@@ -2,10 +2,11 @@ import { getDb, reels, assets, channels, pipelineSteps, publications, platformCo
 import { and, desc, eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { assertReelAccess } from '@/lib/access'
-import { type ChannelVoice, type VoiceSettings, moodToVoiceSettings, ToneConfigSchema, AudioPacksSchema, OperatorSfxSchema, PostMetaSchema, ReelCoverSchema, CaptionStyleSchema, channelPlatformPreset, PRESET_BEDS } from '@reels/core'
+import { type ChannelVoice, type VoiceSettings, moodToVoiceSettings, ToneConfigSchema, AudioPacksSchema, OperatorSfxSchema, PostMetaSchema, ReelCoverSchema, CaptionStyleSchema, TimingsSchema, channelPlatformPreset, PRESET_BEDS } from '@reels/core'
 import { channelMood, MOOD_TINT } from '@/lib/pipeline-phases'
 import { StoryboardEditor } from './StoryboardEditor'
 import { reelMetadata } from '@/lib/page-metadata'
+import { MISSING_FAILURE_DETAIL, recoveryStep } from '@/lib/retry-failure'
 
 export const dynamic = 'force-dynamic'
 
@@ -95,6 +96,8 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
   const renderUrl = renderAsset
     ? `/api/asset?key=${encodeURIComponent(renderAsset.storageKey)}&v=${new Date(renderAsset.createdAt).getTime()}`
     : null
+  const parsedTimings = TimingsSchema.safeParse(reel.timings)
+  const renderDurationSecs = parsedTimings.success ? parsedTimings.data.durationMs / 1000 : null
 
   // The PACKAGING a viewer meets before pressing play — the platform title and the cover.
   // Passed to the spot-check gate because that is where "would you publish this?" gets answered, and until
@@ -204,9 +207,19 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
   if (reel.status === 'failed') {
     const failed = await db.query.pipelineSteps.findFirst({
       where: and(eq(pipelineSteps.reelId, reelId), eq(pipelineSteps.status, 'failed')),
-      orderBy: [desc(pipelineSteps.startedAt)],
+      orderBy: [desc(pipelineSteps.finishedAt)],
     })
-    if (failed) failure = { step: failed.stepName, error: (failed.error ?? 'Unknown error').slice(0, 300) }
+    const latestDurable = failed ? null : await db.query.pipelineSteps.findFirst({
+      where: eq(pipelineSteps.reelId, reelId),
+      orderBy: [desc(pipelineSteps.finishedAt)],
+    })
+    const recoverable = recoveryStep(failed, latestDurable)
+    if (recoverable) {
+      failure = {
+        step: recoverable.stepName,
+        error: (recoverable.error ?? MISSING_FAILURE_DETAIL).slice(0, 300),
+      }
+    }
   }
 
   return (
@@ -241,6 +254,7 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
       sceneImageHistory={sceneImageHistory}
       sceneVideoVariations={sceneVideoVariations}
       renderUrl={renderUrl}
+      renderDurationSecs={renderDurationSecs}
       packaging={packaging}
       // The whole post package, for the finished-reel screen's inline title + caption fields.
       postMeta={parsedMeta.success ? parsedMeta.data : null}

@@ -30,7 +30,13 @@ export async function routeDepiction(
   const generated = (
     eligibilityReason: DepictionRouting['eligibilityReason'],
     subjectClass: DepictionRouting['subjectClass'] = 'generic',
-  ) => DepictionRoutingSchema.parse({ subjectClass, depictionMode: 'generated', eligibilityReason, query: '' })
+  ) => DepictionRoutingSchema.parse({
+    subjectClass,
+    depictionMode: 'generated',
+    eligibilityReason,
+    query: '',
+    classifierVersion: ENTITY_SOURCE_V1_VERSION,
+  })
   let costCents = 0
   try {
     if (!allowsRealWorldEntityPlates(policy)) return { routing: generated('not_permitted'), costCents }
@@ -60,6 +66,7 @@ export async function routeDepiction(
           depictionMode: 'reference_plate',
           eligibilityReason: 'real_subject',
           query,
+          classifierVersion: ENTITY_SOURCE_V1_VERSION,
         }),
         costCents,
       }
@@ -84,6 +91,7 @@ export async function routeDepiction(
         subjectClass: 'human',
         ...decided,
         query: decided.depictionMode === 'generated' ? '' : query,
+        classifierVersion: ENTITY_SOURCE_V1_VERSION,
       }),
       costCents,
     }

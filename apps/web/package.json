@@ -6,6 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "start:local-prod": "next start --hostname 127.0.0.1 --port 3000",
+    "start:railway": "next start --hostname 0.0.0.0",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
     "test:unit": "vitest run"

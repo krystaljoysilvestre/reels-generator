@@ -15,7 +15,7 @@
 // and continuity survive by construction. Versioned source; bump on any prompt-affecting edit.
 import { z } from 'zod'
 
-export const SCENE_DEPICTION_DOCTOR_V1_VERSION = 'scene-depiction-doctor.v1.5'
+export const SCENE_DEPICTION_DOCTOR_V1_VERSION = 'scene-depiction-doctor.v1.6'
 
 export const SceneDepictionRepairSchema = z.object({
   repairs: z.array(
@@ -63,7 +63,8 @@ TWO LAWS — these are invariants:
 REPAIR RULES:
 - Render the span's load-bearing claim as something SEEN: the thing itself, a quantity made physical (a comparison beside a familiar object, abstract rising/falling forms of light), the two sides of a comparison staged in ONE frame, the change made visible. A sound-off viewer must learn the claim from the shot.
 - Write 45–75 words, concrete and specific to THIS span — the wallpaper test must now fail (the shot could not sit under a different script).
-- If the scene is tagged with a primary subject, your repaired shot still OPENS on that same subject.
+- If the scene is tagged with a primary subject, your repaired shot still OPENS on that same subject — except for the restricted-real-person case below, where keeping the tag would make an honest repair impossible.
+- RESTRICTED REAL-PERSON ESCAPE HATCH: an entity with depictionMode "archival_only" or "identity_withheld" may never be reconstructed or replaced with an invented likeness. When such a person is primary/supporting but no supplied referenceOrigin carries an exact sourceAssetKey that truthfully depicts this span's action/state, remove that person from primaryEntity, supportingEntities, appearanceByEntity, and imagePrompt. Retarget the repaired shot to a supported non-human subject, mechanism, document, physical effect, or anonymous representative/conceptual staging that carries the claim. A real portrait cannot prove an unrecorded decision, realization, recommendation, dialogue, or switch action. This exception is allowed to change primaryEntity or set it null; preserving an impossible person tag is a failed repair.
 - Only the people the span itself places may appear; never invent background people. Any beat may be people-free.
 - Repair the truth relationship too. Choose source only for exact verified pixels named by sourcePresentationEntity; reconstruction only for a specific supported moment; representative for anonymous non-event staging; conceptual for hypotheses, counterfactuals, metaphors, or mechanisms that must not read as historical documentation.
 - Never invent a venue, emblem, audience, boardroom, meeting, ceremony, exhibition display, vote, publication, or identity state. If the anchors do not establish a specific event record, tighten to supported evidence/detail or use representative/conceptual staging.

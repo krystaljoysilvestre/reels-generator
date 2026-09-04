@@ -84,11 +84,21 @@ async function checkEndingPresence(reelId: string, timings: Timings, tmp: string
     const { execFile } = await import('node:child_process')
     const { promisify } = await import('node:util')
     const exec = promisify(execFile)
+    const { stdout: durationOut } = await exec('ffprobe', [
+      '-v', 'error', '-show_entries', 'format=duration',
+      '-of', 'default=noprint_wrappers=1:nokey=1', path,
+    ])
+    const stemDurationSec = parseFloat(durationOut.trim())
     const { stderr } = await exec('ffmpeg', [
       '-ss', startSec.toFixed(3), '-i', path, '-t', durationSec.toFixed(3),
       '-af', 'volumedetect', '-f', 'null', '-',
     ])
     const mean = stderr.match(/mean_volume:\s*(-?[\d.]+)\s*dB/)
+    console.log(
+      `[qa] ${reelId} ending ${layer} window=${startSec.toFixed(3)}-${endSec.toFixed(3)}s ` +
+      `stem=${Number.isFinite(stemDurationSec) ? stemDurationSec.toFixed(3) : 'unknown'}s ` +
+      `mean=${mean?.[1] ?? 'unmeasurable'}dB`,
+    )
     if (!mean?.[1] || parseFloat(mean[1]) < -55) {
       return `ending focus ${layer} is inaudible before the terminal fade`
     }

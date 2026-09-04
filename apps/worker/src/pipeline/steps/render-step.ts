@@ -13,6 +13,7 @@ import { composeCover } from '../compose-cover.js'
 import { runStep, setReelStatus } from '../harness.js'
 import { runPool } from '../pool.js'
 import { visualCheckpointKey, visualCheckpointMatches, visualCheckpointMeta } from '../render-checkpoint.js'
+import { maybeInjectFault } from '../fault-injection.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -376,6 +377,12 @@ export async function renderStep(reelId: string): Promise<void> {
         console.log(`[render] all uploads settled at ${sinceStart()}s`)
       }
       if (finalUploadError) throw finalUploadError
+
+      // Forced-recovery lap boundary — a no-op unless FORCE_STEP_FAILURE arms it. Placed HERE because
+      // this is where the 2026-09-01 lost-lock failure actually landed: the graded visual has committed
+      // its durable checkpoint and reel.mp4 is in R2, but no render asset row exists yet. Retry must
+      // therefore prove it can reuse those pixels instead of paying for the frame pass again.
+      await maybeInjectFault(reelId, 'render', 'render:after_visual')
 
       // Constant key per reel → upsert in place; bump createdAt (drives the preview cache-bust + render_qa
       // re-validation). meta.visualFingerprint lets the NEXT render decide whether it can reuse the visual.

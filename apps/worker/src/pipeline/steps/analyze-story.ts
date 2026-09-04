@@ -10,12 +10,13 @@ import {
   mergeBible,
   preserveLockedEntities,
   resolveChannelPolicy,
+  depictionRoutingIsCurrent,
   validateAppearanceBindings,
   validateJourneyTiling,
   validateJourneyTransitions,
   type StoryBible,
 } from '@reels/core'
-import { buildStoryAnalyzerPrompt, STORY_ANALYZER_V1_VERSION, buildIdentityStateCriticPrompt, IDENTITY_STATE_CRITIC_V1_VERSION, IdentityStateCriticSchema } from '../../prompts-bridge.js'
+import { buildStoryAnalyzerPrompt, STORY_ANALYZER_V1_VERSION, buildIdentityStateCriticPrompt, IDENTITY_STATE_CRITIC_V1_VERSION, IdentityStateCriticSchema, ENTITY_SOURCE_V1_VERSION } from '../../prompts-bridge.js'
 import { runStep } from '../harness.js'
 import { routeDepiction } from '../depiction-routing.js'
 
@@ -199,7 +200,9 @@ export async function analyzeStory(reelId: string): Promise<void> {
       // searched or downloaded here, so the storyboard gate stays cheap. The director can now distinguish a
       // verified real identity from a generic precursor and bind the exact entity/state deliberately. These
       // paid classification calls live inside analyze_story's runStep and are returned in its one cost total.
-      const unrouted = bible.entities.filter((entity) => !entity.depiction)
+      const unrouted = bible.entities.filter((entity) =>
+        !depictionRoutingIsCurrent(entity.depiction, ENTITY_SOURCE_V1_VERSION),
+      )
       if (unrouted.length > 0) {
         const routed = await Promise.all(
           unrouted.map(async (entity) => ({

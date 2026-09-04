@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { SourcePolicySchema } from '@reels/core'
-import { buildStateAdaptationPrompt, requiresVisualTruthQa, sourceQueryCandidates } from './generate-images.js'
+import { applyDepictionRouting, buildStateAdaptationPrompt, requiresVisualTruthQa, sourceQueryCandidates } from './generate-images.js'
 
 describe('requiresVisualTruthQa', () => {
   it('enrolls evidence-required reels independently of creative genre', () => {
@@ -62,5 +62,44 @@ describe('sourceQueryCandidates', () => {
     expect(prompt).toContain('surface markings')
     expect(prompt).toContain('an upright, unmarked porcelain urinal')
     expect(prompt).not.toContain('Do not omit')
+  })
+})
+
+describe('applyDepictionRouting', () => {
+  it('clears a stale sourced plate when an old exact-identity verdict becomes generated context', () => {
+    const entity = {
+      id: 'apollo-12',
+      kind: 'object' as const,
+      description: 'the 1969 lunar mission',
+      depiction: {
+        subjectClass: 'object' as const,
+        depictionMode: 'reference_plate' as const,
+        eligibilityReason: 'real_subject' as const,
+        query: 'Command module Columbia',
+        classifierVersion: 'entity-source.v1.5',
+      },
+      referenceImageKey: 'reels/reel/refs/apollo-12-source.webp',
+      referenceOrigin: { type: 'sourced' as const, sourceAssetKey: 'reels/reel/refs/apollo-12-source.webp' },
+      appearances: [{
+        id: 'launch',
+        description: 'the mission at launch',
+        referenceImageKey: 'reels/reel/refs/apollo-12--launch.webp',
+        referenceOrigin: { type: 'sourced' as const, sourceAssetKey: 'reels/reel/refs/apollo-12-source.webp' },
+      }],
+    }
+
+    applyDepictionRouting(entity, {
+      subjectClass: 'generic',
+      depictionMode: 'generated',
+      eligibilityReason: 'generic_subject',
+      query: '',
+      classifierVersion: 'entity-source.v1.6',
+    })
+
+    expect(entity.depiction.depictionMode).toBe('generated')
+    expect(entity.referenceImageKey).toBeUndefined()
+    expect(entity.referenceOrigin).toBeUndefined()
+    expect(entity.appearances[0]!.referenceImageKey).toBeUndefined()
+    expect(entity.appearances[0]!.referenceOrigin).toBeUndefined()
   })
 })
