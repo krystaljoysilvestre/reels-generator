@@ -177,8 +177,11 @@ export function sourceQueryCandidates(
 export function contextualIdentityQueries(identityQuery: string, sourceContext: string): string[] {
   const tokens = sourceContext.trim().split(/\s+/).filter(Boolean)
   if (tokens.length === 0) return []
-  const contexts = [tokens.join(' ')]
-  if (tokens.length > 1) contexts.push(tokens.at(-1)!, tokens[0]!)
+  const full = tokens.join(' ')
+  const boundaries = tokens.length > 1 ? [tokens.at(-1)!, tokens[0]!] : []
+  // Long scene prose is likely to contain staging words MediaWiki treats as mandatory search terms. Put
+  // both boundary tokens first, then retain the full phrase. Short normalized locations keep full priority.
+  const contexts = tokens.length > 3 ? [...boundaries, full] : [full, ...boundaries]
   return contexts.map((context) => `${identityQuery} ${context}`.trim())
 }
 
@@ -190,8 +193,8 @@ export function verifiedSourceAttempts(sourceQueries: string[], isHuman: boolean
   // lets an exact file beat a merely related article lead without allowing one query to consume every deep
   // rank. After rank 0, rotate across all phrasings one rank at a time.
   const attempts = sourceQueries.flatMap((sourceQuery) => [
-    { sourceQuery, preferCommonsSearch: false, commonsCandidateIndex: 0 },
     { sourceQuery, preferCommonsSearch: true, commonsCandidateIndex: 0 },
+    { sourceQuery, preferCommonsSearch: false, commonsCandidateIndex: 0 },
   ])
   for (let commonsCandidateIndex = 1; commonsCandidateIndex < MAX_COMMONS_CANDIDATES_PER_QUERY; commonsCandidateIndex++) {
     for (const sourceQuery of sourceQueries) attempts.push({ sourceQuery, preferCommonsSearch: true, commonsCandidateIndex })
@@ -208,8 +211,8 @@ export function verifiedSourceQueryCandidates(
 ): string[] {
   const effectiveRouting = query === routing.query ? routing : { ...routing, query }
   const exact = [
-    query,
     ...contextualIdentityQueries(routing.query, sourceContext),
+    query,
     ...(query === routing.query ? [] : [routing.query]),
   ]
   const exactWithAliases = exact.flatMap((value) => {

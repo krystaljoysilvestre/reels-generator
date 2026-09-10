@@ -100,18 +100,18 @@ describe('sourceQueryCandidates', () => {
 describe('verifiedSourceQueryCandidates', () => {
   it('checks each exact query\'s top Commons file before unrelated article leads consume the budget', () => {
     expect(verifiedSourceAttempts(['full state', 'identity Goldsboro'], false).slice(0, 4)).toEqual([
-      { sourceQuery: 'full state', preferCommonsSearch: false, commonsCandidateIndex: 0 },
       { sourceQuery: 'full state', preferCommonsSearch: true, commonsCandidateIndex: 0 },
-      { sourceQuery: 'identity Goldsboro', preferCommonsSearch: false, commonsCandidateIndex: 0 },
+      { sourceQuery: 'full state', preferCommonsSearch: false, commonsCandidateIndex: 0 },
       { sourceQuery: 'identity Goldsboro', preferCommonsSearch: true, commonsCandidateIndex: 0 },
+      { sourceQuery: 'identity Goldsboro', preferCommonsSearch: false, commonsCandidateIndex: 0 },
     ])
   })
 
   it('backs off free-form location prose without language-specific stop words', () => {
     expect(contextualIdentityQueries('Mark 39 nuclear bomb', 'in the sky above Goldsboro').slice(0, 3)).toEqual([
-      'Mark 39 nuclear bomb in the sky above Goldsboro',
       'Mark 39 nuclear bomb Goldsboro',
       'Mark 39 nuclear bomb in',
+      'Mark 39 nuclear bomb in the sky above Goldsboro',
     ])
   })
 
@@ -130,11 +130,13 @@ describe('verifiedSourceQueryCandidates', () => {
       'Goldsboro, North Carolina',
     )
     expect(contextualCandidates.slice(0, 4)).toEqual([
-      'Mark 39 nuclear bomb parachute deployed',
-      'Mk 39 nuclear bomb parachute deployed',
       'Mark 39 nuclear bomb Goldsboro, North Carolina',
       'Mk 39 nuclear bomb Goldsboro, North Carolina',
+      'Mark 39 nuclear bomb Carolina',
+      'Mk 39 nuclear bomb Carolina',
     ])
+    expect(contextualCandidates).toContain('Mark 39 nuclear bomb parachute deployed')
+    expect(contextualCandidates).toContain('Mk 39 nuclear bomb parachute deployed')
     expect(contextualCandidates).toContain('Mark 39 nuclear bomb')
     expect(contextualCandidates).toContain('Mk 39 nuclear bomb')
     expect(candidates).toContain('Thermonuclear Weapon')

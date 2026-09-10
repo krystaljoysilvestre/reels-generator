@@ -266,7 +266,9 @@ query may also search `Mk 39`, and a state documented at Goldsboro carries that 
 when Commons cannot match the longer prose description. Because scene locations are free-form and may say
 `in the sky above Goldsboro`, retrieval mechanically backs off from both phrase boundaries instead of using
 language-specific stop words; the identity term remains attached to every query. Each phrasing's article lead
-is paired with its top Commons file before retrieval moves on, then deeper ranks are interleaved across those
+is paired with its top Commons file before retrieval moves on. For non-human subjects, the Commons file runs
+first, and a compact boundary query precedes long location prose that may time out or match nothing. Deeper
+ranks are then interleaved across those
 exact query variants before any one query advances deeper, so one noisy phrasing cannot exhaust the bounded
 vision-verification budget. These terms improve discovery only: the selected pixels must still pass the same
 exact identity-and-state check.
