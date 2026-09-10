@@ -14,7 +14,7 @@
 import { z } from 'zod'
 import { SubjectClassSchema } from '../types/depiction.js'
 
-export const ENTITY_SOURCE_V1_VERSION = 'entity-source.v1.8'
+export const ENTITY_SOURCE_V1_VERSION = 'entity-source.v1.9'
 
 // (1) DECIDE — what class of real-world thing is this, and is it specific enough that a real photograph
 // would improve the render? The impact≠coverage guard is the whole point: a GENERIC subject (a bedroom, a
@@ -112,17 +112,24 @@ export function buildEntityVerifyPrompt(
   subjectClass: 'place' | 'object' | 'animal' | 'human',
   name: string,
   description: string,
+  usage?: 'conditioning_reference' | 'presented_archival',
 ): { system: string; userMessage: string } {
   // What counts as a match differs by class, and a place-worded rule misjudges the others: a portrait is the
   // CORRECT result for a person and a disqualifying result for a building.
   const criteria: Record<typeof subjectClass, string> = {
     place: 'the right kind of structure or landscape with matching distinctive features. Fail a different subject, a generic stand-in, a map, a diagram, a logo, or a portrait of a person.',
-    object: 'the named object itself, clearly the subject of the frame. Fail a different object, a generic example of its category, a replica presented as something else, a map, a diagram, or a logo. A museum or archival photograph of the real object passes. When the description requires a dated issue, edition, version, marking, damage state, restoration state, or other exact historical state, that state is part of identity: fail an image that visibly contradicts it or only shows a different edition/state.',
+    object: 'the named object itself, clearly the subject of the frame. Fail a different object, a generic example of its category, a replica presented as something else, a map, a diagram, or a logo. A museum or archival photograph of the real object passes. When the description requires a dated issue, edition, version, marking, damage state, restoration state, or other exact historical state, that state is part of identity: fail an image that visibly contradicts it or only shows a different edition/state. Judge only what the pixels can establish: do not demand visible proof of an internal, hidden, microscopic, or otherwise non-visible mechanism/state unless the description explicitly requires it exposed on screen.',
     animal: 'the named species or individual animal, clearly the subject. Fail a different species, an illustration presented as a photograph, a diagram, or a logo. A photograph of the animal in any setting — wild, captive, or archival — passes.',
     human: 'the named person, as a portrait, photograph, painted portrait, or historical image of them. Fail a different person, an anonymous figure, a crowd, a statue or monument OF them rather than an image of them, a map, a document, or a logo. When you are not confident it is this specific person, FAIL — a similar-looking stranger is the failure mode this check exists to stop.',
   }
 
-  const system = `You verify whether an image depicts a specific named subject. You are a strict FILTER against obvious mismatches: pass an image ONLY if it clearly shows the named subject — ${criteria[subjectClass]} When unsure, fail (low confidence).
+  const conditioningCriteria = usage === 'conditioning_reference'
+    ? `
+
+This image is a CONDITIONING REFERENCE, not the final staged scene. Its camera angle, background, placement, and transient action may differ from the factual description. Verify the named identity and any durable visible configuration or historical state; do not require the reference itself to stage the final shot.`
+    : ''
+
+  const system = `You verify whether an image depicts a specific named subject. You are a strict FILTER against obvious mismatches: pass an image ONLY if it clearly shows the named subject — ${criteria[subjectClass]} When unsure, fail (low confidence).${conditioningCriteria}
 
 Also report whether the image APPEARS to be black-and-white / monochrome / sepia rather than full colour.`
 

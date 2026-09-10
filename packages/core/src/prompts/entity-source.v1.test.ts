@@ -56,6 +56,19 @@ describe('entity source decision', () => {
     const prompt = buildEntityVerifyPrompt('object', 'The Blind Man', 'May 1917 issue featuring Fountain')
     expect(prompt.system).toContain('dated issue, edition, version')
     expect(prompt.system).toContain('different edition/state')
+    expect(prompt.system).toContain('internal, hidden, microscopic')
+  })
+
+  it('allows a conditioning reference to establish durable state without staging the final shot', () => {
+    const prompt = buildEntityVerifyPrompt(
+      'object',
+      'Mark 39 nuclear bomb',
+      'parachute deployed while descending through the sky',
+      'conditioning_reference',
+    )
+    expect(prompt.system).toContain('CONDITIONING REFERENCE')
+    expect(prompt.system).toContain('camera angle, background, placement, and transient action may differ')
+    expect(prompt.system).toContain('durable visible configuration or historical state')
   })
 
   it('verifies a derived state against source continuity without demanding later marks', () => {

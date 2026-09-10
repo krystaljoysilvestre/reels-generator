@@ -201,8 +201,9 @@ async function fetchVerifiedMedia(
     // A generic analyzer id can be rescued by exact bound narration evidence. Once routing has resolved an
     // exact query, verify against that identity rather than weakening the check back to the shorthand id.
     const name = routing.query || entityName(entity.id)
+    const effectiveRouting = query === routing.query ? routing : { ...routing, query }
     const seenSources = new Set<string>()
-    for (const sourceQuery of sourceQueryCandidates(entity, routing)) {
+    for (const sourceQuery of sourceQueryCandidates(entity, effectiveRouting)) {
       // Article lead first preserves the strongest non-human identity anchor. If vision rejects that exact
       // file, retry the SAME query against Commons directly before broadening the query: an article about a
       // publication commonly leads with its cover while the required issue/page exists as a separate file.
@@ -212,7 +213,7 @@ async function fetchVerifiedMedia(
         const img = await sourceEntityImage(sourceQuery, { requireArticleIdentity: isHuman, preferCommonsSearch })
         if (!img || seenSources.has(img.sourceUrl)) continue
         seenSources.add(img.sourceUrl)
-        const vp = buildEntityVerifyPrompt(subjectClass, name, entity.description)
+        const vp = buildEntityVerifyPrompt(subjectClass, name, entity.description, usage)
         const verify = await llmCall({
           templateVersion: ENTITY_SOURCE_V1_VERSION, schema: EntityVerifySchema,
           provider: 'anthropic', model: DEPICTION_MODEL,
@@ -276,6 +277,33 @@ async function sourceEntityPlate(
   state?: { id: string; prompt: string },
 ): Promise<PlateSourceResult> {
   if (routing.subjectClass === 'fictional' || routing.subjectClass === 'generic') return { sourced: false }
+  // Prefer real pixels of the exact historical state when they exist. Deriving every state from a museum
+  // photograph needlessly asks a generator to preserve identity through the very change being documented;
+  // Goldsboro proved that it can repeatedly turn an exact Mark 39 into generic ordnance even while Commons
+  // holds public-domain USAF photographs of both recovered weapon states.
+  if (state) {
+    const stateQuery = `${routing.query} ${renderEntity.description}`.trim()
+    const { media: exactState, costCents: exactStateCost } = await fetchVerifiedMedia(
+      renderEntity,
+      routing,
+      'conditioning_reference',
+      stateQuery,
+    )
+    bill(exactStateCost)
+    if (exactState) {
+      const stateSourceKey = `reels/${reelId}/refs/${slug(identityEntity.id)}--${slug(state.id)}-source.webp`
+      await uploadBuffer(stateSourceKey, exactState.buffer, exactState.mime)
+      return {
+        sourced: true,
+        key: stateSourceKey,
+        origin: {
+          ...exactState.origin,
+          sourceAssetKey: stateSourceKey,
+          conditioningAssetKey: stateSourceKey,
+        },
+      }
+    }
+  }
   // Verify the source against the PARENT identity. A state description can intentionally differ from the
   // surviving photograph (unsigned vs signed, intact vs damaged); verifying against that state would reject
   // the correct subject before the state-adaptation step gets a chance to do its job.

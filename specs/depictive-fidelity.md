@@ -244,6 +244,15 @@ or imperfect Bible can be reclassified without borrowing an unrelated nearby pro
 an exact query, source and state verification use that exact identity rather than weakening the check back to
 the analyzer's generic id.
 
+For a time-bound identity state, sourcing tries the exact state before generating a derivative. A verified,
+rights-eligible photograph of the documented state is a stronger conditioning anchor than a museum image
+adapted into that state, and avoids paying a generator to reconstruct evidence that already exists. Only when
+exact-state sourcing fails does the existing source-identity → state-adaptation path run. The exact-state source
+remains conditioning media unless the director explicitly chose source presentation; it carries the same
+provenance and never masquerades as a generated frame. Source verification therefore requires the exact
+identity and durable visible state, but does not reject a conditioning photograph merely because its camera,
+background, placement, or transient action differs from the eventual staged shot.
+
 The failure also exposed a retry trap. Truth-QA persisted the rejected asset (so the operator could inspect it),
 but `generate_images` then ran the shared last-mile gate before regeneration and treated the saved failure as
 terminal. Every product Retry failed for free against the same pixels. A linked `truthQaRequired:true` asset
