@@ -9,7 +9,7 @@
 
 import { z } from 'zod'
 
-export const IMAGE_QA_V1_VERSION = 'image-qa.v1.7'
+export const IMAGE_QA_V1_VERSION = 'image-qa.v1.8'
 
 export const ImageQASchema = z.object({
   pass: z.boolean(), // does the image faithfully match the description's checkable intent?
@@ -29,7 +29,12 @@ export interface ImageQATruthContext {
   narrationText: string
 }
 
-export function buildImageQAPrompt(visualPrompt: string, expectedAppearance?: string, truth?: ImageQATruthContext): { system: string; userMessage: string } {
+export function buildImageQAPrompt(
+  visualPrompt: string,
+  expectedAppearance?: string,
+  truth?: ImageQATruthContext,
+  verifiedReferenceLabels: string[] = [],
+): { system: string; userMessage: string } {
   const system = `You are a strict art-director QA reviewing a single AI-generated film still against the brief it was generated from. Return TWO independent judgments:
 1. pass/issues — whether the frame communicates the brief's key checkable intent. This is craft feedback.
 2. truthPass/truthIssues — whether the frame preserves factual identity, state, and depiction honesty. This is the only blocking verdict.
@@ -38,6 +43,7 @@ Judge only clear mismatches, never taste, grade, or a merely different artistic 
   const userMessage = `BRIEF (what this shot is supposed to be):
 """${visualPrompt}"""
 ${expectedAppearance ? `\nEXPECTED VERIFIED ENTITY STATE (render ground truth — applies to people, objects, places, and other sourced identities):\n"""${expectedAppearance}"""\n` : ''}
+${verifiedReferenceLabels.length > 0 ? `\nVERIFIED IDENTITY REFERENCES supplied after the generated frame:\n${verifiedReferenceLabels.map((label, index) => `REFERENCE ${index + 1}: ${label}`).join('\n')}\nCompare identity-defining geometry and visible features against these pixels. Use only the supplied brief, expected state, narration span, and reference images—never remembered or assumed facts about the subject. An alleged mismatch is invalid unless it is visible in a supplied reference or explicitly stated in the supplied text.\n` : ''}
 ${truth?.required ? `\nFACTUAL DEPICTION CONTRACT (blocking):\nbasis: ${truth.depictionBasis}\nnarration span: """${truth.narrationText}"""\n` : ''}
 
 Look at the image and decide whether it faithfully delivers the brief's KEY, checkable elements:
@@ -60,6 +66,7 @@ ${truth?.required ? `Also return a separate blocking truth verdict. Judge the PI
 - FAIL obvious wrong-time or wrong-state details, and any visible identity/state contradiction against EXPECTED VERIFIED ENTITY STATE. This includes a sourced object's defining geometry, orientation, configuration, or mark — never demote those to ordinary issues.
 - Judge only what the pixels can actually establish. Do NOT require an internal, hidden, microscopic, or otherwise non-visible mechanism/state to be exposed merely because the narration names it. Missing visible proof of an inherently hidden state is not a contradiction; fail only a visible contradiction, the wrong identity, or the absence of a feature the brief explicitly says must be visible. The shot may honestly show an observable result while the narration explains its unseen cause.
 - ABSENCE OF VISIBLE PROOF IS NEVER AN IDENTITY MISMATCH. Do not invent expected exterior evidence — holes, markings, pins, switches, arming/fuzing hardware, or indicators — unless EXPECTED VERIFIED ENTITY STATE explicitly says that evidence is visible. Judge identity from the exact subject's established visible form and reference-grounded features; keep an unseen condition in narration only.
+- SOURCE-BOUNDED JUDGMENT: never use outside memory to invent a required color, material, marking, component, deployment rig, mechanism, or historical detail. A difference can block only when the supplied text requires it or the generated frame visibly contradicts a supplied verified reference. If no supplied evidence establishes the alleged detail, omit it from both issue lists.
 - A conceptual frame may communicate the intended idea through a different composition or visual device. Put a clear communication miss in issues/pass; do NOT put it in truthIssues unless it also changes verified identity/state, invents a factual claim, or makes interpretation look like documentation.
 - Do not fail merely because a generated image is illustrative or because it lacks labels. Name only concrete visual truth problems in truthIssues.
 Set truthPass:false on any such problem; otherwise truthPass:true. The two verdicts are independent: pass:false with truthPass:true is valid for a craft/communication miss.` : 'This is not a factual truth-gated scene; set truthPass:true and truthIssues:[].'}

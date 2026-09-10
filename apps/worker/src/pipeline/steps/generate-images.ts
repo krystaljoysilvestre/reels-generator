@@ -1170,6 +1170,14 @@ export async function generateImages(reelId: string): Promise<void> {
         }
 
         const qa = isQATarget(scene)
+        const qaReferences = qa && truthQaRequired
+          ? await Promise.all(sceneEnts
+              .filter((entity) => entity.referenceOrigin?.type === 'sourced' && entity.referenceImageKey && referenceImageKeys.includes(entity.referenceImageKey))
+              .map(async (entity) => ({
+                label: `${entity.id}: ${entityRenderDescription(entity)}`,
+                buffer: await downloadBuffer(entity.referenceImageKey!),
+              })))
+          : []
         let chosen: Awaited<ReturnType<typeof generateImageWithRetry>> | undefined
         let extraNeg = '' // targeted negatives added across re-rolls to push the model off the flagged failure
         let lastIssues: string[] = [] // QA verdict of the kept image ([] = passed / not QA'd)
@@ -1211,7 +1219,7 @@ export async function generateImages(reelId: string): Promise<void> {
             required: truthQaRequired,
             depictionBasis: scene.depictionBasis as DepictionBasis,
             narrationText: scene.narrationText,
-          })
+          }, qaReferences)
           cost.add(costCents)
           lastIssues = verdict.issues
           lastTruthPass = verdict.truthPass
@@ -1305,8 +1313,23 @@ export async function generateImages(reelId: string): Promise<void> {
 // Vision QA: does the render match the brief's checkable intent? Takes the image BYTES (the caller
 // downloads once and reuses the buffer for best-attempt tracking). Sniffs the real media type so it works
 // regardless of fal's output format. Cheap (Haiku); only called on QA-target scenes.
-async function imageQA(buf: Buffer, visualPrompt: string, expectedAppearance?: string, truth?: { required: boolean; depictionBasis: DepictionBasis; narrationText: string }): Promise<{ verdict: z.infer<typeof ImageQASchema>; costCents: number }> {
-  const { system, userMessage } = buildImageQAPrompt(visualPrompt, expectedAppearance, truth)
+async function imageQA(
+  buf: Buffer,
+  visualPrompt: string,
+  expectedAppearance?: string,
+  truth?: { required: boolean; depictionBasis: DepictionBasis; narrationText: string },
+  references: Array<{ label: string; buffer: Buffer }> = [],
+): Promise<{ verdict: z.infer<typeof ImageQASchema>; costCents: number }> {
+  const { system, userMessage } = buildImageQAPrompt(
+    visualPrompt,
+    expectedAppearance,
+    truth,
+    references.map((reference) => reference.label),
+  )
+  const referenceContent = references.flatMap((reference, index) => [
+    { type: 'text' as const, text: `REFERENCE ${index + 1} — verified identity anchor:` },
+    { type: 'image' as const, mediaType: sniffImageMediaType(reference.buffer), base64: reference.buffer.toString('base64') },
+  ])
   const r = await llmCall({
     templateVersion: IMAGE_QA_V1_VERSION,
     schema: ImageQASchema,
@@ -1317,7 +1340,9 @@ async function imageQA(buf: Buffer, visualPrompt: string, expectedAppearance?: s
       {
         role: 'user',
         content: [
+          { type: 'text', text: 'GENERATED FRAME TO JUDGE:' },
           { type: 'image', mediaType: sniffImageMediaType(buf), base64: buf.toString('base64') },
+          ...referenceContent,
           { type: 'text', text: userMessage },
         ],
       },

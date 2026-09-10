@@ -57,6 +57,20 @@ describe('buildImageQAPrompt — time-bound appearance', () => {
     expect(prompt.userMessage).toContain('observable result')
   })
 
+  it('bounds identity judgment to supplied verified reference pixels', () => {
+    const prompt = buildImageQAPrompt(
+      'a weapon descends beneath a parachute',
+      'Mark 39 nuclear bomb: descending beneath a deployed parachute',
+      { required: true, depictionBasis: 'reconstruction', narrationText: 'One weapon deployed its parachute.' },
+      ['Mark 39 nuclear bomb: verified conditioning photograph'],
+    )
+
+    expect(prompt.userMessage).toContain('REFERENCE 1: Mark 39 nuclear bomb')
+    expect(prompt.userMessage).toContain('never remembered or assumed facts')
+    expect(prompt.userMessage).toContain('SOURCE-BOUNDED JUDGMENT')
+    expect(prompt.userMessage).toContain('never use outside memory to invent a required color')
+  })
+
   it('blocks only the independent truth verdict', () => {
     expect(isBlockingImageTruthFailure(true, { truthPass: false })).toBe(true)
     expect(isBlockingImageTruthFailure(true, { truthPass: true })).toBe(false)

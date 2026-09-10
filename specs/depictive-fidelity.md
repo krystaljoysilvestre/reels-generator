@@ -278,6 +278,12 @@ A source-verification contract version change invalidates previously persisted s
 Keeping a plate accepted under the older contract would make the new verifier impossible to exercise and
 would regenerate every scene from the same known-bad pixels.
 
+Truth QA for a generated factual frame receives the same verified sourced identity reference used by the
+renderer. It compares visible identity geometry against those pixels and is forbidden to supply missing
+requirements from model memory. A canopy color, external mechanism, marking, or deployment detail can block
+only when the brief/state says it or a supplied reference visibly establishes it; unsupported historical
+"knowledge" is not evidence.
+
 The exact narration-supported identity is load-bearing twice: routing uses the factual-reasoning model, and
 the resolved query is spliced into every reference and scene prompt ahead of older analyzer shorthand. The
 conditioning pixels and the words therefore agree on the same subject; neither can pull an edit back toward
