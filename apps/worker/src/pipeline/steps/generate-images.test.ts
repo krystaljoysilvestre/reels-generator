@@ -74,6 +74,8 @@ describe('sourceQueryCandidates', () => {
   it('locks unchanged source geometry and required state details during adaptation', () => {
     const prompt = buildStateAdaptationPrompt('documentary reference plate', "turned on its back, marked 'R. Mutt 1917'")
     expect(prompt).toContain('Preserve the source subject\'s identity-defining geometry')
+    expect(prompt).toContain('Produce a close, isolated identity reference')
+    expect(prompt).toContain('attach it to the preserved source subject')
     expect(prompt).toContain("marked 'R. Mutt 1917'")
     expect(prompt).toContain('TARGET STATE IS AUTHORITATIVE')
     expect(prompt).toContain('must not carry over')
@@ -172,7 +174,7 @@ describe('applyDepictionRouting', () => {
       }],
     }
 
-    applyDepictionRouting(entity, { ...entity.depiction, classifierVersion: 'entity-source.v1.17' })
+    applyDepictionRouting(entity, { ...entity.depiction, classifierVersion: 'entity-source.v1.18' })
 
     expect(entity.appearances[0]!.referenceImageKey).toBeUndefined()
     expect(entity.appearances[0]!.referenceOrigin).toBeUndefined()

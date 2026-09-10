@@ -246,7 +246,7 @@ export function verifiedSourceQueryCandidates(
 }
 
 export function buildStateAdaptationPrompt(basePrompt: string, stateDescription: string): string {
-  return `${basePrompt}\n\nIDENTITY-STATE LOCK: Preserve the source subject's identity-defining geometry, proportions, openings, rim/edge shape, components, and markings wherever the target state does not explicitly change them. TARGET STATE IS AUTHORITATIVE: render exactly its specified orientation, surface markings, labels, damage, destruction, deformation, and restoration. A source-state detail that is absent from or contradicts this target belongs to another moment and must not carry over. If the target explicitly requires breakup, fragmentation, collapse, dismantling, crushing, burning, or another form-changing state, do not keep the subject intact merely to preserve identity; apply that change plausibly while retaining recognizable subject/model-specific features in the surviving form. The finished reference MUST visibly satisfy this exact state: ${stateDescription}.`
+  return `${basePrompt}\n\nREFERENCE-PLATE TASK: Produce a close, isolated identity reference of the SAME source subject, not a wide cinematic scene. Keep the complete subject large enough for its distinctive silhouette, proportions, panels, openings, fins, hardware, and markings to remain legible. Never replace or simplify it into a generic member of its category. IDENTITY-STATE LOCK: Preserve the source subject's identity-defining geometry, proportions, openings, rim/edge shape, components, and markings wherever the target state does not explicitly change them. TARGET STATE IS AUTHORITATIVE: render exactly its specified orientation, surface markings, labels, damage, destruction, deformation, restoration, and visible temporary apparatus. When the target adds a temporary external apparatus, attach it to the preserved source subject; do not redraw the subject around a generic substitute. A source-state detail that is absent from or contradicts this target belongs to another moment and must not carry over. If the target explicitly requires breakup, fragmentation, collapse, dismantling, crushing, burning, or another form-changing state, do not keep the subject intact merely to preserve identity; apply that change plausibly while retaining recognizable subject/model-specific features in the surviving form. The finished reference MUST visibly satisfy this exact state: ${stateDescription}.`
 }
 
 // Invariant-2 text helpers (personNameVariants / mentionsAny / scrubNames / SAFE_REPRESENTATIVE_STAGING)
@@ -268,6 +268,30 @@ interface SourcedMedia {
   mime: 'image/jpeg' | 'image/png' | 'image/webp'
   origin: MediaOrigin
   appearsGrayscale: boolean
+}
+
+async function verifyIdentityStateCandidate(
+  source: Pick<SourcedMedia, 'buffer' | 'mime'>,
+  candidate: Buffer,
+  name: string,
+  targetState: string,
+): Promise<{ verdict: z.infer<typeof IdentityStateVerifySchema>; costCents: number }> {
+  const verifyPrompt = buildIdentityStateVerifyPrompt(name, targetState)
+  const verify = await llmCall({
+    templateVersion: ENTITY_SOURCE_V1_VERSION,
+    schema: IdentityStateVerifySchema,
+    provider: 'anthropic',
+    model: DEPICTION_MODEL,
+    system: verifyPrompt.system,
+    messages: [{ role: 'user', content: [
+      { type: 'text', text: 'IMAGE 1 — verified source identity:' },
+      { type: 'image', mediaType: source.mime, base64: source.buffer.toString('base64') },
+      { type: 'text', text: 'IMAGE 2 — target-state candidate:' },
+      { type: 'image', mediaType: sniffImageMediaType(candidate), base64: candidate.toString('base64') },
+      { type: 'text', text: verifyPrompt.userMessage },
+    ] }],
+  })
+  return { verdict: IdentityStateVerifySchema.parse(verify.data), costCents: verify.costCents }
 }
 
 /**
@@ -387,16 +411,35 @@ async function sourceEntityPlate(
     )
     bill(exactStateCost)
     if (exactState) {
-      const stateSourceKey = `reels/${reelId}/refs/${slug(identityEntity.id)}--${slug(state.id)}-source.webp`
-      await uploadBuffer(stateSourceKey, exactState.buffer, exactState.mime)
-      return {
-        sourced: true,
-        key: stateSourceKey,
-        origin: {
-          ...exactState.origin,
-          sourceAssetKey: stateSourceKey,
-          conditioningAssetKey: stateSourceKey,
-        },
+      // Identity verification deliberately ignores final-shot action and temporary apparatus. That makes it
+      // the right gate for a base conditioning anchor, but not proof that these pixels already depict the
+      // requested appearance. Run the separate state gate before bypassing adaptation; otherwise a clear
+      // museum photo can be persisted under a "parachute deployed" key and leave the scene render to invent
+      // the entire state in one identity-destroying jump.
+      const stateVerify = await verifyIdentityStateCandidate(
+        exactState,
+        exactState.buffer,
+        routing.query || entityName(identityEntity.id),
+        renderEntity.description,
+      )
+      bill(stateVerify.costCents)
+      const exactStatePass = stateVerify.verdict.identityPreserved
+        && stateVerify.verdict.candidateMatchesTargetExactly
+        && stateVerify.verdict.confidence >= ENTITY_VERIFY_MIN_CONFIDENCE
+      if (!exactStatePass) {
+        console.warn(`[generate-images] exact-state source "${renderEntity.id}:${state.id}" rejected by state verify (identity=${stateVerify.verdict.identityPreserved}, target=${stateVerify.verdict.candidateMatchesTargetExactly}, confidence=${stateVerify.verdict.confidence}; ${stateVerify.verdict.note})`)
+      } else {
+        const stateSourceKey = `reels/${reelId}/refs/${slug(identityEntity.id)}--${slug(state.id)}-source.webp`
+        await uploadBuffer(stateSourceKey, exactState.buffer, exactState.mime)
+        return {
+          sourced: true,
+          key: stateSourceKey,
+          origin: {
+            ...exactState.origin,
+            sourceAssetKey: stateSourceKey,
+            conditioningAssetKey: stateSourceKey,
+          },
+        }
       }
     }
   }
@@ -432,24 +475,15 @@ async function sourceEntityPlate(
       }, bill)
       bill(res.costCents)
       const rendered = await downloadBuffer(res.asset.storageKey)
-      const verifyPrompt = buildIdentityStateVerifyPrompt(routing.query || entityName(identityEntity.id), renderEntity.description)
-      const verify = await llmCall({
-        templateVersion: ENTITY_SOURCE_V1_VERSION,
-        schema: IdentityStateVerifySchema,
-        provider: 'anthropic',
-        model: DEPICTION_MODEL,
-        system: verifyPrompt.system,
-        messages: [{ role: 'user', content: [
-          { type: 'text', text: 'IMAGE 1 — verified source identity:' },
-          { type: 'image', mediaType: media.mime, base64: media.buffer.toString('base64') },
-          { type: 'text', text: 'IMAGE 2 — generated state-adapted candidate:' },
-          { type: 'image', mediaType: sniffImageMediaType(rendered), base64: rendered.toString('base64') },
-          { type: 'text', text: verifyPrompt.userMessage },
-        ] }],
-      })
+      const verify = await verifyIdentityStateCandidate(
+        media,
+        rendered,
+        routing.query || entityName(identityEntity.id),
+        renderEntity.description,
+      )
       bill(verify.costCents)
-      if (!verify.data.identityPreserved || !verify.data.candidateMatchesTargetExactly || verify.data.confidence < ENTITY_VERIFY_MIN_CONFIDENCE) {
-        console.warn(`[generate-images] adapted state "${renderEntity.id}:${state.id}" rejected by verify on attempt ${attempt + 1} (identity=${verify.data.identityPreserved}, target=${verify.data.candidateMatchesTargetExactly}, confidence=${verify.data.confidence}; ${verify.data.note})`)
+      if (!verify.verdict.identityPreserved || !verify.verdict.candidateMatchesTargetExactly || verify.verdict.confidence < ENTITY_VERIFY_MIN_CONFIDENCE) {
+        console.warn(`[generate-images] adapted state "${renderEntity.id}:${state.id}" rejected by verify on attempt ${attempt + 1} (identity=${verify.verdict.identityPreserved}, target=${verify.verdict.candidateMatchesTargetExactly}, confidence=${verify.verdict.confidence}; ${verify.verdict.note})`)
         continue
       }
       return {

@@ -14,7 +14,7 @@
 import { z } from 'zod'
 import { SubjectClassSchema } from '../types/depiction.js'
 
-export const ENTITY_SOURCE_V1_VERSION = 'entity-source.v1.17'
+export const ENTITY_SOURCE_V1_VERSION = 'entity-source.v1.18'
 
 // (1) DECIDE — what class of real-world thing is this, and is it specific enough that a real photograph
 // would improve the render? The impact≠coverage guard is the whole point: a GENERIC subject (a bedroom, a
@@ -160,6 +160,8 @@ IMAGE 1 is the verified source identity. IMAGE 2 is a generated candidate showin
 
 1. identityPreserved: IMAGE 2 preserves IMAGE 1's identity-defining physical structure wherever the TARGET does not explicitly change it — geometry, proportions, openings, rim/edge shape, component arrangement, markings, and other distinctive form. Fail a visibly different model, object, building, animal, or person.
 2. candidateMatchesTargetExactly: IMAGE 2 visibly satisfies the target orientation, markings, labels, damage, restoration, age, or other state details below.
+
+Judge only target details that pixels can establish. A hidden, internal, microscopic, or otherwise non-visible mechanism/state does not need visible proof unless the target explicitly requires it exposed on screen. Visible external apparatus or action named by the target does need to be present.
 
 The target state is authoritative. Evaluate the TARGET against IMAGE 2 only, never against IMAGE 1. Evaluate identity from physical features the target leaves unchanged, ignoring every source-state attribute that the target changes. When the target says "unmarked," removing IMAGE 1's signature is REQUIRED target compliance and MUST NOT make either boolean false when the remaining identity holds. Provenance was already established from IMAGE 1; never ask IMAGE 2 to prove it independently.
 
