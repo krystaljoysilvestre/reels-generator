@@ -43,6 +43,18 @@ describe('buildImageQAPrompt — time-bound appearance', () => {
     expect(prompt.userMessage).toContain('do NOT put it in truthIssues')
   })
 
+  it('does not demand visible proof of an inherently hidden state', () => {
+    const prompt = buildImageQAPrompt(
+      'a weapon descends beneath a parachute',
+      'the same weapon with its internal safing state changed',
+      { required: true, depictionBasis: 'reconstruction', narrationText: 'Its safing pins had been removed.' },
+    )
+
+    expect(prompt.userMessage).toContain('internal, hidden, microscopic')
+    expect(prompt.userMessage).toContain('Missing visible proof of an inherently hidden state is not a contradiction')
+    expect(prompt.userMessage).toContain('observable result')
+  })
+
   it('blocks only the independent truth verdict', () => {
     expect(isBlockingImageTruthFailure(true, { truthPass: false })).toBe(true)
     expect(isBlockingImageTruthFailure(true, { truthPass: true })).toBe(false)

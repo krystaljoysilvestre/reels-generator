@@ -1,4 +1,4 @@
-import { eq, and } from 'drizzle-orm'
+import { eq, and, inArray } from 'drizzle-orm'
 import { getDb, reels, scenes, assets, channels, stories, assertVisualTruthReady } from '@reels/db'
 import { generateImage, generateImageFal, imageEngineForGenre, FLUX_IMAGE_ENGINE, buildInputHash, ContentFilterError, llmCall, downloadBuffer, uploadBuffer, sourceEntityImage, spendFromError, sniffImageMediaType, SCENE_IMAGE_MODEL, SCENE_IMAGE_QUALITY, type ImageEngine } from '@reels/providers'
 import { archivalShotTarget, presentedSourceTarget, identityWithheldEntities, MODES_WITHOUT_PLATES, normalizeCanon, WorldBibleSchema, EntityPlateStoreSchema, entityDescriptionHash, assembleImagePrompt, assembleNegativePrompt, assembleReferencePrompt, castNationality, historicalEraDirective, reelLightingDirective, sceneEntities, slug, channelPlatformPreset, StoryBibleSchema, AppearanceBindingsSchema, appearanceIdForEntity, entityAtAppearance, resolveEntities, EBN_RENDERING_PROFILE, effectiveGenre, resolveChannelPolicy, requiresEvidence, canUseArchivalHumanShot, splitSceneDepiction, conditionableReferenceKeys, missingRequiredIdentityReferences, personNameVariants, mentionsAny, scrubNames, SAFE_REPRESENTATIVE_STAGING, visualTruthContractErrors, depictionRoutingIsCurrent, type BibleEntity, type CharacterAppearance, type DepictionRouting, type MediaOrigin, type DepictionBasis, type SourcePolicy } from '@reels/core'
@@ -49,6 +49,12 @@ export function applyDepictionRouting(entity: BibleEntity, routing: DepictionRou
       delete appearance.referenceOrigin
     }
   }
+}
+
+/** A persisted truth-QA failure is a regeneration request, not a permanent cache hit. */
+export function imageTruthNeedsRetry(meta: unknown): boolean {
+  const value = (meta ?? {}) as Record<string, unknown>
+  return value['truthQaRequired'] === true && value['truthQaPass'] !== true
 }
 
 // Factual truth is a property of the reel's frozen Source Policy, not its creative genre. Keep the legacy
@@ -192,7 +198,9 @@ async function fetchVerifiedMedia(
     const isHuman = subjectClass === 'human'
 
     // A human's photo must come from the identity-anchored path only; a name-string match has no anchor.
-    const name = entityName(entity.id)
+    // A generic analyzer id can be rescued by exact bound narration evidence. Once routing has resolved an
+    // exact query, verify against that identity rather than weakening the check back to the shorthand id.
+    const name = routing.query || entityName(entity.id)
     const seenSources = new Set<string>()
     for (const sourceQuery of sourceQueryCandidates(entity, routing)) {
       // Article lead first preserves the strongest non-human identity anchor. If vision rejects that exact
@@ -300,7 +308,7 @@ async function sourceEntityPlate(
       }, bill)
       bill(res.costCents)
       const rendered = await downloadBuffer(res.asset.storageKey)
-      const verifyPrompt = buildIdentityStateVerifyPrompt(entityName(identityEntity.id), renderEntity.description)
+      const verifyPrompt = buildIdentityStateVerifyPrompt(routing.query || entityName(identityEntity.id), renderEntity.description)
       const verify = await llmCall({
         templateVersion: ENTITY_SOURCE_V1_VERSION,
         schema: IdentityStateVerifySchema,
@@ -373,6 +381,17 @@ export async function generateImages(reelId: string): Promise<void> {
   ])
   if (!channel) throw new Error(`Channel not found: ${reel.channelId}`)
 
+  const linkedImageIds = reelScenes.flatMap((scene) => scene.imageAssetId ? [scene.imageAssetId] : [])
+  const linkedImageAssets = linkedImageIds.length > 0
+    ? await db.query.assets.findMany({
+        where: inArray(assets.id, linkedImageIds),
+        columns: { id: true, meta: true },
+      })
+    : []
+  const imageMetaById = new Map(linkedImageAssets.map((asset) => [asset.id, asset.meta]))
+  const sceneNeedsImage = (scene: (typeof reelScenes)[number]) =>
+    !scene.imageAssetId || !imageMetaById.has(scene.imageAssetId) || imageTruthNeedsRetry(imageMetaById.get(scene.imageAssetId))
+
   // Story Bible (from analyze_story). null = not analyzed → assembleImagePrompt falls back to the plain
   // style+content form (pre-bible behavior). When present, each scene's entity refs expand to the bible's
   // frozen canonical descriptions, spliced identically across scenes (see specs/story-bible.md).
@@ -396,9 +415,8 @@ export async function generateImages(reelId: string): Promise<void> {
     policy,
     resolveMediaGenre({ storyMode: channel.storyMode, genreCategory: genre, niche: channel.nicheDescription }),
   )
-  // A linked failed verdict is terminal until the scene is deliberately regenerated. This check runs
-  // before reference sourcing or any image spend, so worker retries surface the same blocker for free.
-  await assertVisualTruthReady(reelId)
+  // A linked failed verdict makes only that scene pending again. Render and publishing still fail closed;
+  // generate_images is the recovery path and must be allowed to replace its own rejected output.
   const lighting = storyBible ? reelLightingDirective(genre, storyBible.continuity.timeline) : undefined
 
   // Image model is chosen per genre (currently gpt-image-1 for all — owner preference). Used for both
@@ -451,7 +469,7 @@ export async function generateImages(reelId: string): Promise<void> {
       // A plate is an input to image generation, so mint it only for a scene that actually needs an image
       // now. This matters after a Bible re-analysis: already-rendered scenes keep their pixels and must not
       // trigger a full cast re-plate when only one time-bound appearance is being repaired.
-      if (!s.visualPrompt || s.imageAssetId) continue
+      if (!s.visualPrompt || !sceneNeedsImage(s)) continue
       const appearanceByEntity = AppearanceBindingsSchema.parse(s.appearanceBindings ?? {})
       const { resolved } = resolveEntities(storyBible, {
         primaryEntity: s.primaryEntity,
@@ -468,6 +486,16 @@ export async function generateImages(reelId: string): Promise<void> {
     }
     const plateTargets = [...targetMap.values()]
     const referenced = new Set(plateTargets.map((target) => slug(target.parent.id)))
+    const routingEvidence = new Map<string, string[]>()
+    for (const scene of reelScenes) {
+      for (const ref of [scene.primaryEntity, ...(scene.supportingEntities ?? [])]) {
+        if (!ref || !referenced.has(slug(ref))) continue
+        const key = slug(ref)
+        const spans = routingEvidence.get(key) ?? []
+        if (scene.narrationText.trim()) spans.push(scene.narrationText.trim())
+        routingEvidence.set(key, spans)
+      }
+    }
     const refNeg = assembleNegativePrompt({ genreCategory: genre })
     // ── Channel-level plate reuse (W2) ──────────────────────────────────────────────────────────
     // A RECURRING entity is minted once per channel and reused forever; a one-off story character is
@@ -506,7 +534,7 @@ export async function generateImages(reelId: string): Promise<void> {
       const routeHash = buildInputHash('depiction_routing.v1', {
         reelId,
         templateVersion: ENTITY_SOURCE_V1_VERSION,
-        entities: needsRouting.map((e) => `${slug(e.id)}|${e.kind}|${e.description}`).sort().join('\n'),
+        entities: needsRouting.map((e) => `${slug(e.id)}|${e.kind}|${e.description}|${(routingEvidence.get(slug(e.id)) ?? []).join(' ')}`).sort().join('\n'),
         policy: `${policy.realPlaces}|${policy.realPeople}`,
       })
       await runStep(
@@ -515,7 +543,8 @@ export async function generateImages(reelId: string): Promise<void> {
           let routeCost = 0
           await Promise.all(
             needsRouting.map(async (entity) => {
-              const { routing, costCents } = await routeDepiction(entity, policy, region)
+              const evidence = [...new Set(routingEvidence.get(slug(entity.id)) ?? [])].join('\n')
+              const { routing, costCents } = await routeDepiction(entity, policy, region, evidence)
               if (costCents > 0) { routeCost += costCents; cost.add(costCents) }
               applyDepictionRouting(entity, routing)
             }),
@@ -657,7 +686,7 @@ export async function generateImages(reelId: string): Promise<void> {
     }
   }
 
-  const pending = reelScenes.filter((s) => s.visualPrompt && !s.imageAssetId) // skip already-generated (idempotency)
+  const pending = reelScenes.filter((s) => s.visualPrompt && sceneNeedsImage(s)) // retry only missing/rejected images
 
   const contractErrors = pending.flatMap((scene) => visualTruthContractErrors({
     depictionBasis: scene.depictionBasis as DepictionBasis,
@@ -870,6 +899,7 @@ export async function generateImages(reelId: string): Promise<void> {
       referenceImageKeys, // re-render when a scene's references change (gained/lost a plate)
       sourcePresentation: sourcePresentationTarget?.referenceOrigin?.sourceAssetKey ?? '',
       engine: `${sceneEngine.imageModel}|${sceneEngine.editModel}`, // switching engine (incl. scare→Flux) busts the cache
+      imageQaVersion: IMAGE_QA_V1_VERSION, // a truth-QA contract repair must be able to regenerate rejected pixels
       // The archival subjects are inputs even though they never reach the prompt: they decide whether this
       // scene is fulfilled by a real photograph and whether the prose is scrubbed.
       archival: withheld.map((e) => slug(e.id)).sort().join(','),
@@ -1140,6 +1170,7 @@ export async function generateImages(reelId: string): Promise<void> {
   if (blockingTruthFailures.length > 0) {
     throw new Error(`[visual-truth-image-qa] ${blockingTruthFailures.join(' | ')}`)
   }
+  await assertVisualTruthReady(reelId)
 }
 
 // Vision QA: does the render match the brief's checkable intent? Takes the image BYTES (the caller

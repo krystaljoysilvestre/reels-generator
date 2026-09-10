@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { SourcePolicySchema } from '@reels/core'
-import { applyDepictionRouting, buildStateAdaptationPrompt, requiresVisualTruthQa, sourceQueryCandidates } from './generate-images.js'
+import { applyDepictionRouting, buildStateAdaptationPrompt, imageTruthNeedsRetry, requiresVisualTruthQa, sourceQueryCandidates } from './generate-images.js'
 
 describe('requiresVisualTruthQa', () => {
   it('enrolls evidence-required reels independently of creative genre', () => {
@@ -16,6 +16,16 @@ describe('requiresVisualTruthQa', () => {
 
     expect(requiresVisualTruthQa(fictional, 'informational')).toBe(true)
     expect(requiresVisualTruthQa(fictional, 'horror')).toBe(false)
+  })
+})
+
+describe('imageTruthNeedsRetry', () => {
+  it('reopens only images explicitly enrolled in truth QA that did not pass', () => {
+    expect(imageTruthNeedsRetry({ truthQaRequired: true, truthQaPass: false })).toBe(true)
+    expect(imageTruthNeedsRetry({ truthQaRequired: true })).toBe(true)
+    expect(imageTruthNeedsRetry({ truthQaRequired: true, truthQaPass: true })).toBe(false)
+    expect(imageTruthNeedsRetry({ qaPass: false })).toBe(false)
+    expect(imageTruthNeedsRetry(null)).toBe(false)
   })
 })
 

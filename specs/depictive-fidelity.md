@@ -228,6 +228,34 @@ preserve intact component arrangement while QA is told to accept a breakup. The 
 includes the prompt contract version. A deployed contract repair must therefore invalidate a cached failed
 derived plate and let product Retry recover the same reel without direct data edits or duplicate billing.
 
+### Exact identity may arrive after the generic noun, and rejected pixels are retryable (2026-09-10)
+
+The same Phase 0 reel cleared the B-52 blocker and exposed the next boundary. Its narration first called two
+objects “thermonuclear weapons” and named the second one as a Mark 39 later. The analyzer froze the early
+generic noun as `thermonuclear-weapon`; routing correctly treated that shorthand as generic, minted an invented
+plate, and image QA then correctly rejected scenes 3 and 5 for looking like generic payload/industrial parts
+rather than the named Mark 39. Exact identity had been present in the narration all along but was lost between
+extraction and sourcing.
+
+The identity rule reads the whole narration: when a later model/designation/title clearly identifies the same
+physical subject introduced generically earlier, the one Story Bible entity preserves that exact identity.
+Depiction routing also receives only the narration spans bound to that entity as recovery evidence, so an old
+or imperfect Bible can be reclassified without borrowing an unrelated nearby proper name. Once routing resolves
+an exact query, source and state verification use that exact identity rather than weakening the check back to
+the analyzer's generic id.
+
+The failure also exposed a retry trap. Truth-QA persisted the rejected asset (so the operator could inspect it),
+but `generate_images` then ran the shared last-mile gate before regeneration and treated the saved failure as
+terminal. Every product Retry failed for free against the same pixels. A linked `truthQaRequired:true` asset
+whose `truthQaPass` is not true now means **this scene is pending again**. Only rejected/missing scenes reopen;
+passing scenes remain cached. The image-step hash includes the QA contract version, so a verifier repair can
+replace rejected pixels, while render and publishing continue to fail closed until every linked asset passes.
+
+Pixel QA must also distinguish contradiction from invisibility. It may reject the wrong object, wrong visible
+state, or missing feature the brief explicitly requires on screen. It must not demand that an internal,
+microscopic, hidden, or otherwise non-visible mechanism be exposed merely because narration explains it; an
+honest shot may show the observable result while the voiceover carries its unseen cause.
+
 #### Present the source when the source is the claim
 
 A verified source has two different legitimate uses, and the scene plan must choose between them:

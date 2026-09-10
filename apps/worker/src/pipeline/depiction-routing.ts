@@ -26,6 +26,7 @@ export async function routeDepiction(
   entity: { id: string; kind: 'character' | 'location' | 'object'; description: string },
   policy: SourcePolicy,
   region: string | undefined,
+  narrationEvidence?: string,
 ): Promise<{ routing: DepictionRouting; costCents: number }> {
   const generated = (
     eligibilityReason: DepictionRouting['eligibilityReason'],
@@ -42,7 +43,7 @@ export async function routeDepiction(
     if (!allowsRealWorldEntityPlates(policy)) return { routing: generated('not_permitted'), costCents }
 
     const name = entityName(entity.id)
-    const prompt = buildEntitySourceDecidePrompt(entity.kind, name, entity.description, region)
+    const prompt = buildEntitySourceDecidePrompt(entity.kind, name, entity.description, region, narrationEvidence)
     const decide = await llmCall({
       templateVersion: ENTITY_SOURCE_V1_VERSION,
       schema: EntitySourceDecisionSchema,

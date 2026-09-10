@@ -36,6 +36,22 @@ describe('entity source decision', () => {
     expect(prompt.system).toContain('separately named physical subject')
   })
 
+  it('lets exact bound narration rescue an analyzer shorthand name', () => {
+    const prompt = buildEntitySourceDecidePrompt(
+      'object',
+      'Thermonuclear Weapon',
+      'two compact cylindrical weapons',
+      'United States',
+      'The second Mark 39 struck the ground and broke apart.',
+    )
+
+    expect(prompt.system).toContain('analyzer shorthand')
+    expect(prompt.system).toContain('model/designation')
+    expect(prompt.system).toContain('exact narration-supported identity wins')
+    expect(prompt.userMessage).toContain('BOUND NARRATION EVIDENCE')
+    expect(prompt.userMessage).toContain('Mark 39')
+  })
+
   it('treats an exact edition or state as part of object identity', () => {
     const prompt = buildEntityVerifyPrompt('object', 'The Blind Man', 'May 1917 issue featuring Fountain')
     expect(prompt.system).toContain('dated issue, edition, version')

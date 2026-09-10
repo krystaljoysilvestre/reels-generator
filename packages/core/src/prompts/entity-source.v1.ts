@@ -14,7 +14,7 @@
 import { z } from 'zod'
 import { SubjectClassSchema } from '../types/depiction.js'
 
-export const ENTITY_SOURCE_V1_VERSION = 'entity-source.v1.7'
+export const ENTITY_SOURCE_V1_VERSION = 'entity-source.v1.8'
 
 // (1) DECIDE — what class of real-world thing is this, and is it specific enough that a real photograph
 // would improve the render? The impact≠coverage guard is the whole point: a GENERIC subject (a bedroom, a
@@ -31,6 +31,7 @@ export function buildEntitySourceDecidePrompt(
   name: string,
   description: string,
   region?: string,
+  narrationEvidence?: string,
 ): { system: string; userMessage: string } {
   const system = `You classify what a documentary scene's ENTITY actually is, and decide whether a real photograph of it exists and would help.
 
@@ -60,7 +61,12 @@ vehicle, vessel, aircraft, capsule, or equipment used. Never silently substitute
 the whole mission. Only a separately named physical subject — for example a specific command module, launch
 vehicle, ship, aircraft, instrument, or document — may be classified as that concrete object.
 
-Judge primarily by the NAME. If the name designates a specific real subject, classify it as that subject even when the description only lists physical features. If the name is a generic noun phrase, it is "generic".
+Judge the ENTITY NAME, factual description, and any BOUND NARRATION EVIDENCE together. The name is normally
+the strongest signal, but it may be analyzer shorthand rather than the audience-facing identity. If bound
+narration explicitly identifies this same physical subject more precisely — a model/designation, titled work,
+named vessel, dated artifact, species, building, or person — the exact narration-supported identity wins even
+when the entity name is generic. Use that exact identity in the query. Never borrow a nearby proper name unless
+the evidence clearly says it is this entity; a merely mentioned subject does not rename another object.
 
 Then set sourceable:
 - TRUE only for "place", "object", "animal", or "human" — a specific real VISUAL subject a viewer could look up and that plausibly has photographs.
@@ -71,7 +77,7 @@ When sourceable, write the best search query for a clear photograph of that subj
   const userMessage = `Entity kind (structural only — do not let it decide subjectClass): "${kind}"
 Entity name: "${name}"
 Factual description:
-"""${description}"""${region ? `\n\nRegion/country context: ${region}` : ''}
+"""${description}"""${narrationEvidence ? `\n\nBOUND NARRATION EVIDENCE (only spans whose scene binds this entity):\n"""${narrationEvidence}"""` : ''}${region ? `\n\nRegion/country context: ${region}` : ''}
 
 Return JSON: { "subjectClass": string, "sourceable": boolean, "query": string, "reason": string }`
 
