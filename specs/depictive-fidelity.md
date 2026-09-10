@@ -253,6 +253,11 @@ provenance and never masquerades as a generated frame. Source verification there
 identity and durable visible state, but does not reject a conditioning photograph merely because its camera,
 background, placement, or transient action differs from the eventual staged shot.
 
+Commons search rank is only a retrieval hint, not an identity verdict. Sourcing may advance through a small,
+bounded set of licence-clean non-human candidates after vision rejects the top result, and it retries the
+compact exact identity query as well as the fuller state query. Every distinct candidate still passes the
+same paid vision verifier; human identity remains excluded from this unanchored Commons path.
+
 The exact narration-supported identity is load-bearing twice: routing uses the factual-reasoning model, and
 the resolved query is spliced into every reference and scene prompt ahead of older analyzer shorthand. The
 conditioning pixels and the words therefore agree on the same subject; neither can pull an edit back toward

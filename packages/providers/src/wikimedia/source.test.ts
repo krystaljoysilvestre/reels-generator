@@ -160,6 +160,41 @@ describe('exact non-human retry search', () => {
     expect(result?.sourceUrl).toContain('The_Richard_Mutt_Case')
   })
 
+  it('can advance to the next licence-clean Commons candidate after vision rejects the first', async () => {
+    const firstUrl = 'https://upload.wikimedia.org/wikipedia/commons/1/11/First.jpg'
+    const secondUrl = 'https://upload.wikimedia.org/wikipedia/commons/2/22/Second.jpg'
+    mockFetch({
+      commonsSearch: {
+        query: {
+          pages: [
+            {
+              index: 1,
+              title: 'File:Mark 39 display.jpg',
+              imageinfo: [{
+                url: firstUrl, thumburl: firstUrl, mime: 'image/jpeg',
+                descriptionurl: 'https://commons.wikimedia.org/wiki/File:Mark_39_display.jpg',
+                extmetadata: { LicenseShortName: { value: 'Public domain' }, Artist: { value: 'USAF' } },
+              }],
+            },
+            {
+              index: 2,
+              title: 'File:Goldsboro Mk 39 Bomb 1 close-up.jpg',
+              imageinfo: [{
+                url: secondUrl, thumburl: secondUrl, mime: 'image/jpeg',
+                descriptionurl: 'https://commons.wikimedia.org/wiki/File:Goldsboro_Mk_39_Bomb_1_close-up.jpg',
+                extmetadata: { LicenseShortName: { value: 'Public domain' }, Artist: { value: 'USAF' } },
+              }],
+            },
+          ],
+        },
+      },
+    })
+    const result = await sourceEntityImage('Mark 39', { preferCommonsSearch: true, commonsCandidateIndex: 1 })
+    expect(result?.sourceUrl).toContain('Goldsboro_Mk_39_Bomb_1_close-up')
+    expect(calls).not.toContain(firstUrl)
+    expect(calls).toContain(secondUrl)
+  })
+
   it('weights dates and issue numbers as identity-bearing title tokens', () => {
     expect(commonsTitleMatchScore('The Blind Man No 2 1917', 'The Blind Man No 2 New York 1917'))
       .toBeGreaterThan(commonsTitleMatchScore('The Blind Man No 2 1917', 'The Blind Man issue 1 April'))

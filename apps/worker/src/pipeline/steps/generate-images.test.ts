@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { SourcePolicySchema } from '@reels/core'
-import { applyDepictionRouting, assertSceneImageTruthReady, buildStateAdaptationPrompt, imageTruthNeedsRetry, requiresVisualTruthQa, sourceQueryCandidates } from './generate-images.js'
+import { applyDepictionRouting, assertSceneImageTruthReady, buildStateAdaptationPrompt, imageTruthNeedsRetry, requiresVisualTruthQa, sourceQueryCandidates, verifiedSourceQueryCandidates } from './generate-images.js'
 
 describe('requiresVisualTruthQa', () => {
   it('enrolls evidence-required reels independently of creative genre', () => {
@@ -94,6 +94,21 @@ describe('sourceQueryCandidates', () => {
     expect(prompt).toContain('damage, destruction, deformation')
     expect(prompt).toContain('do not keep the subject intact merely to preserve identity')
     expect(prompt).toContain('recognizable subject/model-specific features')
+  })
+})
+
+describe('verifiedSourceQueryCandidates', () => {
+  it('tries the exact state and parent identity before analyzer shorthand fallbacks', () => {
+    const candidates = verifiedSourceQueryCandidates(
+      { id: 'thermonuclear-weapon', description: 'a compact cylindrical weapon' },
+      { query: 'Mark 39 nuclear bomb', subjectClass: 'object' },
+      'Mark 39 nuclear bomb parachute deployed',
+    )
+    expect(candidates.slice(0, 2)).toEqual([
+      'Mark 39 nuclear bomb parachute deployed',
+      'Mark 39 nuclear bomb',
+    ])
+    expect(candidates).toContain('Thermonuclear Weapon')
   })
 })
 

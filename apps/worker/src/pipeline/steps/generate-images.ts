@@ -130,6 +130,11 @@ const HUMAN_VERIFY_MIN_CONFIDENCE = 0.8
 // verification produced two invalid precursor plates in a row; a third attempt is the smallest retry budget
 // that avoids failing the whole board on that observed variance while still stopping deterministically.
 const MAX_STATE_PLATE_ATTEMPTS = 3
+// Commons rank is topical, not a vision verdict. A precise query can still put a related spacecraft or
+// museum display above the exact historical state. Inspect a small bounded set of licence-clean candidates;
+// every distinct image still pays for and must pass the same strict vision check.
+const MAX_COMMONS_CANDIDATES_PER_QUERY = 5
+const MAX_VERIFIED_SOURCE_CANDIDATES = 8
 
 // The bible entity id IS the subject name in kebab-case ("paoay-church", "jose-rizal"); de-kebab it so the
 // decider judges by the NAME, not only the feature-list description (which often doesn't name the subject).
@@ -157,6 +162,21 @@ export function sourceQueryCandidates(
     seen.add(normalized)
     return true
   })
+}
+
+/** Exact state first, exact parent identity second, then bounded broader fallbacks. */
+export function verifiedSourceQueryCandidates(
+  entity: { id: string; description: string },
+  routing: Pick<DepictionRouting, 'query' | 'subjectClass'>,
+  query = routing.query,
+): string[] {
+  const effectiveRouting = query === routing.query ? routing : { ...routing, query }
+  return [
+    query,
+    ...(query === routing.query ? [] : [routing.query]),
+    ...sourceQueryCandidates(entity, effectiveRouting),
+    ...(query === routing.query ? [] : sourceQueryCandidates(entity, routing)),
+  ].filter((value, index, values) => values.findIndex((candidate) => candidate.toLowerCase() === value.toLowerCase()) === index)
 }
 
 export function buildStateAdaptationPrompt(basePrompt: string, stateDescription: string): string {
@@ -207,48 +227,61 @@ async function fetchVerifiedMedia(
     // A generic analyzer id can be rescued by exact bound narration evidence. Once routing has resolved an
     // exact query, verify against that identity rather than weakening the check back to the shorthand id.
     const name = routing.query || entityName(entity.id)
-    const effectiveRouting = query === routing.query ? routing : { ...routing, query }
+    const sourceQueries = verifiedSourceQueryCandidates(entity, routing, query)
     const seenSources = new Set<string>()
-    for (const sourceQuery of sourceQueryCandidates(entity, effectiveRouting)) {
+    let verifiedCandidates = 0
+    for (const sourceQuery of sourceQueries) {
       // Article lead first preserves the strongest non-human identity anchor. If vision rejects that exact
       // file, retry the SAME query against Commons directly before broadening the query: an article about a
       // publication commonly leads with its cover while the required issue/page exists as a separate file.
       // Humans deliberately never get this unanchored path.
       const searchModes = isHuman ? [false] : [false, true]
-      for (const preferCommonsSearch of searchModes) try {
-        const img = await sourceEntityImage(sourceQuery, { requireArticleIdentity: isHuman, preferCommonsSearch })
-        if (!img || seenSources.has(img.sourceUrl)) continue
-        seenSources.add(img.sourceUrl)
-        const vp = buildEntityVerifyPrompt(subjectClass, name, entity.description, usage)
-        const verify = await llmCall({
-          templateVersion: ENTITY_SOURCE_V1_VERSION, schema: EntityVerifySchema,
-          provider: 'anthropic', model: DEPICTION_MODEL,
-          system: vp.system,
-          messages: [{ role: 'user', content: [{ type: 'image', mediaType: img.mime, base64: img.buffer.toString('base64') }, { type: 'text', text: vp.userMessage }] }],
-        })
-        costCents += verify.costCents
-        const minConfidence = isHuman ? HUMAN_VERIFY_MIN_CONFIDENCE : ENTITY_VERIFY_MIN_CONFIDENCE
-        if (!verify.data.matches || verify.data.confidence < minConfidence) {
-          console.warn(`[generate-images] "${entity.id}" candidate "${img.title}" rejected by verify (matches=${verify.data.matches}, confidence=${verify.data.confidence} < ${minConfidence}; ${verify.data.note})`)
-          continue
-        }
+      for (const preferCommonsSearch of searchModes) {
+        const candidateIndexes = preferCommonsSearch
+          ? Array.from({ length: MAX_COMMONS_CANDIDATES_PER_QUERY }, (_, index) => index)
+          : [0]
+        for (const commonsCandidateIndex of candidateIndexes) {
+          try {
+            const img = await sourceEntityImage(sourceQuery, {
+              requireArticleIdentity: isHuman,
+              preferCommonsSearch,
+              ...(preferCommonsSearch ? { commonsCandidateIndex } : {}),
+            })
+            if (!img || seenSources.has(img.sourceUrl)) continue
+            seenSources.add(img.sourceUrl)
+            if (verifiedCandidates++ >= MAX_VERIFIED_SOURCE_CANDIDATES) return { media: null, costCents }
+            const vp = buildEntityVerifyPrompt(subjectClass, name, entity.description, usage)
+            const verify = await llmCall({
+              templateVersion: ENTITY_SOURCE_V1_VERSION, schema: EntityVerifySchema,
+              provider: 'anthropic', model: DEPICTION_MODEL,
+              system: vp.system,
+              messages: [{ role: 'user', content: [{ type: 'image', mediaType: img.mime, base64: img.buffer.toString('base64') }, { type: 'text', text: vp.userMessage }] }],
+            })
+            costCents += verify.costCents
+            const minConfidence = isHuman ? HUMAN_VERIFY_MIN_CONFIDENCE : ENTITY_VERIFY_MIN_CONFIDENCE
+            if (!verify.data.matches || verify.data.confidence < minConfidence) {
+              console.warn(`[generate-images] "${entity.id}" candidate "${img.title}" rejected by verify (matches=${verify.data.matches}, confidence=${verify.data.confidence} < ${minConfidence}; ${verify.data.note})`)
+              continue
+            }
 
-        return {
-          media: {
-            buffer: img.buffer,
-            mime: img.mime,
-            appearsGrayscale: verify.data.appearsGrayscale ?? false,
-            origin: {
-              type: 'sourced', provider: 'wikimedia', usage, subjectClass,
-              url: img.sourceUrl, license: img.license, licenseUrl: img.licenseUrl, author: img.author,
-              articleUrl: img.articleUrl,
-              ...(img.wikibaseItem ? { wikibaseItem: img.wikibaseItem } : {}),
-            },
-          },
-          costCents,
+            return {
+              media: {
+                buffer: img.buffer,
+                mime: img.mime,
+                appearsGrayscale: verify.data.appearsGrayscale ?? false,
+                origin: {
+                  type: 'sourced', provider: 'wikimedia', usage, subjectClass,
+                  url: img.sourceUrl, license: img.license, licenseUrl: img.licenseUrl, author: img.author,
+                  articleUrl: img.articleUrl,
+                  ...(img.wikibaseItem ? { wikibaseItem: img.wikibaseItem } : {}),
+                },
+              },
+              costCents,
+            }
+          } catch (candidateError) {
+            console.warn(`[generate-images] source candidate "${sourceQuery}"${preferCommonsSearch ? ` (Commons rank ${commonsCandidateIndex + 1})` : ''} failed for "${entity.id}": ${candidateError instanceof Error ? candidateError.message : String(candidateError)}`)
+          }
         }
-      } catch (candidateError) {
-        console.warn(`[generate-images] source candidate "${sourceQuery}"${preferCommonsSearch ? ' (Commons search)' : ''} failed for "${entity.id}": ${candidateError instanceof Error ? candidateError.message : String(candidateError)}`)
       }
     }
     return { media: null, costCents }
