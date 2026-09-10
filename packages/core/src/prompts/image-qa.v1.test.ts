@@ -52,6 +52,8 @@ describe('buildImageQAPrompt — time-bound appearance', () => {
 
     expect(prompt.userMessage).toContain('internal, hidden, microscopic')
     expect(prompt.userMessage).toContain('Missing visible proof of an inherently hidden state is not a contradiction')
+    expect(prompt.userMessage).toContain('ABSENCE OF VISIBLE PROOF IS NEVER AN IDENTITY MISMATCH')
+    expect(prompt.userMessage).toContain('Do not invent expected exterior evidence')
     expect(prompt.userMessage).toContain('observable result')
   })
 

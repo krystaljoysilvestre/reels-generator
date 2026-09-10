@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { SourcePolicySchema } from '@reels/core'
-import { applyDepictionRouting, buildStateAdaptationPrompt, imageTruthNeedsRetry, requiresVisualTruthQa, sourceQueryCandidates } from './generate-images.js'
+import { applyDepictionRouting, assertSceneImageTruthReady, buildStateAdaptationPrompt, imageTruthNeedsRetry, requiresVisualTruthQa, sourceQueryCandidates } from './generate-images.js'
 
 describe('requiresVisualTruthQa', () => {
   it('enrolls evidence-required reels independently of creative genre', () => {
@@ -26,6 +26,18 @@ describe('imageTruthNeedsRetry', () => {
     expect(imageTruthNeedsRetry({ truthQaRequired: true, truthQaPass: true })).toBe(false)
     expect(imageTruthNeedsRetry({ qaPass: false })).toBe(false)
     expect(imageTruthNeedsRetry(null)).toBe(false)
+  })
+})
+
+describe('assertSceneImageTruthReady', () => {
+  it('throws inside the per-scene step for a blocking truth failure', () => {
+    expect(() => assertSceneImageTruthReady(3, true, false, ['wrong exact identity']))
+      .toThrow('[visual-truth-image-qa] scene 3: wrong exact identity')
+  })
+
+  it('does not block ordinary craft QA or a passing factual frame', () => {
+    expect(() => assertSceneImageTruthReady(3, false, false, ['craft-only miss'])).not.toThrow()
+    expect(() => assertSceneImageTruthReady(3, true, true, [])).not.toThrow()
   })
 })
 

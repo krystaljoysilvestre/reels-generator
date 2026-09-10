@@ -9,7 +9,7 @@
 
 import { z } from 'zod'
 
-export const IMAGE_QA_V1_VERSION = 'image-qa.v1.6'
+export const IMAGE_QA_V1_VERSION = 'image-qa.v1.7'
 
 export const ImageQASchema = z.object({
   pass: z.boolean(), // does the image faithfully match the description's checkable intent?
@@ -59,6 +59,7 @@ ${truth?.required ? `Also return a separate blocking truth verdict. Judge the PI
 - conceptual must read as interpretation. FAIL if a hypothesis, counterfactual, proposal, metaphor, or mechanism has collapsed into a plausible historical/documentary photograph.
 - FAIL obvious wrong-time or wrong-state details, and any visible identity/state contradiction against EXPECTED VERIFIED ENTITY STATE. This includes a sourced object's defining geometry, orientation, configuration, or mark — never demote those to ordinary issues.
 - Judge only what the pixels can actually establish. Do NOT require an internal, hidden, microscopic, or otherwise non-visible mechanism/state to be exposed merely because the narration names it. Missing visible proof of an inherently hidden state is not a contradiction; fail only a visible contradiction, the wrong identity, or the absence of a feature the brief explicitly says must be visible. The shot may honestly show an observable result while the narration explains its unseen cause.
+- ABSENCE OF VISIBLE PROOF IS NEVER AN IDENTITY MISMATCH. Do not invent expected exterior evidence — holes, markings, pins, switches, arming/fuzing hardware, or indicators — unless EXPECTED VERIFIED ENTITY STATE explicitly says that evidence is visible. Judge identity from the exact subject's established visible form and reference-grounded features; keep an unseen condition in narration only.
 - A conceptual frame may communicate the intended idea through a different composition or visual device. Put a clear communication miss in issues/pass; do NOT put it in truthIssues unless it also changes verified identity/state, invents a factual claim, or makes interpretation look like documentation.
 - Do not fail merely because a generated image is illustrative or because it lacks labels. Name only concrete visual truth problems in truthIssues.
 Set truthPass:false on any such problem; otherwise truthPass:true. The two verdicts are independent: pass:false with truthPass:true is valid for a craft/communication miss.` : 'This is not a factual truth-gated scene; set truthPass:true and truthIssues:[].'}

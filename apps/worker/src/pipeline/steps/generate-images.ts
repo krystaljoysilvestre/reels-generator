@@ -1,7 +1,7 @@
 import { eq, and, inArray } from 'drizzle-orm'
 import { getDb, reels, scenes, assets, channels, stories, assertVisualTruthReady } from '@reels/db'
 import { generateImage, generateImageFal, imageEngineForGenre, FLUX_IMAGE_ENGINE, buildInputHash, ContentFilterError, llmCall, downloadBuffer, uploadBuffer, sourceEntityImage, spendFromError, sniffImageMediaType, SCENE_IMAGE_MODEL, SCENE_IMAGE_QUALITY, type ImageEngine } from '@reels/providers'
-import { archivalShotTarget, presentedSourceTarget, identityWithheldEntities, MODES_WITHOUT_PLATES, normalizeCanon, WorldBibleSchema, EntityPlateStoreSchema, entityDescriptionHash, assembleImagePrompt, assembleNegativePrompt, assembleReferencePrompt, castNationality, historicalEraDirective, reelLightingDirective, sceneEntities, slug, channelPlatformPreset, StoryBibleSchema, AppearanceBindingsSchema, appearanceIdForEntity, entityAtAppearance, resolveEntities, EBN_RENDERING_PROFILE, effectiveGenre, resolveChannelPolicy, requiresEvidence, canUseArchivalHumanShot, splitSceneDepiction, conditionableReferenceKeys, missingRequiredIdentityReferences, personNameVariants, mentionsAny, scrubNames, SAFE_REPRESENTATIVE_STAGING, visualTruthContractErrors, depictionRoutingIsCurrent, type BibleEntity, type CharacterAppearance, type DepictionRouting, type MediaOrigin, type DepictionBasis, type SourcePolicy } from '@reels/core'
+import { archivalShotTarget, presentedSourceTarget, identityWithheldEntities, MODES_WITHOUT_PLATES, normalizeCanon, WorldBibleSchema, EntityPlateStoreSchema, entityDescriptionHash, entityRenderDescription, assembleImagePrompt, assembleNegativePrompt, assembleReferencePrompt, castNationality, historicalEraDirective, reelLightingDirective, sceneEntities, slug, channelPlatformPreset, StoryBibleSchema, AppearanceBindingsSchema, appearanceIdForEntity, entityAtAppearance, resolveEntities, EBN_RENDERING_PROFILE, effectiveGenre, resolveChannelPolicy, requiresEvidence, canUseArchivalHumanShot, splitSceneDepiction, conditionableReferenceKeys, missingRequiredIdentityReferences, personNameVariants, mentionsAny, scrubNames, SAFE_REPRESENTATIVE_STAGING, visualTruthContractErrors, depictionRoutingIsCurrent, type BibleEntity, type CharacterAppearance, type DepictionRouting, type MediaOrigin, type DepictionBasis, type SourcePolicy } from '@reels/core'
 import { z } from 'zod'
 import { buildRephrasePrompt, REPHRASE_V1_VERSION, buildImageQAPrompt, IMAGE_QA_V1_VERSION, ImageQASchema, isBlockingImageTruthFailure, buildFilterSafePrompt, FILTER_SAFE_V1_VERSION, FilterSafeSchema, buildEntityVerifyPrompt, buildIdentityStateVerifyPrompt, buildRepresentativeStagingPrompt, EntityVerifySchema, IdentityStateVerifySchema, RepresentativeStagingSchema, PLATE_COLOURISE_PROMPT, ENTITY_SOURCE_V1_VERSION } from '../../prompts-bridge.js'
 import { runStep } from '../harness.js'
@@ -55,6 +55,12 @@ export function applyDepictionRouting(entity: BibleEntity, routing: DepictionRou
 export function imageTruthNeedsRetry(meta: unknown): boolean {
   const value = (meta ?? {}) as Record<string, unknown>
   return value['truthQaRequired'] === true && value['truthQaPass'] !== true
+}
+
+/** Keep a rejected scene's runStep row failed so the idempotency cache cannot replay rejected pixels. */
+export function assertSceneImageTruthReady(sceneIdx: number, required: boolean, truthPass: boolean, issues: string[]): void {
+  if (!isBlockingImageTruthFailure(required, { truthPass })) return
+  throw new Error(`[visual-truth-image-qa] scene ${sceneIdx}: ${issues.join('; ') || 'factual image truth QA failed without a reason'}`)
 }
 
 // Factual truth is a property of the reel's frozen Source Policy, not its creative genre. Keep the legacy
@@ -778,8 +784,6 @@ export async function generateImages(reelId: string): Promise<void> {
     [...(s.primaryEntity ? [s.primaryEntity] : []), ...(s.supportingEntities ?? [])].some((r) => archivalSlugs.has(slug(r)))
   const isQATarget = (s: (typeof pending)[number]) => truthQaRequired || Boolean(eraContext) || s.tier === 'video' || (peak !== '' && s.narrationText.includes(peak)) || featuresPerson(s) || featuresArchival(s) || (isVoiceover && carriesClaim(s))
 
-  const blockingTruthFailures: string[] = []
-
   const processScene = async (scene: (typeof pending)[number]) => {
     const appearanceByEntity = AppearanceBindingsSchema.parse(scene.appearanceBindings ?? {})
     // FIRST-PERSON NARRATOR VISIBILITY — decide the narrator's splice HERE, deterministically, from whether
@@ -1103,7 +1107,7 @@ export async function generateImages(reelId: string): Promise<void> {
 
           const buffer = await downloadBuffer(result.asset.storageKey)
           const expectedAppearance = Object.keys(appearanceByEntity).length > 0
-            ? sceneEnts.map((entity) => `${entity.id}: ${entity.description}`).join('\n')
+            ? sceneEnts.map((entity) => `${entity.id}: ${entityRenderDescription(entity)}`).join('\n')
             : undefined
           const { verdict, costCents } = await imageQA(buffer, qaBrief, expectedAppearance, {
             required: truthQaRequired,
@@ -1184,9 +1188,11 @@ export async function generateImages(reelId: string): Promise<void> {
           .set({ imageAssetId: asset!.id, imageOrigin: null })
           .where(and(eq(scenes.reelId, reelId), eq(scenes.idx, scene.idx)))
 
-        if (isBlockingImageTruthFailure(truthQaRequired, { truthPass: lastTruthPass })) {
-          blockingTruthFailures.push(`scene ${scene.idx}: ${lastTruthIssues.join('; ') || 'factual image truth QA failed without a reason'}`)
-        }
+        // A rejected asset is deliberately persisted for inspection, but this per-scene paid step must
+        // remain FAILED. Marking it done makes the next product Retry hit runStep's cache and replay the
+        // same rejected pixels forever. runPool still lets sibling scenes finish before surfacing the
+        // failure, while the failed row makes this exact scene genuinely rerunnable at the same hash.
+        assertSceneImageTruthReady(scene.idx, truthQaRequired, lastTruthPass, lastTruthIssues)
 
         return { output: { assetId: asset!.id, archival: false, exactSource: false }, costCents: cost.total }
       },
@@ -1195,9 +1201,6 @@ export async function generateImages(reelId: string): Promise<void> {
 
   // Rolling pool — fast without flooding fal, and one bad scene doesn't abort the others.
   await runPool(pending, IMAGE_CONCURRENCY, processScene, 'scene image')
-  if (blockingTruthFailures.length > 0) {
-    throw new Error(`[visual-truth-image-qa] ${blockingTruthFailures.join(' | ')}`)
-  }
   await assertVisualTruthReady(reelId)
 }
 

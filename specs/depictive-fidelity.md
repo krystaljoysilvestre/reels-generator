@@ -253,11 +253,19 @@ provenance and never masquerades as a generated frame. Source verification there
 identity and durable visible state, but does not reject a conditioning photograph merely because its camera,
 background, placement, or transient action differs from the eventual staged shot.
 
+The exact narration-supported identity is load-bearing twice: routing uses the factual-reasoning model, and
+the resolved query is spliced into every reference and scene prompt ahead of older analyzer shorthand. The
+conditioning pixels and the words therefore agree on the same subject; neither can pull an edit back toward
+a generic category. Image QA judges hidden conditions only through visible contradiction and must not invent
+exterior evidence that the verified state never said would be visible.
+
 The failure also exposed a retry trap. Truth-QA persisted the rejected asset (so the operator could inspect it),
 but `generate_images` then ran the shared last-mile gate before regeneration and treated the saved failure as
 terminal. Every product Retry failed for free against the same pixels. A linked `truthQaRequired:true` asset
 whose `truthQaPass` is not true now means **this scene is pending again**. Only rejected/missing scenes reopen;
-passing scenes remain cached. The image-step hash includes the QA contract version, so a verifier repair can
+passing scenes remain cached. A truth-rejected scene's per-scene ledger row remains failed even though its
+inspectable asset is persisted, so Retry reruns that paid unit instead of returning the rejected asset from
+the idempotency cache. The image-step hash includes the QA contract version, so a verifier repair can
 replace rejected pixels, while render and publishing continue to fail closed until every linked asset passes.
 
 Pixel QA must also distinguish contradiction from invisibility. It may reject the wrong object, wrong visible
