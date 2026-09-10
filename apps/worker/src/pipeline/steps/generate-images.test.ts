@@ -49,9 +49,9 @@ describe('sourceQueryCandidates', () => {
     })).toEqual(['Marcel Duchamp photograph'])
   })
 
-  it('locks source geometry and required state details during adaptation', () => {
+  it('locks unchanged source geometry and required state details during adaptation', () => {
     const prompt = buildStateAdaptationPrompt('documentary reference plate', "turned on its back, marked 'R. Mutt 1917'")
-    expect(prompt).toContain('Preserve the source subject\'s exact physical geometry')
+    expect(prompt).toContain('Preserve the source subject\'s identity-defining geometry')
     expect(prompt).toContain("marked 'R. Mutt 1917'")
     expect(prompt).toContain('TARGET STATE IS AUTHORITATIVE')
     expect(prompt).toContain('must not carry over')
@@ -62,6 +62,16 @@ describe('sourceQueryCandidates', () => {
     expect(prompt).toContain('surface markings')
     expect(prompt).toContain('an upright, unmarked porcelain urinal')
     expect(prompt).not.toContain('Do not omit')
+  })
+
+  it('does not force an explicitly destructive target to remain intact', () => {
+    const prompt = buildStateAdaptationPrompt(
+      'documentary reference plate',
+      'broken apart in mid-air with separated fuselage sections and detached components',
+    )
+    expect(prompt).toContain('damage, destruction, deformation')
+    expect(prompt).toContain('do not keep the subject intact merely to preserve identity')
+    expect(prompt).toContain('recognizable subject/model-specific features')
   })
 })
 
@@ -93,7 +103,7 @@ describe('applyDepictionRouting', () => {
       depictionMode: 'generated',
       eligibilityReason: 'generic_subject',
       query: '',
-      classifierVersion: 'entity-source.v1.6',
+      classifierVersion: 'entity-source.v1.7',
     })
 
     expect(entity.depiction.depictionMode).toBe('generated')

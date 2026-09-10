@@ -208,6 +208,26 @@ The director still chooses the most truthful shot for the beat. These rules do n
 into a scene it cannot support, and they do not prescribe a visual style. They prevent the system from
 anchoring a scene to the wrong kind of subject or the wrong historical instance.
 
+### Destructive states preserve identity without preserving intactness (2026-09-09)
+
+The Phase 0 live lap exposed a contradiction in derived-state verification. A sourced intact B-52 was the
+correct identity anchor, while the story-time state required the aircraft broken apart in mid-air. The
+adaptation satisfied the target state, but the verifier rejected it because separated components no longer
+formed one intact structure. Retry could never succeed: intactness and breakup were being required at once.
+
+For an explicitly destructive, dismantled, collapsed, fragmented, or otherwise form-changing target, identity
+means the same sourced subject or exact model remains recognizable in the surviving form. Features the target
+explicitly changes are not continuity requirements. Unchanged distinctive geometry, model-specific components,
+markings that should survive, and physically plausible relationships between the surviving parts remain
+identity evidence. A different subject/model, generic debris, or a candidate with no recognizable identity
+anchor still fails. For a non-destructive state, the existing strict geometry and component-continuity bar is
+unchanged.
+
+The adaptation prompt and verifier must state this exception symmetrically: the renderer cannot be told to
+preserve intact component arrangement while QA is told to accept a breakup. The plate-step input hash also
+includes the prompt contract version. A deployed contract repair must therefore invalidate a cached failed
+derived plate and let product Retry recover the same reel without direct data edits or duplicate billing.
+
 #### Present the source when the source is the claim
 
 A verified source has two different legitimate uses, and the scene plan must choose between them:

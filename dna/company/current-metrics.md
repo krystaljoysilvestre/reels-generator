@@ -24,7 +24,7 @@ Phase 0 — Foundation
 
 Last Updated:
 
-2026-09-04
+2026-09-09
 
 ---
 
@@ -76,7 +76,7 @@ one click, durable-work preserving and cost-idempotent; tenant and spend boundar
 acceptance build must pass lint, typecheck, tests and build. Direct social publishing, billing, teams, long-form and
 public-launch polish are outside this gate.
 
-**Gate status on 2026-09-04 — day 4 of 10 working days; the window closes 2026-09-14.** Criterion 5 is met: an
+**Gate status on 2026-09-09 — day 7 of 10 working days; the window closes 2026-09-14.** Criterion 5 is met: an
 explicit shared-key allowlist, per-resource ownership and real-Postgres suites prove owner access, foreign denial,
 foreign resource IDs returning 404, suspended and pending sessions blocked, and reel/user/global spend gates halting
 before a paid step starts. Criterion 6 is green on the **consolidated build** (`721a987`), verified 2026-09-04 in CI's environment: clean
@@ -113,9 +113,11 @@ reliability repairs on the acceptance path, not new creative architecture.
 stack in Singapore rather than the founder's Mac: an external probe on 2026-09-03 returned `/api/health` **200**
 with Railway edge headers. The accepted topology — one public web service, one private all-role worker, private
 Postgres and Redis, existing R2 assets, a $30 usage alert and a $50 monthly compute cap — is recorded in
-`specs/phase0-deployment.md`. **Health is the only one of that spec's five canary checks confirmed in writing.**
-Operator sign-in, migrated row/spend parity, one queue job surviving a worker restart, and R2 read/write are
-unrecorded, so the Cloudflare Tunnel route to the Mac remains the rollback path until they are. Scheduled
+`specs/phase0-deployment.md`. **Health and migrated-data parity are now confirmed in writing.** The 2026-09-09
+read-only production check preserved all five publication identities and fields, all four channels, the one user,
+and the exact 163-row / 225¢ spend ledger; its one extra reel is the known hosted render. Operator sign-in
+completion and R2 read/write remain, while the stronger queue-survival reading is part of the forced-recovery lap,
+so the Cloudflare Tunnel route to the Mac remains the rollback path until they clear. Scheduled
 production stays disabled until the forced-recovery lap and one fresh product-only acceptance reel clear the
 Phase 0 gate.
 
@@ -234,7 +236,7 @@ Each experiment tests a named assumption in company/assumptions.md.
 
 | Experiment | Hypothesis | Expected Metric Impact | Status |
 | ---------- | ---------- | ---------------------- | ------ |
-| **Phase 0 product-only acceptance** | The deployed product can complete and recover one standard short-form reel without its builder becoming a hidden stage | Workflow completion and production reliability ↑ | **ACTIVE — day 4 of 10 (2026-09-04).** One consolidated build (`721a987`) now carries the tenancy, spend and forced-recovery suites, the Railway deployment and the reliability repairs, all four CI steps green with every integration suite present (5+5+3). The live recovery lap and the fresh product-only reel have not run |
+| **Phase 0 product-only acceptance** | The deployed product can complete and recover one standard short-form reel without its builder becoming a hidden stage | Workflow completion and production reliability ↑ | **BLOCKED — day 7 of 10 (2026-09-09).** Migration parity passed. The first live reel reached Visuals at $2.16, where a destructive B-52 story-time state could not satisfy an intact-structure identity verifier. One product Retry was cost-idempotent but repeated the failure; render and its injected boundary were never reached. The blocker is recorded in `specs/phase0-forced-recovery-lap.md` |
 | Packaging repair | The named disqualifiers are packaging, not story, and fixing them changes the publish answer | Stories published 0 → ≥1 | **CLOSED AT n=1 (2026-08-24).** Crossroads cleared the durable leave-it-up decision and published. Repeatability is tracked under publishing consistency, not this repair experiment |
 | **The audience is readable** | A published reel's real performance can reach `metrics` and feed few-shot selection without manual logging | Audience evidence 0 → ≥1 | **CONFIRMED (2026-08-26).** One scheduled poll read both public videos through `YOUTUBE_API_KEY`, appended both time-series rows, and refreshed both reel snapshots without manual logging. Reel #1 read 81 views; reel #2 established its immediate zero baseline |
 | Depictive fidelity beyond places | A real subject must be *sourced*, and a real person's face must never be invented | Depictive truth held under real-world subjects | **CLOSED — SHIPPED (2026-08-17).** Graduated to `specs/depictive-fidelity.md`. A third guard was **rejected on measurement**: a lexical "depicts what it doesn't tag" detector scored 1 true positive to 2–3 false, and would have stamped `R.MUTT 1917` on shop-window plumbing |
@@ -263,12 +265,11 @@ Each experiment tests a named assumption in company/assumptions.md.
   the service confirms the commit. Verified hosted on its first run. Same event-versus-state family as the
   `publications` row that counted a deleted upload as a publish — and the fix is the same shape: measure the
   state, not the event.
-* **Two and a half of the five hosted canary checks are still open** (certain / medium). `app.kendrix.io`
-  resolves to Railway while `specs/phase0-deployment.md` says the local tunnel holds until sign-in, data parity,
-  queue-restart survival and R2 access pass. A canary log now exists in that spec rather than the checks living in
-  memory: health passes and anonymous access is correctly refused. Sign-in completing, row/spend parity, queue
-  survival and R2 read/write must run **after** the redeploy, or they certify a build that will not produce the
-  acceptance reel.
+* **One and a half standalone hosted canary checks are still open** (certain / medium). `app.kendrix.io`
+  resolves to Railway while `specs/phase0-deployment.md` says the local tunnel holds until sign-in and R2 access
+  pass. Health and migrated-data parity are recorded; anonymous access is correctly refused; and the 09-04 worker
+  restart supplies partial queue evidence. Sign-in completion and R2 read/write are outputs of the acceptance
+  reel, while the forced-recovery lap supplies the stronger queue-survival proof.
 * **The first proof channel is deliberately narrower and technically harder.** Crossroads remains the sole Customer
   Zero evidence source and exercises factual grounding, depictive fidelity and verified identity. Its four live reels
   continue collecting audience evidence while new production is paused for the Phase 0 exit sprint.

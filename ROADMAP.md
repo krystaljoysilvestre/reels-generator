@@ -46,7 +46,7 @@ the fresh product-only reel still remain. The render path now commits `visual.mp
 checkpoint immediately after upload, so the forced lap can lose its queue/render step after that boundary and
 prove one-click Retry skips the already-finished frame pass without R2 inspection or manual salvage.
 
-**Sprint status — 2026-09-04, day 4 of 10 working days; the window closes 2026-09-14:**
+**Sprint status — 2026-09-09, day 7 of 10 working days; the window closes 2026-09-14:**
 
 | # | Criterion | State |
 | - | --------- | ----- |
@@ -92,12 +92,28 @@ same commit, and the four CI steps were re-run against real Postgres on it. It i
 **Deployment cut over 2026-09-02:** `https://app.kendrix.io` now answers from the Railway Hobby stack in
 Singapore — one public web service, one private all-role worker, private Postgres and Redis, and the existing R2
 assets (`specs/phase0-deployment.md`). An external probe on 2026-09-03 returned `/api/health` 200 with Railway edge
-headers, so the origin no longer depends on the founder's Mac being awake. **One and a half of the spec's five
-canary checks are now recorded** in `specs/phase0-deployment.md`'s canary log: health passes, and anonymous
-requests are correctly refused (`/api/channel`, `/api/publishing`, `/api/admin/costs` → 401; `/dashboard` → 307
-to `/signin`). Sign-in completing, migrated row/spend parity, a queue job surviving a worker restart, and R2
-read/write are unrun; the Cloudflare Tunnel route to the Mac stays as rollback until they pass. Scheduled
+headers, so the origin no longer depends on the founder's Mac being awake. **Two and a half of the spec's five
+canary checks are now recorded** in `specs/phase0-deployment.md`'s canary log: health and migrated-data parity
+pass, and anonymous requests are correctly refused (`/api/channel`, `/api/publishing`, `/api/admin/costs` → 401;
+`/dashboard` → 307
+to `/signin`). Sign-in completing and R2 read/write remain; the stronger queue-survival reading is part of the
+forced-recovery lap. The Cloudflare Tunnel route to the Mac stays as rollback until they pass. Scheduled
 production stays off until the hosted forced-retry lap and the fresh product-only acceptance reel clear the gate.
+
+**The first live acceptance attempt stopped on a real pre-render blocker on 2026-09-09.** Reel `b2ce55d3`
+reached Visuals at $2.16, then the verified-identity gate could not reconcile a sourced intact B-52 with the
+story-time state `broken-apart`: every candidate that satisfied the destructive state was rejected for not
+preserving intact physical structure. The product surfaced the failure and preserved work; one Retry repeated no
+paid work and left spend at $2.16, but it could not repair the stored binding. The injected render boundary was
+never reached, so criteria 3 and 4 remain open. Evidence and the rerun condition are recorded in
+`specs/phase0-forced-recovery-lap.md`.
+
+**Migration parity passed 2026-09-09.** A read-only hosted query found 1 user, 4 channels, 14 reels and the exact
+five migrated YouTube publications with their dates, status and disclosure flags intact. The append-only spend
+ledger exactly matches the local baseline at 163 rows / 225¢. Production has one expected extra hosted reel,
+`a0b521b1`, at 712¢. The remaining 28¢ difference from the later local reel-cost snapshot belongs to
+`38f08fcf`: production's 655¢ value was last updated on 2026-08-24, before migration, while the local snapshot
+later read 683¢. That is local-only post-split spend, not an import loss.
 
 **The hosted stack drifted, and was caught and closed on 2026-09-04.** Railway has no GitHub auto-deploy, so
 pushing changed nothing hosted: `web` sat on `fb53e7d` and `worker` on `fa156da`, meaning **the worker lacked

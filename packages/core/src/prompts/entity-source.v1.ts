@@ -14,7 +14,7 @@
 import { z } from 'zod'
 import { SubjectClassSchema } from '../types/depiction.js'
 
-export const ENTITY_SOURCE_V1_VERSION = 'entity-source.v1.6'
+export const ENTITY_SOURCE_V1_VERSION = 'entity-source.v1.7'
 
 // (1) DECIDE — what class of real-world thing is this, and is it specific enough that a real photograph
 // would improve the render? The impact≠coverage guard is the whole point: a GENERIC subject (a bedroom, a
@@ -141,16 +141,22 @@ export function buildIdentityStateVerifyPrompt(
 
 IMAGE 1 is the verified source identity. IMAGE 2 is a generated candidate showing that SAME physical subject at a different story-time state.
 
-1. identityPreserved: IMAGE 2 preserves IMAGE 1's stable physical structure — geometry, proportions, openings, rim/edge shape, component arrangement, and other form that the target does not change. Fail a visibly different model, object, building, animal, or person.
+1. identityPreserved: IMAGE 2 preserves IMAGE 1's identity-defining physical structure wherever the TARGET does not explicitly change it — geometry, proportions, openings, rim/edge shape, component arrangement, markings, and other distinctive form. Fail a visibly different model, object, building, animal, or person.
 2. candidateMatchesTargetExactly: IMAGE 2 visibly satisfies the target orientation, markings, labels, damage, restoration, age, or other state details below.
 
-The target state is authoritative. Evaluate the TARGET against IMAGE 2 only, never against IMAGE 1. Evaluate identity from stable physical form only, ignoring every source-state attribute that the target changes. When the target says "unmarked," removing IMAGE 1's signature is REQUIRED target compliance and MUST NOT make either boolean false when the geometry remains the same. Provenance was already established from IMAGE 1; never ask IMAGE 2 to prove it independently.
+The target state is authoritative. Evaluate the TARGET against IMAGE 2 only, never against IMAGE 1. Evaluate identity from physical features the target leaves unchanged, ignoring every source-state attribute that the target changes. When the target says "unmarked," removing IMAGE 1's signature is REQUIRED target compliance and MUST NOT make either boolean false when the remaining identity holds. Provenance was already established from IMAGE 1; never ask IMAGE 2 to prove it independently.
+
+DESTRUCTIVE OR FORM-CHANGING TARGETS: when the target explicitly requires breakup, fragmentation, collapse, dismantling, crushing, burning, or another state that changes structural continuity, do NOT require IMAGE 2 to remain intact. Missing continuity, separated components, deformation, or damage explicitly required by the target cannot by itself make identityPreserved false. Instead, judge whether the surviving form remains recognizably the same sourced subject or exact model through the distinctive geometry and model-specific components that should survive. Fail a different subject/model, generic debris, or a candidate with too little recognizable evidence to carry the identity claim. This exception applies only to changes the target explicitly requires; it does not excuse unrelated identity drift.
 
 Truth-table example: IMAGE 1 is signed; target says unmarked; IMAGE 2 has the same geometry and is unmarked → identityPreserved=true AND candidateMatchesTargetExactly=true. The fact that IMAGE 2 differs from IMAGE 1 on the requested state is the purpose of adaptation, never a failure.`
+
+  const destructiveExample = `Destructive-state example: IMAGE 1 is a verified intact aircraft; the target says broken apart in mid-air; IMAGE 2 shows that same aircraft model breaking apart with recognizable model-specific components → identityPreserved=true AND candidateMatchesTargetExactly=true. A different aircraft model or unidentifiable generic debris → identityPreserved=false.`
 
   const userMessage = `Subject identity: "${name}"
 Target story-time state:
 """${targetState}"""
+
+${destructiveExample}
 
 Compare IMAGE 1 with IMAGE 2. Return JSON: { "identityPreserved": boolean, "candidateMatchesTargetExactly": boolean, "confidence": 0..1, "note": string }`
 

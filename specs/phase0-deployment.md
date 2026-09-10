@@ -116,9 +116,9 @@ what is believed.
 
 | Check | State | Evidence |
 | ----- | ----- | -------- |
-| `/api/health` returns 200 | **Pass** | External probe 2026-09-03 with Railway edge headers; re-probed 2026-09-04 on `d0a0c59`, body `{"ok":true,"build":"d0a0c59","buildSource":"stamp"}` |
+| `/api/health` returns 200 | **Pass** | External probe 2026-09-03 with Railway edge headers; re-probed 2026-09-09 on `d0a0c59`, body `{"ok":true,"build":"d0a0c59","buildSource":"stamp"}` |
 | Operator sign-in and protected-page redirect | **Half recorded** | 2026-09-04 anonymous probe, re-run on `d0a0c59`: `/api/channel`, `/api/publishing` and `/api/admin/costs` all return 401; `/dashboard` returns 307 to `/signin`; `/signin` itself returns 200. Sign-in completing is unrun — it needs operator credentials |
-| Migrated channel / reel / publication / spend totals match | **Unrun — and the standard has moved** | See "Reading the parity check" below. Local baseline captured 2026-09-04 |
+| Migrated channel / reel / publication / spend totals match | **Pass** | Read-only hosted check 2026-09-09: 1 user / 4 channels / 14 reels / 5 publications; all five publication identities and fields match; spend ledger still exactly 163 rows / 225¢. The one extra hosted reel and reel-cost difference reconcile below |
 | One provider-free queue job completes and survives a worker restart | **Partial** | 2026-09-04, from the 17:34 +08 worker deploy — which is a restart. The worker came back, started all three role workers, re-registered its repeatable schedules, and two scheduled queue jobs then ran to completion: `metrics_poll` (provider-free, \$0) and `trending_refresh`. **Not** shown: a job *in flight* during the restart surviving, or the absence of duplication |
 | R2 reads and writes succeed without exposing credentials | **Unrun** | — |
 
@@ -143,7 +143,23 @@ The local baseline, captured 2026-09-04 from `reels_dev` (read-only):
 | `spend_events` rows / `sum(cost_cents)` | 163 / 225 (\$2.25) |
 | paid Crossroads reels, cents | 1063, 932, 793, 683, 670, 521, 10, 9 |
 
-To capture the hosted side, `railway connect Postgres` and run:
+The hosted side was captured read-only on 2026-09-09:
+
+| | Hosted production |
+| - | - |
+| users / channels / reels | 1 / 4 / 14 |
+| publications | The same five YouTube IDs, dates, `published` statuses and disclosure flags as the local baseline |
+| `sum(reels.cost_cents)` | 6734 (\$67.34) |
+| `spend_events` rows / `sum(cost_cents)` | 163 / 225 (\$2.25) |
+
+The apparent 28¢ mismatch is post-migration divergence, not corruption. Production has the expected hosted-only
+reel `a0b521b1` at 712¢. Removing it leaves 6022¢, while the later local snapshot is 6050¢. The difference is
+reel `38f08fcf`: production holds 655¢ with `updated_at` 2026-08-24, before the 2026-09-02 migration, while the
+2026-09-04 local snapshot records 683¢. The extra 28¢ was therefore added only to the local copy after the two
+databases split. Production preserved the older imported value. No migrated publication, channel, user or spend
+event is missing, and the one extra hosted reel is the known hosted render.
+
+The query used for the hosted side was:
 
 ```sql
 select (select count(*) from users) as users,
@@ -163,12 +179,11 @@ from publications order by published_at;
 is \$2.25 across 163 rows. The two are not required to agree — the ledger post-dates most of that spend — but the
 gap is large enough to be worth one deliberate look before per-reel unit economics are used for pricing.
 
-The remaining checks can now run: as of 2026-09-04 the stack serves `d0a0c59`, so they would certify the build
-that will produce the acceptance reel. Note where they land naturally rather than as separate ceremonies — the
+The remaining checks land naturally in the acceptance reel rather than as separate ceremonies: the
 acceptance reel signs in, writes and reads R2 for every image, audio file and render, and drives the queue end to
 end, so three of the five are lap outputs. The stronger reading of queue survival (a job in flight when the
 process dies, resuming from durable work) is exactly what the forced-recovery lap demonstrates; it does not need
-its own separate test. What genuinely needs doing on its own is the parity read.
+its own separate test. The parity read was the only standalone remainder, and it passed on 2026-09-09.
 
 Hosted behavior observed 2026-09-04 from worker logs, recorded because it is evidence either way:
 

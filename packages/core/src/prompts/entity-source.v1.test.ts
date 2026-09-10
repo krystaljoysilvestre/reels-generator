@@ -52,4 +52,16 @@ describe('entity source decision', () => {
     expect(prompt.system).toContain('identityPreserved=true AND candidateMatchesTargetExactly=true')
     expect(prompt.userMessage).toContain('an upright, unmarked porcelain urinal')
   })
+
+  it('allows an explicitly destructive target to change intact structure without erasing identity', () => {
+    const prompt = buildIdentityStateVerifyPrompt(
+      'B-52 aircraft',
+      'broken apart in mid-air with separated fuselage sections and detached components',
+    )
+    expect(prompt.system).toContain('DESTRUCTIVE OR FORM-CHANGING TARGETS')
+    expect(prompt.system).toContain('do NOT require IMAGE 2 to remain intact')
+    expect(prompt.system).toContain('cannot by itself make identityPreserved false')
+    expect(prompt.userMessage).toContain('same aircraft model breaking apart')
+    expect(prompt.userMessage).toContain('different aircraft model or unidentifiable generic debris')
+  })
 })

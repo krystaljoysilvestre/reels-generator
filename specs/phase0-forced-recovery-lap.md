@@ -1,7 +1,7 @@
 # Phase 0 forced-recovery lap
 
-**Status:** Ready to run
-**Date:** 2026-09-03
+**Status:** Blocked before the injected render boundary
+**Date:** 2026-09-09
 **Gate items:** 3 (a forced failure is visible in-product and one-click Retry reuses durable work) and
 4 (retry repeats no paid provider call and adds no cost twice)
 
@@ -74,14 +74,33 @@ counts for items 3 and 4.
 
 | Field | Value |
 | ----- | ----- |
-| Reel id / subject | |
-| Cost at failure | |
-| Cost after Retry (must match) | |
-| Failure visible in-product without help? | |
-| Retry clicks needed | |
-| Frame pass repeated? (expect no) | |
-| Any terminal / SQL / script touched? (expect none) | |
-| Wall-clock from Retry to render complete | |
+| Reel id / subject | `b2ce55d3-f388-474a-8a3f-20ececc7498a` / 1961 Goldsboro B-52 nuclear near miss |
+| Cost at failure | $2.16, during `generate_images`; the injected render boundary was never reached |
+| Cost after Retry (must match) | $2.16 |
+| Failure visible in-product without help? | Yes — Visuals failed with the preserved-work message and technical detail naming the missing `b-52-aircraft` reference in scenes 1 and 2 |
+| Retry clicks needed | One product Retry was attempted; it returned to the same pre-render failure |
+| Frame pass repeated? (expect no) | Not reached |
+| Any terminal / SQL / script touched? (expect none) | None before the product exposed the failure. Railway logs were read only after the lap had already failed, to diagnose the blocker |
+| Wall-clock from Retry to render complete | Not applicable — Retry failed again before image spend |
+
+### 2026-09-09 blocker
+
+The first live lap found a stricter failure before the fault-injection boundary. The Story Bible routed
+`b-52-aircraft` to a sourced reference plate and selected a story-time appearance in which the aircraft was
+broken apart. Sourcing the intact B-52 reference succeeded, but all state-adaptation candidates were rejected:
+the verifier required the same stable physical structure to remain intact while the target required separated
+fuselage sections and detached components. The two requirements are mutually exclusive for a destructive event.
+
+The product behavior around the failure was sound: it stopped before scene-image spend, explained that completed
+work was kept, exposed Retry, and the creator's Retry left the reel cost unchanged at $2.16. But Retry cannot heal
+the stored identity/state contract; later attempts fail immediately against the same missing-reference gate. The
+forced render-recovery lap therefore remains unrun. Disarm `FORCE_STEP_FAILURE`, repair and review the destructive
+identity-state contract, deploy that repair, then resume this same reel if the retry path can invalidate only the
+failed visual work; otherwise run a fresh lap.
+
+`FORCE_STEP_FAILURE` was removed immediately after diagnosis. Railway deployment
+`56385a81-914c-41c1-8095-07f79c3bfe65` became Active and the worker returned Online with 24 service variables;
+the temporary switch is no longer present.
 
 ## The lap fails if
 

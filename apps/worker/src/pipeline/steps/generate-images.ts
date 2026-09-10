@@ -148,7 +148,7 @@ export function sourceQueryCandidates(
 }
 
 export function buildStateAdaptationPrompt(basePrompt: string, stateDescription: string): string {
-  return `${basePrompt}\n\nIDENTITY-STATE LOCK: Preserve the source subject's exact physical geometry, proportions, openings, rim, and fixture details. TARGET STATE IS AUTHORITATIVE: render exactly its specified orientation, surface markings, labels, damage, and restoration. A source-state detail that is absent from or contradicts this target belongs to another moment and must not carry over. The finished reference MUST visibly satisfy this exact state: ${stateDescription}.`
+  return `${basePrompt}\n\nIDENTITY-STATE LOCK: Preserve the source subject's identity-defining geometry, proportions, openings, rim/edge shape, components, and markings wherever the target state does not explicitly change them. TARGET STATE IS AUTHORITATIVE: render exactly its specified orientation, surface markings, labels, damage, destruction, deformation, and restoration. A source-state detail that is absent from or contradicts this target belongs to another moment and must not carry over. If the target explicitly requires breakup, fragmentation, collapse, dismantling, crushing, burning, or another form-changing state, do not keep the subject intact merely to preserve identity; apply that change plausibly while retaining recognizable subject/model-specific features in the surviving form. The finished reference MUST visibly satisfy this exact state: ${stateDescription}.`
 }
 
 // Invariant-2 text helpers (personNameVariants / mentionsAny / scrubNames / SAFE_REPRESENTATIVE_STAGING)
@@ -551,8 +551,9 @@ export async function generateImages(reelId: string): Promise<void> {
     // referenceImageKey: the hash is the set of entities still MISSING a plate, so a swallowed plate failure
     // retries on the next run instead of being cached away as done.
     if (toMint.length > 0) {
-      const plateHash = buildInputHash('image_plates.v6', {
+      const plateHash = buildInputHash('image_plates.v7', {
         reelId,
+        templateVersion: ENTITY_SOURCE_V1_VERSION,
         // Depiction mode is IN the hash: a re-route (policy change, a subject reclassified) must re-mint
         // rather than serve a plate produced under the old mode.
         entities: toMint.map((target) => `${target.targetKey}|${target.parent.depiction?.depictionMode ?? 'generated'}|${target.renderEntity.description}`).sort().join('\n'),
