@@ -14,7 +14,7 @@
 import { z } from 'zod'
 import { SubjectClassSchema } from '../types/depiction.js'
 
-export const ENTITY_SOURCE_V1_VERSION = 'entity-source.v1.12'
+export const ENTITY_SOURCE_V1_VERSION = 'entity-source.v1.13'
 
 // (1) DECIDE — what class of real-world thing is this, and is it specific enough that a real photograph
 // would improve the render? The impact≠coverage guard is the whole point: a GENERIC subject (a bedroom, a
@@ -136,6 +136,7 @@ Also report whether the image APPEARS to be black-and-white / monochrome / sepia
   const userMessage = `Does IMAGE 1 depict "${name}"?
 Factual description:
 """${description}"""
+${usage === 'conditioning_reference' ? '\nApply the conditioning-reference rule strictly: do not cite a missing camera angle, setting, placement, motion/action, or hidden/internal detail as a reason to fail. A landed or recovered view may anchor an object depicted moving in the final shot. Judge only the named identity and durable state evidence visible in these pixels.\n' : ''}
 
 Return JSON: { "matches": boolean, "confidence": 0..1, "appearsGrayscale": boolean, "note": string }`
 

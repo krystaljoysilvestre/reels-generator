@@ -69,6 +69,8 @@ describe('entity source decision', () => {
     expect(prompt.system).toContain('CONDITIONING REFERENCE')
     expect(prompt.system).toContain('camera angle, background, placement, and transient action may differ')
     expect(prompt.system).toContain('durable visible configuration or historical state')
+    expect(prompt.userMessage).toContain('A landed or recovered view may anchor an object depicted moving')
+    expect(prompt.userMessage).toContain('hidden/internal detail')
   })
 
   it('verifies a derived state against source continuity without demanding later marks', () => {

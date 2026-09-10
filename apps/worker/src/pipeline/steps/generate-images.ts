@@ -169,10 +169,12 @@ export function verifiedSourceQueryCandidates(
   entity: { id: string; description: string },
   routing: Pick<DepictionRouting, 'query' | 'subjectClass'>,
   query = routing.query,
+  sourceContext = '',
 ): string[] {
   const effectiveRouting = query === routing.query ? routing : { ...routing, query }
   const exact = [
     query,
+    ...(sourceContext.trim() ? [`${routing.query} ${sourceContext.trim()}`] : []),
     ...(query === routing.query ? [] : [routing.query]),
   ]
   const exactWithAliases = exact.flatMap((value) => {
@@ -223,6 +225,7 @@ async function fetchVerifiedMedia(
   routing: DepictionRouting,
   usage: 'conditioning_reference' | 'presented_archival',
   query = routing.query,
+  sourceContext = '',
 ): Promise<{ media: SourcedMedia | null; costCents: number }> {
   let costCents = 0
   try {
@@ -234,7 +237,7 @@ async function fetchVerifiedMedia(
     // A generic analyzer id can be rescued by exact bound narration evidence. Once routing has resolved an
     // exact query, verify against that identity rather than weakening the check back to the shorthand id.
     const name = routing.query || entityName(entity.id)
-    const sourceQueries = verifiedSourceQueryCandidates(entity, routing, query)
+    const sourceQueries = verifiedSourceQueryCandidates(entity, routing, query, sourceContext)
     const seenSources = new Set<string>()
     let verifiedCandidates = 0
     // Article leads remain first. Commons ranks are then interleaved across query variants: rank 1 for every
@@ -330,6 +333,7 @@ async function sourceEntityPlate(
       routing,
       'conditioning_reference',
       stateQuery,
+      state.sourceContext,
     )
     bill(exactStateCost)
     if (exactState) {

@@ -258,9 +258,10 @@ bounded set of licence-clean non-human candidates after vision rejects the top r
 compact exact identity query as well as the fuller state query. Every distinct candidate still passes the
 same paid vision verifier; human identity remains excluded from this unanchored Commons path.
 
-Historical state retrieval includes the scene's factual location context and common designation aliases
-without weakening verification. For example, a `Mark 39` state query may also search `Mk 39`, and a state
-documented at Goldsboro carries that location into retrieval. Candidate ranks are interleaved across those
+Historical state retrieval includes both the full state description and a compact identity-plus-location
+query, along with common designation aliases, without weakening verification. For example, a `Mark 39` state
+query may also search `Mk 39`, and a state documented at Goldsboro carries that location into retrieval even
+when Commons cannot match the longer prose description. Candidate ranks are interleaved across those
 exact query variants before any one query advances deeper, so one noisy phrasing cannot exhaust the bounded
 vision-verification budget. These terms improve discovery only: the selected pixels must still pass the same
 exact identity-and-state check.

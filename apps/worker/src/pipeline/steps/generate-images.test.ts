@@ -99,16 +99,24 @@ describe('sourceQueryCandidates', () => {
 
 describe('verifiedSourceQueryCandidates', () => {
   it('tries the exact state and parent identity before analyzer shorthand fallbacks', () => {
+    const entity = { id: 'thermonuclear-weapon', description: 'a compact cylindrical weapon' }
+    const routing = { query: 'Mark 39 nuclear bomb', subjectClass: 'object' as const }
     const candidates = verifiedSourceQueryCandidates(
-      { id: 'thermonuclear-weapon', description: 'a compact cylindrical weapon' },
-      { query: 'Mark 39 nuclear bomb', subjectClass: 'object' },
+      entity,
+      routing,
       'Mark 39 nuclear bomb parachute deployed',
     )
-    expect(candidates.slice(0, 2)).toEqual([
+    const contextualCandidates = verifiedSourceQueryCandidates(
+      entity,
+      routing,
+      'Mark 39 nuclear bomb parachute deployed',
+      'Goldsboro, North Carolina',
+    )
+    expect(contextualCandidates.slice(0, 6)).toEqual([
       'Mark 39 nuclear bomb parachute deployed',
       'Mk 39 nuclear bomb parachute deployed',
-    ])
-    expect(candidates.slice(2, 4)).toEqual([
+      'Mark 39 nuclear bomb Goldsboro, North Carolina',
+      'Mk 39 nuclear bomb Goldsboro, North Carolina',
       'Mark 39 nuclear bomb',
       'Mk 39 nuclear bomb',
     ])
