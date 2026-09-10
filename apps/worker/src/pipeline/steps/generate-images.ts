@@ -171,9 +171,16 @@ export function verifiedSourceQueryCandidates(
   query = routing.query,
 ): string[] {
   const effectiveRouting = query === routing.query ? routing : { ...routing, query }
-  return [
+  const exact = [
     query,
     ...(query === routing.query ? [] : [routing.query]),
+  ]
+  const exactWithAliases = exact.flatMap((value) => {
+    const alias = value.replace(/\bmark(?=\s*-?\s*\d)/gi, 'Mk')
+    return alias.toLowerCase() === value.toLowerCase() ? [value] : [value, alias]
+  })
+  return [
+    ...exactWithAliases,
     ...sourceQueryCandidates(entity, effectiveRouting),
     ...(query === routing.query ? [] : sourceQueryCandidates(entity, routing)),
   ].filter((value, index, values) => values.findIndex((candidate) => candidate.toLowerCase() === value.toLowerCase()) === index)
@@ -230,59 +237,53 @@ async function fetchVerifiedMedia(
     const sourceQueries = verifiedSourceQueryCandidates(entity, routing, query)
     const seenSources = new Set<string>()
     let verifiedCandidates = 0
-    for (const sourceQuery of sourceQueries) {
-      // Article lead first preserves the strongest non-human identity anchor. If vision rejects that exact
-      // file, retry the SAME query against Commons directly before broadening the query: an article about a
-      // publication commonly leads with its cover while the required issue/page exists as a separate file.
-      // Humans deliberately never get this unanchored path.
-      const searchModes = isHuman ? [false] : [false, true]
-      for (const preferCommonsSearch of searchModes) {
-        const candidateIndexes = preferCommonsSearch
-          ? Array.from({ length: MAX_COMMONS_CANDIDATES_PER_QUERY }, (_, index) => index)
-          : [0]
-        for (const commonsCandidateIndex of candidateIndexes) {
-          try {
-            const img = await sourceEntityImage(sourceQuery, {
-              requireArticleIdentity: isHuman,
-              preferCommonsSearch,
-              ...(preferCommonsSearch ? { commonsCandidateIndex } : {}),
-            })
-            if (!img || seenSources.has(img.sourceUrl)) continue
-            seenSources.add(img.sourceUrl)
-            if (verifiedCandidates++ >= MAX_VERIFIED_SOURCE_CANDIDATES) return { media: null, costCents }
-            const vp = buildEntityVerifyPrompt(subjectClass, name, entity.description, usage)
-            const verify = await llmCall({
-              templateVersion: ENTITY_SOURCE_V1_VERSION, schema: EntityVerifySchema,
-              provider: 'anthropic', model: DEPICTION_MODEL,
-              system: vp.system,
-              messages: [{ role: 'user', content: [{ type: 'image', mediaType: img.mime, base64: img.buffer.toString('base64') }, { type: 'text', text: vp.userMessage }] }],
-            })
-            costCents += verify.costCents
-            const minConfidence = isHuman ? HUMAN_VERIFY_MIN_CONFIDENCE : ENTITY_VERIFY_MIN_CONFIDENCE
-            if (!verify.data.matches || verify.data.confidence < minConfidence) {
-              console.warn(`[generate-images] "${entity.id}" candidate "${img.title}" rejected by verify (matches=${verify.data.matches}, confidence=${verify.data.confidence} < ${minConfidence}; ${verify.data.note})`)
-              continue
-            }
-
-            return {
-              media: {
-                buffer: img.buffer,
-                mime: img.mime,
-                appearsGrayscale: verify.data.appearsGrayscale ?? false,
-                origin: {
-                  type: 'sourced', provider: 'wikimedia', usage, subjectClass,
-                  url: img.sourceUrl, license: img.license, licenseUrl: img.licenseUrl, author: img.author,
-                  articleUrl: img.articleUrl,
-                  ...(img.wikibaseItem ? { wikibaseItem: img.wikibaseItem } : {}),
-                },
-              },
-              costCents,
-            }
-          } catch (candidateError) {
-            console.warn(`[generate-images] source candidate "${sourceQuery}"${preferCommonsSearch ? ` (Commons rank ${commonsCandidateIndex + 1})` : ''} failed for "${entity.id}": ${candidateError instanceof Error ? candidateError.message : String(candidateError)}`)
-          }
-        }
+    // Article leads remain first. Commons ranks are then interleaved across query variants: rank 1 for every
+    // exact query before rank 2 for any one query, so one noisy long query cannot consume the vision budget.
+    const attempts = sourceQueries.map((sourceQuery) => ({ sourceQuery, preferCommonsSearch: false, commonsCandidateIndex: 0 }))
+    if (!isHuman) {
+      for (let commonsCandidateIndex = 0; commonsCandidateIndex < MAX_COMMONS_CANDIDATES_PER_QUERY; commonsCandidateIndex++) {
+        for (const sourceQuery of sourceQueries) attempts.push({ sourceQuery, preferCommonsSearch: true, commonsCandidateIndex })
       }
+    }
+    for (const { sourceQuery, preferCommonsSearch, commonsCandidateIndex } of attempts) try {
+      const img = await sourceEntityImage(sourceQuery, {
+        requireArticleIdentity: isHuman,
+        preferCommonsSearch,
+        ...(preferCommonsSearch ? { commonsCandidateIndex } : {}),
+      })
+      if (!img || seenSources.has(img.sourceUrl)) continue
+      seenSources.add(img.sourceUrl)
+      if (verifiedCandidates++ >= MAX_VERIFIED_SOURCE_CANDIDATES) return { media: null, costCents }
+      const vp = buildEntityVerifyPrompt(subjectClass, name, entity.description, usage)
+      const verify = await llmCall({
+        templateVersion: ENTITY_SOURCE_V1_VERSION, schema: EntityVerifySchema,
+        provider: 'anthropic', model: DEPICTION_MODEL,
+        system: vp.system,
+        messages: [{ role: 'user', content: [{ type: 'image', mediaType: img.mime, base64: img.buffer.toString('base64') }, { type: 'text', text: vp.userMessage }] }],
+      })
+      costCents += verify.costCents
+      const minConfidence = isHuman ? HUMAN_VERIFY_MIN_CONFIDENCE : ENTITY_VERIFY_MIN_CONFIDENCE
+      if (!verify.data.matches || verify.data.confidence < minConfidence) {
+        console.warn(`[generate-images] "${entity.id}" candidate "${img.title}" rejected by verify (matches=${verify.data.matches}, confidence=${verify.data.confidence} < ${minConfidence}; ${verify.data.note})`)
+        continue
+      }
+
+      return {
+        media: {
+          buffer: img.buffer,
+          mime: img.mime,
+          appearsGrayscale: verify.data.appearsGrayscale ?? false,
+          origin: {
+            type: 'sourced', provider: 'wikimedia', usage, subjectClass,
+            url: img.sourceUrl, license: img.license, licenseUrl: img.licenseUrl, author: img.author,
+            articleUrl: img.articleUrl,
+            ...(img.wikibaseItem ? { wikibaseItem: img.wikibaseItem } : {}),
+          },
+        },
+        costCents,
+      }
+    } catch (candidateError) {
+      console.warn(`[generate-images] source candidate "${sourceQuery}"${preferCommonsSearch ? ` (Commons rank ${commonsCandidateIndex + 1})` : ''} failed for "${entity.id}": ${candidateError instanceof Error ? candidateError.message : String(candidateError)}`)
     }
     return { media: null, costCents }
   } catch (err) {
@@ -313,7 +314,7 @@ async function sourceEntityPlate(
   reelId: string,
   engine: ImageEngine,
   bill: (cents: number) => void,
-  state?: { id: string; prompt: string },
+  state?: { id: string; prompt: string; sourceContext?: string },
 ): Promise<PlateSourceResult> {
   if (routing.subjectClass === 'fictional' || routing.subjectClass === 'generic') return { sourced: false }
   // Prefer real pixels of the exact historical state when they exist. Deriving every state from a museum
@@ -321,7 +322,9 @@ async function sourceEntityPlate(
   // Goldsboro proved that it can repeatedly turn an exact Mark 39 into generic ordnance even while Commons
   // holds public-domain USAF photographs of both recovered weapon states.
   if (state) {
-    const stateQuery = `${routing.query} ${renderEntity.description}`.trim()
+    const stateQuery = [routing.query, renderEntity.description, state.sourceContext]
+      .filter((value): value is string => Boolean(value?.trim()))
+      .join(' ')
     const { media: exactState, costCents: exactStateCost } = await fetchVerifiedMedia(
       renderEntity,
       routing,
@@ -530,6 +533,7 @@ export async function generateImages(reelId: string): Promise<void> {
       appearance: CharacterAppearance | null
       renderEntity: BibleEntity
       targetKey: string
+      sourceContext: string
     }
     const targetMap = new Map<string, PlateTarget>()
     for (const s of reelScenes) {
@@ -548,7 +552,13 @@ export async function generateImages(reelId: string): Promise<void> {
           ? parent.appearances?.find((candidate) => slug(candidate.id) === slug(appearanceId)) ?? null
           : null
         const targetKey = `${slug(parent.id)}::${appearance ? slug(appearance.id) : 'base'}`
-        targetMap.set(targetKey, { parent, appearance, renderEntity: entityAtAppearance(parent, appearance?.id), targetKey })
+        targetMap.set(targetKey, {
+          parent,
+          appearance,
+          renderEntity: entityAtAppearance(parent, appearance?.id),
+          targetKey,
+          sourceContext: s.location?.trim() ?? '',
+        })
       }
     }
     const plateTargets = [...targetMap.values()]
@@ -697,6 +707,7 @@ export async function generateImages(reelId: string): Promise<void> {
                       ? {
                           id: target.appearance.id,
                           prompt: assembleReferencePrompt(entity, effectiveStyle, lighting, cast),
+                          sourceContext: target.sourceContext,
                         }
                       : undefined,
                   )

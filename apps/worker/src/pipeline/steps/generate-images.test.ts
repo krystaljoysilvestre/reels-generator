@@ -106,7 +106,11 @@ describe('verifiedSourceQueryCandidates', () => {
     )
     expect(candidates.slice(0, 2)).toEqual([
       'Mark 39 nuclear bomb parachute deployed',
+      'Mk 39 nuclear bomb parachute deployed',
+    ])
+    expect(candidates.slice(2, 4)).toEqual([
       'Mark 39 nuclear bomb',
+      'Mk 39 nuclear bomb',
     ])
     expect(candidates).toContain('Thermonuclear Weapon')
   })
