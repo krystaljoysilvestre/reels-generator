@@ -164,6 +164,18 @@ export function sourceQueryCandidates(
   })
 }
 
+// Scene locations are free-form creative text, not normalized place ids (live example: "in the sky above
+// Goldsboro"). Search the full context first, then mechanically back off from both boundaries. This avoids
+// language-specific stop-word lists while still surfacing a proper-name token when MediaWiki's all-terms
+// search cannot match the surrounding prose.
+export function contextualIdentityQueries(identityQuery: string, sourceContext: string): string[] {
+  const tokens = sourceContext.trim().split(/\s+/).filter(Boolean)
+  if (tokens.length === 0) return []
+  const contexts = [tokens.join(' ')]
+  if (tokens.length > 1) contexts.push(tokens.at(-1)!, tokens[0]!)
+  return contexts.map((context) => `${identityQuery} ${context}`.trim())
+}
+
 /** Exact state first, exact parent identity second, then bounded broader fallbacks. */
 export function verifiedSourceQueryCandidates(
   entity: { id: string; description: string },
@@ -174,7 +186,7 @@ export function verifiedSourceQueryCandidates(
   const effectiveRouting = query === routing.query ? routing : { ...routing, query }
   const exact = [
     query,
-    ...(sourceContext.trim() ? [`${routing.query} ${sourceContext.trim()}`] : []),
+    ...contextualIdentityQueries(routing.query, sourceContext),
     ...(query === routing.query ? [] : [routing.query]),
   ]
   const exactWithAliases = exact.flatMap((value) => {

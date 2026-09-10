@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { SourcePolicySchema } from '@reels/core'
-import { applyDepictionRouting, assertSceneImageTruthReady, buildStateAdaptationPrompt, imageTruthNeedsRetry, requiresVisualTruthQa, sourceQueryCandidates, verifiedSourceQueryCandidates } from './generate-images.js'
+import { applyDepictionRouting, assertSceneImageTruthReady, buildStateAdaptationPrompt, contextualIdentityQueries, imageTruthNeedsRetry, requiresVisualTruthQa, sourceQueryCandidates, verifiedSourceQueryCandidates } from './generate-images.js'
 
 describe('requiresVisualTruthQa', () => {
   it('enrolls evidence-required reels independently of creative genre', () => {
@@ -98,6 +98,14 @@ describe('sourceQueryCandidates', () => {
 })
 
 describe('verifiedSourceQueryCandidates', () => {
+  it('backs off free-form location prose without language-specific stop words', () => {
+    expect(contextualIdentityQueries('Mark 39 nuclear bomb', 'in the sky above Goldsboro').slice(0, 3)).toEqual([
+      'Mark 39 nuclear bomb in the sky above Goldsboro',
+      'Mark 39 nuclear bomb Goldsboro',
+      'Mark 39 nuclear bomb in',
+    ])
+  })
+
   it('tries the exact state and parent identity before analyzer shorthand fallbacks', () => {
     const entity = { id: 'thermonuclear-weapon', description: 'a compact cylindrical weapon' }
     const routing = { query: 'Mark 39 nuclear bomb', subjectClass: 'object' as const }
@@ -112,14 +120,14 @@ describe('verifiedSourceQueryCandidates', () => {
       'Mark 39 nuclear bomb parachute deployed',
       'Goldsboro, North Carolina',
     )
-    expect(contextualCandidates.slice(0, 6)).toEqual([
+    expect(contextualCandidates.slice(0, 4)).toEqual([
       'Mark 39 nuclear bomb parachute deployed',
       'Mk 39 nuclear bomb parachute deployed',
       'Mark 39 nuclear bomb Goldsboro, North Carolina',
       'Mk 39 nuclear bomb Goldsboro, North Carolina',
-      'Mark 39 nuclear bomb',
-      'Mk 39 nuclear bomb',
     ])
+    expect(contextualCandidates).toContain('Mark 39 nuclear bomb')
+    expect(contextualCandidates).toContain('Mk 39 nuclear bomb')
     expect(candidates).toContain('Thermonuclear Weapon')
   })
 })

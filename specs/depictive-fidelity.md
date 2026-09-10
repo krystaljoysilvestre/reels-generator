@@ -261,7 +261,9 @@ same paid vision verifier; human identity remains excluded from this unanchored 
 Historical state retrieval includes both the full state description and a compact identity-plus-location
 query, along with common designation aliases, without weakening verification. For example, a `Mark 39` state
 query may also search `Mk 39`, and a state documented at Goldsboro carries that location into retrieval even
-when Commons cannot match the longer prose description. Candidate ranks are interleaved across those
+when Commons cannot match the longer prose description. Because scene locations are free-form and may say
+`in the sky above Goldsboro`, retrieval mechanically backs off from both phrase boundaries instead of using
+language-specific stop words; the identity term remains attached to every query. Candidate ranks are interleaved across those
 exact query variants before any one query advances deeper, so one noisy phrasing cannot exhaust the bounded
 vision-verification budget. These terms improve discovery only: the selected pixels must still pass the same
 exact identity-and-state check.

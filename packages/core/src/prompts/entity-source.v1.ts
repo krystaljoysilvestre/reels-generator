@@ -14,7 +14,7 @@
 import { z } from 'zod'
 import { SubjectClassSchema } from '../types/depiction.js'
 
-export const ENTITY_SOURCE_V1_VERSION = 'entity-source.v1.13'
+export const ENTITY_SOURCE_V1_VERSION = 'entity-source.v1.14'
 
 // (1) DECIDE — what class of real-world thing is this, and is it specific enough that a real photograph
 // would improve the render? The impact≠coverage guard is the whole point: a GENERIC subject (a bedroom, a
@@ -114,11 +114,14 @@ export function buildEntityVerifyPrompt(
   description: string,
   usage?: 'conditioning_reference' | 'presented_archival',
 ): { system: string; userMessage: string } {
+  const objectCriteria = usage === 'conditioning_reference'
+    ? `the named object itself, clearly the subject of the frame. Fail a different object, a generic example of its category, a replica presented as something else, a map, a diagram, or a logo. Require identity-defining shape and any DURABLE VISIBLE CONFIGURATION explicitly named in the description. Do not treat final-shot motion, action, camera, setting, placement, or hidden/internal mechanisms as required state. Example: for "descending with a deployed parachute," require the correct object and a visibly deployed parachute, but NEVER require the reference to be airborne; a landed or recovered view with that parachute visible passes. A museum view without the required deployed parachute fails that configuration. Safing pins, switch positions, arming sequences, and other internal or non-visible states never cause failure unless the image is explicitly a close-up intended to expose them.`
+    : 'the named object itself, clearly the subject of the frame. Fail a different object, a generic example of its category, a replica presented as something else, a map, a diagram, or a logo. A museum or archival photograph of the real object passes. When the description requires a dated issue, edition, version, marking, damage state, restoration state, or other exact historical state, that state is part of identity: fail an image that visibly contradicts it or only shows a different edition/state. Judge only what the pixels can establish: do not demand visible proof of an internal, hidden, microscopic, or otherwise non-visible mechanism/state unless the description explicitly requires it exposed on screen.'
   // What counts as a match differs by class, and a place-worded rule misjudges the others: a portrait is the
   // CORRECT result for a person and a disqualifying result for a building.
   const criteria: Record<typeof subjectClass, string> = {
     place: 'the right kind of structure or landscape with matching distinctive features. Fail a different subject, a generic stand-in, a map, a diagram, a logo, or a portrait of a person.',
-    object: 'the named object itself, clearly the subject of the frame. Fail a different object, a generic example of its category, a replica presented as something else, a map, a diagram, or a logo. A museum or archival photograph of the real object passes. When the description requires a dated issue, edition, version, marking, damage state, restoration state, or other exact historical state, that state is part of identity: fail an image that visibly contradicts it or only shows a different edition/state. Judge only what the pixels can establish: do not demand visible proof of an internal, hidden, microscopic, or otherwise non-visible mechanism/state unless the description explicitly requires it exposed on screen.',
+    object: objectCriteria,
     animal: 'the named species or individual animal, clearly the subject. Fail a different species, an illustration presented as a photograph, a diagram, or a logo. A photograph of the animal in any setting — wild, captive, or archival — passes.',
     human: 'the named person, as a portrait, photograph, painted portrait, or historical image of them. Fail a different person, an anonymous figure, a crowd, a statue or monument OF them rather than an image of them, a map, a document, or a logo. When you are not confident it is this specific person, FAIL — a similar-looking stranger is the failure mode this check exists to stop.',
   }
