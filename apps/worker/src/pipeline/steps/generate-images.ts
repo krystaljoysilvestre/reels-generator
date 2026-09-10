@@ -37,11 +37,15 @@ const MAX_QA_REROLLS = 1
 
 export function applyDepictionRouting(entity: BibleEntity, routing: DepictionRouting): void {
   const previousMode = entity.depiction?.depictionMode
+  const previousClassifierVersion = entity.depiction?.classifierVersion
   entity.depiction = routing
   // A classifier correction from exact real identity to generated context must not leave the old source
   // plate attached: conditionableReferenceKeys would otherwise keep using pixels that the new verdict
   // explicitly says do not represent this entity.
-  if (previousMode === 'reference_plate' && routing.depictionMode !== 'reference_plate') {
+  if (previousMode === 'reference_plate' && (
+    routing.depictionMode !== 'reference_plate'
+    || previousClassifierVersion !== routing.classifierVersion
+  )) {
     delete entity.referenceImageKey
     delete entity.referenceOrigin
     for (const appearance of entity.appearances ?? []) {
@@ -185,19 +189,34 @@ export function contextualIdentityQueries(identityQuery: string, sourceContext: 
   return contexts.map((context) => `${identityQuery} ${context}`.trim())
 }
 
-export function verifiedSourceAttempts(sourceQueries: string[], isHuman: boolean): VerifiedSourceAttempt[] {
+export function verifiedSourceAttempts(
+  sourceQueries: string[],
+  isHuman: boolean,
+  firstCommonsDepth = 1,
+): VerifiedSourceAttempt[] {
   if (isHuman) {
     return sourceQueries.map((sourceQuery) => ({ sourceQuery, preferCommonsSearch: false, commonsCandidateIndex: 0 }))
   }
   // Pair each phrasing's article lead with its top Commons result before moving to the next phrasing. This
   // lets an exact file beat a merely related article lead without allowing one query to consume every deep
   // rank. After rank 0, rotate across all phrasings one rank at a time.
-  const attempts = sourceQueries.flatMap((sourceQuery) => [
-    { sourceQuery, preferCommonsSearch: true, commonsCandidateIndex: 0 },
-    { sourceQuery, preferCommonsSearch: false, commonsCandidateIndex: 0 },
-  ])
+  const attempts: VerifiedSourceAttempt[] = []
+  const boundedFirstDepth = Math.max(1, Math.min(firstCommonsDepth, MAX_COMMONS_CANDIDATES_PER_QUERY))
+  const firstQuery = sourceQueries[0]
+  if (firstQuery) {
+    for (let commonsCandidateIndex = 0; commonsCandidateIndex < boundedFirstDepth; commonsCandidateIndex++) {
+      attempts.push({ sourceQuery: firstQuery, preferCommonsSearch: true, commonsCandidateIndex })
+    }
+  }
+  for (const [index, sourceQuery] of sourceQueries.entries()) {
+    if (index > 0) attempts.push({ sourceQuery, preferCommonsSearch: true, commonsCandidateIndex: 0 })
+    attempts.push({ sourceQuery, preferCommonsSearch: false, commonsCandidateIndex: 0 })
+  }
   for (let commonsCandidateIndex = 1; commonsCandidateIndex < MAX_COMMONS_CANDIDATES_PER_QUERY; commonsCandidateIndex++) {
-    for (const sourceQuery of sourceQueries) attempts.push({ sourceQuery, preferCommonsSearch: true, commonsCandidateIndex })
+    for (const [index, sourceQuery] of sourceQueries.entries()) {
+      if (index === 0 && commonsCandidateIndex < boundedFirstDepth) continue
+      attempts.push({ sourceQuery, preferCommonsSearch: true, commonsCandidateIndex })
+    }
   }
   return attempts
 }
@@ -278,7 +297,7 @@ async function fetchVerifiedMedia(
     const sourceQueries = verifiedSourceQueryCandidates(entity, routing, query, sourceContext)
     const seenSources = new Set<string>()
     let verifiedCandidates = 0
-    const attempts = verifiedSourceAttempts(sourceQueries, isHuman)
+    const attempts = verifiedSourceAttempts(sourceQueries, isHuman, sourceContext.trim() ? 3 : 1)
     for (const { sourceQuery, preferCommonsSearch, commonsCandidateIndex } of attempts) try {
       const img = await sourceEntityImage(sourceQuery, {
         requireArticleIdentity: isHuman,

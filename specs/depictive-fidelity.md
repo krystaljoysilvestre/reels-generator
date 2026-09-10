@@ -268,10 +268,15 @@ when Commons cannot match the longer prose description. Because scene locations 
 language-specific stop words; the identity term remains attached to every query. Each phrasing's article lead
 is paired with its top Commons file before retrieval moves on. For non-human subjects, the Commons file runs
 first, and a compact boundary query precedes long location prose that may time out or match nothing. Deeper
-ranks are then interleaved across those
+ranks of that strongest contextual query get a small head start before remaining ranks are interleaved across
+those
 exact query variants before any one query advances deeper, so one noisy phrasing cannot exhaust the bounded
 vision-verification budget. These terms improve discovery only: the selected pixels must still pass the same
 exact identity-and-state check.
+
+A source-verification contract version change invalidates previously persisted sourced plates before retry.
+Keeping a plate accepted under the older contract would make the new verifier impossible to exercise and
+would regenerate every scene from the same known-bad pixels.
 
 The exact narration-supported identity is load-bearing twice: routing uses the factual-reasoning model, and
 the resolved query is spliced into every reference and scene prompt ahead of older analyzer shorthand. The

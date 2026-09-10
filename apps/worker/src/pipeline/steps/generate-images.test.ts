@@ -107,6 +107,14 @@ describe('verifiedSourceQueryCandidates', () => {
     ])
   })
 
+  it('inspects deeper ranks of the strongest contextual query before broadening', () => {
+    expect(verifiedSourceAttempts(['identity Goldsboro', 'full state'], false, 3).slice(0, 3)).toEqual([
+      { sourceQuery: 'identity Goldsboro', preferCommonsSearch: true, commonsCandidateIndex: 0 },
+      { sourceQuery: 'identity Goldsboro', preferCommonsSearch: true, commonsCandidateIndex: 1 },
+      { sourceQuery: 'identity Goldsboro', preferCommonsSearch: true, commonsCandidateIndex: 2 },
+    ])
+  })
+
   it('backs off free-form location prose without language-specific stop words', () => {
     expect(contextualIdentityQueries('Mark 39 nuclear bomb', 'in the sky above Goldsboro').slice(0, 3)).toEqual([
       'Mark 39 nuclear bomb Goldsboro',
@@ -144,6 +152,32 @@ describe('verifiedSourceQueryCandidates', () => {
 })
 
 describe('applyDepictionRouting', () => {
+  it('clears appearance plates when the source-verification contract changes', () => {
+    const entity = {
+      id: 'thermonuclear-weapon',
+      kind: 'object' as const,
+      description: 'two Mark 39 nuclear bombs',
+      depiction: {
+        subjectClass: 'object' as const,
+        depictionMode: 'reference_plate' as const,
+        eligibilityReason: 'real_subject' as const,
+        query: 'Mark 39 nuclear bomb',
+        classifierVersion: 'entity-source.v1.16',
+      },
+      appearances: [{
+        id: 'parachute-deployed',
+        description: 'descending under a parachute',
+        referenceImageKey: 'reels/reel/refs/old.webp',
+        referenceOrigin: { type: 'sourced' as const, sourceAssetKey: 'reels/reel/refs/old.webp' },
+      }],
+    }
+
+    applyDepictionRouting(entity, { ...entity.depiction, classifierVersion: 'entity-source.v1.17' })
+
+    expect(entity.appearances[0]!.referenceImageKey).toBeUndefined()
+    expect(entity.appearances[0]!.referenceOrigin).toBeUndefined()
+  })
+
   it('clears a stale sourced plate when an old exact-identity verdict becomes generated context', () => {
     const entity = {
       id: 'apollo-12',
