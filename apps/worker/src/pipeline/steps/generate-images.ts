@@ -136,6 +136,12 @@ const MAX_STATE_PLATE_ATTEMPTS = 3
 const MAX_COMMONS_CANDIDATES_PER_QUERY = 5
 const MAX_VERIFIED_SOURCE_CANDIDATES = 8
 
+interface VerifiedSourceAttempt {
+  sourceQuery: string
+  preferCommonsSearch: boolean
+  commonsCandidateIndex: number
+}
+
 // The bible entity id IS the subject name in kebab-case ("paoay-church", "jose-rizal"); de-kebab it so the
 // decider judges by the NAME, not only the feature-list description (which often doesn't name the subject).
 const entityName = (id: string) => id.split('-').map((w) => (w ? w[0]!.toUpperCase() + w.slice(1) : w)).join(' ')
@@ -174,6 +180,23 @@ export function contextualIdentityQueries(identityQuery: string, sourceContext: 
   const contexts = [tokens.join(' ')]
   if (tokens.length > 1) contexts.push(tokens.at(-1)!, tokens[0]!)
   return contexts.map((context) => `${identityQuery} ${context}`.trim())
+}
+
+export function verifiedSourceAttempts(sourceQueries: string[], isHuman: boolean): VerifiedSourceAttempt[] {
+  if (isHuman) {
+    return sourceQueries.map((sourceQuery) => ({ sourceQuery, preferCommonsSearch: false, commonsCandidateIndex: 0 }))
+  }
+  // Pair each phrasing's article lead with its top Commons result before moving to the next phrasing. This
+  // lets an exact file beat a merely related article lead without allowing one query to consume every deep
+  // rank. After rank 0, rotate across all phrasings one rank at a time.
+  const attempts = sourceQueries.flatMap((sourceQuery) => [
+    { sourceQuery, preferCommonsSearch: false, commonsCandidateIndex: 0 },
+    { sourceQuery, preferCommonsSearch: true, commonsCandidateIndex: 0 },
+  ])
+  for (let commonsCandidateIndex = 1; commonsCandidateIndex < MAX_COMMONS_CANDIDATES_PER_QUERY; commonsCandidateIndex++) {
+    for (const sourceQuery of sourceQueries) attempts.push({ sourceQuery, preferCommonsSearch: true, commonsCandidateIndex })
+  }
+  return attempts
 }
 
 /** Exact state first, exact parent identity second, then bounded broader fallbacks. */
@@ -252,14 +275,7 @@ async function fetchVerifiedMedia(
     const sourceQueries = verifiedSourceQueryCandidates(entity, routing, query, sourceContext)
     const seenSources = new Set<string>()
     let verifiedCandidates = 0
-    // Article leads remain first. Commons ranks are then interleaved across query variants: rank 1 for every
-    // exact query before rank 2 for any one query, so one noisy long query cannot consume the vision budget.
-    const attempts = sourceQueries.map((sourceQuery) => ({ sourceQuery, preferCommonsSearch: false, commonsCandidateIndex: 0 }))
-    if (!isHuman) {
-      for (let commonsCandidateIndex = 0; commonsCandidateIndex < MAX_COMMONS_CANDIDATES_PER_QUERY; commonsCandidateIndex++) {
-        for (const sourceQuery of sourceQueries) attempts.push({ sourceQuery, preferCommonsSearch: true, commonsCandidateIndex })
-      }
-    }
+    const attempts = verifiedSourceAttempts(sourceQueries, isHuman)
     for (const { sourceQuery, preferCommonsSearch, commonsCandidateIndex } of attempts) try {
       const img = await sourceEntityImage(sourceQuery, {
         requireArticleIdentity: isHuman,

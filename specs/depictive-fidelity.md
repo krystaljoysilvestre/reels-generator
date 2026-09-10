@@ -250,8 +250,10 @@ adapted into that state, and avoids paying a generator to reconstruct evidence t
 exact-state sourcing fails does the existing source-identity → state-adaptation path run. The exact-state source
 remains conditioning media unless the director explicitly chose source presentation; it carries the same
 provenance and never masquerades as a generated frame. Source verification therefore requires the exact
-identity and durable visible state, but does not reject a conditioning photograph merely because its camera,
-background, placement, or transient action differs from the eventual staged shot.
+identity and intrinsic durable state (edition, markings, damage, restoration), but does not reject a
+conditioning photograph merely because its camera, background, placement, transient action, or temporary
+external apparatus differs from the eventual staged shot. The final generated frame and image QA own those
+visible scene requirements.
 
 Commons search rank is only a retrieval hint, not an identity verdict. Sourcing may advance through a small,
 bounded set of licence-clean non-human candidates after vision rejects the top result, and it retries the
@@ -263,7 +265,8 @@ query, along with common designation aliases, without weakening verification. Fo
 query may also search `Mk 39`, and a state documented at Goldsboro carries that location into retrieval even
 when Commons cannot match the longer prose description. Because scene locations are free-form and may say
 `in the sky above Goldsboro`, retrieval mechanically backs off from both phrase boundaries instead of using
-language-specific stop words; the identity term remains attached to every query. Candidate ranks are interleaved across those
+language-specific stop words; the identity term remains attached to every query. Each phrasing's article lead
+is paired with its top Commons file before retrieval moves on, then deeper ranks are interleaved across those
 exact query variants before any one query advances deeper, so one noisy phrasing cannot exhaust the bounded
 vision-verification budget. These terms improve discovery only: the selected pixels must still pass the same
 exact identity-and-state check.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { SourcePolicySchema } from '@reels/core'
-import { applyDepictionRouting, assertSceneImageTruthReady, buildStateAdaptationPrompt, contextualIdentityQueries, imageTruthNeedsRetry, requiresVisualTruthQa, sourceQueryCandidates, verifiedSourceQueryCandidates } from './generate-images.js'
+import { applyDepictionRouting, assertSceneImageTruthReady, buildStateAdaptationPrompt, contextualIdentityQueries, imageTruthNeedsRetry, requiresVisualTruthQa, sourceQueryCandidates, verifiedSourceAttempts, verifiedSourceQueryCandidates } from './generate-images.js'
 
 describe('requiresVisualTruthQa', () => {
   it('enrolls evidence-required reels independently of creative genre', () => {
@@ -98,6 +98,15 @@ describe('sourceQueryCandidates', () => {
 })
 
 describe('verifiedSourceQueryCandidates', () => {
+  it('checks each exact query\'s top Commons file before unrelated article leads consume the budget', () => {
+    expect(verifiedSourceAttempts(['full state', 'identity Goldsboro'], false).slice(0, 4)).toEqual([
+      { sourceQuery: 'full state', preferCommonsSearch: false, commonsCandidateIndex: 0 },
+      { sourceQuery: 'full state', preferCommonsSearch: true, commonsCandidateIndex: 0 },
+      { sourceQuery: 'identity Goldsboro', preferCommonsSearch: false, commonsCandidateIndex: 0 },
+      { sourceQuery: 'identity Goldsboro', preferCommonsSearch: true, commonsCandidateIndex: 0 },
+    ])
+  })
+
   it('backs off free-form location prose without language-specific stop words', () => {
     expect(contextualIdentityQueries('Mark 39 nuclear bomb', 'in the sky above Goldsboro').slice(0, 3)).toEqual([
       'Mark 39 nuclear bomb in the sky above Goldsboro',

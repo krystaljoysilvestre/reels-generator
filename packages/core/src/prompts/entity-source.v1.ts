@@ -14,7 +14,7 @@
 import { z } from 'zod'
 import { SubjectClassSchema } from '../types/depiction.js'
 
-export const ENTITY_SOURCE_V1_VERSION = 'entity-source.v1.14'
+export const ENTITY_SOURCE_V1_VERSION = 'entity-source.v1.15'
 
 // (1) DECIDE — what class of real-world thing is this, and is it specific enough that a real photograph
 // would improve the render? The impact≠coverage guard is the whole point: a GENERIC subject (a bedroom, a
@@ -115,7 +115,7 @@ export function buildEntityVerifyPrompt(
   usage?: 'conditioning_reference' | 'presented_archival',
 ): { system: string; userMessage: string } {
   const objectCriteria = usage === 'conditioning_reference'
-    ? `the named object itself, clearly the subject of the frame. Fail a different object, a generic example of its category, a replica presented as something else, a map, a diagram, or a logo. Require identity-defining shape and any DURABLE VISIBLE CONFIGURATION explicitly named in the description. Do not treat final-shot motion, action, camera, setting, placement, or hidden/internal mechanisms as required state. Example: for "descending with a deployed parachute," require the correct object and a visibly deployed parachute, but NEVER require the reference to be airborne; a landed or recovered view with that parachute visible passes. A museum view without the required deployed parachute fails that configuration. Safing pins, switch positions, arming sequences, and other internal or non-visible states never cause failure unless the image is explicitly a close-up intended to expose them.`
+    ? `the named object itself, clearly the subject of the frame. Fail a different object, a generic example of its category, a replica presented as something else, a map, a diagram, or a logo. Require identity-defining shape and INTRINSIC DURABLE STATE explicitly named in the description, including edition, markings, damage, or restoration. Do not treat final-shot motion, action, camera, setting, placement, temporary external apparatus, or hidden/internal mechanisms as identity state. Example: for "descending with a deployed parachute," require the correct object, but NEVER require the conditioning reference to be airborne or to include the temporary parachute inside its crop; the final generated scene and its QA own that visible action. Safing pins, switch positions, arming sequences, and other internal or non-visible states never cause failure unless the image is explicitly a close-up intended to expose them.`
     : 'the named object itself, clearly the subject of the frame. Fail a different object, a generic example of its category, a replica presented as something else, a map, a diagram, or a logo. A museum or archival photograph of the real object passes. When the description requires a dated issue, edition, version, marking, damage state, restoration state, or other exact historical state, that state is part of identity: fail an image that visibly contradicts it or only shows a different edition/state. Judge only what the pixels can establish: do not demand visible proof of an internal, hidden, microscopic, or otherwise non-visible mechanism/state unless the description explicitly requires it exposed on screen.'
   // What counts as a match differs by class, and a place-worded rule misjudges the others: a portrait is the
   // CORRECT result for a person and a disqualifying result for a building.
