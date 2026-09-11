@@ -46,15 +46,15 @@ the fresh product-only reel still remain. The render path now commits `visual.mp
 checkpoint immediately after upload, so the forced lap can lose its queue/render step after that boundary and
 prove one-click Retry skips the already-finished frame pass without R2 inspection or manual salvage.
 
-**Sprint status — 2026-09-09, day 7 of 10 working days; the window closes 2026-09-14:**
+**Sprint status — 2026-09-10, day 8 of 10 working days; the window closes 2026-09-14:**
 
 | # | Criterion | State |
 | - | --------- | ----- |
-| 1–2 | Fresh reel completes invite/sign-in → export in the deployed product, no terminal/SQL/scripts | **Not started** |
-| 3 | Forced failure visible in-product; one-click Retry reuses durable work | **Automated proof green and committed** (`6e9ff51`); hosted lap now **unblocked** — the code is live on the worker as of 2026-09-04 |
-| 4 | Retry repeats no paid provider call and no cost | **Automated proof green and committed** — cached step returns `costCents: 0`, provider never called, ledger unmoved; hosted lap pending |
+| 1–2 | Fresh reel completes invite/sign-in → export in the deployed product, no terminal/SQL/scripts | **Artifact complete; strict proof still open.** Reel `b2ce55d3` completed sign-in → production → review → approval → export at $7.86, but engineering fixes, deploys and log inspection occurred between its visual failures. One clean replay remains before calling the builder absent |
+| 3 | Forced failure visible in-product; one-click Retry reuses durable work | **Pass live 2026-09-10.** The product surfaced the injected finishing failure; one Retry reused `visual.mp4` and completed render in 12.5s rather than repeating the 269.7s frame pass |
+| 4 | Retry repeats no paid provider call and no cost | **Pass live 2026-09-10.** Spend was 786¢ at failure and 786¢ after final QA; recovery logged cached-visual reuse and no paid provider step reran |
 | 5 | Automated tenant / suspended-user / storage-ownership / spend-boundary checks | **Green** — `api-access.integration` (5 tests) and `spend-boundaries.integration` (5 tests) pass against real Postgres |
-| 6 | Lint, typecheck, tests, production build green | **Green on the consolidated build `721a987`** — typecheck clean, lint 0 errors (6 pre-existing warnings), **696 passing / 1 skipped of 697** across 80 files with all three integration suites present (5+5+3), clean `pnpm build`, verified 2026-09-04 in CI's environment |
+| 6 | Lint, typecheck, tests, production build green | **Green.** Real-Postgres CI proof remains on consolidated build `721a987` (696 passing / 1 Redis skip, all three integration suites present). The deployed visual-repair path through `7e0a6b1` passed full lint (0 errors, 9 existing warnings), typecheck, **711 local tests / 12 environment-gated skips**, and the full production build on 2026-09-11 |
 
 **The forced failure is now configuration, not an intervention (2026-09-03).** `FORCE_STEP_FAILURE` names
 boundaries to fail at; unset — the shipped state — is a no-op that does not even query. The one boundary that
@@ -92,21 +92,27 @@ same commit, and the four CI steps were re-run against real Postgres on it. It i
 **Deployment cut over 2026-09-02:** `https://app.kendrix.io` now answers from the Railway Hobby stack in
 Singapore — one public web service, one private all-role worker, private Postgres and Redis, and the existing R2
 assets (`specs/phase0-deployment.md`). An external probe on 2026-09-03 returned `/api/health` 200 with Railway edge
-headers, so the origin no longer depends on the founder's Mac being awake. **Two and a half of the spec's five
-canary checks are now recorded** in `specs/phase0-deployment.md`'s canary log: health and migrated-data parity
-pass, and anonymous requests are correctly refused (`/api/channel`, `/api/publishing`, `/api/admin/costs` → 401;
-`/dashboard` → 307
-to `/signin`). Sign-in completing and R2 read/write remain; the stronger queue-survival reading is part of the
-forced-recovery lap. The Cloudflare Tunnel route to the Mac stays as rollback until they pass. Scheduled
-production stays off until the hosted forced-retry lap and the fresh product-only acceptance reel clear the gate.
+headers, so the origin no longer depends on the founder's Mac being awake. **All five canary rows now carry hosted
+evidence** in `specs/phase0-deployment.md`: health, migrated-data parity and anonymous denial passed first; the
+2026-09-10 acceptance artifact then completed operator Google sign-in, authenticated R2 reads/writes, durable
+recovery across a worker restart and product export. The Cloudflare Tunnel route remains rollback until the clean
+product-only replay clears the gate. Scheduled production stays off until that decision.
 
 **The first live acceptance attempt stopped on a real pre-render blocker on 2026-09-09.** Reel `b2ce55d3`
 reached Visuals at $2.16, then the verified-identity gate could not reconcile a sourced intact B-52 with the
 story-time state `broken-apart`: every candidate that satisfied the destructive state was rejected for not
 preserving intact physical structure. The product surfaced the failure and preserved work; one Retry repeated no
 paid work and left spend at $2.16, but it could not repair the stored binding. The injected render boundary was
-never reached, so criteria 3 and 4 remain open. Evidence and the rerun condition are recorded in
+never reached, so criteria 3 and 4 were still open at that point. Evidence and the rerun condition are recorded in
 `specs/phase0-forced-recovery-lap.md`.
+
+**The same artifact completed the hosted recovery path on 2026-09-10.** After the destructive-state, exact-source
+and source-grounded image-QA repairs were deployed, scene 3 passed with a state-adapted, source-shaped Mark 39
+under its parachute. Production finished at **$7.86**. `render:after_visual` then failed as configured; the UI
+showed the preserved-work recovery message, one Retry reused the durable visual, and the ledger stayed at 786¢
+through final QA. The 86.3-second reel was spot-checked, approved and exported, and remains unpublished. This
+closes the live forced-recovery and duplicate-cost criteria. It does **not** close the stricter product-only
+criterion: the builder repaired and deployed code during this reel, so one clean replay is still required.
 
 **Migration parity passed 2026-09-09.** A read-only hosted query found 1 user, 4 channels, 14 reels and the exact
 five migrated YouTube publications with their dates, status and disclosure flags intact. The append-only spend

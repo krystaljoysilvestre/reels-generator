@@ -1,7 +1,7 @@
 # Phase 0 forced-recovery lap
 
-**Status:** Blocked before the injected render boundary
-**Date:** 2026-09-09
+**Status:** Complete — hosted failure, durable reuse and unchanged ledger observed
+**Date:** 2026-09-10
 **Gate items:** 3 (a forced failure is visible in-product and one-click Retry reuses durable work) and
 4 (retry repeats no paid provider call and adds no cost twice)
 
@@ -75,15 +75,29 @@ counts for items 3 and 4.
 | Field | Value |
 | ----- | ----- |
 | Reel id / subject | `b2ce55d3-f388-474a-8a3f-20ececc7498a` / 1961 Goldsboro B-52 nuclear near miss |
-| Cost at failure | $2.16, during `generate_images`; the injected render boundary was never reached |
-| Cost after Retry (must match) | $2.16 |
-| Failure visible in-product without help? | Yes — Visuals failed with the preserved-work message and technical detail naming the missing `b-52-aircraft` reference in scenes 1 and 2 |
-| Retry clicks needed | One product Retry was attempted; it returned to the same pre-render failure |
-| Frame pass repeated? (expect no) | Not reached |
-| Any terminal / SQL / script touched? (expect none) | None before the product exposed the failure. Railway logs were read only after the lap had already failed, to diagnose the blocker |
-| Wall-clock from Retry to render complete | Not applicable — Retry failed again before image spend |
+| Cost at failure | **$7.86**, after `render:after_visual`; all paid generation was already complete |
+| Cost after Retry (must match) | **$7.86** — unchanged through render completion and render QA |
+| Failure visible in-product without help? | **Yes** — the storyboard changed to Failed and showed “Something went wrong while finishing” plus “Nothing’s lost — everything finished so far is kept. Retry picks up from there.” Worker evidence names `Forced recovery-lap failure at render:after_visual (FORCE_STEP_FAILURE)` |
+| Retry clicks needed | **One** recovery click |
+| Frame pass repeated? (expect no) | **No** — failed pass took 269.7s; recovery logged `visual unchanged — reusing cached track`, muxed/uploaded from the checkpoint, and finished `render` in 12.5s |
+| Any terminal / SQL / script touched? (expect none) | No artifact, queue or database salvage. The fault variable was removed and the worker restarted before the recovery click; this was not necessary because attempt 2 stands down by contract, but it is a procedural deviation from step 4’s “Nothing else.” No SQL or one-off recovery script touched the reel |
+| Wall-clock from Retry to render complete | **12.5s** for `render`; **27.1s** through final `render_qa` |
 
-### 2026-09-09 blocker
+### 2026-09-10 completion
+
+After the visual-identity blockers below were repaired, the same reel reached the configured boundary. The first
+render committed its graded visual checkpoint, then failed exactly where armed. The product surfaced the failed
+finishing phase and preserved Retry. Recovery reused the durable visual at 3.1s, re-muxed and uploaded at 6.1s,
+completed render at 12.5s, and passed final QA at 27.1s. The reel ledger stayed at **786¢** across the failure and
+recovery, proving that no paid provider step repeated. The finished 86.3-second artifact was spot-checked,
+approved, and exported through the product; it was **not published**.
+
+The worker was restarted after the test variable was removed and before Retry. This did not unlock the retry —
+the durable render row was already attempt 2, for which the fault stands down even when armed — and the restart
+adds useful persistence evidence. Still, future laps should follow the written order exactly: Retry first, disarm
+after success, so the live log also records `armed but attempt 2 — standing down`.
+
+### 2026-09-09 blocker (resolved for this lap)
 
 The first live lap found a stricter failure before the fault-injection boundary. The Story Bible routed
 `b-52-aircraft` to a sourced reference plate and selected a story-time appearance in which the aircraft was
@@ -94,13 +108,15 @@ fuselage sections and detached components. The two requirements are mutually exc
 The product behavior around the failure was sound: it stopped before scene-image spend, explained that completed
 work was kept, exposed Retry, and the creator's Retry left the reel cost unchanged at $2.16. But Retry cannot heal
 the stored identity/state contract; later attempts fail immediately against the same missing-reference gate. The
-forced render-recovery lap therefore remains unrun. Disarm `FORCE_STEP_FAILURE`, repair and review the destructive
-identity-state contract, deploy that repair, then resume this same reel if the retry path can invalidate only the
-failed visual work; otherwise run a fresh lap.
+forced render-recovery lap was therefore unrun on 2026-09-09. The destructive-state verifier and subsequent exact
+object sourcing/state-conditioning defects were repaired, deployed, and the same reel resumed to the completed
+lap recorded above.
 
-`FORCE_STEP_FAILURE` was removed immediately after diagnosis. Railway deployment
+`FORCE_STEP_FAILURE` was removed immediately after the first diagnosis. Railway deployment
 `56385a81-914c-41c1-8095-07f79c3bfe65` became Active and the worker returned Online with 24 service variables;
-the temporary switch is no longer present.
+the temporary switch was later re-armed for the successful boundary run. It was removed again after the injected
+failure; Railway redeploy `d82b8a96-2490-4d27-aba1-d102725b2769` restarted the verified worker image, and a direct
+process check confirmed the variable absent.
 
 ## The lap fails if
 

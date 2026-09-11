@@ -117,10 +117,10 @@ what is believed.
 | Check | State | Evidence |
 | ----- | ----- | -------- |
 | `/api/health` returns 200 | **Pass** | External probe 2026-09-03 with Railway edge headers; re-probed 2026-09-09 on `d0a0c59`, body `{"ok":true,"build":"d0a0c59","buildSource":"stamp"}` |
-| Operator sign-in and protected-page redirect | **Half recorded** | 2026-09-04 anonymous probe, re-run on `d0a0c59`: `/api/channel`, `/api/publishing` and `/api/admin/costs` all return 401; `/dashboard` returns 307 to `/signin`; `/signin` itself returns 200. Sign-in completing is unrun — it needs operator credentials |
+| Operator sign-in and protected-page redirect | **Pass** | Anonymous protections passed on 2026-09-04. On 2026-09-10 the operator completed Google sign-in in Chrome and used the authenticated storyboard through production, review, approval and export |
 | Migrated channel / reel / publication / spend totals match | **Pass** | Read-only hosted check 2026-09-09: 1 user / 4 channels / 14 reels / 5 publications; all five publication identities and fields match; spend ledger still exactly 163 rows / 225¢. The one extra hosted reel and reel-cost difference reconcile below |
-| One provider-free queue job completes and survives a worker restart | **Partial** | 2026-09-04, from the 17:34 +08 worker deploy — which is a restart. The worker came back, started all three role workers, re-registered its repeatable schedules, and two scheduled queue jobs then ran to completion: `metrics_poll` (provider-free, \$0) and `trending_refresh`. **Not** shown: a job *in flight* during the restart surviving, or the absence of duplication |
-| R2 reads and writes succeed without exposing credentials | **Unrun** | — |
+| One provider-free queue job completes and survives a worker restart | **Pass for durable recovery** | On 2026-09-10 the forced render failure and its committed visual checkpoint survived worker redeploy `d82b8a96-2490-4d27-aba1-d102725b2769`; one UI Retry resumed from the durable track and completed locally/provider-free. The ledger stayed at 786¢. This proves persisted recovery across restart, not automatic pickup of a still-running job |
+| R2 reads and writes succeed without exposing credentials | **Pass** | Acceptance reel `b2ce55d3` sourced and read reference pixels, wrote scene images, three motion clips, voice, effects, music, `visual.mp4` and final `render.mp4`, played the final asset in the authenticated UI, and downloaded the post package without exposing credentials |
 
 ### Reading the parity check
 
