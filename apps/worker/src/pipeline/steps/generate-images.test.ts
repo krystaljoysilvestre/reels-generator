@@ -65,6 +65,18 @@ describe('sourceQueryCandidates', () => {
     ])
   })
 
+  it('combines complementary landmark and subsite identities before broadening', () => {
+    expect(sourceQueryCandidates({
+      id: 'norad-command-center',
+      description: 'the command center inside Cheyenne Mountain Complex',
+    }, { query: 'Cheyenne Mountain Complex', subjectClass: 'place' })).toEqual([
+      'Cheyenne Mountain Complex',
+      'Cheyenne Mountain Complex Norad Command Center',
+      'Norad Command Center',
+      'Norad Command Center the command center inside Cheyenne Mountain Complex',
+    ])
+  })
+
   it('does not broaden human identity searches', () => {
     expect(sourceQueryCandidates({ id: 'marcel-duchamp', description: 'artist' }, {
       query: 'Marcel Duchamp photograph', subjectClass: 'human',
@@ -174,7 +186,7 @@ describe('applyDepictionRouting', () => {
       }],
     }
 
-    applyDepictionRouting(entity, { ...entity.depiction, classifierVersion: 'entity-source.v1.18' })
+    applyDepictionRouting(entity, { ...entity.depiction, classifierVersion: 'entity-source.v1.19' })
 
     expect(entity.appearances[0]!.referenceImageKey).toBeUndefined()
     expect(entity.appearances[0]!.referenceOrigin).toBeUndefined()

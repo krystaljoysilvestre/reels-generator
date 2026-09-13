@@ -274,6 +274,22 @@ exact query variants before any one query advances deeper, so one noisy phrasing
 vision-verification budget. These terms improve discovery only: the selected pixels must still pass the same
 exact identity-and-state check.
 
+### A landmark identity and its interior name may be complementary (2026-09-13)
+
+The clean NORAD replay exposed a retrieval split rather than an evidence gap. The Story Bible named the
+`norad-command-center`, while depiction routing correctly resolved its containing real place as `Cheyenne
+Mountain Complex`. Sourcing searched each phrase separately: the landmark query returned exterior entrances,
+and the room name returned a modern/casual operations-center image. The strict verifier rejected both and the
+coverage gate stopped before image spend. Yet the two identities composed into one query immediately surfaced
+multiple public-domain photographs of the Cheyenne Mountain Air/Space Defense Operations Centers.
+
+For non-human subjects, when the routing identity and the Story Bible name have mostly complementary lexical
+content, sourcing tries their combined query before broadening to the entity name or description. When the
+name already substantially overlaps the routing query, no redundant combined variant is added. This is a
+retrieval hint only: every resulting candidate still consumes the same bounded candidate budget and must pass
+the unchanged exact identity/state verifier. Human sourcing remains article-anchored and never enters this
+free-text composition path.
+
 A source-verification contract version change invalidates previously persisted sourced plates before retry.
 Keeping a plate accepted under the older contract would make the new verifier impossible to exercise and
 would regenerate every scene from the same known-bad pixels.

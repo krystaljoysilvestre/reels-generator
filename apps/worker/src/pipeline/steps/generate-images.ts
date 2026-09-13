@@ -162,9 +162,24 @@ export function sourceQueryCandidates(
   // "The Blind Man magazine May 1917 issue Fountain" returned generic periodicals, while the compact
   // "The Blind Man May 1917 Fountain" returned the exact issue-2 page). Keep both; verification decides.
   const compactQuery = routing.query.replace(/\b(?:magazine|issue|publication|document|photograph|photo|image|scan)\b/gi, ' ').replace(/\s+/g, ' ').trim()
+  // A Story Bible name can identify a room/subsite while routing identifies only its containing landmark.
+  // Compose both when their vocabularies are genuinely complementary (live case: "Cheyenne Mountain
+  // Complex" + "NORAD Command Center"). Token-overlap coverage avoids padding an already-specific title
+  // such as "The Blind Man ..." with its near-duplicate entity name, and is language/genre agnostic.
+  const tokens = (value: string) => value
+    .normalize('NFKD')
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean)
+  const nameTokens = tokens(name)
+  const queryTokens = new Set(tokens(routing.query))
+  const overlap = nameTokens.filter((token) => queryTokens.has(token)).length
+  const complementaryIdentityQuery = nameTokens.length > 0 && overlap * 2 < nameTokens.length
+    ? `${routing.query} ${name}`
+    : ''
   const raw = routing.subjectClass === 'human'
     ? [routing.query]
-    : [routing.query, compactQuery, name, `${name} ${entity.description}`]
+    : [routing.query, compactQuery, complementaryIdentityQuery, name, `${name} ${entity.description}`]
   const seen = new Set<string>()
   return raw.map((value) => value.trim()).filter((value) => {
     const normalized = value.toLowerCase()
