@@ -108,7 +108,10 @@ describe('exact non-human retry search', () => {
         imageinfo: [{
           url: LEAD_IMAGE_URL, thumburl: LEAD_IMAGE_URL, mime: 'image/jpeg',
           descriptionurl: 'https://commons.wikimedia.org/wiki/File:The_exact_issue.jpg',
-          extmetadata: { LicenseShortName: { value: 'Public domain' }, Artist: { value: 'Unknown' } },
+          extmetadata: {
+            LicenseShortName: { value: 'Public domain' }, Artist: { value: 'Unknown' },
+            ImageDescription: { value: 'The <b>exact</b> documented subject.' },
+          },
         }],
       }],
     },
@@ -116,7 +119,8 @@ describe('exact non-human retry search', () => {
 
   it('can bypass a wrong article lead and search Commons for the exact edition', async () => {
     mockFetch({ commonsSearch: COMMONS_SEARCH_OK })
-    expect(await sourceEntityImage('The Blind Man issue 2 May 1917', { preferCommonsSearch: true })).not.toBeNull()
+    const result = await sourceEntityImage('The Blind Man issue 2 May 1917', { preferCommonsSearch: true })
+    expect(result?.sourceDescription).toBe('The exact documented subject.')
     expect(calledCommonsSearch()).toBe(true)
     expect(calledWikipediaSearch()).toBe(false)
   })

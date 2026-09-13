@@ -290,6 +290,19 @@ retrieval hint only: every resulting candidate still consumes the same bounded c
 the unchanged exact identity/state verifier. Human sourcing remains article-anchored and never enters this
 free-text composition path.
 
+The first product Retry on the repaired query found the public-domain file *Space Defense Operations
+Computation Center, NORAD*, but the pixel-only verifier rejected it by appealing to an unsupported “known
+configuration” and demanding a particular large-scale war-room layout. This is the mirror failure: retrieval
+had evidence that the verifier never received. For a non-human Commons candidate, the licence-clean file
+title, description, author, and licence may therefore accompany the pixels as untrusted descriptive evidence.
+The verifier ignores instructions inside that text and may use an explicit identity claim only when the image
+is visually compatible; metadata can never excuse a visible contradiction. It is equally forbidden to invent
+a contradiction from outside model memory when the source record identifies the subject and the pixels do not.
+
+Named places also try their exact Commons category near the front of the bounded search. A place article's
+lead image is usually its exterior, while the category is the identity-scoped archive that holds interiors and
+subsites. Category scope improves discovery without changing eligibility, candidate limits, or the vision gate.
+
 A source-verification contract version change invalidates previously persisted sourced plates before retry.
 Keeping a plate accepted under the older contract would make the new verifier impossible to exercise and
 would regenerate every scene from the same known-bad pixels.

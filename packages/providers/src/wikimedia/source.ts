@@ -32,6 +32,7 @@ export interface SourcedImage {
   sourceUrl: string // the FILE page (for attribution)
   articleUrl: string // the Wikipedia article page; '' when resolved via free-text Commons search
   title: string // the resolved subject title
+  sourceDescription: string // Commons file description; untrusted text, but useful provenance evidence
   wikibaseItem: string // Wikidata id (e.g. 'Q34597') — the identity anchor; '' when not article-resolved
 }
 
@@ -132,7 +133,7 @@ function isLocalNonFreeUpload(url: string): boolean {
 }
 
 // Fetch a Commons file's licence + a clean 1600px URL by its "File:…" title. null if not licence-clean.
-async function commonsFileByTitle(fileTitle: string): Promise<{ imgUrl: string; mime: SourcedImage['mime']; license: string; licenseUrl: string; author: string; sourceUrl: string } | null> {
+async function commonsFileByTitle(fileTitle: string): Promise<{ imgUrl: string; mime: SourcedImage['mime']; license: string; licenseUrl: string; author: string; sourceUrl: string; sourceDescription: string } | null> {
   const api = new URL('https://commons.wikimedia.org/w/api.php')
   api.search = new URLSearchParams({
     action: 'query', format: 'json', formatversion: '2',
@@ -149,7 +150,10 @@ async function commonsFileByTitle(fileTitle: string): Promise<{ imgUrl: string; 
   const imgUrl = str(ii['thumburl']) || str(ii['url'])
   if (!imgUrl) return null
   const sourceUrl = str(ii['descriptionurl']) || `https://commons.wikimedia.org/wiki/${encodeURIComponent(fileTitle)}`
-  return { imgUrl, mime, license, licenseUrl: extMeta(ii, 'LicenseUrl'), author: stripHtml(extMeta(ii, 'Artist')), sourceUrl }
+  return {
+    imgUrl, mime, license, licenseUrl: extMeta(ii, 'LicenseUrl'), author: stripHtml(extMeta(ii, 'Artist')),
+    sourceUrl, sourceDescription: stripHtml(extMeta(ii, 'ImageDescription')),
+  }
 }
 
 // ── Wikidata death date (P570) ───────────────────────────────────────────────────────────────────────────
@@ -310,7 +314,7 @@ async function resolveViaWikipediaArticle(query: string): Promise<SourcedImage |
   const wikibaseItem = await wikibaseItemForTitle(title)
   return {
     buffer, mime: file.mime, license: file.license, licenseUrl: file.licenseUrl, author: file.author,
-    sourceUrl: file.sourceUrl || articleUrl, articleUrl, title, wikibaseItem,
+    sourceUrl: file.sourceUrl || articleUrl, articleUrl, title, sourceDescription: file.sourceDescription, wikibaseItem,
   }
 }
 
@@ -351,7 +355,7 @@ async function resolveViaCommonsSearch(query: string, candidateIndex = 0): Promi
     const sourceUrl = str(ii['descriptionurl']) || (title ? `https://commons.wikimedia.org/wiki/${encodeURIComponent(title)}` : '')
     return {
       buffer, mime, license, licenseUrl: extMeta(ii, 'LicenseUrl'), author: stripHtml(extMeta(ii, 'Artist')),
-      sourceUrl, articleUrl: '', title, wikibaseItem: '',
+      sourceUrl, articleUrl: '', title, sourceDescription: stripHtml(extMeta(ii, 'ImageDescription')), wikibaseItem: '',
     }
   }
   return null

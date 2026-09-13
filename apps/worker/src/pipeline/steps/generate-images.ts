@@ -177,9 +177,12 @@ export function sourceQueryCandidates(
   const complementaryIdentityQuery = nameTokens.length > 0 && overlap * 2 < nameTokens.length
     ? `${routing.query} ${name}`
     : ''
+  // A named place's Commons category is an identity-scoped archive, and often contains interior/subsite
+  // photographs that the article lead and free-text title ranking hide behind an exterior hero image.
+  const categoryQuery = routing.subjectClass === 'place' ? `incategory:"${routing.query}"` : ''
   const raw = routing.subjectClass === 'human'
     ? [routing.query]
-    : [routing.query, compactQuery, complementaryIdentityQuery, name, `${name} ${entity.description}`]
+    : [routing.query, compactQuery, categoryQuery, complementaryIdentityQuery, name, `${name} ${entity.description}`]
   const seen = new Set<string>()
   return raw.map((value) => value.trim()).filter((value) => {
     const normalized = value.toLowerCase()
@@ -346,7 +349,12 @@ async function fetchVerifiedMedia(
       if (!img || seenSources.has(img.sourceUrl)) continue
       seenSources.add(img.sourceUrl)
       if (verifiedCandidates++ >= MAX_VERIFIED_SOURCE_CANDIDATES) return { media: null, costCents }
-      const vp = buildEntityVerifyPrompt(subjectClass, name, entity.description, usage)
+      const vp = buildEntityVerifyPrompt(subjectClass, name, entity.description, usage, {
+        title: img.title,
+        description: img.sourceDescription,
+        author: img.author,
+        license: img.license,
+      })
       const verify = await llmCall({
         templateVersion: ENTITY_SOURCE_V1_VERSION, schema: EntityVerifySchema,
         provider: 'anthropic', model: DEPICTION_MODEL,

@@ -71,6 +71,7 @@ describe('sourceQueryCandidates', () => {
       description: 'the command center inside Cheyenne Mountain Complex',
     }, { query: 'Cheyenne Mountain Complex', subjectClass: 'place' })).toEqual([
       'Cheyenne Mountain Complex',
+      'incategory:"Cheyenne Mountain Complex"',
       'Cheyenne Mountain Complex Norad Command Center',
       'Norad Command Center',
       'Norad Command Center the command center inside Cheyenne Mountain Complex',
@@ -186,7 +187,7 @@ describe('applyDepictionRouting', () => {
       }],
     }
 
-    applyDepictionRouting(entity, { ...entity.depiction, classifierVersion: 'entity-source.v1.19' })
+    applyDepictionRouting(entity, { ...entity.depiction, classifierVersion: 'entity-source.v1.20' })
 
     expect(entity.appearances[0]!.referenceImageKey).toBeUndefined()
     expect(entity.appearances[0]!.referenceOrigin).toBeUndefined()
