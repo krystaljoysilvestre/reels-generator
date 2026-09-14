@@ -7,6 +7,7 @@ const editorialBrief = 'Follow the Crossroads structure. On revision, make the a
 describe('EBN editorial brief isolation', () => {
   it('gives the planner channel direction without promoting it to evidence', () => {
     const prompt = buildEbnPlannerPrompt({
+      language: 'tagalog',
       facts: [{ id: 'F01', stance: 'FACT', weight: 'Critical', value: 'The directors voted to reject the work.' }],
       criticalIds: ['F01'],
       editorialBrief,
@@ -21,6 +22,7 @@ describe('EBN editorial brief isolation', () => {
 
   it('gives the writer voice and revision direction without relaxing citation discipline', () => {
     const prompt = buildEbnWriterPrompt({
+      language: 'tagalog',
       claims: [{
         id: 'C1',
         order: 1,
@@ -37,7 +39,8 @@ describe('EBN editorial brief isolation', () => {
     expect(prompt.system).toContain('A requested example, interpretation, alternate path, motive, or factual statement')
     expect(prompt.system).toContain('For EVERY sentence, cite the factIds')
     expect(prompt.system).toContain('Never mention the dossier, Evidence Bible')
-    expect(prompt.userMessage).toContain('200 words; acceptable range 180–220 words; no more than 8 sentences')
-    expect(prompt.system).toContain('at or below 30 words')
+    expect(prompt.userMessage).toContain('200 words; acceptable range 180–220 words')
+    expect(prompt.system).toContain('OUTPUT LANGUAGE: tagalog')
+    expect(prompt.system).toContain('there is no fixed sentence count or per-sentence word limit')
   })
 })

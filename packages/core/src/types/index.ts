@@ -1,4 +1,5 @@
 export * from './channel.js'
+export * from './genre.js'
 export * from './source-policy.js'
 export * from './depiction.js'
 export * from './post-meta.js'

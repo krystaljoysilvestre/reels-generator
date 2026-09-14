@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm'
 import { getDb, reels, stories, channels } from '@reels/db'
-import { llmCall, buildInputHash } from '@reels/providers'
+import { llmCall, buildInputHash, spendFromError } from '@reels/providers'
 import {
   WorldBibleSchema,
   allowsRealWorldEntityPlates,
@@ -81,9 +81,8 @@ export async function analyzeStory(reelId: string): Promise<void> {
 
   const result = await runStep(
     { reelId, stepName: 'analyze_story', inputHash },
-    async () => {
+    async (cost) => {
       let bible: StoryBible
-      let cost = 0
       // Long-form: the journey's verbatim leg spans together approach the narration's own length, so a
       // multi-minute story overruns the 4096 default mid-journey. Scale headroom with the input.
       const analyzerMaxTokens = story.body.length > 5000 ? 8192 : 4096
@@ -95,7 +94,7 @@ export async function analyzeStory(reelId: string): Promise<void> {
           messages: [{ role: 'user', content: userMessage }],
           maxTokens: analyzerMaxTokens,
         })
-        cost = llm.costCents
+        cost.add(llm.costCents)
         // Re-parse to recover the resolved output type (defaults applied) — zod's input type is loose
         // because of the schema defaults, so the generic on llmCall infers the optional-fields shape.
         let analyzed: StoryBible = StoryBibleSchema.parse(llm.data)
@@ -117,7 +116,7 @@ export async function analyzeStory(reelId: string): Promise<void> {
             messages: [{ role: 'user', content: statePrompt.userMessage }],
             maxTokens: 1800,
           })
-          cost += stateVerdict.costCents
+          cost.add(stateVerdict.costCents)
           const stateIssues = stateVerdict.data.issues ?? []
           console.log(
             `[identity-state-gate] ${reelId.slice(0, 8)}: ${stateVerdict.data.ok && stateIssues.length === 0 ? 'pass' : `${stateIssues.length} issue(s)`}`,
@@ -140,7 +139,7 @@ export async function analyzeStory(reelId: string): Promise<void> {
               ],
               maxTokens: analyzerMaxTokens,
             })
-            cost += repair.costCents
+            cost.add(repair.costCents)
             analyzed = StoryBibleSchema.parse(repair.data)
           }
         }
@@ -167,7 +166,7 @@ export async function analyzeStory(reelId: string): Promise<void> {
             ],
             maxTokens: analyzerMaxTokens,
           })
-          cost += repair.costCents
+          cost.add(repair.costCents)
           analyzed = StoryBibleSchema.parse(repair.data)
         }
 
@@ -190,6 +189,7 @@ export async function analyzeStory(reelId: string): Promise<void> {
         bible = mergeBible(channelCanon, analyzed)
       } catch (err) {
         if (err instanceof IdentityStateGateError) throw err
+        cost.add(spendFromError(err))
         console.warn(`[analyze-story] ${reelId.slice(0, 8)} analysis failed, persisting canon-only bible: ${err instanceof Error ? err.message : String(err)}`)
         bible = mergeBible(channelCanon, EMPTY_STORY_BIBLE)
       }
@@ -205,17 +205,17 @@ export async function analyzeStory(reelId: string): Promise<void> {
       )
       if (unrouted.length > 0) {
         const routed = await Promise.all(
-          unrouted.map(async (entity) => ({
-            entity,
-            result: await routeDepiction(entity, sourcePolicy, worldBible.region),
-          })),
+          unrouted.map(async (entity) => {
+            const result = await routeDepiction(entity, sourcePolicy, worldBible.region)
+            cost.add(result.costCents)
+            return { entity, result }
+          }),
         )
         for (const { entity, result: routedEntity } of routed) {
           entity.depiction = routedEntity.routing
-          cost += routedEntity.costCents
         }
       }
-      return { output: bible, costCents: cost }
+      return { output: bible, costCents: cost.total }
     },
   )
 

@@ -4,8 +4,8 @@ import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { eq } from 'drizzle-orm'
 import { getDb, channels, stories, channelSeries, seriesTopics, claimSetupSpendForChannel } from '@reels/db'
-import { SourcePolicySchema, ToneConfigSchema, WorldBibleSchema, ChannelVoiceSchema, VoiceModeSchema, CaptionStyleSchema, TargetPlatformsSchema, resolvePlatformPreset, MAX_TARGET_SECONDS, MusicIntensitySchema, MusicModeSchema, AudioMoodSchema, peakFracForType } from '@reels/core'
-import { classifyGenre, GENRE_MODULE_VALUES, asGenreModule } from '@reels/core/prompts/scenes.v1'
+import { GenreCategorySchema, SourcePolicySchema, ToneConfigSchema, WorldBibleSchema, ChannelVoiceSchema, VoiceModeSchema, CaptionStyleSchema, TargetPlatformsSchema, resolvePlatformPreset, MAX_TARGET_SECONDS, MusicIntensitySchema, MusicModeSchema, AudioMoodSchema, peakFracForType } from '@reels/core'
+import { classifyGenre, asGenreModule } from '@reels/core/prompts/scenes.v1'
 import { STYLE_VALUES, resolveStyle } from '@reels/core/prompts/story-styles.v1'
 import { VOICE_VALUES, resolveVoice } from '@reels/core/prompts/story-voices.v1'
 import { callerMayUseStorageKey, requireApiUser, requireChannelOwner } from '@/lib/api-access'
@@ -42,14 +42,15 @@ const InputSchema = z.object({
     .array(
       z.object({
         name: z.string().trim().min(1).max(80),
-        genreCategory: z.enum(GENRE_MODULE_VALUES).optional(),
+        genreCategory: GenreCategorySchema.optional(),
+        sourcePolicy: SourcePolicySchema.optional(),
         exampleTopics: z.array(z.string().trim().min(1).max(300)).max(50).default([]),
       }),
     )
     .max(8)
     .default([]),
   // Genre bucket from channel.v1; falls back to keyword classification if absent.
-  genreCategory: z.enum(GENRE_MODULE_VALUES).optional(),
+  genreCategory: GenreCategorySchema.optional(),
   // PROSE dimensions (story-styles / story-voices) — operator-selectable. Re-validated against the
   // genre below. NOT the TTS voice (voicePool) or visual style (stylePreset).
   narrativeStyle: z.enum(STYLE_VALUES).optional(),
@@ -218,6 +219,7 @@ export async function POST(req: NextRequest) {
             name: s.name,
             // undefined → NULL = "no opinion", NOT a copy of the channel's genre (see the RFC).
             genreCategory: s.genreCategory ?? null,
+            sourcePolicy: s.sourcePolicy ?? null,
             orderIdx: i,
           })
           .returning()

@@ -240,6 +240,7 @@ void (async () => {
 
     const write = async (requestedWords: number, previous?: z.infer<typeof EbnWriterSchema>) => {
       const base = buildEbnWriterPrompt({
+        language: row.language,
         claims: claimsWithFacts,
         permissions: TRUE_CRIME_PERMISSIONS,
         editorialBrief: brief,
@@ -312,7 +313,7 @@ SPOKEN SHORT-FORM CRAFT:
       wordCount: words(narration),
       claims: control.claims,
       citationMap,
-      fidelity: fidelity.data,
+      fidelity: EbnFidelitySchema.parse(fidelity.data),
       ending: ending.data,
     })
     persistWriterProgress()

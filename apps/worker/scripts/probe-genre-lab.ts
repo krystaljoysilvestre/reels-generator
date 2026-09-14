@@ -1,18 +1,23 @@
-// Genre lab (2026-07-17): full-chain probe (Planner → Writer → Editor → Claude Naturalizer →
+// Genre lab: standard-chain diagnostic (Planner → Writer → Editor → Claude Naturalizer →
 // Claude gate) for ONE genre at a time, on a Taglish channel — 2 short (75s) + 2 long-form (240s,
 // exercises the long-form WRITER branch — isLongForm>180s in story.v2 — NOT the full chaptered
-// scene-breakdown pipeline; this probe stops at the writer/gate). No DB writes. Mirrors production generate-story
-// (studio.v2 routing + discard guards). Every run doubles as a Taglish naturalness test.
+// scene-breakdown pipeline; this probe stops at the writer/gate). No DB writes. Uses the current core
+// prompts and normalized verdicts, but NOT production persistence, optional stages, or EBN routing.
+// Use story-studio-check.ts for the actual production entrypoint. These distinctions appear in the manifest.
 // Usage: tsx scripts/probe-genre-lab.ts <genre> [writerProvider]
-//   e.g. tsx scripts/probe-genre-lab.ts reddit_story            (gpt-4o writer)
-//        tsx scripts/probe-genre-lab.ts reddit_story anthropic  (Claude writer — PRODUCTION since studio.v3, 5482675)
+//   e.g. tsx scripts/probe-genre-lab.ts reddit_story            (production writer provider)
+//        PROBE_NICHE="A gentle mystery for families" tsx scripts/probe-genre-lab.ts "cozy mystery"
+// PROBE_OUTPUT saves the manifest and raw stage artifacts to a NEW JSON file. PROBE_DRY_RUN=1 prints
+// configuration without paid calls. An explicit openai provider is an experiment, not production parity.
 // Cost: ~50-100¢ per genre.
 import '../src/env.js'
 import { z } from 'zod'
+import { open } from 'node:fs/promises'
+import type { StoryCreativeContext } from '@reels/core'
 import type { StoryElements } from '../src/prompts-bridge.js'
 void (async () => {
-  const { llmCall } = await import('@reels/providers')
-  const { StoryOutputSchema } = await import('@reels/core')
+  const { llmCall, spendFromError, DEFAULT_LLM_MODELS } = await import('@reels/providers')
+  const { StoryOutputSchema, GenreCategorySchema, PLATFORM_PRESETS, DEFAULT_SOURCE_POLICY, SourcePolicySchema } = await import('@reels/core')
   const {
     buildStoryPlannerPrompt,
     StoryPlanSchema,
@@ -23,7 +28,8 @@ void (async () => {
     StoryNaturalizeSchema,
     buildStoryGatePrompt,
     StoryGateSchema,
-    defaultTasteRubric,
+    enforceStoryGateEssence,
+    composeTasteRubric,
     defaultAudienceDescriptor,
     STORY_PLANNER_V1_VERSION,
     STORY_V2_VERSION,
@@ -221,9 +227,9 @@ Nakauwi ako. Buo.
 Pero yung tsinelas ko — may putik sa itaas, hindi sa ilalim.
 Hanggang ngayon, 'pag naglalakad ako sa gabi, nakayuko ako. Lagi.`
 
-  // FICTIONALIZED true-crime exemplars (ORIGINAL, Taglish). True crime is NOT a first-class genre
-  // module — the niche classifies to `horror` (scenes.v1 classifyGenre), so the writer gets horror's
-  // dread craft; these exemplars keep it GROUNDED and HUMAN (a trusted person, a scam, a disappearance)
+  // FICTIONALIZED true-crime exemplars (ORIGINAL, Taglish). The explicit custom `true_crime` label
+  // uses general craft; the declared niche and these exemplars provide its grounded, human form
+  // (a trusted person, a scam, a disappearance)
   // with procedural/restrained detail, NO supernatural and NO gore, ending on the chilling ordinariness.
   // Invented people/cases only — never real individuals or real cases (no Evidence Bible yet).
   const TRUE_CRIME_FEWSHOT = `--- REFERENCE STORY 1 (the trusted neighbor · first-person community witness · grounded + restrained · the ordinary detail that was wrong · ends unresolved) ---
@@ -316,34 +322,29 @@ Pero tuwing may nag-a-alok sa akin ng "sigurado 'to, kita agad" — naaalala ko 
       niche: 'true-feeling everyday Filipino stories — whatever the barangay would actually retell',
       hookHint: 'earn the next ten seconds with the first line',
     },
-    // Filipino FOLKLORE as LEGEND/WONDER (not folk-horror). The niche deliberately avoids horror keywords
-    // (aswang/multo/kulam/ghost/scary) so classifyGenre routes it to `general` (mythic storytelling identity)
-    // rather than horror — the creatures live in the world bible, told as legend, not as scares. Owner asked
-    // for folklore INSTEAD of horror. (Reveals the same "folklore is a WORLD, not a genre" gap as true crime.)
+    // The explicit custom `folklore` label uses general craft. The niche and world bible define this
+    // fixture's legend/wonder form; shared creatures do not select horror's writing module.
     folklore: {
       name: 'Alamat',
       niche: 'retellings of Philippine folklore and alamat — the legends of the diwata and the enchanted mountains like Maria Makiling, the tikbalang and the kapre of the old forests, the engkanto and the nuno sa punso, and the alamat behind rivers, fireflies, and the first fruits; told as mythic oral tales the elders pass down, full of wonder and quiet warning',
       hookHint: 'open like an elder beginning a tale by lamplight — pull the listener into the legend in the first line',
       worldBible: HORROR_WORLD_BIBLE,
     },
-    // Mystery is NOT a genre module — the niche has no horror keywords, so it routes to `general` (neutral
-    // storyteller). A test of whether the writer produces clean passing stories on a fresh genre whose
-    // literary instincts ALIGN with it (unlike childrens' simplicity, which the writer fights).
+    // The explicit custom `mystery` label uses general craft, with its puzzle and reveal defined here.
     mystery: {
       name: 'Sino Ang Gumawa?',
       niche: 'Filipino mystery stories — a puzzle that grabs you: something does not add up, a clue that does not fit, an ordinary person or a sharp observer piecing it together through misdirection and red herrings, and a satisfying reveal that makes you rethink everything you just heard; grounded and clever, first-person or close, never supernatural',
       hookHint: 'open on the wrong detail — the one thing that does not add up — so the viewer is pulled into the puzzle by second 3',
     },
-    // Fairy tales route to the `childrens` module (classifyGenre matches "fairy tale") — our wonder genre.
-    // Enchanted world bible (NOT horror) so it leans storybook-wonder. A humble hero, a magical test, a lesson.
+    // The explicit custom `fairytale` label uses general craft; its niche and enchanted world bible
+    // define the storybook wonder. The label does not imply the children's module or an audience age.
     fairytale: {
       name: 'Noong Unang Panahon',
       niche: 'enchanted Filipino fairy tales where a humble hero crosses paths with a FAIRY of the forest — a diwata, a tiny winged lambana, or a mischievous engkanto — who grants a wish with a catch, quietly tests a kind heart, or strikes a bargain to keep; the fairy is a CHARACTER the hero meets and speaks with, not just ambient magic; warm or gently bittersweet, in the storybook tradition',
       hookHint: 'open on the hero meeting the fairy — a diwata or a glowing lambana appears in the first beat, wondrous and a little uncanny',
       worldBible: FAIRYTALE_WORLD_BIBLE,
     },
-    // True crime is NOT a first-class module — this niche classifies to `horror` (classifyGenre matches
-    // "true-crime"), so it borrows horror's dread craft; the fewshot keeps it grounded + human. Fictionalized
+    // The explicit custom `true_crime` label uses general craft; the niche and fewshot define its form. Fictionalized
     // on purpose (no real people/cases): we have no Evidence Bible, and asserting real crimes about real
     // (often private) people is a factual + harm risk.
     true_crime: {
@@ -352,10 +353,9 @@ Pero tuwing may nag-a-alok sa akin ng "sigurado 'to, kita agad" — naaalala ko 
       hookHint: 'open on the unsettling ordinary detail or the moment it turned — the viewer must feel the wrongness by second 3',
       fewshot: TRUE_CRIME_FEWSHOT,
     },
-    // Documentary is a PRODUCT-DIRECTION probe, run against the CURRENT architecture ON PURPOSE
-    // (no documentary genre module, no grammar, no evidence seam) to observe whether the stack is
-    // sufficient. `seeds` are real, checkable subjects passed as operatorSeed so the output can be
-    // fact-checked against reality — documentary's whole promise is factual accuracy.
+    // The explicit custom `documentary` label uses general craft. This diagnostic supplies vetted
+    // briefs to the standard chain and checks its claims against them; it does not exercise the
+    // production EBN route. `seeds` select the real subjects covered by the corresponding briefs.
     documentary: {
       name: 'Ganito Nangyari',
       niche: 'short documentaries on how real things came to be or fell apart — companies, inventions, disasters, places; the true story behind something the viewer half-knows',
@@ -378,15 +378,20 @@ Pero tuwing may nag-a-alok sa akin ng "sigurado 'to, kita agad" — naaalala ko 
     },
   }
 
-  const genre = process.argv[2]
-  const ch = genre ? LAB[genre] : undefined
-  if (!genre || !ch) {
-    console.error(`usage: tsx scripts/probe-genre-lab.ts <genre> [writerProvider]\ngenres: ${Object.keys(LAB).join(', ')}`)
+  const parsedGenre = GenreCategorySchema.safeParse(process.argv[2])
+  if (!parsedGenre.success) {
+    console.error(`usage: tsx scripts/probe-genre-lab.ts <genre> [anthropic|openai]\nAny nonempty genre up to 120 characters is accepted. Known fixtures: ${Object.keys(LAB).join(', ')}`)
     process.exit(1)
   }
+  const genre = parsedGenre.data
+  const ch = Object.hasOwn(LAB, genre) ? { ...LAB[genre]! } : {
+    name: `${genre} lab`, niche: `Stories in the ${genre} genre, honoring its chosen form and emotional promise.`,
+    hookHint: PLATFORM_PRESETS.youtube_shorts.hookHint,
+  } as (typeof LAB)[string]
   // Optional writer-model experiment (probe-only; production writer stays per generate-story).
-  const writerProvider = process.argv[3] === 'anthropic' ? ('anthropic' as const) : undefined
-  if (writerProvider) console.log(`⚗ writer provider override: ${writerProvider}`)
+  if (process.argv[3] && !['anthropic', 'openai'].includes(process.argv[3])) throw new Error('Writer provider must be anthropic or openai')
+  const writerProvider = process.argv[3] === 'openai' ? 'openai' as const : 'anthropic' as const
+  console.log(`writer provider: ${writerProvider}${writerProvider === 'openai' ? ' (experiment)' : ''}`)
   // DNA-ONLY experiment (harness override — the planner/prompts are UNCHANGED): swap only the channel
   // niche/name to test whether a genre's shape-convergence comes from the planner or the channel DNA.
   if (process.env.PROBE_NICHE) ch.niche = process.env.PROBE_NICHE
@@ -413,6 +418,17 @@ Pero tuwing may nag-a-alok sa akin ng "sigurado 'to, kita agad" — naaalala ko 
     : RUNS.length
   if (process.env.PROBE_RUNS) console.log(`⚗ cheap mode → ${RUN_LIMIT}/${RUNS.length} run(s)`)
   if (process.env.PROBE_NAT_MODEL) console.log(`⚗ naturalizer model override → ${process.env.PROBE_NAT_MODEL}`)
+  const manifest = {
+    schemaVersion: 1, createdAt: new Date().toISOString(), genre, niche: ch.niche, language: lang,
+    route: 'standard-chain-diagnostic',
+    excludes: ['production persistence/recovery', 'optional plan/ending/finishing stages', 'production EBN route'],
+    providers: { planner: 'openai', writer: writerProvider, editor: 'openai', naturalizer: 'anthropic', gate: 'anthropic' },
+    models: { planner: DEFAULT_LLM_MODELS.openai, writer: DEFAULT_LLM_MODELS[writerProvider], editor: DEFAULT_LLM_MODELS.openai, naturalizer: process.env.PROBE_NAT_MODEL || DEFAULT_LLM_MODELS.anthropic, gate: DEFAULT_LLM_MODELS.anthropic },
+    versions: { planner: STORY_PLANNER_V1_VERSION, writer: STORY_V2_VERSION, editor: STORY_EDITOR_V1_VERSION, naturalizer: STORY_NATURALIZER_V1_VERSION, gate: STORY_CRITIC_V2_VERSION },
+    runs: RUNS.slice(0, RUN_LIMIT),
+  }
+  console.log(`MANIFEST ${JSON.stringify(manifest)}`)
+  if (process.env.PROBE_DRY_RUN === '1') return
 
   // Evidence check (probe prototype of the Evidence layer): judge each claim ONLY against the vetted brief.
   const EvidenceCheckSchema = z.object({
@@ -425,6 +441,42 @@ Pero tuwing may nag-a-alok sa akin ng "sigurado 'to, kita agad" — naaalala ko 
       }),
     ),
   })
+  type StageArtifact<T> = {
+    status: 'running' | 'ok' | 'failed' | 'discarded_wordcount' | 'discarded_peak' | 'discarded_formatting'
+    costCents: number
+    output?: T
+    inputNarration?: string
+    inputPeakMoment?: string
+    error?: string
+    detail?: string
+  }
+  type GateVerdict = z.infer<typeof StoryGateSchema>
+  type AttemptArtifact = {
+    attempt: number
+    qaFeedback?: string
+    writer: StageArtifact<z.input<typeof StoryOutputSchema>>
+    editor?: StageArtifact<z.infer<typeof StoryEditSchema>>
+    naturalizer?: StageArtifact<z.infer<typeof StoryNaturalizeSchema>>
+    gate?: StageArtifact<GateVerdict> & { verdict?: GateVerdict }
+    finalNarration?: string
+    peakMoment?: string
+    stageNotes: string[]
+  }
+  type RunArtifact = {
+    run: typeof SHORT
+    creativeContext?: StoryCreativeContext
+    planner: StageArtifact<z.input<typeof StoryPlanSchema>>
+    plan?: z.input<typeof StoryPlanSchema>
+    attempts: AttemptArtifact[]
+    writer?: z.input<typeof StoryOutputSchema>
+    finalNarration?: string
+    gateVerdicts: GateVerdict[]
+    stageNotes?: string[]
+    evidence?: StageArtifact<z.infer<typeof EvidenceCheckSchema>>
+    evidenceLines: string[]
+    error?: string
+    costCents: number
+  }
   const wordCount = (s: string) => s.trim().split(/\s+/).filter(Boolean).length
   const beatLines = (s: string) => s.split('\n').filter((l) => l.trim()).length
   const PH_BIBLE = JSON.stringify({ region: process.env.PROBE_REGION || 'Philippines', era: 'present day', canonLocations: [], canonObjects: [], vocabulary: {} })
@@ -435,19 +487,49 @@ Pero tuwing may nag-a-alok sa akin ng "sigurado 'to, kita agad" — naaalala ko 
   if (process.env.PROBE_WORLDBIBLE) console.log(`⚗ world bible override (${process.env.PROBE_WORLDBIBLE.length} chars)`)
   const tone = JSON.stringify({ intensity: 7, warmth: 5, energy: 5, pacing: 5, humor: genre === 'comedy' ? 8 : 3 })
   let totalCost = 0
+  // The call boundary owns spend, including paid failures. Outer orchestration catches only report
+  // errors, so a failed retry or schema parse can never be billed twice by nested catches.
+  const recordCall = async <T>(artifact: StageArtifact<T>, call: () => Promise<{ data: T; costCents: number }>) => {
+    try {
+      const result = await call()
+      artifact.status = 'ok'
+      artifact.output = result.data
+      artifact.costCents = result.costCents
+      totalCost += result.costCents
+      return result
+    } catch (error) {
+      artifact.status = 'failed'
+      artifact.error = String(error)
+      artifact.costCents = spendFromError(error)
+      totalCost += artifact.costCents
+      throw error
+    }
+  }
   // Accumulate across runs so the planner's anti-sameness guard fires like production (spreads
   // registers/shapes instead of converging on one) — the probe otherwise runs each story cold.
   const recentEls: StoryElements[] = []
   const recentLoglines: string[] = []
   const summary: string[] = [] // one line per run: form | title | register | gate | retried
+  const artifacts: RunArtifact[] = []
+  // Reserve the exact requested file before any paid work. Dry-run already returned above.
+  const outputFile = process.env.PROBE_OUTPUT ? await open(process.env.PROBE_OUTPUT, 'wx') : undefined
 
+  try {
   for (let i = 0; i < RUN_LIMIT; i++) {
+   const costBeforeRun = totalCost
+   const run = RUNS[i]!
+   const runArtifact: RunArtifact = {
+     run, planner: { status: 'running', costCents: 0 }, attempts: [], gateVerdicts: [], evidenceLines: [], costCents: 0,
+   }
+   artifacts.push(runArtifact)
    try {
-    const run = RUNS[i]!
     const angle = selectAngles(1, i * 3 + 1)[0]!
     // FACTUAL GROUNDING: a vetted Evidence brief (operator/curator-supplied DNA) becomes the ONLY source
     // of truth for this real subject — the planner + writer narrate FROM it, never from the model's memory.
     const brief = ch.evidenceBriefs?.[i]
+    const sourcePolicy = brief ? SourcePolicySchema.parse({ realPlaces: true, realEvents: true, realPeople: 'historical', evidenceRequired: true, invention: 'none' }) : DEFAULT_SOURCE_POLICY
+    const creativeContext = { genre, niche: ch.niche, language: lang, audienceDescriptor: aud, targetSeconds: run.targetSeconds, sourcePolicy }
+    runArtifact.creativeContext = creativeContext
     const wb = brief
       ? JSON.stringify({
           subject: ch.seeds?.[i],
@@ -458,6 +540,7 @@ Pero tuwing may nag-a-alok sa akin ng "sigurado 'to, kita agad" — naaalala ko 
         })
       : worldBible
     const plannerPrompt = buildStoryPlannerPrompt({
+      creativeContext,
       channelName: ch.name,
       nicheDescription: ch.niche,
       toneConfig: tone,
@@ -471,21 +554,29 @@ Pero tuwing may nag-a-alok sa akin ng "sigurado 'to, kita agad" — naaalala ko 
       regenerationNonce: i,
       recentElements: recentEls,
     })
-    const plan = await llmCall({
+    const plan = await recordCall(runArtifact.planner, () => llmCall({
       templateVersion: STORY_PLANNER_V1_VERSION,
       schema: StoryPlanSchema,
       system: plannerPrompt.system,
       messages: [{ role: 'user', content: plannerPrompt.userMessage }],
       temperature: 1.0,
       maxTokens: 1500,
-    })
-    totalCost += plan.costCents
+    }))
+    runArtifact.plan = plan.data
     recentEls.push(plan.data.elements)
     if (plan.data.logline) recentLoglines.push(plan.data.logline)
 
     // Full chain (writer → editor → naturalizer), callable twice: production's gate-steered rewrite.
     const runChain = async (qaFeedback?: string) => {
+      const attemptArtifact: AttemptArtifact = {
+        attempt: runArtifact.attempts.length + 1,
+        ...(qaFeedback !== undefined ? { qaFeedback } : {}),
+        writer: { status: 'running', costCents: 0 }, stageNotes: [],
+      }
+      // Append before the writer call: even a failed first call or retry remains reviewable.
+      runArtifact.attempts.push(attemptArtifact)
       const writerPrompt = buildStoryWriterPrompt({
+        creativeContext,
         channelName: ch.name,
         nicheDescription: ch.niche,
         toneConfig: tone,
@@ -505,10 +596,10 @@ Pero tuwing may nag-a-alok sa akin ng "sigurado 'to, kita agad" — naaalala ko 
           emotionalDestination: plan.data.emotionalDestination,
         },
         register: plan.data.elements.register,
-        platformHookHint: run.form === 'short' ? ch.hookHint : undefined,
+        platformHookHint: run.form === 'short' ? ch.hookHint : PLATFORM_PRESETS.youtube_long.hookHint,
         qaFeedback,
       })
-      const story = await llmCall({
+      const story = await recordCall(attemptArtifact.writer, () => llmCall({
         templateVersion: STORY_V2_VERSION,
         schema: StoryOutputSchema,
         system: writerPrompt.system,
@@ -516,19 +607,23 @@ Pero tuwing may nag-a-alok sa akin ng "sigurado 'to, kita agad" — naaalala ko 
         ...(writerProvider ? { provider: writerProvider } : {}),
         temperature: 1.0,
         maxTokens: run.writerTokens,
-      })
-      totalCost += story.costCents
+      }))
 
       let narration = story.data.narration
       let peakMoment = story.data.peakMoment
-      const stageNotes: string[] = []
+      const stageNotes = attemptArtifact.stageNotes
 
       // Editor → Naturalizer with the production discard guards.
       for (const stage of ['editor', 'naturalizer'] as const) {
+        const stageArtifact: StageArtifact<z.infer<typeof StoryEditSchema> | z.infer<typeof StoryNaturalizeSchema>> = {
+          status: 'running', costCents: 0, inputNarration: narration, inputPeakMoment: peakMoment,
+        }
+        attemptArtifact[stage] = stageArtifact
         try {
           const prompt =
             stage === 'editor'
               ? buildStoryEditorPrompt({
+                  creativeContext,
                   nicheDescription: ch.niche,
                   genreCategory: genre,
                   language: lang,
@@ -540,12 +635,13 @@ Pero tuwing may nag-a-alok sa akin ng "sigurado 'to, kita agad" — naaalala ko 
                   targetWords: run.targetWords,
                 })
               : buildStoryNaturalizerPrompt({
+                  creativeContext,
                   language: lang,
                   audienceDescriptor: aud,
                   narration,
                   peakMoment,
                 })
-          const res = await llmCall({
+          const res = await recordCall(stageArtifact, () => llmCall({
             templateVersion: stage === 'editor' ? STORY_EDITOR_V1_VERSION : STORY_NATURALIZER_V1_VERSION,
             schema: stage === 'editor' ? StoryEditSchema : StoryNaturalizeSchema,
             system: prompt.system,
@@ -555,8 +651,7 @@ Pero tuwing may nag-a-alok sa akin ng "sigurado 'to, kita agad" — naaalala ko 
               : {}),
             temperature: 0.7,
             maxTokens: run.writerTokens,
-          })
-          totalCost += res.costCents
+          }))
           // SOURCE OF TRUTH: these mirror the production discard tolerances in
           // apps/worker/src/pipeline/steps/generate-story.ts (editor ±25%, naturalizer ±15%). If those
           // change, this probe silently diverges from the thing it claims to mirror — keep in sync.
@@ -565,55 +660,73 @@ Pero tuwing may nag-a-alok sa akin ng "sigurado 'to, kita agad" — naaalala ko 
           const inL = beatLines(narration)
           const outL = beatLines(res.data.narration)
           const keptPeak = resolvePeak(res.data.narration, [res.data.peakMoment, peakMoment])
-          if (dw > tol) stageNotes.push(`${stage}: discarded_wordcount (${Math.round(dw * 100)}%)`)
-          else if (!keptPeak) stageNotes.push(`${stage}: discarded_peak`)
-          else if (inL >= 4 && outL <= Math.ceil(inL / 2)) stageNotes.push(`${stage}: discarded_formatting (${inL}→${outL})`)
-          else {
+          if (dw > tol) {
+            stageArtifact.status = 'discarded_wordcount'
+            stageArtifact.detail = `${Math.round(dw * 100)}% word-count change`
+            stageNotes.push(`${stage}: discarded_wordcount (${Math.round(dw * 100)}%)`)
+          } else if (!keptPeak) {
+            stageArtifact.status = 'discarded_peak'
+            stageNotes.push(`${stage}: discarded_peak`)
+          } else if (inL >= 4 && outL <= Math.ceil(inL / 2)) {
+            stageArtifact.status = 'discarded_formatting'
+            stageArtifact.detail = `${inL}→${outL} lines`
+            stageNotes.push(`${stage}: discarded_formatting (${inL}→${outL})`)
+          } else {
             stageNotes.push(`${stage}: ok${res.data.narration === narration ? ' (unchanged)' : ''}`)
             narration = res.data.narration
             peakMoment = keptPeak
           }
         } catch (err) {
+          stageArtifact.status = 'failed'
+          stageArtifact.error = String(err)
           stageNotes.push(`${stage}: failed (${String(err).slice(0, 60)})`)
         }
       }
-      return { story, narration, stageNotes }
+      attemptArtifact.finalNarration = narration
+      attemptArtifact.peakMoment = peakMoment
+      return { story, narration, stageNotes, artifact: attemptArtifact }
     }
 
-    const gateOnce = async (title: string, logline: string, narration: string) => {
+    const gateVerdicts = runArtifact.gateVerdicts
+    const gateOnce = async (title: string, logline: string, narration: string, attemptArtifact: AttemptArtifact) => {
+      const gateArtifact: NonNullable<AttemptArtifact['gate']> = { status: 'running', costCents: 0, inputNarration: narration }
+      attemptArtifact.gate = gateArtifact
       const gp = buildStoryGatePrompt({
+        creativeContext,
         channelName: ch.name,
         nicheDescription: ch.niche,
         language: lang,
-        tasteRubric: defaultTasteRubric(genre, ch.niche),
+        tasteRubric: composeTasteRubric({ genreCategory: genre, niche: ch.niche }),
         narration,
         title,
         logline,
       })
-      const gr = await llmCall({
+      const gr = await recordCall(gateArtifact, () => llmCall({
         templateVersion: STORY_CRITIC_V2_VERSION,
         schema: StoryGateSchema,
         system: gp.system,
         messages: [{ role: 'user', content: gp.userMessage }],
         provider: 'anthropic',
-        maxTokens: 512,
-      })
-      totalCost += gr.costCents
-      return gr.data
+        maxTokens: 1200,
+      }))
+      const verdict = enforceStoryGateEssence(gr.data)
+      gateArtifact.verdict = verdict
+      gateVerdicts.push(verdict)
+      return verdict
     }
 
-    // Production shape: chain → gate; on FAIL, ONE steered rewrite → gate again; ships regardless.
+    // Diagnostic only: record final failure; production auto mode holds failures for human review.
     let attempt = await runChain()
     const gateLines: string[] = []
     let retried = false
     try {
-      let verdict = await gateOnce(attempt.story.data.title, attempt.story.data.logline, attempt.narration)
+      let verdict = await gateOnce(attempt.story.data.title, attempt.story.data.logline, attempt.narration, attempt.artifact)
       gateLines.push(`${verdict.pass ? 'PASS' : `FAIL [rewriteCanFix=${verdict.rewriteCanFix ?? '—'}]`} — ${verdict.reason}`)
       // Mirror production: skip the retry on an idea-level failure (rewriteCanFix===false).
       if (!verdict.pass && verdict.rewriteCanFix !== false) {
         retried = true
         attempt = await runChain(verdict.reason)
-        verdict = await gateOnce(attempt.story.data.title, attempt.story.data.logline, attempt.narration)
+        verdict = await gateOnce(attempt.story.data.title, attempt.story.data.logline, attempt.narration, attempt.artifact)
         gateLines.push(`after rewrite: ${verdict.pass ? 'PASS' : 'FAIL'} — ${verdict.reason}`)
       }
     } catch (err) {
@@ -623,13 +736,15 @@ Pero tuwing may nag-a-alok sa akin ng "sigurado 'to, kita agad" — naaalala ko 
     // ── EVIDENCE CHECK — verify each factual claim against the vetted brief (external, not model memory).
     // This is the layer the story-gate can't be: it judges truth against a supplied source, so it catches
     // the confident myths (e.g. Tacoma "resonance") the gate waves through.
-    const evidenceLines: string[] = []
+    const evidenceLines = runArtifact.evidenceLines
     if (brief) {
+      const evidenceArtifact: NonNullable<RunArtifact['evidence']> = { status: 'running', costCents: 0, inputNarration: attempt.narration }
+      runArtifact.evidence = evidenceArtifact
       try {
-        const ev = await llmCall({
+        const ev = await recordCall(evidenceArtifact, () => llmCall({
           templateVersion: 'evidence-check.v0-probe',
           schema: EvidenceCheckSchema,
-          system: `You are a fact-checker. The BRIEF is the ONLY source of truth about "${ch.seeds?.[i]}" — treat it as vetted and authoritative, and do NOT use your own knowledge; judge every claim ONLY against the brief.\n\nBRIEF:\n${brief}\n\nExtract each distinct factual claim the SCRIPT makes about the real subject (names, dates, numbers, places, causes, sequence). For each: "supported" = the brief affirms it; "unsupported" = the brief neither affirms nor denies it (possibly added from memory); "contradicted" = the brief says otherwise (a factual ERROR). pass=true only if NO claim is contradicted.`,
+          system: `You are a fact-checker. The BRIEF is the ONLY source of truth about "${ch.seeds?.[i]}" — treat it as vetted and authoritative, and do NOT use your own knowledge; judge every claim ONLY against the brief.\n\nBRIEF:\n${brief}\n\nExtract each distinct factual claim the SCRIPT makes about the real subject (names, dates, numbers, places, causes, sequence). For each: "supported" = the brief affirms it; "unsupported" = the brief neither affirms nor denies it (possibly added from memory); "contradicted" = the brief says otherwise (a factual ERROR). pass=true only if EVERY claim is supported.`,
           messages: [
             {
               role: 'user',
@@ -638,12 +753,11 @@ Pero tuwing may nag-a-alok sa akin ng "sigurado 'to, kita agad" — naaalala ko 
           ],
           provider: 'anthropic' as const,
           maxTokens: 1200,
-        })
-        totalCost += ev.costCents
+        }))
         const contra = ev.data.claims.filter((c) => c.verdict === 'contradicted').length
         const unsup = ev.data.claims.filter((c) => c.verdict === 'unsupported').length
         evidenceLines.push(
-          `${ev.data.pass ? '✅ EVIDENCE PASS' : '❌ EVIDENCE FAIL'} — ${contra} contradicted, ${unsup} unsupported, ${ev.data.claims.length} claims`,
+          `${ev.data.pass && contra === 0 && unsup === 0 ? '✅ EVIDENCE PASS' : '❌ EVIDENCE FAIL'} — ${contra} contradicted, ${unsup} unsupported, ${ev.data.claims.length} claims`,
         )
         for (const c of ev.data.claims) evidenceLines.push(`  [${c.verdict}] ${c.claim}${c.note ? ` — ${c.note}` : ''}`)
       } catch (err) {
@@ -670,13 +784,28 @@ Pero tuwing may nag-a-alok sa akin ng "sigurado 'to, kita agad" — naaalala ko 
     console.log(`${'─'.repeat(70)}\n[RAW WRITER]\n${attempt.story.data.narration}`)
     console.log(`${'─'.repeat(70)}\n[FINAL · post editor+naturalizer]\n${attempt.narration}`)
     const finalGate = gateLines[gateLines.length - 1] ?? '(no gate)'
+    runArtifact.writer = attempt.story.data
+    runArtifact.finalNarration = attempt.narration
+    runArtifact.stageNotes = attempt.stageNotes
     summary.push(`${run.form.padEnd(5)} | ${attempt.story.data.title.slice(0, 40).padEnd(40)} | ${(el.register ?? '-').slice(0, 24).padEnd(24)} | ${finalGate.startsWith('gate errored') ? 'ERROR' : /(^|: )PASS — /.test(finalGate) ? 'PASS' : 'FAIL'}${retried ? ' (retried)' : ''}`)
    } catch (err) {
+    runArtifact.error = String(err)
     console.log(`\n${'═'.repeat(70)}\n[${genre.toUpperCase()} · ${i + 1}/${RUN_LIMIT}] RUN FAILED (harness): ${String(err).slice(0, 200)}`)
     summary.push(`${RUNS[i]!.form.padEnd(5)} | ${'(harness failure)'.padEnd(40)} | ${'-'.padEnd(24)} | ERROR`)
+   } finally {
+    runArtifact.costCents = totalCost - costBeforeRun
    }
   }
   console.log(`\n${'═'.repeat(70)}\nSUMMARY (${genre}):\n${summary.map((s, n) => `  ${n + 1}. ${s}`).join('\n')}`)
   console.log(`total lab cost (${genre}): ${totalCost}¢`)
+  } finally {
+    if (outputFile) {
+      try {
+        await outputFile.writeFile(JSON.stringify({ manifest, artifacts, summary, costCents: totalCost }, null, 2))
+      } finally {
+        await outputFile.close()
+      }
+    }
+  }
   process.exit(0)
 })()

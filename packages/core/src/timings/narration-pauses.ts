@@ -87,7 +87,7 @@ function innerSentenceStarts(cps: string[], startCp: number, endCp: number): num
 // Plan dramatic beats for a reel's narration. `sceneTexts` are the scene narrationTexts in order (they
 // tile the narration gaplessly). Returns beats sorted by cpIndex, de-duped (largest target wins on a tie).
 export function planNarrationPauses(narration: string, sceneTexts: string[], genre?: string): NarrationBeat[] {
-  const profile = genre ? GENRE_PAUSE_PROFILES[genre] : undefined
+  const profile = genre && Object.hasOwn(GENRE_PAUSE_PROFILES, genre) ? GENRE_PAUSE_PROFILES[genre] : undefined
   if (!profile || sceneTexts.length === 0) return []
 
   const cps = Array.from(narration)

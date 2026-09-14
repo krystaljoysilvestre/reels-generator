@@ -13,7 +13,7 @@
 // FAIL CLOSED, ALWAYS. An invalid region, a quote that disagrees with its own indices, a verifier
 // rejection, a tripped guard, a thrown error — all of them keep the ORIGINAL ending and record why.
 // Repair is optional; an incorrect repair is expensive.
-import { llmCall } from '@reels/providers'
+import { llmCall, spendFromError } from '@reels/providers'
 import {
   splitNumberedSentences,
   spliceSentences,
@@ -21,6 +21,8 @@ import {
   validateRegion,
   quoteMatchesRegion,
   asModelText,
+  type StoryCreativeContext,
+  type SourcePolicy,
 } from '@reels/core'
 import {
   buildStoryEndingCriticPrompt,
@@ -62,6 +64,8 @@ export type EndingRepairAudit =
   | { status: 'failed'; error: string }
 
 export interface EndingRepairInput {
+  creativeContext?: StoryCreativeContext | undefined
+  sourcePolicy?: SourcePolicy | undefined
   title: string
   narration: string
   /** Untouchable: drives music timing and earns its own scene. A region containing it is skipped. */
@@ -124,6 +128,8 @@ export async function runEndingRepair(
 
       // ── Locate: two integers, never prose ──
       const cp = buildStoryEndingCriticPrompt({
+        creativeContext: input.creativeContext,
+        sourcePolicy: input.sourcePolicy,
         genreCategory: genre,
         language,
         closingCraft,
@@ -177,6 +183,8 @@ export async function runEndingRepair(
 
       // ── Generate: ONLY the replacement lines, against an asymmetric context ──
       const sp = buildStoryEndingSurgeonPrompt({
+        creativeContext: input.creativeContext,
+        sourcePolicy: input.sourcePolicy,
         genreCategory: genre,
         language,
         audienceDescriptor,
@@ -210,6 +218,8 @@ export async function runEndingRepair(
 
       // ── Verify: generates nothing, can only reject ──
       const vp = buildStoryEditVerifierPrompt({
+        creativeContext: input.creativeContext,
+        sourcePolicy: input.sourcePolicy,
         language,
         immutableContext: immutablePrefix,
         removed: removed.trim(),
@@ -265,6 +275,7 @@ export async function runEndingRepair(
       },
     }
   } catch (err) {
+    addCost(spendFromError(err))
     console.warn(`[ending_repair] failed, keeping the original ending: ${String(err)}`)
     return { narration, audit: { status: 'failed', error: String(err) } }
   }

@@ -11,8 +11,10 @@
 // Returns only the writer-visible plan fields; the caller carries elements/mechanics/register over from
 // the original plan (a repair, not a re-composition). Versioned source; bump on any prompt-affecting edit.
 import { z } from 'zod'
+import type { SourcePolicy } from '../types/source-policy.js'
+import { type StoryCreativeContext, STORY_CONTEXT_VERSION, renderStoryCreativeContext, renderStorySourceGuards } from './story-context.js'
 
-export const STORY_PLAN_DOCTOR_V1_VERSION = 'story-plan-doctor.v1.0'
+export const STORY_PLAN_DOCTOR_V1_VERSION = `story-plan-doctor.v1.1+${STORY_CONTEXT_VERSION}`
 
 export const PlanDoctorSchema = z.object({
   premise: z.string().min(1),
@@ -26,6 +28,8 @@ export const PlanDoctorSchema = z.object({
 export type DoctoredPlan = z.infer<typeof PlanDoctorSchema>
 
 export interface PlanDoctorVars {
+  creativeContext?: StoryCreativeContext | undefined
+  sourcePolicy?: SourcePolicy | undefined
   channelName: string
   nicheDescription: string
   targetSeconds: number
@@ -42,13 +46,13 @@ export interface PlanDoctorVars {
 }
 
 export function buildStoryPlanDoctorPrompt(v: PlanDoctorVars): { system: string; userMessage: string } {
-  const system = `You are a STORY-PLAN DOCTOR for the channel "${v.channelName}". Niche: ${v.nicheDescription}.
+  const system = `${v.creativeContext ? `${renderStoryCreativeContext(v.creativeContext)}\n\n` : ''}${renderStorySourceGuards(v.sourcePolicy ?? v.creativeContext?.sourcePolicy)}\n\nYou are a STORY-PLAN DOCTOR for the channel "${v.channelName}". Niche: ${v.nicheDescription}.
 You are handed a plan that FAILED a structural-agency check, and the exact reason it failed. REPAIR this plan — do not replace it. Keep what works (the world, the relationships, the specific texture, the emotional territory it was reaching for) and change as little as possible, but fix the agency so ALL THREE now hold:
 1. DECISION — the protagonist makes ONE clear ACTIVE CHOICE with a live alternative and a real cost they themselves pay (name the alternative and the cost).
 2. CHAIN — the escalation is CAUSED by that choice and its consequence (therefore / but) — not events happening to a witness, not a feeling intensifying.
 3. CAUSED ENDING — the ending is the DIRECT CONSEQUENCE of the decision; had they chosen otherwise it would differ. NEVER resolve on a reveal, a coincidence, a resurfacing memory, an object's disclosure, or another character's act. (A reveal may TRIGGER the story; it must not RESOLVE it.)
-KEEP IT LEAN — this becomes a ~${v.targetSeconds}-second first-person story. Build the plan around ONE central choice and its consequence: aim for 3–4 real beats total, NOT a dense chain of micro-beats. A spare escalation the writer can breathe into and make FLOW beats a crammed one every time. Write the escalation as a few clear sentences, not a paragraph of stacked turns.
-Keep it a real, human, first-person story; do not turn a costly choice into a tidy moral. Return the full repaired plan.`
+KEEP IT LEAN — this becomes a ~${v.targetSeconds}-second story in the creator's chosen perspective and form. Build the plan around ONE central choice and its consequence: use only the developments needed to earn that consequence within the duration, rather than a dense chain of micro-beats. A spare escalation the writer can breathe into and make FLOW beats a crammed one every time. Write the escalation as a few clear sentences, not a paragraph of stacked turns.
+Preserve the chosen perspective and story form; do not turn a costly choice into a tidy moral. Return the full repaired plan.`
 
   const view = {
     premise: v.plan.premise,

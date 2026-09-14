@@ -1,6 +1,7 @@
-import { eq, and, gte, desc, count } from 'drizzle-orm'
+import { randomUUID } from 'node:crypto'
+import { eq, ne, and, gte, desc, count } from 'drizzle-orm'
 import { getDb, channels, stories, reels, rejections, pipelineSteps } from '@reels/db'
-import { llmCall } from '@reels/providers'
+import { llmCall, spendFromError } from '@reels/providers'
 import {
   StoryOutputSchema,
   WorldBibleSchema,
@@ -10,6 +11,15 @@ import {
   effectiveGenre,
   requiresEvidence,
   resolveChannelPolicy,
+  assertEvidenceBibleIntegrity,
+  assertEbnClaimsIntegrity,
+  assertEbnCitationIntegrity,
+  ebnClaimBudget,
+  ebnLengthCorrection,
+  EVIDENCE_INTEGRITY_VERSION,
+  type StoryCreativeContext,
+  renderStoryCreativeContext,
+  renderStorySourceGuards,
   type StoryOutput,
   type SourcePolicy,
 } from '@reels/core'
@@ -18,9 +28,6 @@ import {
 } from '@reels/providers'
 import { runEndingRepair, type EndingRepairAudit } from './ending-repair.js'
 import {
-  // story.v1 kept only as the planner-failure fallback draft (a single direct draft on the angle).
-  STORY_V1_VERSION,
-  buildStoryPrompt,
   // Studio pipeline (story-writer-v2 pivot, 2026-07-15)
   buildStoryWriterPrompt,
   STORY_V2_VERSION,
@@ -53,6 +60,9 @@ import {
   STORY_FINISHING_JUDGE_V1_VERSION,
   FinishingJudgeSchema,
   type FinishingIssue,
+  STORY_ENDING_CRITIC_V1_VERSION,
+  STORY_ENDING_SURGEON_V1_VERSION,
+  STORY_EDIT_VERIFIER_V1_VERSION,
   // Evidence-Based Narrative (EBN) — the factual path (specs/evidence-based-narrative.md).
   buildEbnExtractorPrompt,
   STORY_EBN_EXTRACTOR_V1_VERSION,
@@ -78,13 +88,12 @@ import {
   REJECTION_REASON_LABELS,
   selectAngles,
 } from '../../assembly-bridge.js'
-import { runStep, setReelStatus } from '../harness.js'
+import { runStep } from '../harness.js'
 
 // The story pipeline: Planner → Genre Writer ×1 → Editor → Naturalizer → binary Gate.
 // ~5 LLM calls, ONE full-length prose generation. The Writer is the product.
 // (The legacy best-of-6 path was retired 2026-07-16 after the blind premise A/B: the single
 // Planner won on freshness/pull, so write-6-and-rank is gone. History is in git if ever needed.)
-const CANDIDATE_TEMPERATURE = 1.0 // temperature for the planner-failure fallback draft (story.v1)
 // Studio recipe version: keys the input hash alongside every stage/asset version.
 // v2 (2026-07-17): Naturalizer routed to Claude — the polish probe (probe-taglish-polish.ts) showed
 // the gpt-4o naturalizer inert on unnatural Taglish while Claude's gate critiques were native-sharp;
@@ -94,7 +103,9 @@ const CANDIDATE_TEMPERATURE = 1.0 // temperature for the planner-failure fallbac
 // 14/16 at the same gate, and gpt-4o re-suspended consequences even under an explicit DNA+plan+gate
 // demand (steerability 0/8). Planner/editor stay on the default prose provider; the planner-failure
 // fallback (story.v1) is untouched — rare, and pending the legacy-path decision.
-const GENERATE_STORY_STUDIO_VERSION = 'generate_story.studio.v3'
+// v4 (2026-09-13): the full creator contract survives every stage, planner failure uses the same
+// current writer, and a completed winner carries its own recoverable story identity.
+const GENERATE_STORY_STUDIO_VERSION = 'generate_story.studio.v4'
 // How many recent stories feed the Planner's premise avoid-list (the mirror-×6 fix).
 const RECENT_PREMISES_LIMIT = 15
 const WRITER_TEMPERATURE = 1.0
@@ -111,7 +122,6 @@ const REWRITE_TEMPERATURE = 0.7 // editor + naturalizer: refinement, not inventi
 // the writer can still collapse the turn (a separate landing pass is the follow-up).
 // Enable via STORY_PLAN_GATE=1 (single-operator switch for now; a per-channel setting is the proper
 // long-term home so channels whose form is endurance are never forced into agency).
-const PLAN_GATE_ENABLED = process.env.STORY_PLAN_GATE === '1'
 const PLAN_DOCTOR_MAX_REPAIRS = 2
 
 // FINISHING QA JUDGE (OPT-IN, 2026-07-20). A DETECTION-only layer: after the winner is settled, a judge
@@ -119,7 +129,6 @@ const PLAN_DOCTOR_MAX_REPAIRS = 2
 // announced-theme/rhythm) that story_review surfaces, so human review is fast + targeted. It NEVER
 // edits the story and NEVER gates — the probe showed the JUDGE is reliable but the auto-fixer isn't, so
 // fixing stays human-in-the-loop. Fail-safe: any error just records nothing. Enable via STORY_FINISHING_QA=1.
-const FINISHING_QA_ENABLED = process.env.STORY_FINISHING_QA === '1'
 
 // ENDING REPAIR — the first BOUNDED EDIT (OPT-IN, 2026-08-06). The endings lap shipped detection that
 // works, and exposed that we own no way to ACT on it: the gate's rewrite re-rolls the whole chain, because
@@ -129,7 +138,6 @@ const FINISHING_QA_ENABLED = process.env.STORY_FINISHING_QA === '1'
 // Runs after the naturalizer and BEFORE the gate, so the gate simply reads the better version.
 // Fail-closed everywhere: any invalid region, any verifier rejection, any guard, any error ⇒ the original
 // ending ships unchanged. Repair is optional; an incorrect repair is expensive.
-const ENDING_REPAIR_ENABLED = process.env.STORY_ENDING_REPAIR === '1'
 
 type RewriteStatus = 'ok' | 'failed' | 'discarded_wordcount' | 'discarded_peak' | 'discarded_formatting'
 
@@ -140,7 +148,7 @@ interface StudioOutput {
   mode: 'studio'
   angleId: string
   prose: { style: string; voice: string; influence: StyleInfluence } // resolved prose dimensions (attribution)
-  plannerStatus: 'ok' | 'failed_fell_back_to_v1_draft'
+  plannerStatus: 'ok' | 'failed_direct_writer' | 'failed_fell_back_to_v1_draft' // final value is legacy output
   plan: StoryPlan | null // includes whyThisStory + mechanics (audit only — the Writer never saw them)
   // Plan-level judge-and-force audit (only present when STORY_PLAN_GATE is enabled). `verdicts` is the
   // plan gate's pass/reason at each step (original, then each repair); `repaired` = how many doctor
@@ -150,6 +158,9 @@ interface StudioOutput {
     | { status: 'ok'; version: string; doctorVersion: string; verdicts: Array<{ pass: boolean; reason: string }>; repaired: number; originalLogline: string }
     | { status: 'failed'; error: string }
   winner: StoryOutput // FINAL story (post edit + naturalize + peak chain) — the one persisted
+  // Identity allocated before the completed step is persisted. A retry can materialize this exact
+  // artifact without mistaking the previous rejected story for the newly judged winner.
+  winnerStoryId?: string // absent only on output written before studio.v4
   writerRaw: StoryOutput // pre-edit, for the raw-vs-final diff
   editor: { status: RewriteStatus; detail?: string }
   naturalizer: { status: RewriteStatus; detail?: string }
@@ -247,6 +258,71 @@ export function resolvePeak(narration: string, candidates: Array<string | undefi
     if (hit) return hit
   }
   return ''
+}
+
+/** Materialize the exact winner recorded by runStep, including after a commit/link crash. */
+async function persistStudioWinner(reelId: string, channelId: string, language: string, output: StudioOutput) {
+  const db = getDb()
+  await db.transaction(async (tx) => {
+    const reel = await tx.query.reels.findFirst({ where: eq(reels.id, reelId) })
+    if (!reel || reel.channelId !== channelId) throw new Error('Story recovery could not resolve its owning reel.')
+    const linked = reel.storyId
+      ? await tx.query.stories.findFirst({ where: eq(stories.id, reel.storyId) })
+      : null
+    if (linked && linked.channelId !== channelId) throw new Error('Story recovery found a linked story owned by another channel.')
+    let winnerStoryId = output.winnerStoryId
+    if (!winnerStoryId) {
+      // Legacy output did not record artifact identity. Adopt only an exact match; a different body
+      // could be a human edit or the prior rejected draft, and recovery cannot safely guess which.
+      if (linked && (linked.body !== output.winner.narration || linked.title !== output.winner.title || linked.logline !== output.winner.logline)) {
+        throw new Error('Story recovery needs review: the linked story differs from the cached winner and this legacy generation did not record its story identity. Both drafts have been preserved.')
+      }
+      winnerStoryId = linked?.id ?? randomUUID()
+      output = { ...output, winnerStoryId }
+      await tx.update(pipelineSteps).set({ output }).where(and(
+        eq(pipelineSteps.reelId, reelId), eq(pipelineSteps.stepName, 'generate_story'),
+      ))
+    }
+
+    if (linked?.id === winnerStoryId) {
+      // Preserve any later creator edits and never regress an advanced reel on job redelivery.
+      if (reel.status === 'drafting') {
+        await tx.update(reels).set({ status: 'story_review', updatedAt: new Date() }).where(eq(reels.id, reelId))
+      }
+      return
+    }
+    if (reel.status !== 'drafting' && reel.status !== 'story_review') {
+      throw new Error('Story recovery cannot replace a story after production has advanced. Review the cached winner before retrying.')
+    }
+
+    const winner = output.winner
+    const existingWinner = await tx.query.stories.findFirst({
+      where: eq(stories.id, winnerStoryId), columns: { id: true, channelId: true, title: true, body: true, logline: true },
+    })
+    if (existingWinner) {
+      if (existingWinner.channelId !== channelId || existingWinner.body !== winner.narration || existingWinner.title !== winner.title || existingWinner.logline !== winner.logline) {
+        throw new Error('Story recovery found a conflicting winner identity; no story was replaced.')
+      }
+      const otherReel = await tx.query.reels.findFirst({
+        where: and(eq(reels.storyId, winnerStoryId), ne(reels.id, reelId)), columns: { id: true },
+      })
+      if (otherReel) throw new Error('Story recovery found a winner linked to another reel; no story was replaced.')
+    }
+    await tx.insert(stories).values({
+      id: winnerStoryId,
+      channelId,
+      source: 'ai',
+      origin: 'pipeline',
+      language,
+      title: winner.title,
+      body: winner.narration,
+      logline: winner.logline,
+      twistAnchor: winner.peakMoment.trim() ? winner.peakMoment : null,
+      subgenreTags: winner.subgenreTags,
+      elements: { ...(output.plan?.elements ?? {}), narratorVoice: winner.narratorVoice },
+    }).onConflictDoNothing({ target: stories.id })
+    await tx.update(reels).set({ storyId: winnerStoryId, status: 'story_review', updatedAt: new Date() }).where(eq(reels.id, reelId))
+  })
 }
 
 export async function generateStory(reelId: string, channelId: string, language: string = 'tagalog') {
@@ -374,12 +450,9 @@ export async function generateStory(reelId: string, channelId: string, language:
   const doneAt = prevStep?.status === 'done' ? prevStep.finishedAt : null
   const cachedWinner = prevOutput?.winner ?? null
   if (doneAt && cachedWinner && !(latestRejection && latestRejection.createdAt > doneAt)) {
-    const linked = await db.query.reels.findFirst({ where: eq(reels.id, reelId), columns: { storyId: true } })
-    if (linked?.storyId) {
-      console.log(`[generate_story] ${reelId.slice(0, 8)}: step already done + story linked, no newer rejection — reusing (no re-pay)`)
-      await setReelStatus(reelId, 'story_review')
-      return cachedWinner
-    }
+    await persistStudioWinner(reelId, channelId, language, prevOutput as StudioOutput)
+    console.log(`[generate_story] ${reelId.slice(0, 8)}: completed winner reconciled, no newer rejection — reusing (no re-pay)`)
+    return cachedWinner
   }
 
   const worldBible = WorldBibleSchema.parse(channel.worldBible)
@@ -409,6 +482,20 @@ export async function generateStory(reelId: string, channelId: string, language:
     operatorFeedback,
     regenerationNonce,
   }
+  const creativeContext: StoryCreativeContext = {
+    genre: genre ?? 'general',
+    niche: channel.nicheDescription,
+    language,
+    audienceDescriptor: basePromptVars.audienceDescriptor,
+    targetSeconds,
+    narrativeStyle: channel.narrativeStyle || undefined,
+    styleInfluence: (['light', 'medium', 'full'] as const).includes(channel.styleInfluence as StyleInfluence)
+      ? (channel.styleInfluence as StyleInfluence)
+      : 'medium',
+    narrativeVoice: channel.narrativeVoice || undefined,
+    editorialPrinciples: channel.editorialPrinciples || undefined,
+    sourcePolicy,
+  }
 
   const result = await runStudio({
     reelId,
@@ -429,6 +516,7 @@ export async function generateStory(reelId: string, channelId: string, language:
     },
     dossier,
     basePromptVars,
+    creativeContext,
     worldBible,
     targetSeconds,
     storyMaxTokens,
@@ -443,51 +531,7 @@ export async function generateStory(reelId: string, channelId: string, language:
     language,
   })
 
-  const winner = result.output.winner
-  // Story-elements labels → persisted for the cross-reel shape avoid-list + analytics.
-  // Planner metadata, NOT a Writer instruction (invariant 1). null for BYO.
-  const elements = result.output.plan?.elements ?? null
-
-  // Insert the winning story and link the reel to it ATOMICALLY. Previously the insert and the reel-link
-  // were two separate statements OUTSIDE the step's idempotency: a crash between them left the story
-  // orphaned and the reel stuck in story_review with storyId=null, so analyze_story later threw
-  // "Reel has no story" and the reel dead-ended. One transaction makes them all-or-nothing.
-  const persistStory = () =>
-    db.transaction(async (tx) => {
-      const [story] = await tx
-        .insert(stories)
-        .values({
-          channelId,
-          source: 'ai',
-          origin: 'pipeline', // reel artifact — never shown in the channel story library
-          language,
-          title: winner.title,
-          body: winner.narration,
-          logline: winner.logline,
-          // Music-timing anchor. Studio mode may resolve to '' (all peak candidates edited away) —
-          // persist NULL so breakdown-scenes re-extracts via peak-extract.v1 instead of anchoring
-          // on a line that no longer exists in the narration.
-          twistAnchor: winner.peakMoment.trim() ? winner.peakMoment : null,
-          subgenreTags: winner.subgenreTags,
-          // Fold the Writer's voice-casting profile in with the planner's element labels (jsonb, no new
-          // column) so the auto-voice picker can match a narrator's gender/age to a pool voice.
-          elements: { ...(elements ?? {}), narratorVoice: winner.narratorVoice },
-        })
-        .returning()
-      await tx.update(reels).set({ storyId: story!.id, status: 'story_review', updatedAt: new Date() }).where(eq(reels.id, reelId))
-    })
-
-  if (!result.skipped) {
-    // Fresh generation (or a regeneration after rejection) → always a new story + relink.
-    await persistStory()
-  } else {
-    // Cached hit: the story was already created + linked on the original run. Self-heal the rare case
-    // where that run crashed after the step was marked 'done' but before the link landed — otherwise the
-    // idempotency skip would leave the reel permanently unlinked.
-    const linked = await db.query.reels.findFirst({ where: eq(reels.id, reelId), columns: { storyId: true } })
-    if (linked?.storyId) await setReelStatus(reelId, 'story_review')
-    else await persistStory()
-  }
+  await persistStudioWinner(reelId, channelId, language, result.output)
 
   return result.output.winner
 }
@@ -500,6 +544,7 @@ export async function generateStory(reelId: string, channelId: string, language:
 
 interface StudioArgs {
   reelId: string
+  creativeContext: StoryCreativeContext
   channel: {
     name: string
     nicheDescription: string
@@ -555,6 +600,10 @@ interface StudioArgs {
 }
 
 async function runStudio(a: StudioArgs) {
+  // Snapshot optional passes once per round, so their runtime behavior and cache version agree.
+  const planGateEnabled = process.env.STORY_PLAN_GATE === '1'
+  const finishingQaEnabled = process.env.STORY_FINISHING_QA === '1'
+  const endingRepairEnabled = process.env.STORY_ENDING_REPAIR === '1'
   // Evidence discipline and rendering profile are separate axes. Any reel whose frozen Source Policy
   // requires evidence uses the dossier → Evidence Bible → cited-writer chain. `storyMode='ebn'` remains
   // a rendering/specialization choice; a standard channel keeps its own visual identity downstream.
@@ -574,13 +623,7 @@ async function runStudio(a: StudioArgs) {
   // PROSE dimensions (story-styles / story-voices). '' → pure genre / identity-default voice.
   const narrativeStyle = a.channel.narrativeStyle || undefined
   const narrativeVoice = a.channel.narrativeVoice || undefined
-  const styleInfluence = (['light', 'medium', 'full'] as const).includes(a.channel.styleInfluence as StyleInfluence)
-    ? (a.channel.styleInfluence as StyleInfluence)
-    : 'medium'
-  // WRITER MODEL: gpt-4o (the standing "OpenAI writes prose" decision). A 2026-07-16 blind writer
-  // A/B found Claude's Taglish arguably more natural, but the owner kept OpenAI for Taglish on a
-  // second read. The gpt-4o-vs-Claude writer A/B harness (scripts/taglish-ab.ts) remains for other
-  // languages/channels (e.g. an English channel) if we revisit the model choice there.
+  const styleInfluence = a.creativeContext.styleInfluence ?? 'medium'
   // ONE structural seed per round, rotated by an offset that ADVANCES every reel (rotationOffset =
   // channel story count + nonce), and never the angle the operator just rejected. This is the fix
   // for the fresh-reel sameness: keying on regenerationNonce alone froze every fresh reel to angle #0.
@@ -602,6 +645,8 @@ async function runStudio(a: StudioArgs) {
     operatorFeedback: a.operatorFeedback,
     regenerationNonce: a.regenerationNonce,
     recentElements: a.recentElements,
+    sourcePolicy: a.channel.sourcePolicy,
+    creativeContext: a.creativeContext,
   })
 
   // One hash for the whole studio round. Planner prompt text carries the nonce, feedback, and the
@@ -617,6 +662,7 @@ async function runStudio(a: StudioArgs) {
     fewshot: v.fewshotStories,
     rubric: tasteRubric,
     angleId: angle.id,
+    creativeContext: a.creativeContext,
     // narrativeVoice only shapes the WRITER (not the planner prompt text), so hash it explicitly;
     // style/influence ride in via plannerSystem but are listed for a legible cache key.
     narrativeStyle: narrativeStyle ?? '',
@@ -624,15 +670,21 @@ async function runStudio(a: StudioArgs) {
     styleInfluence,
     // Only perturb the cache key when the plan gate is ON — a channel that hasn't opted in keeps its
     // existing hashes (no mass re-run). When on, the versions make enabling/disabling produce distinct keys.
-    ...(PLAN_GATE_ENABLED
+    ...(planGateEnabled
       ? { planCriticVersion: STORY_PLAN_CRITIC_V1_VERSION, planDoctorVersion: STORY_PLAN_DOCTOR_V1_VERSION }
       : {}),
-    ...(FINISHING_QA_ENABLED ? { finishingJudgeVersion: STORY_FINISHING_JUDGE_V1_VERSION } : {}),
+    ...(finishingQaEnabled ? { finishingJudgeVersion: STORY_FINISHING_JUDGE_V1_VERSION } : {}),
+    ...(endingRepairEnabled ? {
+      endingCriticVersion: STORY_ENDING_CRITIC_V1_VERSION,
+      endingSurgeonVersion: STORY_ENDING_SURGEON_V1_VERSION,
+      endingVerifierVersion: STORY_EDIT_VERIFIER_V1_VERSION,
+    } : {}),
     // Same discipline for the opt-in fact gate: only channels using it get the extra key material, so
     // everyone else keeps their existing hashes. The dossier itself is hashed — editing the sources
     // re-runs the story round (and therefore the check) instead of serving a stale verdict.
     ...(a.channel.factCheck && a.dossier
       ? {
+          evidenceIntegrityVersion: EVIDENCE_INTEGRITY_VERSION,
           factCheckExtractorVersion: STORY_EBN_EXTRACTOR_V1_VERSION,
           factCheckFidelityVersion: STORY_EBN_FIDELITY_V1_VERSION,
           factCheckDossier: a.dossier,
@@ -657,10 +709,10 @@ async function runStudio(a: StudioArgs) {
       cost.add(planRes.costCents)
       plan = { ...planRes.data, mechanics: planRes.data.mechanics ?? [] }
     } catch (err) {
-      // Never fail the step over the planner: fall back to ONE story.v1 draft on the angle
-      // (the pre-pivot behavior, minus best-of-N). Editor/Naturalizer/Gate still run on it.
-      console.warn(`[generate_story] planner failed, falling back to a direct v1 draft: ${String(err)}`)
-      plannerStatus = 'failed_fell_back_to_v1_draft'
+      cost.add(spendFromError(err))
+      // Keep the same writer and full creator brief when planning fails.
+      console.warn(`[generate_story] planner failed, writing directly from the creator brief: ${String(err)}`)
+      plannerStatus = 'failed_direct_writer'
     }
 
     // ── 1b. Plan gate + doctor (OPT-IN) — judge the idea for agency, repair on fail ──────────
@@ -668,13 +720,16 @@ async function runStudio(a: StudioArgs) {
     // plan and records status:'failed'. The doctored plan (writer-visible fields) is merged over the
     // original so elements/mechanics/register carry through unchanged.
     let planGate: StudioOutput['planGate']
-    if (PLAN_GATE_ENABLED && plan) {
+    if (planGateEnabled && plan) {
+      const originalPlan = plan
       try {
         const judge = async (p: StoryPlan) => {
           const { system, userMessage } = buildStoryPlanCriticPrompt({
             channelName: v.channelName,
             nicheDescription: v.nicheDescription,
             plan: p,
+            creativeContext: a.creativeContext,
+            sourcePolicy: a.channel.sourcePolicy,
           })
           const res = await llmCall({
             templateVersion: STORY_PLAN_CRITIC_V1_VERSION,
@@ -702,6 +757,8 @@ async function runStudio(a: StudioArgs) {
             targetSeconds: a.targetSeconds,
             plan,
             reason: verdict.reason,
+            creativeContext: a.creativeContext,
+            sourcePolicy: a.channel.sourcePolicy,
           })
           const docRes = await llmCall({
             templateVersion: STORY_PLAN_DOCTOR_V1_VERSION,
@@ -726,6 +783,8 @@ async function runStudio(a: StudioArgs) {
           originalLogline,
         }
       } catch (err) {
+        cost.add(spendFromError(err))
+        plan = originalPlan
         // Never fail the step over the plan gate — the original plan ships, exactly as if this were off.
         console.warn(`[generate_story] plan gate/doctor failed, using the original plan: ${String(err)}`)
         planGate = { status: 'failed', error: String(err) }
@@ -734,57 +793,46 @@ async function runStudio(a: StudioArgs) {
 
     // ── 2. The Genre Writer: ONE excellent prose execution ──────────────────
     const writeOnce = async (qaFeedback?: string): Promise<StoryOutput> => {
-      if (plan) {
-        const { system, userMessage } = buildStoryWriterPrompt({
-          channelName: v.channelName,
-          nicheDescription: v.nicheDescription,
-          toneConfig: v.toneConfig,
-          language: v.language,
-          audienceDescriptor: v.audienceDescriptor,
-          worldBibleJson: v.worldBibleJson,
-          fewshotStories: v.fewshotStories,
-          targetSeconds: v.targetSeconds,
-          targetWords: v.targetWords,
-          genreCategory,
-          narrativeStyle,
-          narrativeVoice,
-          styleInfluence,
-          // Mechanics deliberately stripped: the Writer writes someone who lived this — it never
-          // "executes false_safety + delayed_realization" (see writer-identities.v1 header).
-          plan: {
-            premise: plan.premise,
-            conflict: plan.conflict,
-            escalation: plan.escalation,
-            twist: plan.twist,
-            ending: plan.ending,
-            emotionalDestination: plan.emotionalDestination,
-          },
-          register: plan.elements.register, // the committed temperature — flows on to voice delivery too
-          platformHookHint: a.platformHookHint,
-          operatorFeedback: a.operatorFeedback,
-          regenerationNonce: a.regenerationNonce,
-          qaFeedback,
-        })
-        const res = await llmCall({
-          templateVersion: STORY_V2_VERSION,
-          schema: StoryOutputSchema,
-          system,
-          messages: [{ role: 'user', content: userMessage }],
-          provider: 'anthropic', // studio.v3: the writer must cross consequence thresholds gpt-4o softens
-          temperature: WRITER_TEMPERATURE,
-          maxTokens: a.storyMaxTokens,
-        })
-        cost.add(res.costCents)
-        return { ...res.data, newCanon: res.data.newCanon ?? [] }
-      }
-      // Planner-failure fallback: a single legacy draft pinned to the angle.
-      const { system, userMessage } = buildStoryPrompt({ ...v, angleDirective: angle.directive })
+      const { system, userMessage } = buildStoryWriterPrompt({
+        channelName: v.channelName,
+        nicheDescription: v.nicheDescription,
+        toneConfig: v.toneConfig,
+        language: v.language,
+        audienceDescriptor: v.audienceDescriptor,
+        worldBibleJson: v.worldBibleJson,
+        fewshotStories: v.fewshotStories,
+        targetSeconds: v.targetSeconds,
+        targetWords: v.targetWords,
+        genreCategory,
+        narrativeStyle,
+        narrativeVoice,
+        styleInfluence,
+        // Mechanics remain planner metadata; the Writer receives only the committed idea.
+        ...(plan ? { plan: {
+          premise: plan.premise,
+          conflict: plan.conflict,
+          escalation: plan.escalation,
+          twist: plan.twist,
+          ending: plan.ending,
+          emotionalDestination: plan.emotionalDestination,
+        } } : {}),
+        register: plan?.elements.register,
+        operatorSeed: a.operatorSeed,
+        angleDirective: angle.directive,
+        sourcePolicy: a.channel.sourcePolicy,
+        creativeContext: a.creativeContext,
+        platformHookHint: a.platformHookHint,
+        operatorFeedback: a.operatorFeedback,
+        regenerationNonce: a.regenerationNonce,
+        qaFeedback,
+      })
       const res = await llmCall({
-        templateVersion: STORY_V1_VERSION,
+        templateVersion: STORY_V2_VERSION,
         schema: StoryOutputSchema,
         system,
         messages: [{ role: 'user', content: userMessage }],
-        temperature: CANDIDATE_TEMPERATURE,
+        provider: 'anthropic',
+        temperature: WRITER_TEMPERATURE,
         maxTokens: a.storyMaxTokens,
       })
       cost.add(res.costCents)
@@ -816,12 +864,16 @@ async function runStudio(a: StudioArgs) {
                 emotionalDestination,
                 canonicalNames,
                 targetWords: v.targetWords,
+                sourcePolicy: a.channel.sourcePolicy,
+                creativeContext: a.creativeContext,
               })
             : buildStoryNaturalizerPrompt({
                 language: v.language,
                 audienceDescriptor: v.audienceDescriptor,
                 narration,
                 peakMoment,
+                sourcePolicy: a.channel.sourcePolicy,
+                creativeContext: a.creativeContext,
               })
         const res = await llmCall({
           templateVersion: stage === 'editor' ? STORY_EDITOR_V1_VERSION : STORY_NATURALIZER_V1_VERSION,
@@ -864,6 +916,7 @@ async function runStudio(a: StudioArgs) {
         }
         return { narration: res.data.narration, peakMoment: keptPeak, status: 'ok' }
       } catch (err) {
+        cost.add(spendFromError(err))
         console.warn(`[generate_story] ${stage} failed, passing text through: ${String(err)}`)
         return { narration, peakMoment, status: 'failed', detail: String(err) }
       }
@@ -880,6 +933,8 @@ async function runStudio(a: StudioArgs) {
         title: story.title,
         logline: story.logline,
         operatorFeedback: a.operatorFeedback,
+        sourcePolicy: a.channel.sourcePolicy,
+        creativeContext: a.creativeContext,
       })
       const res = await llmCall({
         templateVersion: STORY_CRITIC_V2_VERSION,
@@ -907,6 +962,8 @@ async function runStudio(a: StudioArgs) {
         audienceDescriptor: v.audienceDescriptor,
         hookPromise: plan?.hookPromise,
         viewerTransformation: plan?.viewerTransformation,
+        creativeContext: a.creativeContext,
+        sourcePolicy: a.channel.sourcePolicy,
         onCost: (cents) => cost.add(cents),
         resolvePeak,
       })
@@ -918,7 +975,7 @@ async function runStudio(a: StudioArgs) {
       const raw = await writeOnce(qaFeedback)
       const edited = await refine('editor', raw.narration, raw.peakMoment, 0.25) // prompt asks ±15%; guard is looser so borderline passes aren't wasted
       const natural = await refine('naturalizer', edited.narration, edited.peakMoment, 0.15) // prompt asks ±10%
-      if (!ENDING_REPAIR_ENABLED) return { raw, edited, natural }
+      if (!endingRepairEnabled) return { raw, edited, natural }
       // The bounded edit runs on the finished text, before the gate reads it. The naturalizer's own
       // audit status is left untouched — this is a separate stage with its own trail.
       // On a gate-steered retry this records the SECOND chain's repair, because that is the chain that
@@ -954,6 +1011,7 @@ async function runStudio(a: StudioArgs) {
       }
       gate = { status: 'ok', version: STORY_CRITIC_V2_VERSION, verdicts, retried }
     } catch (err) {
+      cost.add(spendFromError(err))
       // Never fail the step over the gate — the human gate still sees the story.
       console.warn(`[generate_story] gate failed, passing story through: ${String(err)}`)
       gate = { status: 'failed', error: String(err) }
@@ -968,7 +1026,7 @@ async function runStudio(a: StudioArgs) {
 
     // ── Finishing QA (OPT-IN, detection only) — record a punch-list for the human reviewer ──────────
     let finishingQA: StudioOutput['finishingQA']
-    if (FINISHING_QA_ENABLED) {
+    if (finishingQaEnabled) {
       try {
         const { system, userMessage } = buildStoryFinishingJudgePrompt({
           channelName: v.channelName,
@@ -977,6 +1035,8 @@ async function runStudio(a: StudioArgs) {
           narration: winner.narration,
           title: winner.title,
           logline: winner.logline ?? '',
+          creativeContext: a.creativeContext,
+          sourcePolicy: a.channel.sourcePolicy,
         })
         const res = await llmCall({
           templateVersion: STORY_FINISHING_JUDGE_V1_VERSION,
@@ -989,6 +1049,7 @@ async function runStudio(a: StudioArgs) {
         cost.add(res.costCents)
         finishingQA = { status: 'ok', version: STORY_FINISHING_JUDGE_V1_VERSION, issues: res.data.issues, summary: res.data.summary }
       } catch (err) {
+        cost.add(spendFromError(err))
         // Never fail the step over QA — it's advisory. Record the failure and move on.
         console.warn(`[generate_story] finishing QA failed, skipping punch-list: ${String(err)}`)
         finishingQA = { status: 'failed', error: String(err) }
@@ -1015,12 +1076,15 @@ async function runStudio(a: StudioArgs) {
           maxTokens: 4096,
         })
         cost.add(exRes.costCents)
-        const facts = exRes.data.facts
+        const facts = EvidenceBibleSchema.parse(exRes.data).facts
+        assertEvidenceBibleIntegrity(facts)
 
         const ff = buildEbnFidelityPrompt({
           facts: facts.map((f) => ({ id: f.id, stance: f.stance, weight: f.weight, value: f.value, attributed_to: f.attributed_to })),
           criticalIds: facts.filter((f) => f.weight === 'Critical').map((f) => f.id),
           narration: winner.narration,
+          title: winner.title,
+          logline: winner.logline,
         })
         const ffRes = await llmCall({
           templateVersion: STORY_EBN_FIDELITY_V1_VERSION,
@@ -1036,6 +1100,7 @@ async function runStudio(a: StudioArgs) {
         }
         console.log(`[generate_story] fact gate: ${ffRes.data.issues.length === 0 ? 'no fidelity issues' : `${ffRes.data.issues.length} fidelity issue(s) flagged (advisory)`} against ${facts.length} sourced fact(s)`)
       } catch (err) {
+        cost.add(spendFromError(err))
         // Never fail the step over the fact gate — it's advisory, exactly like finishing QA above.
         console.warn(`[generate_story] fact gate failed, story proceeds to review unchecked: ${String(err)}`)
         factCheck = { fidelity: { status: 'failed', error: String(err) } }
@@ -1051,6 +1116,7 @@ async function runStudio(a: StudioArgs) {
       plan,
       ...(planGate ? { planGate } : {}),
       winner,
+      winnerStoryId: randomUUID(),
       writerRaw: raw,
       editor: { status: edited.status, ...(edited.detail ? { detail: edited.detail } : {}) },
       naturalizer: { status: natural.status, ...(natural.detail ? { detail: natural.detail } : {}) },
@@ -1072,7 +1138,7 @@ async function runStudio(a: StudioArgs) {
 // Extraction is fail-CLOSED (no evidence ⇒ no story); the Fact-Fidelity Checker is fail-SAFE detection
 // (its flags surface at story_review for the human — matching the advisory-gate philosophy).
 // ────────────────────────────────────────────────────────────────────────────
-const GENERATE_STORY_EBN_VERSION = 'generate-story-ebn.v1'
+const GENERATE_STORY_EBN_VERSION = 'generate-story-ebn.v2'
 
 async function runEbnStudio(a: StudioArgs) {
   const db = getDb()
@@ -1096,6 +1162,12 @@ async function runEbnStudio(a: StudioArgs) {
   // Keep the brief structurally separate from the Evidence Bible so the model is explicitly forbidden
   // from treating channel copy or operator feedback as a factual source.
   const editorialBrief = JSON.stringify({
+    creativeContext: a.creativeContext,
+    creatorContract: renderStoryCreativeContext(a.creativeContext),
+    sourceConstraints: renderStorySourceGuards(a.channel.sourcePolicy),
+    language,
+    audienceDescriptor: a.basePromptVars.audienceDescriptor,
+    sourcePolicy: a.channel.sourcePolicy,
     channel: a.channel.name,
     channelPromise: a.channel.nicheDescription,
     editorialPrinciples: a.channel.editorialPrinciples,
@@ -1103,7 +1175,7 @@ async function runEbnStudio(a: StudioArgs) {
     genre: a.channel.genreCategory,
     narrativeStyle: a.channel.narrativeStyle,
     narrativeVoice: a.channel.narrativeVoice,
-    styleInfluence: a.channel.styleInfluence,
+    styleInfluence: a.creativeContext.styleInfluence,
     targetSeconds: a.targetSeconds,
     targetWords: a.basePromptVars.targetWords,
     platformHook: a.platformHookHint,
@@ -1120,6 +1192,7 @@ async function runEbnStudio(a: StudioArgs) {
     writerVersion: STORY_EBN_WRITER_V1_VERSION,
     fidelityVersion: STORY_EBN_FIDELITY_V1_VERSION,
     narrativeQualityVersion: STORY_CRITIC_V2_VERSION,
+    evidenceIntegrityVersion: EVIDENCE_INTEGRITY_VERSION,
     dossier,
     specialization,
     language,
@@ -1138,13 +1211,14 @@ async function runEbnStudio(a: StudioArgs) {
       system: ex.system,
       messages: [{ role: 'user', content: ex.userMessage }],
       provider: 'anthropic',
-      maxTokens: 3000,
+      maxTokens: Math.min(16384, Math.max(3000, a.basePromptVars.targetWords * 6)),
     })
     cost.add(exRes.costCents)
-    const facts = exRes.data.facts
+    const facts = EvidenceBibleSchema.parse(exRes.data).facts
     if (facts.length === 0) {
       throw new Error('EBN extractor produced an empty Evidence Bible from the dossier; blocking (fail-closed).')
     }
+    assertEvidenceBibleIntegrity(facts)
     // Persist the frozen, versioned Bible on the reel BEFORE consuming it (the immutability contract:
     // nothing downstream acquires facts — the Planner/Writer only select from what is frozen here).
     const evidenceBibleVersion = 1
@@ -1157,21 +1231,22 @@ async function runEbnStudio(a: StudioArgs) {
     const criticalIds = facts.filter((f) => f.weight === 'Critical').map((f) => f.id)
     const factById = new Map(facts.map((f) => [f.id, f]))
     const targetWords = a.basePromptVars.targetWords
-    const maxClaims = Math.max(4, Math.min(14, Math.round(targetWords / 28)))
+    const maxClaims = ebnClaimBudget(targetWords)
 
     // ── 2. Planner → Narrative Claims (ordering only; every claim cites fact ids) ──
     const targetNote = `a ~${targetWords}-word ${specialization.replace(/_/g, ' ')} story that fulfills the editorial brief`
-    const pl = buildEbnPlannerPrompt({ facts: bibleForModel, criticalIds, targetNote, editorialBrief, maxClaims })
+    const pl = buildEbnPlannerPrompt({ facts: bibleForModel, criticalIds, targetNote, editorialBrief, maxClaims, language })
     const claimsRes = await llmCall({
       templateVersion: STORY_EBN_PLANNER_V1_VERSION,
       schema: EbnClaimsSchema,
       system: pl.system,
       messages: [{ role: 'user', content: pl.userMessage }],
       provider: 'anthropic',
-      maxTokens: 2000,
+      maxTokens: Math.min(16384, Math.max(2000, maxClaims * 180)),
     })
     cost.add(claimsRes.costCents)
     const rawClaims = claimsRes.data.claims.sort((left, right) => left.order - right.order)
+    assertEbnClaimsIntegrity(facts, rawClaims)
     // Claim count is a structural duration lever. If the planner exceeds its budget, merge adjacent
     // claims deterministically rather than dropping evidence or asking another paid model to re-plan.
     // The merged claim keeps the union of fact ids, so citability and Critical-fact coverage survive.
@@ -1210,6 +1285,8 @@ async function runEbnStudio(a: StudioArgs) {
         permissions: TRUE_CRIME_PERMISSIONS,
         editorialBrief: brief,
         targetWords: requestedWords,
+        language,
+        audienceDescriptor: a.basePromptVars.audienceDescriptor,
       })
       const res = await llmCall({
         templateVersion: STORY_EBN_WRITER_V1_VERSION,
@@ -1218,13 +1295,14 @@ async function runEbnStudio(a: StudioArgs) {
         messages: [{
           role: 'user',
           content: previousDraft
-            ? `${wr.userMessage}\n\nPREVIOUS CITED DRAFT TO COMPRESS:\n${JSON.stringify(previousDraft, null, 2)}\n\nReturn a complete replacement JSON object. Preserve its supported factual spine and citations, but merge or remove redundant sentences until BOTH hard budgets are satisfied. Count the narration words before answering.`
+            ? `${wr.userMessage}\n\nPREVIOUS CITED DRAFT TO REVISE:\n${JSON.stringify(previousDraft, null, 2)}\n\nReturn a complete replacement JSON object. Preserve its supported factual spine and citations while following the length correction in the brief. Count the narration words before answering.`
             : wr.userMessage,
         }],
         provider: 'anthropic',
-        maxTokens: a.storyMaxTokens,
+        maxTokens: Math.min(16384, Math.max(a.storyMaxTokens, targetWords * 6)),
       })
       cost.add(res.costCents)
+      assertEbnCitationIntegrity(facts, claims, res.data)
       return res.data
     }
     let writerData = await write(editorialBrief)
@@ -1236,16 +1314,13 @@ async function runEbnStudio(a: StudioArgs) {
 
     const firstWordCount = countWords(narrationFrom(writerData))
     if (firstWordCount < minWords || firstWordCount > maxWords) {
-      // A prompt-level target is not a guarantee. One bounded, fully cost-accounted rewrite turns
-      // duration into an enforced production constraint without weakening evidence/citation discipline.
-      // Correct for the observed proportional miss rather than repeating the same nominal request.
-      // Example: 267 words against a 196 target → ask the compressor for ~144; if it repeats its 1.36×
-      // bias, the result lands near 196. The real gate below still judges against 176–216.
-      const correctionWords = Math.max(80, Math.round((targetWords * targetWords) / firstWordCount))
+      // One bounded correction, with the same real budget as the final gate. A short draft needs
+      // expansion using supported evidence; a long one needs compression, never conflicting targets.
+      const correction = ebnLengthCorrection(targetWords, firstWordCount)
       writerData = await write(
-        `${editorialBrief}\n\nMANDATORY LENGTH CORRECTION: The previous draft was ${firstWordCount} words. Compress the complete story aggressively. The final production gate requires ${minWords}–${maxWords} words. Preserve every claim and citation requirement; do not add facts.`,
+        `${editorialBrief}\n\nMANDATORY LENGTH CORRECTION: ${correction.instruction}`,
         writerData,
-        correctionWords,
+        correction.requestedWords,
       )
     }
 
@@ -1259,7 +1334,7 @@ async function runEbnStudio(a: StudioArgs) {
     // ── 4. Fact-Fidelity Checker (fail-SAFE — detection; the human approves at review) ──
     let fidelity: NonNullable<StudioOutput['ebn']>['fidelity']
     try {
-      const fp = buildEbnFidelityPrompt({ facts: bibleForModel, criticalIds, narration })
+      const fp = buildEbnFidelityPrompt({ facts: bibleForModel, criticalIds, narration, title: writerData.title, logline: writerData.logline, citations: citationMap })
       const fRes = await llmCall({
         templateVersion: STORY_EBN_FIDELITY_V1_VERSION,
         schema: EbnFidelitySchema,
@@ -1271,6 +1346,7 @@ async function runEbnStudio(a: StudioArgs) {
       cost.add(fRes.costCents)
       fidelity = { status: 'ok', version: STORY_EBN_FIDELITY_V1_VERSION, issues: fRes.data.issues, summary: fRes.data.summary ?? '' }
     } catch (err) {
+      cost.add(spendFromError(err))
       console.warn(`[generate_story:ebn] fact-fidelity check failed, surfacing story for human review anyway: ${String(err)}`)
       fidelity = { status: 'failed', error: String(err) }
     }
@@ -1305,6 +1381,8 @@ async function runEbnStudio(a: StudioArgs) {
         title: winner.title,
         logline: winner.logline ?? '',
         operatorFeedback: a.operatorFeedback,
+        sourcePolicy: a.channel.sourcePolicy,
+        creativeContext: a.creativeContext,
       })
       const res = await llmCall({
         templateVersion: STORY_CRITIC_V2_VERSION,
@@ -1317,6 +1395,7 @@ async function runEbnStudio(a: StudioArgs) {
       cost.add(res.costCents)
       editorialVerdict = enforceStoryGateEssence(res.data)
     } catch (err) {
+      cost.add(spendFromError(err))
       editorialError = String(err)
       console.warn(`[generate_story:ebn] narrative-quality gate failed; holding auto advance for review: ${editorialError}`)
     }
@@ -1346,10 +1425,15 @@ async function runEbnStudio(a: StudioArgs) {
       v: 3,
       mode: 'studio',
       angleId: `ebn:${specialization}`,
-      prose: { style: '', voice: '', influence: 'medium' },
+      prose: {
+        style: a.creativeContext.narrativeStyle ?? '',
+        voice: a.creativeContext.narrativeVoice ?? '',
+        influence: a.creativeContext.styleInfluence ?? 'medium',
+      },
       plannerStatus: 'ok',
       plan: null,
       winner,
+      winnerStoryId: randomUUID(),
       writerRaw: winner,
       editor: { status: 'ok' },
       naturalizer: { status: 'ok' },

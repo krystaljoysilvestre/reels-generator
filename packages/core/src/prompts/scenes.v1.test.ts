@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { classifyGenre, asGenreModule, buildScenesPrompt, GENRE_MODULE_VALUES } from './scenes.v1.js'
+import { classifyGenre, asGenreModule, buildScenesPrompt, GENRE_MODULE_VALUES, resolveMediaGenre } from './scenes.v1.js'
 
 describe('classifyGenre', () => {
   it('keeps the original three buckets' + "' priority", () => {
@@ -39,7 +39,44 @@ describe('asGenreModule', () => {
   })
 })
 
+describe('resolveMediaGenre', () => {
+  it('retains known defaults and the EBN documentary register', () => {
+    for (const genreCategory of GENRE_MODULE_VALUES) {
+      expect(resolveMediaGenre({ genreCategory, niche: 'horror' })).toBe(genreCategory)
+      expect(resolveMediaGenre({ genreCategory, storyMode: 'ebn' })).toBe('informational')
+    }
+    expect(resolveMediaGenre({ genreCategory: 'science history', storyMode: 'ebn' })).toBe('informational')
+  })
+
+  it.each(['cozy mystery', 'constructor', '__proto__', '日常の小さな物語'])(
+    'uses neutral defaults for explicit %s even when the niche contains an excluded genre', (genreCategory) => {
+      expect(resolveMediaGenre({ genreCategory, niche: 'gentle puzzles with no horror or scary imagery' })).toBe('general')
+    },
+  )
+
+  it('only classifies legacy missing labels from the niche', () => {
+    for (const genreCategory of [undefined, null, '', '  ']) {
+      expect(resolveMediaGenre({ genreCategory, niche: 'horror stories' })).toBe('horror')
+    }
+  })
+})
+
 describe('buildScenesPrompt', () => {
+  it('retains the declared custom genre without injecting a module inferred from its exclusions', () => {
+    const vars = {
+      bibleEntitiesJson: '[]', era: 'present', regionDescriptor: 'a small town',
+      nicheDescription: 'gentle puzzles with no horror or scary imagery', genreCategory: 'cozy mystery',
+      narration: 'The missing teacup was beside the stove.', minScenes: 1, maxScenes: 2, peakMoment: '', maxVideoTiers: 0,
+    }
+    const custom = buildScenesPrompt(vars)
+    expect(custom.system).toContain('DECLARED GENRE: cozy mystery')
+    expect(custom.userMessage).not.toContain('GENRE — HORROR / THRILLER / PARANORMAL')
+    expect(custom.userMessage).not.toContain('GENRE — INFORMATIONAL / NEWS / EDUCATIONAL')
+    const evidenceBased = buildScenesPrompt({ ...vars, storyMode: 'ebn' })
+    expect(evidenceBased.system).toContain('DECLARED GENRE: cozy mystery')
+    expect(evidenceBased.userMessage).toContain('GENRE — INFORMATIONAL / NEWS / EDUCATIONAL')
+  })
+
   it('does not let an attempted event become a successful visual outcome', () => {
     const { userMessage } = buildScenesPrompt({
       bibleEntitiesJson: '[]',

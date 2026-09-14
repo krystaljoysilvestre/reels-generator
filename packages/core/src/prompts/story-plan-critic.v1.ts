@@ -12,8 +12,10 @@
 // calibrated + honest (passes real costly decisions, fails decoration), and predicts the final gate.
 // Versioned source; bump on any prompt-affecting edit.
 import { z } from 'zod'
+import type { SourcePolicy } from '../types/source-policy.js'
+import { type StoryCreativeContext, STORY_CONTEXT_VERSION, renderStoryCreativeContext, renderStorySourceGuards } from './story-context.js'
 
-export const STORY_PLAN_CRITIC_V1_VERSION = 'story-plan-critic.v1.0'
+export const STORY_PLAN_CRITIC_V1_VERSION = `story-plan-critic.v1.1+${STORY_CONTEXT_VERSION}`
 
 // Rich verdict: three sub-checks each carry EVIDENCE (a short quote + a restatement) — the anti-gaming
 // mechanism (a plan can't pass on decision-verbs alone; the judge must restate the act as a concrete
@@ -28,6 +30,8 @@ export const PlanCriticSchema = z.object({
 export type PlanCriticVerdict = z.infer<typeof PlanCriticSchema>
 
 export interface PlanCriticVars {
+  creativeContext?: StoryCreativeContext | undefined
+  sourcePolicy?: SourcePolicy | undefined
   channelName: string
   nicheDescription: string
   // The writer-visible plan fields ONLY (mechanics/elements are stripped, same blindness as the Writer).
@@ -43,8 +47,8 @@ export interface PlanCriticVars {
 }
 
 export function buildStoryPlanCriticPrompt(v: PlanCriticVars): { system: string; userMessage: string } {
-  const system = `You are the PLAN GATE for the channel "${v.channelName}". Niche: ${v.nicheDescription}.
-A planner has committed ONE idea for a lived, first-person story. No prose exists yet — you judge the IDEA.
+  const system = `${v.creativeContext ? `${renderStoryCreativeContext(v.creativeContext)}\n\n` : ''}${renderStorySourceGuards(v.sourcePolicy ?? v.creativeContext?.sourcePolicy)}\n\nYou are the PLAN GATE for the channel "${v.channelName}". Niche: ${v.nicheDescription}.
+A planner has committed ONE idea for a story whose creator opted into structural-agency review. The narrator may be outside the events; judge the protagonist, not the narrator's grammatical person. No prose exists yet — you judge the IDEA.
 You answer ONE question: does this plan have STRUCTURAL AGENCY — is the story driven by the protagonist's own costly choices? Yes or no.
 
 Three checks. ALL must hold (pass=true only if all three sub-checks pass):
@@ -55,7 +59,7 @@ Three checks. ALL must hold (pass=true only if all three sub-checks pass):
 HOW TO JUDGE — this is the important part:
 - Judge STRUCTURE, not vocabulary. The words "decides", "chooses", "refuses" prove nothing by themselves — a plan written to please this judge sprinkles decision verbs over a passive spine, and that plan must FAIL.
 - For each check, in "evidence": quote the plan's own clause, THEN restate the act in your own words as a specific could-have-done-otherwise act (e.g. "she hands the envelope over instead of enrolling herself, losing three years of savings"). If you cannot restate it as a specific act with a specific alternative and cost, it is decoration — fail that check.
-- When genuinely borderline, FAIL. A borderline decision at plan level becomes no decision in the prose; the writer dilutes agency, never amplifies it.
+- When genuinely borderline, FAIL. A borderline decision at plan level becomes no decision in the prose; the repair should clarify its structure before prose is written.
 - You do NOT fix or rewrite the plan. Pass or fail. "reason" is ONE blunt sentence naming the passive mechanism in THIS plan (it steers the repair).`
 
   const view = {

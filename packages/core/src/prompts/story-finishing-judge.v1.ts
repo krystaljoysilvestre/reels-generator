@@ -13,11 +13,13 @@
 // universal-vs-cultural craft line), and flagging "not agentic enough" here would mis-fire on endurance-form
 // stories. Versioned source; bump on any prompt-affecting edit.
 import { z } from 'zod'
+import type { SourcePolicy } from '../types/source-policy.js'
+import { type StoryCreativeContext, STORY_CONTEXT_VERSION, renderStoryCreativeContext, renderStorySourceGuards } from './story-context.js'
 import { isFilipinoRegister } from './story-craft.v1.js'
 
 // Back to v1.1: the `ending` axis added 2026-08-06 is reverted (decision-log 2026-08-06-003) — it scored
 // against the same unvalidated standard as the gate's DELETION TEST.
-export const STORY_FINISHING_JUDGE_V1_VERSION = 'story-finishing-judge.v1.1'
+export const STORY_FINISHING_JUDGE_V1_VERSION = `story-finishing-judge.v1.2+${STORY_CONTEXT_VERSION}`
 
 export const FinishingIssueSchema = z.object({
   // Which finishing-craft axis the problem is on (for grouping/telemetry in the review UI).
@@ -33,6 +35,8 @@ export type FinishingIssue = z.infer<typeof FinishingIssueSchema>
 export type FinishingJudgeVerdict = z.infer<typeof FinishingJudgeSchema>
 
 export interface FinishingJudgeVars {
+  creativeContext?: StoryCreativeContext | undefined
+  sourcePolicy?: SourcePolicy | undefined
   channelName: string
   nicheDescription: string
   language: string
@@ -47,16 +51,16 @@ export function buildStoryFinishingJudgePrompt(v: FinishingJudgeVars): { system:
   // literal 'taglish' did, and Taglish is no longer offered in the picker.
   const naturalness =
     isFilipinoRegister(v.language)
-      ? `does every line sound like a real Filipino actually talking? Flag word-for-word-translated, bookish/literary, or garbled Tagalog and wrong word choices (quote the phrase; e.g. handwriting is "sulat-kamay", not "gawa-kamay").`
-      : `does every line sound like a real person actually talking (in ${v.language})? Flag stilted, bookish, translated-sounding, or garbled phrasing and wrong word choices (quote the phrase).`
+      ? `does each line sound natural in the selected Filipino voice and form? Flag broken or translated phrasing and wrong word choices, not intentional formal, literary or monolingual language (quote the phrase; e.g. handwriting is "sulat-kamay", not "gawa-kamay").`
+      : `does each line work aloud in the selected ${v.language} voice and form? Flag broken, translated-sounding or unintentionally stilted phrasing and wrong words. Formal or poetic language is not itself a defect (quote the phrase).`
 
-  const system = `You are the FINISHING QA judge for the channel "${v.channelName}". Niche: ${v.nicheDescription}.
-Read this finished short first-person story as a FIRST-TIME LISTENER who hears it ONCE, cannot pause, and knows nothing going in. Return a punch-list: one issue per REAL problem, each with the offending line quoted. If an axis is fine, say nothing about it. Axes:
+  const system = `${v.creativeContext ? `${renderStoryCreativeContext(v.creativeContext)}\n\n` : ''}${renderStorySourceGuards(v.sourcePolicy ?? v.creativeContext?.sourcePolicy)}\n\nYou are the FINISHING QA judge for the channel "${v.channelName}". Niche: ${v.nicheDescription}.
+Read this finished narration in its selected genre, form and voice as a FIRST-TIME LISTENER who hears it ONCE, cannot pause, and knows nothing going in. Return a punch-list: one issue per REAL problem, each with the offending line quoted. If an axis is fine, say nothing about it. Axes:
 - naturalness: ${naturalness}
 - orientation: by the time each emotional beat arrives, does the listener already know WHO these people are, WHERE we are, and WHY it matters? Flag essential context that lands too late or never (e.g. that this is a departed grandmother's house being cleared, or a relationship the story depends on).
-- turn: is the pivotal beat (the decision/reversal/confession the story rides on) DRAMATIZED — concrete action, real words, room to land — or COLLAPSED into summary/announcement ("Doon ko narealize…", "tapos wala")?
-- announced_theme: does the narrator ever SPELL OUT the meaning/feeling/moral instead of letting it land through image and action?
-- rhythm: is the sentence rhythm varied, or a monotonous string of near-identical short fragments?
+- turn: is the pivotal development clear and given enough room to land in this form? Flag a hollow announcement where the promised scene, understanding or recognition never arrives. Do not require invented action, dialogue or emotion from nonfiction.
+- announced_theme: does an announced meaning or feeling substitute for an experience the story never earned? An earned named takeaway, direct warmth, reflection or explanation can belong to the form; directness alone is not a flaw.
+- rhythm: does accidental mechanical repetition flatten attention? Preserve deliberate meter, refrains, parallelism, comic timing and measured exposition that serve this telling.
 Be honest and specific; do NOT invent problems; warm, plain feeling is GOOD, not a problem. Do NOT judge whether the character is "active enough" — that is not your job here. An empty issues list means it reads clean.`
 
   const userMessage = `TITLE: ${v.title}\nLOGLINE: ${v.logline}\n\nNARRATION:\n${v.narration}\n\nOUTPUT (JSON only):\n{ "issues": [ { "axis": "orientation", "problem": "" } ], "summary": "" }`

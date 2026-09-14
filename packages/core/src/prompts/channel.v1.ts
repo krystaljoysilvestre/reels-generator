@@ -7,10 +7,10 @@ import { z } from 'zod'
 import { ToneConfigSchema, WorldBibleSchema, resolvePlatformPreset, MAX_TARGET_SECONDS, type TargetPlatform } from '../types/channel.js'
 import { SourcePolicySchema } from '../types/source-policy.js'
 import { STYLE_VALUES, STORY_STYLES } from './story-styles.v1.js'
-import { GENRE_MODULE_VALUES } from './scenes.v1.js'
+import { GenreCategorySchema } from '../types/genre.js'
 import { VOICE_VALUES } from './story-voices.v1.js'
 
-export const CHANNEL_V1_VERSION = 'channel.v1.8'
+export const CHANNEL_V1_VERSION = 'channel.v1.9'
 
 // The full derived profile returned by the LLM. Narrator voices are NOT derived
 // — the operator picks real ElevenLabs voices in the UI. We derive an audioMood
@@ -49,16 +49,14 @@ export const ChannelDerivationSchema = z.object({
     .array(
       z.object({
         name: z.string(),
-        genreCategory: z.enum(GENRE_MODULE_VALUES).optional(),
+        genreCategory: GenreCategorySchema.optional(),
+        sourcePolicy: SourcePolicySchema.optional(),
         exampleTopics: z.array(z.string()).default([]),
       }),
     )
     .max(8)
     .default([]),
-  // Derived from GENRE_MODULE_VALUES, never hand-listed: a literal list here silently drifted from the
-  // canonical one and omitted 'childrens' and 'fairytale' — both first-class modules with their own
-  // writer identity and scene grammar — so no channel could ever be DERIVED into them.
-  genreCategory: z.enum(GENRE_MODULE_VALUES), // genre bucket → picks the writer identity + scene-prompt genre module
+  genreCategory: GenreCategorySchema, // creator's actual genre; known modules are optional defaults
   // PRESENTATION identity — how the audience receives the narration (a bias the analyzer reasons from,
   // not a command). '' = no lean (let each story decide); 'voiceover' = a narrator who never appears on
   // screen (news/documentary/explainer); 'hosted' = an on-screen teller. See voiceover-perspective.md.
@@ -204,7 +202,8 @@ Produce JSON with exactly these fields:
   "series": [  // 0–8 RECURRING CATEGORIES the description itself lays out — content pillars, segments, "types of videos I make". Return [] when the description names none, which is the common and correct answer for an ANTHOLOGY (a different standalone story every time). Never invent categories to fill this out: a fabricated editorial structure would silently drive what every future video is about.
     {
       "name": "the creator's own name for the category, kept close to their words ('Urban Legends', 'Case Studies')",
-      "genreCategory": "OMIT unless this category genuinely differs from the channel's own genreCategory above. Omitting means 'no opinion — follow the channel', which keeps following it even if the channel's genre is later corrected. Only set it where the difference is real: on a folklore channel, a creature series is horror while a travel/'places you can visit' series is lifestyle.",
+      "genreCategory": "OMIT unless this category genuinely differs from the channel's own genreCategory above. Omitting means 'no opinion — follow the channel', which keeps following it even if the channel's genre is later corrected. Only set it where the difference is real; preserve a specific or mixed genre when the creator names one.",
+      "sourcePolicy": "OMIT unless the creator explicitly gives this series different factual permissions from the channel. Never infer permissions from its genre. When supplied, use the same sourcePolicy shape as the channel.",
       "exampleTopics": ["the specific subjects the creator LISTED under this category, copied close to their words ('The Yamashita Treasure', 'White Lady of Balete Drive'). These become real production topics, so copy only what they named — [] if they listed none."]
     }
   ],
@@ -215,19 +214,9 @@ Produce JSON with exactly these fields:
     "evidenceRequired": "true if claims must be checkable against real sources (news, documentary, science, finance). false for fiction.",
     "invention": "'free' (fiction — invent everything) | 'constrained' (the SUBJECT is real, the telling is the writer's — folklore, history, real places) | 'none' (nothing may be invented; every specific comes from supplied sources)"
   },
-  "genreCategory": "the channel's GENRE bucket — drives both which WRITER identity tells its stories and how scenes are composed and lit. Pick the ONE that fits what this channel's videos ARE:
-     - horror: horror, thriller, paranormal, true-crime, creepypasta, mystery, scary/eerie storytelling — built for dread, shadow, near-black night
-     - informational: news, explainers, education, tutorials, history, science, finance, tech, documentary, reviews — clear, sharp, neutrally-lit subjects
-     - lifestyle: food/cooking, travel, vlogs, fashion, beauty, fitness, product, DIY — bright, inviting, aspirational
-     - drama: emotional/relationship narrative, hugot, heartbreak, family stories, romance — stories built to move the viewer
-     - commentary: opinion, hot takes, rants, reactions, motivation/self-improvement/stoicism — argument- or conviction-driven monologue, a clear stance with basis
-     - reddit_story: reddit-style first-person confession/AITA/TIFU storytime — must read as a REAL post by a real person
-     - comedy: punchline-driven, skits, absurd/funny storytelling — setup, expectation, subversion
-     - childrens: stories made FOR children — gentle jeopardy, plain words, a warm close; never adult dread dressed up as a kids' story
-     - fairytale: folk and fairy tales for any age — wonder, enchantment, magic that costs something; painterly and lantern-lit, not photoreal horror
-     - general: anything that doesn't clearly fit the above (faith, general storytelling) — neutral composition, no genre-specific rules",
+  "genreCategory": "the genre or blend the creator actually asked for, in at most 120 characters. Preserve their named form and language; do not squeeze an unfamiliar form into a catalog. Use a familiar id only when it accurately describes the brief: horror, informational, lifestyle, drama, commentary, reddit_story, comedy, childrens, fairytale, general. These are suggestions, not the boundaries of storytelling. More specific or mixed labels are valid, e.g. cozy mystery, romantic science fiction, or nature poetry. Use general only when the creator's brief is genuinely broad. This label describes the creative intent; it does not decide factual permissions or dictate lighting.",
   "presentation": "how this channel's narration reaches the audience. 'voiceover' = a narrator who NEVER appears on screen — the voice explains/reports/argues over b-roll, concept, and data visuals (news, documentary, explainers, education, most commentary). 'hosted' = an on-screen teller/presenter is part of the format. '' = no lean — first-person lived storytelling (horror/drama/reddit confessions) or anything where each story should decide for itself. Pick 'voiceover' only when the FORMAT clearly has no on-screen narrator; when unsure, use ''.",
-  "narrativeStyle": "the storytelling TRADITION this channel works in — pick ONE valid for the genreCategory you chose (a suggested default the creator can change); OMIT for 'general' or if none fits. Valid styles per genre:\n${styleMenu}",
+  "narrativeStyle": "the storytelling TRADITION this channel works in — pick ONE valid for a known genreCategory only when it fits (a suggested default the creator can change); OMIT for a custom genre or if none fits. Valid styles per genre:\n${styleMenu}",
   "narrativeVoice": "how the NARRATOR sounds in the prose (NOT the audio/TTS voice) — pick the ONE that fits this channel best from: ${voiceMenu}",
   "voiceSearchKeyword": "1–2 word genre/topic tag for finding fitting narrator voices, e.g. 'horror', 'true crime', 'motivation', 'meditation'",
   "audioMood": {

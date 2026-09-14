@@ -9,6 +9,7 @@
     "smoke": "tsx src/smoke-test.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
+    "typecheck:story-probes": "tsc -p tsconfig.story-probes.json",
     "lint": "eslint src",
     "test": "vitest run",
     "test:unit": "vitest run"

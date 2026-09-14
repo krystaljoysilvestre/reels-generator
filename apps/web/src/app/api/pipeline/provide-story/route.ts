@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { and, eq, inArray } from 'drizzle-orm'
 import { getDb, reels, channels, stories } from '@reels/db'
 import { enqueueStep } from '@reels/queue'
-import { requiresEvidence, resolveChannelPolicy } from '@reels/core'
+import { requiresEvidence, resolveChannelPolicy, resolveGenreForNewReel } from '@reels/core'
 import { requireChannelOwner, requireStoryOwner, requireReelCreationBudget } from '@/lib/api-access'
 
 // BYO script: the operator provides their own story for this reel, so generate_story is skipped.
@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
     try {
       const inserted = await db
         .insert(reels)
-        .values({ channelId: story.channelId, status, language: story.language, storyId: story.id, sourcePolicy })
+        .values({ channelId: story.channelId, status, language: story.language, storyId: story.id, sourcePolicy, genreCategory: resolveGenreForNewReel(null, owningChannel) })
         .returning()
       reel = inserted[0]
     } catch (err) {
@@ -125,7 +125,7 @@ export async function POST(req: NextRequest) {
     .returning()
   const [reel] = await db
     .insert(reels)
-    .values({ channelId: channel.id, status: 'storyboard', language, storyId: story!.id, sourcePolicy })
+    .values({ channelId: channel.id, status: 'storyboard', language, storyId: story!.id, sourcePolicy, genreCategory: resolveGenreForNewReel(null, channel) })
     .returning()
 
   // Auto-use the user's story: build the Story Bible → scenes → images straight away (no story-review stop).

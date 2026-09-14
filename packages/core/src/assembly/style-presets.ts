@@ -28,7 +28,8 @@ export interface StylePreset {
 // Omitting it returns the pre-genre key, which callers use as the fallback while genre thumbnails
 // are still being rendered.
 export function stylePresetThumbKey(id: string, genre?: string): string {
-  return genre ? `style-presets/${genre}/${id}.webp` : `style-presets/${id}.webp`
+  const presetGenre = genre && Object.hasOwn(SAMPLE_SCENES, genre) ? genre : 'general'
+  return genre ? `style-presets/${presetGenre}/${id}.webp` : `style-presets/${id}.webp`
 }
 
 // Inverse of stylePresetThumbKey: `style-presets/<genre>/<id>.webp` → `style-presets/<id>.webp`,
@@ -77,7 +78,8 @@ export const SAMPLE_SCENES: Record<string, string> = {
 
 // The sample scene for a genre, falling back to the neutral 'general' one for an unknown value.
 export function sampleSceneForGenre(genre?: string): string {
-  return SAMPLE_SCENES[(genre ?? 'general').toLowerCase()] ?? SAMPLE_SCENES['general']!
+  const key = (genre ?? 'general').toLowerCase()
+  return SAMPLE_SCENES[Object.hasOwn(SAMPLE_SCENES, key) ? key : 'general']!
 }
 
 // How many presets to surface per channel (the gallery cap). The pool below is tagged so every genre
@@ -258,7 +260,8 @@ export const STYLE_PRESETS: StylePreset[] = [
 
 // The best-fit presets for a channel's genre (genre-tagged + universal), capped at PRESETS_PER_GENRE.
 export function presetsForGenre(genre?: string): StylePreset[] {
-  const g = (genre ?? 'general').toLowerCase()
+  const key = (genre ?? 'general').toLowerCase()
+  const g = Object.hasOwn(SAMPLE_SCENES, key) ? key : 'general'
   return [...STYLE_PRESETS]
     .filter((p) => p.genres.includes(g) || p.genres.includes('all'))
     .sort((a, b) => fit(b, g) - fit(a, g))

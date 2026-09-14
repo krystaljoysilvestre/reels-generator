@@ -5,7 +5,7 @@ import {
   type DepictionRouting,
   type SourcePolicy,
 } from '@reels/core'
-import { llmCall, resolveSubjectIdentity, wikidataPersonFacts } from '@reels/providers'
+import { llmCall, resolveSubjectIdentity, wikidataPersonFacts, spendFromError } from '@reels/providers'
 import {
   buildEntitySourceDecidePrompt,
   EntitySourceDecisionSchema,
@@ -96,6 +96,7 @@ export async function routeDepiction(
       costCents,
     }
   } catch (error) {
+    costCents += spendFromError(error)
     console.warn(
       `[depiction-routing] routing failed for "${entity.id}" → generated: ${error instanceof Error ? error.message : String(error)}`,
     )

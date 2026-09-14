@@ -13,7 +13,7 @@ import { and, asc, eq, inArray, sql } from 'drizzle-orm'
 import { getDb, channelSeries, seriesTopics, reels, recordSpendEvent } from '@reels/db'
 import { llmCall, spendFromError } from '@reels/providers'
 import { buildSeriesTopicsPrompt, SeriesTopicsSchema, SERIES_TOPICS_V1_VERSION } from '@reels/core/prompts/series-topics.v1'
-import { resolveChannelPolicy, requiresRealSubjects } from '@reels/core'
+import { resolveChannelPolicy, requiresRealSubjects, type SourcePolicy } from '@reels/core'
 import { buildEvidenceAcquirePrompt, EvidenceAcquireSchema, EVIDENCE_ACQUIRE_V1_VERSION, renderDossier } from '@reels/core/prompts/evidence-acquire.v1'
 
 /**
@@ -41,6 +41,7 @@ export interface SeriesPick {
   /** The series' own genre override, or null when it has no opinion (→ falls back to the channel's). */
   genreCategory: string | null
   narrativeStyle: string | null
+  sourcePolicy: unknown
 }
 
 /**
@@ -112,6 +113,7 @@ export async function pickNextSeriesTopic(
       subject: topic.subject,
       genreCategory: s.genreCategory,
       narrativeStyle: s.narrativeStyle,
+      sourcePolicy: s.sourcePolicy,
     }
   }
   return null // every enabled series is out of topics → caller falls back to planner-invented
@@ -137,9 +139,10 @@ export interface AcquiredEvidence {
 export async function acquireEvidence(
   channel: SeriesChannel & { languages?: string[] },
   subject: string,
+  sourcePolicy?: SourcePolicy,
 ): Promise<AcquiredEvidence | null> {
   try {
-    const policy = resolveChannelPolicy(null, null, channel)
+    const policy = sourcePolicy ?? resolveChannelPolicy(null, null, channel)
     const p = buildEvidenceAcquirePrompt({
       subject,
       channelName: channel.name,
@@ -211,7 +214,7 @@ export async function acquireEvidence(
  */
 export async function replenishSeriesTopics(
   channel: SeriesChannel,
-  series: { id: string; name: string },
+  series: { id: string; name: string; sourcePolicy?: unknown },
 ): Promise<number> {
   const db = getDb()
   try {
@@ -226,7 +229,7 @@ export async function replenishSeriesTopics(
     // The old heuristic (storyMode==='ebn' || genre==='informational') got the motivating case exactly
     // backwards: a folklore channel sits on `horror`, so it was told invention was fine — while its whole
     // premise is real legends a viewer can look up.
-    const requireReal = requiresRealSubjects(resolveChannelPolicy(null, null, channel))
+    const requireReal = requiresRealSubjects(resolveChannelPolicy(null, series, channel))
 
     const p = buildSeriesTopicsPrompt({
       channelName: channel.name,
@@ -250,16 +253,23 @@ export async function replenishSeriesTopics(
     }
 
     // Normalize before comparing: an exact-string match missed "The Tiyanak" against "Tiyanak". Strips a
-    // leading article and punctuation only — deliberately NOT fuzzy matching, which would start dropping
-    // genuinely distinct subjects. A semantic near-duplicate ("The Lost Gold of General Yamashita" vs
+    // leading article and punctuation only, preserving letters, combining marks and numbers in every
+    // script. Canonical Unicode equivalents compare alike without changing the stored subject text.
+    // Deliberately NOT fuzzy matching, which would start dropping genuinely distinct subjects.
+    // A semantic near-duplicate ("The Lost Gold of General Yamashita" vs
     // "Yamashita Treasure") still gets through; that is what the queue being visible is for.
-    const norm = (t: string) => t.trim().toLowerCase().replace(/^(the|a|an)\s+/, '').replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim()
+    const norm = (t: string) => t.normalize('NFC').trim().toLowerCase().replace(/^(the|a|an)\s+/, '').replace(/[^\p{L}\p{M}\p{N}\s]/gu, '').replace(/\s+/gu, ' ').trim()
     const existing = new Set(seen.map((s) => norm(s.subject)))
     const proposed = r.data.topics ?? []
     const fresh = proposed
       .filter((t) => (requireReal ? t.real : true)) // discard anything unvouched on a real-subject channel
       .map((t) => t.subject.trim())
-      .filter((s) => s.length > 0 && !existing.has(norm(s)))
+      .filter((s) => {
+        const key = norm(s)
+        if (!key || existing.has(key)) return false
+        existing.add(key) // also deduplicate candidates within this replenishment batch
+        return true
+      })
     if (fresh.length === 0) {
       console.warn(`[series-replenish] ${channel.name} / ${series.name}: nothing usable returned (${r.costCents}¢)`)
       return 0
@@ -275,7 +285,17 @@ export async function replenishSeriesTopics(
     )
     return fresh.length
   } catch (err) {
-    // Fail soft — a dry queue just means the Planner invents this reel, which is the pre-series behaviour.
+    const failedCostCents = spendFromError(err)
+    if (channel.userId && failedCostCents > 0) {
+      await recordSpendEvent({
+        userId: channel.userId,
+        channelId: channel.id,
+        surface: 'series_replenish',
+        provider: 'openai',
+        costCents: failedCostCents,
+      })
+    }
+    // The scheduler independently applies the resolved policy before any source-free fallback.
     console.warn(`[series-replenish] ${channel.name} / ${series.name} failed: ${err instanceof Error ? err.message : String(err)}`)
     return 0
   }

@@ -4,13 +4,13 @@
 // Structure: a niche-NEUTRAL CORE (always sent) + ONE genre MODULE, so a reel only pays for its own
 // genre's rules (a cooking reel never reads the horror darkness rules; a horror reel never reads "show
 // the subject bright and clear"). The module is chosen from the channel's `genreCategory` — an
-// LLM-derived bucket stored at channel creation (channel.v1). `classifyGenre` is the keyword fallback,
-// used when a channel predates the column (or the value is unrecognized).
+// creator genre stored at channel creation (channel.v1). Explicit custom genres use the neutral module;
+// `classifyGenre` is the keyword fallback only when a channel predates the column.
 
 // Back to v1.44: the closing-shot block ("THE LAST SCENE IS THE AFTERIMAGE") is reverted with the rest of
 // the ending TEXT layer (decision-log 2026-08-06-003). The TIME layer that makes a closing shot playable
 // at all — the outro tail in compute-timings §4.65 — is KEPT; it is the part the founder validated.
-export const SCENES_V1_VERSION = 'scenes.v1.56'
+export const SCENES_V1_VERSION = 'scenes.v1.57'
 
 export type GenreModule =
   | 'horror'
@@ -24,8 +24,8 @@ export type GenreModule =
   | 'fairytale'
   | 'general'
 
-// Single source of truth for the bucket values — the wizard/settings validators import this
-// instead of hand-writing `v === '…' || v === '…'` chains that drift.
+// Single source of truth for known numeric/media defaults and suggested genre modules.
+// Creator genre labels are free text; this registry does not constrain them.
 export const GENRE_MODULE_VALUES = [
   'horror',
   'informational',
@@ -49,7 +49,8 @@ export interface ScenesPromptVars {
   era: string
   regionDescriptor: string
   nicheDescription: string // the channel's genre/niche — drives the visual language
-  genreCategory?: string // LLM-derived bucket stored on the channel; falls back to classifyGenre(niche)
+  genreCategory?: string | undefined // Raw frozen creator genre; only absent legacy values use niche classification
+  storyMode?: string | null | undefined // EBN retains the informational media register
   aspect?: '9:16' | '16:9' // the channel's output frame (platform preset) — 9:16 when absent
   narration: string
   // Beat-driven count: a length-scaled range the director picks WITHIN by cutting on dramatic beats.
@@ -98,7 +99,7 @@ export function classifyGenre(niche: string): GenreModule {
   return 'general'
 }
 
-// Coerce a stored/derived string to a known module, defaulting unknown values to 'general'.
+// Return a known module, or null when the creator's label has no built-in module.
 export function asGenreModule(v: string | null | undefined): GenreModule | null {
   return (GENRE_MODULE_VALUES as readonly string[]).includes(v ?? '') ? (v as GenreModule) : null
 }
@@ -108,11 +109,13 @@ export function asGenreModule(v: string | null | undefined): GenreModule | null 
 // it resolves to `informational` (the closest built calm-register module — measured, neutral light, peak on
 // the revelation) instead of falling into the empty `general` bucket, which gave EBN reels no register
 // guidance at all and let the horror-tuned defaults take over. Until EBN earns its own module this is the
-// right home. Standard channels are unaffected: the result is identical to the existing
-// `asGenreModule(genreCategory) ?? classifyGenre(niche)` resolution.
+// right home. Explicit custom genres use neutral defaults and retain their raw label in prompt context;
+// only absent legacy genres may be inferred from the niche.
 export function resolveMediaGenre(opts: { storyMode?: string | null | undefined; genreCategory?: string | null | undefined; niche?: string | null | undefined }): GenreModule {
   if (opts.storyMode === 'ebn') return 'informational'
-  return asGenreModule(opts.genreCategory) ?? (opts.niche ? classifyGenre(opts.niche) : 'general')
+  const declared = opts.genreCategory?.trim()
+  if (declared) return asGenreModule(declared) ?? 'general'
+  return opts.niche ? classifyGenre(opts.niche) : 'general'
 }
 
 // One genre MODULE is appended to the core (only the matched one is sent).
@@ -135,7 +138,7 @@ export function buildScenesPrompt(v: ScenesPromptVars): { system: string; userMe
   const frame = v.aspect === '16:9' ? 'widescreen (16:9) narrated videos' : 'vertical (9:16) narrated reels'
   const system = `You are a storyboard director for ${frame}.
 
-CHANNEL GENRE / NICHE: ${v.nicheDescription}
+CHANNEL GENRE / NICHE: ${v.nicheDescription}${v.genreCategory?.trim() ? `\nDECLARED GENRE: ${v.genreCategory.trim()}` : ''}
 Compose every shot in the visual language of THIS genre — show what it shows, imply what it implies. Do NOT import conventions from other genres. Match the genre.
 
 STORY BIBLE — the recurring people, places, and objects in THIS reel, each with a fixed id and a canonical look:
@@ -147,8 +150,8 @@ Era: ${v.era}. Region look: ${v.regionDescriptor}.`
     ? `\n\nThe PEAK of this reel is this line: "${v.peakMoment.trim()}" — give it its OWN dedicated scene (don't bury it inside a longer span) so it lands as its own shot. FRAME THE PAYOFF SO IT DOMINATES: if your GENRE section below defines "THE PEAK", that grammar governs this shot (a comedy payoff wants the whole picture; a drama payoff wants the small gesture close). Otherwise default to a tight push-in — an extreme close-up on the one thing the line pays off, filling almost the entire frame, any other person at most a partial sliver at the edge (cameraMove: push_in); a payoff seen wide with no genre reason reads small. If the payoff's real geometry (a reflection, a doorway, a comparison) needs more room, you judge the tightest frame that keeps it landing in one believable photograph.`
     : ''
 
-  // Prefer the channel's LLM-derived category; fall back to keyword classification for older channels.
-  const module = asGenreModule(v.genreCategory) ?? classifyGenre(v.nicheDescription)
+  // Explicit custom labels stay neutral; only legacy absent labels use niche classification.
+  const module = resolveMediaGenre({ storyMode: v.storyMode, genreCategory: v.genreCategory, niche: v.nicheDescription })
   const genreModule = GENRE_MODULES[module]
   const moduleBlock = genreModule ? `\n\n${genreModule}` : ''
 

@@ -5,7 +5,7 @@ import { eq } from 'drizzle-orm'
 import { getDb, channels } from '@reels/db'
 import { SourcePolicySchema, ToneConfigSchema, WorldBibleSchema, CaptionStyleSchema, TargetPlatformsSchema, channelPlatformPreset, MAX_TARGET_SECONDS, AudioPacksSchema, MusicMoodSchema, PostingRulesSchema, PublishScheduleSchema } from '@reels/core'
 import { STYLE_VALUES } from '@reels/core/prompts/story-styles.v1'
-import { GENRE_MODULE_VALUES } from '@reels/core/prompts/scenes.v1'
+import { GenreCategorySchema } from '@reels/core'
 import { VOICE_VALUES } from '@reels/core/prompts/story-voices.v1'
 import { callerMayUseStorageKey, requireChannelOwner } from '@/lib/api-access'
 
@@ -42,7 +42,7 @@ const UpdateSchema = z
     sourcePolicy: SourcePolicySchema,
     // Genre — the AI's creation-time classification, correctable by the operator (re-scopes the
     // writer identity, registers, scene grammar, voice delivery, and the style menus).
-    genreCategory: z.enum(GENRE_MODULE_VALUES),
+    genreCategory: GenreCategorySchema,
     // PROSE dimensions (story-styles / story-voices) — '' allowed (pure genre / default voice).
     narrativeStyle: z.union([z.literal(''), z.enum(STYLE_VALUES)]),
     narrativeVoice: z.union([z.literal(''), z.enum(VOICE_VALUES)]),

@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "noEmit": true },
+  "files": [
+    "scripts/story-studio-check.ts",
+    "scripts/probe-genre-lab.ts",
+    "scripts/gate-pass-rate.ts",
+    "scripts/probe-ebn.ts",
+    "scripts/probe-ebn-ending-contract.ts",
+    "scripts/probe-ebn-ending-brief.ts",
+    "scripts/probe-ebn-five-claims.ts",
+    "scripts/probe-ebn-writer-landing.ts",
+    "scripts/probe-ebn-cited-editor.ts"
+  ]
+}

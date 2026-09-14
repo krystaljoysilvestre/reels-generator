@@ -9,17 +9,18 @@
 // Versioned source code. Mechanics are baked into the prompt text, so their version rides along.
 
 import { z } from 'zod'
-import { type SourcePolicy, DEFAULT_SOURCE_POLICY } from '../types/source-policy.js'
+import { type SourcePolicy } from '../types/source-policy.js'
 import { STORY_MECHANICS_V1_VERSION, renderMechanics } from './story-mechanics.v1.js'
 import { STORY_ELEMENTS_V1_VERSION, StoryElementsSchema, renderElementPalette, formatRecentElements, type StoryElements } from './story-elements.v1.js'
 import { STORY_STYLES_V1_VERSION, resolveStyle, renderStyleForPlanner, type StyleInfluence } from './story-styles.v1.js'
 import { WRITER_IDENTITIES, WRITER_IDENTITIES_V1_VERSION } from './writer-identities.v1.js'
-import { asGenreModule, classifyGenre, type GenreModule } from './scenes.v1.js'
+import { type GenreModule } from './scenes.v1.js'
+import { type StoryCreativeContext, STORY_CONTEXT_VERSION, resolveWritingGenre, renderStoryCreativeContext, renderStorySourceGuards } from './story-context.js'
 
 // Includes WRITER_IDENTITIES_V1_VERSION because the planner renders identity fields (questionsAsked,
 // taboos, registers, selectionLens) — so an identity edit must bust the planner's inputHash explicitly,
 // not rely solely on the step's full-text hashing of plannerSystem/plannerUser (review nit, 2026-07-18).
-export const STORY_PLANNER_V1_VERSION = `planner.v1.8+${STORY_MECHANICS_V1_VERSION}+${STORY_ELEMENTS_V1_VERSION}+${STORY_STYLES_V1_VERSION}+${WRITER_IDENTITIES_V1_VERSION}`
+export const STORY_PLANNER_V1_VERSION = `planner.v1.9+${STORY_MECHANICS_V1_VERSION}+${STORY_ELEMENTS_V1_VERSION}+${STORY_STYLES_V1_VERSION}+${WRITER_IDENTITIES_V1_VERSION}+${STORY_CONTEXT_VERSION}`
 
 // The committed idea. `mechanics` + `elements` are planner METADATA — the caller STRIPS them before
 // the Writer sees the plan (INVARIANT 1: the Writer writes from the idea, never from labels).
@@ -35,8 +36,8 @@ export const StoryPlanSchema = z.object({
   // being duplicated — the contract is: promise → transformation → feel.
   hookPromise: z.string().min(1), // what the opening implicitly promises to change ("I will change how you see elevators")
   viewerTransformation: z.object({
-    before: z.string().min(1), // what the viewer believes walking in
-    after: z.string().min(1),  // what they believe walking out — a BELIEF or a behaviour, never merely a new fact
+    before: z.string().min(1), // the viewer's starting feeling, understanding or expectation
+    after: z.string().min(1),  // the intended change in feeling, understanding, expectation, or action
   }),
   escalation: z.string().min(1), // the middle's engine: how it tightens from premise to turn, each step caused by the last
   twist: z.string().min(1), // the turn — reveal, reversal, punchline, flip; genre decides
@@ -50,6 +51,7 @@ export const StoryPlanSchema = z.object({
 export type StoryPlan = z.infer<typeof StoryPlanSchema>
 
 export interface StoryPlannerVars {
+  creativeContext?: StoryCreativeContext | undefined
   channelName: string
   nicheDescription: string
   toneConfig: string // JSON stringified
@@ -71,56 +73,24 @@ export interface StoryPlannerVars {
 }
 
 export function resolvePlannerGenre(genreCategory: string | null | undefined, niche: string): GenreModule {
-  return asGenreModule(genreCategory ?? null) ?? classifyGenre(niche)
+  return resolveWritingGenre(genreCategory, niche)
 }
 
-// The GUARDS line, driven by the channel's Source Policy.
-//
-// Until now this was unconditional, and its first clause told EVERY channel to fictionalize specific
-// real places. For a channel built on real named subjects that silently laundered the premise —
-// "White Lady of Balete Drive" became an invented street on every reel. The policy makes that a
-// creator choice instead of a global assumption.
-//
-// What NEVER varies, at any policy setting: no invented wrongdoing attributed to real named parties,
-// no graphic content, no harm to minors, no retellings of known films/books/copypastas. And this line
-// governs NARRATION only — whether a rendered frame may STAGE a real party as if photographed is the
-// depictive-ethics floor's, which sits above policy and cannot be relaxed from here.
-function renderGuards(p: SourcePolicy): string {
-  const places = p.realPlaces
-    ? 'real places may be named accurately (use their real names; do not invent a stand-in for a real place the story is actually about)'
-    : 'fictionalize specific real places (invented street/business names; a real region/era is fine)'
-  const people =
-    p.realPeople === 'public_figures'
-      ? 'real public figures may be NAMED and discussed, but never placed in invented scenes, quoted with words they did not say, or accused of anything not established by the source'
-      : p.realPeople === 'historical'
-        ? 'long-dead historical figures may be named; no living identifiable people'
-        : 'no real, identifiable people'
-  const events = p.realEvents
-    ? 'real documented events may be treated as real; never invent an event and present it as documented'
-    : 'events are invented'
-  const invention =
-    p.invention === 'none'
-      ? ' Every load-bearing specific must come from the supplied source material — invent nothing.'
-      : p.invention === 'constrained'
-        ? ' The SUBJECT is real and must stay accurate; the telling is yours.'
-        : ''
-  return `GUARDS: ${places}; ${people}; ${events}; no graphic gore or sexual content; never harm to minors as subject matter; original work only — no retellings of known films, books, or copypastas.${invention}`
-}
-
+// Source-policy guards are shared with every downstream authoring pass so permission cannot drift.
 export function buildStoryPlannerPrompt(v: StoryPlannerVars): { system: string; userMessage: string } {
-  const genre = resolvePlannerGenre(v.genreCategory, v.nicheDescription)
+  const genre = resolvePlannerGenre(v.creativeContext?.genre ?? v.genreCategory, v.nicheDescription)
   const identity = WRITER_IDENTITIES[genre]
   const mechanics = renderMechanics(genre)
   const elementPalette = renderElementPalette(genre)
   const recentEls = v.recentElements ?? []
   // Style layer: biases the plan's element/mechanic choices (never owns them). '' → pure genre.
-  const styleSpec = resolveStyle(genre, v.narrativeStyle)
-  const styleBlock = styleSpec ? `\n${renderStyleForPlanner(styleSpec, v.styleInfluence ?? 'medium')}\n` : ''
+  const styleSpec = resolveStyle(genre, v.creativeContext?.narrativeStyle ?? v.narrativeStyle)
+  const styleBlock = styleSpec ? `\n${renderStyleForPlanner(styleSpec, v.creativeContext?.styleInfluence ?? v.styleInfluence ?? 'medium')}\n` : ''
   // The writer's registers: the idea commits to ONE temperature at planning time (per-story judgment,
   // owner decision 2026-07-17) — recorded in elements.register, handed to the Writer, and read by the
   // voice-delivery envelope downstream.
   const registersBlock = identity.registers?.length
-    ? `\nTHE WRITER'S REGISTERS — every idea has a temperature; commit yours to the ONE register it wants (record it in elements.register). Candidates, not a rotation — but a long streak in one register is its own sameness:\n${identity.registers.map((r) => `- ${r}`).join('\n')}\n`
+    ? `\nTHE WRITER'S REGISTERS — candidates for this story's dominant register, not a rotation. Name your own or combine them when the intended emotional journey calls for it; record the choice in elements.register:\n${identity.registers.map((r) => `- ${r}`).join('\n')}\n`
     : ''
   // Selection lens: genre-specific guidance on WHICH ideas deserve to exist (not how to tell them).
   // TESTS the planner reasons with, never a beat template. Where present, it OUTRANKS the generic
@@ -131,10 +101,12 @@ export function buildStoryPlannerPrompt(v: StoryPlannerVars): { system: string; 
 
   const system = `You are the story planner for "${v.channelName}" — the creative subconscious of ${identity.label}.
 Niche: ${v.nicheDescription}
+Declared genre / form: ${v.creativeContext?.genre ?? v.genreCategory ?? '(derive from the channel intent)'}
 Tone calibration (0–10 scales): ${v.toneConfig}
+${v.creativeContext ? `\n${renderStoryCreativeContext(v.creativeContext)}\n` : ''}
 
 You do not write prose. You decide WHAT story deserves to exist next on this channel. The writer who executes your idea is always asking: ${identity.questionsAsked.join(' ')} Plan ideas that give those questions great answers.
-That writer refuses to: ${identity.taboos.join(' ')} Never commit an idea whose premise, ending, or emotional destination would force one of those — the taboo shows up at YOUR level first (e.g. an ending planned as "and it brought everyone closer" is already a bow before a word is written).
+Genre defaults, where compatible with the creator's declared intent: ${identity.taboos.join(' ')} These do not overrule a selected form, audience or deliberate departure. A custom genre uses its own promise, not the default identity's preferred story shape.
 ${mechanics ? `\n${mechanics}\n` : ''}${styleBlock}${registersBlock}${selectionBlock}
 WORLD BIBLE — ideas must fit this world (reuse canonical names; don't invent recurring elements):
 ${v.worldBibleJson}
@@ -146,7 +118,7 @@ ${elementPalette}
 
 You will also DESCRIBE your committed idea along those dimensions (see the output). Describe the story you chose — don't reverse-engineer a story to hit labels. But quality comes first: if the strongest idea happens to share a dimension or two with recent ones, keep the stronger idea and vary elsewhere — never bend a story into something weaker just to be different.
 
-${renderGuards(v.sourcePolicy ?? DEFAULT_SOURCE_POLICY)}`
+${renderStorySourceGuards(v.sourcePolicy ?? v.creativeContext?.sourcePolicy)}`
 
   const userMessage = `Plan the next story for this channel — a ~${v.targetSeconds}-second telling.
 ${
@@ -162,7 +134,7 @@ ${v.avoidList || '(nothing yet — the catalog is young; freshness still wins)'}
 
 ALREADY USED ON THIS CHANNEL (story shape) — the real anti-sameness guard, because a different premise with the same shape still FEELS like the same story:
 ${formatRecentElements(recentEls)}
-VARIETY RULE: your committed idea must differ from the recent stories on \`structure\` AND at least two other dimensions. Never reuse a recent (setting + trigger + turn) combination, a recent \`role\`, or (for horror) a recent \`anchor\`. A new noise in the same room happening to the same kind of person is NOT a new story.
+VARIETY CHECK: avoid repeating the same dramatic mechanism with different surface details. Recurring characters, roles and a channel's chosen form can stay; seek meaningful freshness within them. Quality and the creator's contract outrank label diversity. Do not change structure or discard the strongest idea merely to differ in a fixed number of dimensions.
 
 Anti-patterns from rejected reels: ${v.rejectionAvoidList || 'none yet'}
 ${
@@ -170,24 +142,24 @@ ${
       ? `\nThis is regeneration attempt #${(v.regenerationNonce ?? 1)}. The operator rejected the previous story: "${v.operatorFeedback}". Re-plan — a DIFFERENT premise/approach that directly answers this, not the same idea reworded.\n`
       : ''
   }
-STORY PHYSICS — the committed idea must hold together as drama, not as atmosphere. Apply these in THIS channel's own terms: a lived story has a protagonist; an explainer or argument answers the same physics with a question that tightens, facts that force each other, and an understanding that changes:
-- CONFLICT IS A WANT. Someone wants something (even tiny — finish the shift, get home, be believed) and something is in the way. In an explainer: the viewer's assumption colliding with how it actually works. "A creepy feeling grows" is a mood, not a conflict.
-- THE MIDDLE IS CHOICES. In a lived story the protagonist DECIDES things, and each decision costs — ignoring it has a price, checking has a price, telling someone has a price; things happening TO a passive narrator is not escalation. In an explainer, each revelation forces the next question.
-- CAUSE, NEVER SEQUENCE. The beats chain with "therefore" and "but", never "and then". If your logline reads "this happened, and then this happened", reject the idea and tighten it.
-- DECIDE THE DESTINATION BEFORE THE JOURNEY. Once you have the premise and the conflict, commit to where the VIEWER ends up — the promise your opening makes, and what they believe walking out that they didn't believe walking in — and only then plan the middle that earns it. A story planned the other way round (write it, hope the ending works) arrives wherever it happens to arrive, which is why endings feel bolted on. If you cannot name a real belief the viewer leaves with, the idea has not earned an ending yet: tighten it or pick a better one.
+STORY DEVELOPMENT — apply these tests in the declared genre and form's own terms:
+- FOCUS: identify the want, question, relationship, experience or argument that gives the audience a reason to stay. A mood alone cannot substitute for the development this particular story promises.
+- PROGRESSION: make the middle matter. In a character-driven story, choices, pressures and consequences should reveal the people rather than leave them interchangeable spectators. An explainer develops understanding; a reflective or observational form earns its discoveries. Do not invent a protagonist, dilemma or costly decision to satisfy another form's grammar.
+- COHERENCE: causes and consequences must hold where asserted. Avoid coincidence that substitutes for an earned turn; presentation order can be associative or nonlinear when the listener can follow its purpose.
+- DESTINATION: decide the audience effect this story is meant to earn, then develop toward it. The outcome may be laughter, reassurance, recognition, suspense, understanding, an open question or changed belief. Do not manufacture a lesson, surprise or belief change for a story that promises something else.
 
 OUTPUT (JSON only) — the ONE committed idea:
 {
   "premise": "the situation, concrete and specific — who, where, what starts it",
   "conflict": "who wants what, and what stands in the way — a want colliding with the world, in this genre's own terms",
-  "hookPromise": "what your opening implicitly promises to change — the check the first line writes ('I am going to permanently change how you see elevators'). The ending must cash THIS one, not an easier one.",
+  "hookPromise": "the experience, question or emotional promise that makes this opening worth following; the story must deliver on its own promise",
   "viewerTransformation": {
-    "before": "what the viewer believes walking in — stated as their ordinary assumption",
-    "after": "what they believe walking out. It must be something they'd now BELIEVE or DO differently, not merely a fact they now know ('mirrors are ordinary' → 'mirrors at night feel different' passes; 'didn't know X' → 'knows X' does not)."
+    "before": "the viewer's starting feeling, understanding or expectation",
+    "after": "the intended audience effect by the end, appropriate to this genre and form; learning, recognition, laughter, reassurance or an earned open question are valid"
   },
-  "escalation": "the middle's engine: the few turns between premise and the turn, chained by therefore/but — in a lived story, each caused by a choice that costs more than the last; in an explainer/argument, each revelation forcing the next question",
-  "twist": "the turn — what the viewer learns/feels that reframes everything",
-  "ending": "how it lands — the final beat, one breath past the turn: what is DIFFERENT now, delivered as a concrete image or action, never as a stated meaning. It must be capable of producing the transformation above.",
+  "escalation": "how the middle develops toward the promised payoff, with the connections and changes that make each part matter",
+  "twist": "the pivotal development or payoff: a reversal, recognition, discovery, resolution or another form-native turn; no surprise is required",
+  "ending": "how this story delivers its promised audience effect and comes to its appropriate stopping point; the form may call for an image, action, question, clear explanation or an earned direct takeaway",
   "emotionalDestination": "what the viewer is left feeling after the last line",
   "logline": "one sentence a stranger could repeat",
   "whyThisStory": "one sentence: why THIS deserves to exist over everything you rejected — what makes it fresh for this exact channel. If you can't justify it, it's generic: go back and commit to a better one.",
@@ -202,7 +174,7 @@ OUTPUT (JSON only) — the ONE committed idea:
     "turn": "the reveal/reversal type",
     "aftereffect": "what the viewer carries away",
     "tensionCurve": "the pacing shape only",
-    "register": "the ONE register this idea commits to (from the writer's registers, in its own words); omit if the genre has none"
+    "register": "the chosen dominant register or intentional emotional movement, in your own words; omit if not useful"
   }
 }`
 

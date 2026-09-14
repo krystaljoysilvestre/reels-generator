@@ -244,6 +244,7 @@ void (async () => {
         const niche = arm === 'control' ? controlNiche : leanNiche
         const brief = makeBrief(row, niche)
         const planner = buildEbnPlannerPrompt({
+          language: row.language,
           facts: bibleForModel,
           criticalIds,
           targetNote: `a ~${targetWords}-word historical events story that fulfills the editorial brief`,
@@ -284,6 +285,7 @@ void (async () => {
 
         const write = async (writerBrief: string, requestedWords: number, previous?: z.infer<typeof EbnWriterSchema>) => {
           const prompt = buildEbnWriterPrompt({
+            language: row.language,
             claims: claimsWithFacts,
             permissions: TRUE_CRIME_PERMISSIONS,
             editorialBrief: writerBrief,
@@ -353,7 +355,7 @@ void (async () => {
           wordCount: words(narration),
           claims,
           citationMap,
-          fidelity: fidelity.data,
+          fidelity: EbnFidelitySchema.parse(fidelity.data),
           ending: ending.data,
         })
         console.log(`[${row.title}] run ${run}/${RUNS} ${arm}: ${words(narration)}w · double=${ending.data.doubleEnding} · debt=${ending.data.debtPaid} · fidelity=${fidelity.data.issues.length}`)

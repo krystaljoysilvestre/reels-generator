@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { llmCall } from '@reels/providers'
 import { recordSpendEvent } from '@reels/db'
-import { ToneConfigSchema, WorldBibleSchema, TargetPlatformsSchema, resolvePlatformPreset, MAX_TARGET_SECONDS } from '@reels/core'
+import { GenreCategorySchema, SourcePolicySchema, resolveChannelPolicy, requiresEvidence, ToneConfigSchema, WorldBibleSchema, TargetPlatformsSchema, resolvePlatformPreset, MAX_TARGET_SECONDS } from '@reels/core'
 import {
   buildChannelSamplePrompt,
   ChannelSampleSchema,
@@ -11,6 +11,7 @@ import {
 } from '@reels/core/prompts/channel-sample.v2'
 import { requireApiUser, requireSpendBudget } from '@/lib/api-access'
 import { recordFailedSpend } from '@/lib/failed-spend'
+import { defaultAudienceDescriptor } from '@reels/core/prompts/story-craft.v1'
 
 const InputSchema = z.object({
   name: z.string().trim().min(1).max(80),
@@ -26,7 +27,10 @@ const InputSchema = z.object({
   // The operator's OWN draft, to be rebuilt in the channel's voice. Capped like the other free-text
   // fields since it is echoed into the prompt. Only ever their words — never a sample we wrote.
   reviseDraft: z.string().trim().max(8000).optional(),
-  genreCategory: z.string().trim().optional(), // derived bucket → picks the writer identity (niche keywords as fallback)
+  sourcePolicy: SourcePolicySchema.optional(),
+  sourceMaterial: z.string().trim().max(20000).optional(),
+  editorialPrinciples: z.string().trim().max(4000).optional(),
+  genreCategory: GenreCategorySchema.optional(), // exact creator label; only absent legacy values use niche fallback
   narrativeStyle: z.string().trim().optional(), // prose style (story-styles); resolves within genre or falls back
   narrativeVoice: z.string().trim().optional(), // prose narrator voice (story-voices)
   styleInfluence: z.enum(['light', 'medium', 'full']).optional(),
@@ -46,8 +50,27 @@ export async function POST(req: NextRequest) {
   }
 
   const c = parsed.data
+  const sourcePolicy = resolveChannelPolicy(null, null, { sourcePolicy: c.sourcePolicy })
+  if (requiresEvidence(sourcePolicy) && !c.sourceMaterial) {
+    return NextResponse.json({ error: 'Add sources for this example, or paste your own script.' }, { status: 400 })
+  }
   const { system, userMessage } = buildChannelSamplePrompt({
     name: c.name,
+    sourcePolicy,
+    ...(c.sourceMaterial ? { sourceMaterial: c.sourceMaterial } : {}),
+    ...(c.editorialPrinciples ? { editorialPrinciples: c.editorialPrinciples } : {}),
+    creativeContext: {
+      genre: c.genreCategory ?? '',
+      niche: c.nicheDescription,
+      language: c.languages[0]!,
+      audienceDescriptor: defaultAudienceDescriptor(c.languages[0]!),
+      targetSeconds: c.targetSeconds,
+      narrativeStyle: c.narrativeStyle,
+      narrativeVoice: c.narrativeVoice,
+      styleInfluence: c.styleInfluence,
+      editorialPrinciples: c.editorialPrinciples,
+      sourcePolicy,
+    },
     nicheDescription: c.nicheDescription,
     language: c.languages[0]!,
     toneJson: JSON.stringify(c.toneConfig),

@@ -45,7 +45,8 @@ export interface LlmResult<T> {
   inputHash: string
 }
 
-const DEFAULT_MODEL: Record<LlmProvider, string> = {
+// Shared with diagnostic manifests so probes report the same defaults the transport executes.
+export const DEFAULT_LLM_MODELS: Readonly<Record<LlmProvider, string>> = {
   openai: 'gpt-4o',
   anthropic: 'claude-sonnet-4-6',
 }
@@ -268,7 +269,7 @@ async function transport(provider: LlmProvider, model: string, system: string, m
 export async function llmCall<T>(opts: LlmCallOptions<T>): Promise<LlmResult<T>> {
   const provider = opts.provider ?? 'openai'
   const webSearch = provider === 'openai' && opts.webSearch === true
-  const model = opts.model ?? (webSearch ? OPENAI_WEB_SEARCH_MODEL : DEFAULT_MODEL[provider])
+  const model = opts.model ?? (webSearch ? OPENAI_WEB_SEARCH_MODEL : DEFAULT_LLM_MODELS[provider])
   const maxTokens = opts.maxTokens ?? 4096
   const inputHash = buildInputHash(opts.templateVersion, {
     system: opts.system,

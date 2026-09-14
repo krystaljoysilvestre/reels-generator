@@ -17,12 +17,13 @@ import {
   type SourcePolicy,
 } from '@reels/core'
 import { asGenreModule } from '@reels/core/prompts/scenes.v1'
-import { GENRE_OPTIONS, PRESENTATION_OPTIONS } from '@/lib/genre-labels'
+import { PRESENTATION_OPTIONS } from '@/lib/genre-labels'
 import { stylesForGenre } from '@reels/core/prompts/story-styles.v1'
 import { STORY_VOICES } from '@reels/core/prompts/story-voices.v1'
 import { CaptionPreview } from '@/components/CaptionPreview'
 import { PlatformPicker } from '@/components/PlatformPicker'
 import { Dropdown } from '@/components/Dropdown'
+import { GenreInput } from '@/components/GenreInput'
 import { VisualStyle } from './VisualStyle'
 import { ChannelAvatar } from '@/components/ChannelAvatar'
 
@@ -684,18 +685,17 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
           <SectionLabel>Storytelling style</SectionLabel>
           <p className="text-xs text-faint">
             The kind of story this channel tells, the tradition it works in, and how the narrator sounds on the page.
-            Mixing genres? Pick the dominant one — your channel description carries the blend.
+            Choose a familiar genre or describe your own, including a blend.
           </p>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <label className="flex flex-col gap-1.5 text-xs font-medium text-muted">
               Kind of story
-              <Dropdown
-                value={asGenreModule(genreCategory) ?? 'general'}
-                onChange={(v) => {
-                  setGenreCategory(v)
-                  setNarrativeStyle('') // styles are scoped to the genre — a switch resets to pure genre
+              <GenreInput
+                value={genreCategory}
+                onChange={(value) => {
+                  setGenreCategory(value)
+                  setNarrativeStyle('')
                 }}
-                options={GENRE_OPTIONS}
               />
             </label>
             <label className="flex flex-col gap-1.5 text-xs font-medium text-muted">

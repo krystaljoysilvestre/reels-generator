@@ -1,7 +1,7 @@
 // story-critic.v2 — the editorial gate: should this ship? Reads the FINAL script once and answers
 // pass/fail with one line of reason. No ranking, no scoring axes, no candidates (that was v1's
 // best-of-N job; v1 stays untouched for the legacy path). A fail buys exactly ONE Writer rewrite,
-// then the story passes through regardless — the story_review human gate is the backstop.
+// then the runtime enforces bounded retry and review policy.
 //
 // Per-genre DEFAULT rubrics replace v1's single horror-specific fallback. This is the documented
 // unbiased-design exception: deliberate owner-set defaults used only when a channel hasn't mined
@@ -9,14 +9,16 @@
 // Versioned source code. Bump on any prompt-affecting edit.
 
 import { z } from 'zod'
-import { asGenreModule, classifyGenre, type GenreModule } from './scenes.v1.js'
+import type { SourcePolicy } from '../types/source-policy.js'
+import { type GenreModule } from './scenes.v1.js'
+import { type StoryCreativeContext, STORY_CONTEXT_VERSION, resolveWritingGenre, renderStoryCreativeContext, renderStorySourceGuards } from './story-context.js'
 import { isFilipinoRegister } from './story-craft.v1.js'
 
 // Back to v2.18 content and version: the v2.19 ending criteria (per-genre LANDING checks + the universal
 // DELETION TEST) are reverted per decision-log 2026-08-06-003. A blind read found no text-level ending
 // defect the founder can see, and these were GATE criteria — a rejection re-rolls the whole chain, so a
 // standard we cannot defend costs real spend and replaces good stories rather than fixing them.
-export const STORY_CRITIC_V2_VERSION = 'story-critic.v2.19'
+export const STORY_CRITIC_V2_VERSION = `story-critic.v2.20+${STORY_CONTEXT_VERSION}`
 
 export const StoryGateSchema = z.object({
   pass: z.boolean(),
@@ -71,7 +73,7 @@ PAYOFF
 
 VOICE
 - Reads as SPOKEN confession, not written prose: hesitations and self-corrections, in the VARIED rhythm of real speech — never a uniform one-beat-per-line / all-fragments cadence (a templated rhythm is its own AI tell).
-- Committed to ONE register — intimate 2AM dread, coiled suspense, or kinetic shock all pass; a story that blends registers into mush fails. Loud is legitimate when the story earns it; gore never is.
+- The emotional movement is intentional — quiet dread, coiled suspense, kinetic shock and earned transitions can all work. Fail an accidental blend that weakens fear, not a purposeful change of temperature. Loud is legitimate when earned; gore never is.
 
 WORLD
 - Grounded in the believable texture of this channel's own world (places, habits, objects its people actually have); nothing pasted in from another culture's stock imagery.
@@ -100,11 +102,11 @@ NEVER
 - A character conveniently articulating the theme.`,
 
   commentary: `STANCE
-- One clear claim, stated early, that a stranger could repeat in one sentence — and that someone could genuinely disagree with.
+- One clear, supported position a stranger could repeat. A direct take can state it early; a selected personal essay may earn it by the end, and satire may make its target clear through the bit.
 
 BASIS
 - At least one concrete, checkable example carries the argument; assertion alone never does.
-- The other side's strongest point is met, not a strawman.
+- When the argument engages an opposing position, it addresses that position fairly rather than a strawman.
 
 VOICE
 - Sounds like a person who actually holds this opinion — heat where it's earned, no manufactured outrage.
@@ -116,7 +118,7 @@ NEVER
 - Hedging that dissolves the stance ("both sides have a point" as a conclusion).
 - Volume substituting for basis.`,
 
-  reddit_story: `THE CORE TEST — does it read like a real person's real experience you're overhearing ("did this actually happen?"), and would strangers argue in the comments (who's right, who's lying, is this even real)? If there's nothing to argue about, or it sounds authored, it fails no matter how well-written.
+  reddit_story: `THE CORE TEST — does this sound like a believable post in the selected form? Moral-jury posts need a genuine dilemma; revenge needs its payoff; a confession, discovery or creepy encounter earns disclosure, recognition or unease. An argument in the comments is not required of every form.
 
 HOOK
 - Opens on a plain PROBLEM or dilemma the viewer will follow within the first breath — a wrong done, a mess the narrator caused, a mystery, a secret. Not slow scene-setting.
@@ -126,7 +128,7 @@ BELIEVABILITY (disqualifying if failed)
 - Nothing winks at the audience; nothing sounds polished, structured, or literary — the instant it reads as written, it fails.
 
 STAKES
-- A real situation a commenter would take a side over. Scale is open: trivial (a stolen lunch) OR life-altering (a betrayal, a life's savings) both pass — never judge "big enough" or "small enough".
+- A situation that matters to this teller and gives the chosen post a reason to exist. A moral-jury post invites sides; other forms need not. Scale may be trivial or life-altering.
 
 ENDING — the test is AUTHENTICITY, not open-vs-closed. End the way a REAL poster of THIS kind of story would:
 - A revenge / malicious-compliance / TIFU story lands its payoff (the comeuppance, the backfire, the damage).
@@ -136,14 +138,14 @@ ENDING — the test is AUTHENTICITY, not open-vs-closed. End the way a REAL post
 
 NEVER
 - Sounding authored — the spell of realness is the entire product.
-- A quiet, plotless literary vignette with nothing to argue over (that's a drama story, not a Reddit post).
-- Colorful-instead-of-mundane details; a purely sympathetic narrator; a tidy moral.`,
+- A post whose promised dilemma, revelation, confession or payoff never arrives.
+- Contrived details or self-presentation that break credibility; an unearned moral. A sympathetic narrator does not need invented faults.`,
 
   comedy: `SETUP
 - An expectation is genuinely built before it's broken; the setup hides in plain sight.
 
 PUNCH
-- The turn is unexpected AND retroactively obvious; the funny word lands last.
+- The payoff earns the intended laugh: a surprise should fit in hindsight, while observational comedy may land through precise recognition. Preserve the timing and word placement that make THIS joke work; surprise and a final funny word are not universal requirements.
 - Escalation follows its own strict logic — absurd, never random.
 
 VOICE
@@ -157,7 +159,7 @@ NEVER
 
 SUBSTANCE
 - One idea made concrete through a vivid example or felt-scale comparison; "a lot"/"huge" never does the work.
-- The viewer's likely misconception is engaged, not ignored.
+- The viewer's actual question or gap in understanding is addressed. Correct a misconception when relevant; do not invent one to justify explaining something.
 
 PAYOFF
 - Ends with the idea in a carryable shape — the viewer could re-explain it.
@@ -166,17 +168,17 @@ NEVER
 - Covering everything and landing nothing; claims the story hasn't made believable.`,
 
   lifestyle: `HOOK
-- Leads with the payoff moment — the thing the viewer will want.
+- Establishes why this experience is worth following. Payoff-first can work; a selected day-in-the-life or process form may build toward it.
 
 SUBSTANCE
-- One real sensory anchor and one insider detail only a practitioner would know.
+- Specific sensory or practical detail makes the experience credible; do not demand insider detail the narrator could not know.
 - Attainable: a viewer can see their own first step.
 
 NEVER
 - Glossy perfection without texture; a feature list instead of a moment.`,
 
   childrens: `GOAL
-- ONE simple, clear thing the little hero wants, easy for a small child to follow — no subplots, no two threads to track.
+- A clear focus and level of complexity appropriate to the channel's stated child audience. A young child may need one simple goal; do not impose preschool limits on older children.
 - The problem feels BIG to a child even if small to an adult (a lost sock, the dark, a first day) — taken seriously, never belittled.
 
 DELIGHT & WONDER
@@ -197,9 +199,9 @@ HEART (the storybook close)
 VOICE
 - Simple, musical, read-aloud rhythm with a refrain a child could chant along with; vary the line length naturally — not every line a fragment.
 - Concrete and picturable — a child can SEE every beat ("ribbons danced like butterflies", not "she was happy"). Gentle, inclusive humor welcome; never mean.
-- SIMPLE ENOUGH FOR A SMALL CHILD: everyday words a young child actually knows. Literary, poetic, or grown-up vocabulary is a fail. Prefer the plain everyday NATIVE word over a fancy synonym or a borrowed/imported word when a common native word exists — a child uses the ordinary word, not the elevated or loaned one. Abstract or introspective grown-up phrasing and similes a child cannot picture ("a question you can't quite name", "the kind of sadness that isn't anger, just heavy") are a fail. If a five-year-old wouldn't understand or picture it, it doesn't belong.
+- AUDIENCE-APPROPRIATE LANGUAGE: vocabulary and comparisons must be understandable to the stated child audience. Native and borrowed words are judged by familiarity and accuracy, not origin. An unfamiliar word or idea can be introduced clearly; do not require prior knowledge or impose a five-year-old standard on older children.
 - SENTENCE STRUCTURE stays childlike — short, clear sentences, one simple thought at a time. The variety wanted here is childlike (a short line, a slightly longer warm one, a refrain), never adult winding run-ons or stacked introspection.
-- FAMILIAR OBJECTS: the things in the story are common, everyday objects a child instantly knows (a blanket, a toy, a slipper, a pet, the moon, a lamp, a firefly). An unusual or unfamiliar object a small child wouldn't recognize (an odd instrument, an exotic or made-up thing) is a fail.
+- PICTURABLE WORLD: let the intended child audience understand the things that matter. Familiar objects and clearly introduced new wonders both work; novelty alone is not a failure.
 - OPENER & CLOSE: a warm storybook opener that invites the child in, and a cozy closing frame that lets the tale settle — in the SPIRIT of "once upon a time…" / "…happily ever after", never the literal cliché.
 
 NEVER
@@ -246,7 +248,7 @@ NEVER
 }
 
 export function defaultTasteRubric(genreCategory: string | null | undefined, niche: string): string {
-  return DEFAULT_TASTE_RUBRICS[asGenreModule(genreCategory ?? null) ?? classifyGenre(niche)]
+  return DEFAULT_TASTE_RUBRICS[resolveWritingGenre(genreCategory, niche)]
 }
 
 // The ONE seam that resolves what the gate judges against. Two channel fields feed it and they mean
@@ -270,13 +272,18 @@ export function composeTasteRubric(
     niche: string
   },
 ): string {
-  const base = opts.tasteRubric?.trim() || defaultTasteRubric(opts.genreCategory, opts.niche)
+  const operatorRubric = opts.tasteRubric?.trim()
+  const base = operatorRubric
+    ? `OPERATOR-AUTHORED FULL RUBRIC — replaces the built-in genre rubric. These explicit criteria remain binding; do not dismiss them as optional genre defaults. Source fidelity and safety constraints still take precedence.\n${operatorRubric}`
+    : `BUILT-IN GENRE DEFAULTS — apply these where compatible with the creator's declared form, voice, audience and style influence. A deliberate departure from a default technique is not a failure.\n${defaultTasteRubric(opts.genreCategory, opts.niche)}`
   const principles = opts.editorialPrinciples?.trim()
   if (!principles) return base
   return `${base}\n\nTHIS CHANNEL'S OWN RULES — set by the creator, and binding on top of everything above:\n${principles}`
 }
 
 export interface StoryGateVars {
+  creativeContext?: StoryCreativeContext | undefined
+  sourcePolicy?: SourcePolicy | undefined
   channelName: string
   nicheDescription: string
   language: string
@@ -290,22 +297,23 @@ export interface StoryGateVars {
 export function buildStoryGatePrompt(v: StoryGateVars): { system: string; userMessage: string } {
   const system = `You are the final editorial gate for "${v.channelName}".
 Niche: ${v.nicheDescription}
+${v.creativeContext ? `\n${renderStoryCreativeContext(v.creativeContext)}\n` : ''}
+${renderStorySourceGuards(v.sourcePolicy ?? v.creativeContext?.sourcePolicy)}
 
 A finished ${v.language} narration script is about to ship. You answer ONE question: should this ship — yes or no?
 
 How you judge:
-- THE CREDIBILITY TEST comes first: read it as a skeptical listener who instantly smells over-polished, constructed, or AI-flavored writing. If you would not believe a real person said this out loud, it fails.
-- LANGUAGE NATURALNESS (any language) is a hard fail: any line that reads like a sentence translated word-for-word from another language, any garbled or grammatically-wrong phrase, or a title in the wrong language, = FAIL — name the exact line in your reason so the rewrite can fix it.${isFilipinoRegister(v.language) ? '\n- For this Filipino channel specifically: textbook/literary Tagalog or forced, perfectly-balanced code-switching also fails — it should read as natural, contemporary spoken Filipino, code-switched the way people actually talk.' : ''}
-- SENTENCE-RHYTHM VARIETY: real speech is bursty — sentences of varied length. A uniform, templated cadence — nearly every beat a short fragment or one-beat-per-line, the same em-dash-aside → short-punch shape repeated, mechanical one/two-word punch lines — is an AI tell and fails, even when each line is individually fine. (Intentional refrains are welcome; a monotonous rhythm is not.)
-- STORY PHYSICS — where this script tells a story (someone lived something), four script-doctor checks. A clear miss on any is a fail worth naming:
-  · AGENCY: does the narrator DECIDE anything, or do things merely happen to a passive witness?
-  · CAUSALITY: do the beats force each other ("therefore/but"), or just follow each other ("and then")?
-  · THE DEBT: does the ending answer the question the opening planted — or twist from nowhere?
-  · THE CHANGE: is anything different at the end (in the narrator, their world, or the viewer's understanding) — or does it just stop?
-  (An explainer or argument answers these in its own terms: a claim advanced, a question paid off, an understanding changed. A Reddit post answers them in ITS terms: AGENCY = the narrator or their target DID something, not just felt something; THE CHANGE = the payoff landed — revenge taken, rule backfired, disaster arrived — OR, for an "am I wrong?" post, the verdict question thrown hard to the viewer. An open verdict is a real ending; a revenge or disaster story that just trails off is not.)
+- THE CREDIBILITY TEST: does the telling work as the chosen voice and form for this audience? Reject accidental mechanical or incoherent language. A practiced storyteller, poet, precise documentary narrator or casual confessor can each be credible; do not require spontaneous conversation from every form.
+- LANGUAGE NATURALNESS (any language) is a hard fail: any line that reads like a sentence translated word-for-word from another language, any garbled or grammatically-wrong phrase, or a title in the wrong language, = FAIL — name the exact line in your reason so the rewrite can fix it.${isFilipinoRegister(v.language) ? '\n- For this Filipino channel specifically: judge Filipino against the selected audience and voice. Broken phrasing and forced code-switching fail; formal, literary or monolingual Filipino can be intentional and valid.' : ''}
+- RHYTHM: reject monotonous or templated pacing that weakens the intended experience. Preserve purposeful meter, parallelism, refrains, measured precision and comic timing. Sentence length or repeated shape alone does not prove a failure.
+- STORY DEVELOPMENT — apply these in the creator's genre and form:
+  · INVOLVEMENT: when characters drive the story, do their wants, choices and pressures matter, or are they interchangeable spectators? Do not demand that an outside narrator personally caused the events, or invent agency for a factual subject.
+  · COHERENCE: do asserted causes and consequences hold? An intentional nonlinear, associative or observational structure is valid when its purpose is intelligible; coincidence that substitutes for an earned payoff is not.
+  · PROMISE: does the story deliver the experience or question its opening invites? An earned recognition, explanation, reassurance, joke or open question can pay it off without a surprise or changed belief.
+  · PROGRESSION: does the middle develop that experience rather than repeat or compress away what matters? Judge a confession, moral-jury post, discovery, poem or argument in its own form; an unresolved situation may end honestly when its promised experience has landed.
 - ESSENCE — make this separate verdict before the overall decision. A first-time listener, without relying on the title, source dossier, or prior knowledge, must be able to say what the story is centrally about, what changed or was decided, and why that consequence matters. Include the context needed to understand the causal spine; a sequence of names/events, a compressed outline, or a short script that merely gestures at its significance fails. Do NOT reward background for its own sake, demand a minimum duration or beat count, or require the script to state a theme. Judge whether THIS story's own promise is intelligible and felt.
-- SHOW THE TURN — the beat the whole story turns on (the decision, the reversal, the near-failure, the moment of doubt that EARNS the ending) must be dramatized as a concrete, felt moment, not collapsed into a bald summary ("tapos wala", "gusto niyang sumuko", "and everything changed", "napagtanto niya"). Where the payoff depends on a low or doubting beat first, that beat must be FELT (the breath that catches then the light that dies, the trembling voice) so the turn is earned, not asserted. A hollow or summarized turn fails. This is NOT a ban on plainness or warm, directly-stated feeling — only on flattening the one beat the whole story rides on.
-- Then the channel's rubric below. A clear violation of a rubric line fails; judge against the rubric, not your personal taste.
+- EARN THE PIVOTAL MOMENT — give the development the story rides on enough clarity and weight to land. In drama that may require a felt scene; in an explainer it may be a clear account of why something follows. Do not reward an announced transformation that the telling never earns, and do not demand invented dialogue or emotions from nonfiction. Direct warmth and an earned named takeaway can belong to the form.
+- Then the rubric below, interpreted through the creator's contract. The creator's explicit rules remain binding; built-in genre defaults apply only where compatible with the selected form, voice and audience. Reject a concrete failure of the intended experience, not an intentional departure from a default technique. Factual truth requires external evidence; do not invent factual corrections from your own confidence.
 - You do not rewrite, rank, or score. Pass or fail, with ONE blunt sentence of reason. On fail, the reason must point at the text (what fails and where), because it steers exactly one rewrite.
 - On a FAIL, also judge rewriteCanFix: could a better TELLING of this SAME idea plausibly pass — a prose/voice problem, an announced feeling, a translated line, a fumbled ending's execution? Then true. Or is the failure in the IDEA itself — the premise has no dilemma to argue, it's the wrong grammar for this genre, nothing is at stake, a structure a rewrite of the same plan cannot repair? Then false (a rewrite would just re-run and fail again). When unsure, true. On a pass, ignore it.
 - Bar check: a good-enough story passes. This gate exists to catch real failures, not to chase perfection — most competent scripts should pass.`

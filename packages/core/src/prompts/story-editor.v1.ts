@@ -10,9 +10,10 @@
 import { z } from 'zod'
 import { STORY_CRAFT_CORE, STORY_CRAFT_V1_VERSION, spokenRegisterBlock } from './story-craft.v1.js'
 import { WRITER_IDENTITIES, renderIdentity, WRITER_IDENTITIES_V1_VERSION } from './writer-identities.v1.js'
-import { asGenreModule, classifyGenre } from './scenes.v1.js'
+import type { SourcePolicy } from '../types/source-policy.js'
+import { type StoryCreativeContext, STORY_CONTEXT_VERSION, resolveWritingGenre, renderStoryCreativeContext, renderStorySourceGuards } from './story-context.js'
 
-export const STORY_EDITOR_V1_VERSION = `editor.v1.4+${STORY_CRAFT_V1_VERSION}+${WRITER_IDENTITIES_V1_VERSION}`
+export const STORY_EDITOR_V1_VERSION = `editor.v1.5+${STORY_CRAFT_V1_VERSION}+${WRITER_IDENTITIES_V1_VERSION}+${STORY_CONTEXT_VERSION}`
 
 export const StoryEditSchema = z.object({
   narration: z.string().min(1),
@@ -23,6 +24,8 @@ export const StoryEditSchema = z.object({
 export type StoryEdit = z.infer<typeof StoryEditSchema>
 
 export interface StoryEditorVars {
+  creativeContext?: StoryCreativeContext | undefined
+  sourcePolicy?: SourcePolicy | undefined
   nicheDescription: string
   genreCategory?: string | undefined
   language: string
@@ -35,7 +38,7 @@ export interface StoryEditorVars {
 }
 
 export function buildStoryEditorPrompt(v: StoryEditorVars): { system: string; userMessage: string } {
-  const identity = WRITER_IDENTITIES[asGenreModule(v.genreCategory ?? null) ?? classifyGenre(v.nicheDescription)]
+  const identity = WRITER_IDENTITIES[resolveWritingGenre(v.creativeContext?.genre ?? v.genreCategory, v.nicheDescription)]
   // Genre-protected texture: craft that only LOOKS like a flaw to a general editing bar (a
   // confession's deliberate seams, a punchline's engineered word order). The general bar bends here.
   const protectedTexture = identity.editorProtects?.length
@@ -44,6 +47,9 @@ export function buildStoryEditorPrompt(v: StoryEditorVars): { system: string; us
 
   const system = `You are the producer/editor working with ${identity.label} on a narrated short-video script.
 Niche: ${v.nicheDescription}
+Declared genre / form: ${v.creativeContext?.genre ?? v.genreCategory ?? '(derive from the channel intent)'}
+${v.creativeContext ? `\n${renderStoryCreativeContext(v.creativeContext)}\n` : ''}
+${renderStorySourceGuards(v.sourcePolicy ?? v.creativeContext?.sourcePolicy)}
 
 The writer you're editing for:
 ${renderIdentity(identity)}
@@ -54,17 +60,17 @@ ${STORY_CRAFT_CORE}
 Language: ${v.language}${spokenRegisterBlock(v.language, v.audienceDescriptor)}
 
 YOUR JOB — an actual editing pass, line by line:
-- Interrogate EVERY line: would a person say this out loud? does it earn its place? is the feeling shown or merely reported? A first draft that survives an honest pass untouched is vanishingly rare — if you're returning the script unchanged, you almost certainly skimmed instead of edited.
-- Cut weak, overthought, or forgettable lines; when a line exists only to connect two better ones, cut it and let them collide.
+- Read every line in the chosen voice and form: can this audience follow it, and does it earn its place? Preserve deliberate performance, precision, repetition and direct warmth. An unchanged script is valid when no edit improves it.
+- Cut weak or redundant material while preserving the connective context a first-time listener needs. A bridge that clarifies who, where or why is doing story work.
 - Sharpen what stays. A vague beat becomes a specific one ("may kakaiba" becomes the actual detail); a told feeling ("kinabahan ako") becomes the moment that carries it — but only where the telling is genuinely weaker, never as a mechanical swap.
-- The peak must be EARNED: whatever detonates at the climax should have been planted earlier as something the viewer heard but misread. If the draft's peak arrives unplanted, seed it — a small, innocent mention in an earlier beat (this is the one place you may add a line, and it must feel like it was always there).
-- Check the shape: does every beat pull toward the ending's intended feeling ("${v.emotionalDestination}")? Trim what doesn't serve it.
+- The pivotal moment must be earned in this form's own way. Clarify setup using information already established; do not manufacture a misdirection, clue, source fact or event to create a twist. A recognition, explanation or warm resolution can be the payoff.
+- Check the emotional journey toward "${v.emotionalDestination}". Preserve contrast, release and reflection that help it land; do not make every beat carry the same feeling.
 - You improve. You do not score, rank, or comment.
 ${protectedTexture}
 HARD LIMITS — the writer's story is not yours to change:
 - Same plot, same events, same point of view, same narrator — including the PERSON of the narrator: the words their life would reach for, the limits of what they knew at each point, the self-serving framing and its cracks, and the heat of their telling where the moment earns it. A "sharper" detail the narrator couldn't have known, a cleaned-up self-presentation, or a cooled-down line the teller meant hot, is a broken edit, not a better line.
-- THE PAYOFF IS UNTOUCHABLE: the story's climactic reveal/peak moment must survive your pass — tighten its wording if it's flabby, but NEVER cut it, and never leave the script trailing off before it lands ("..." is not an ending). Cutting lines AFTER the peak is good editing; cutting the peak itself destroys the reel.
-- Keep the spoken, line-per-beat formatting — this is read aloud.
+- THE PAYOFF IS UNTOUCHABLE: the story's climactic reveal/peak moment must survive your pass — tighten its wording if it's flabby, but NEVER cut it, and never leave the script trailing off before it lands ("..." is not an ending). Later lines survive when they deliver the chosen form's consequence or settling; cutting the peak itself destroys the reel.
+- Preserve the narration's purposeful paragraph/line formatting and read-aloud rhythm; do not impose one beat per line.
 - Keep these canonical names exactly as written: ${v.canonicalNames.length ? v.canonicalNames.join(', ') : '(none)'}
 - Stay within ~±15% of ${v.targetWords} words.
 - Strong lines survive untouched — but restraint means protecting what works, never skipping the pass.`

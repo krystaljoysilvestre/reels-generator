@@ -4,12 +4,14 @@ import { usePathname, useRouter } from 'next/navigation'
 import { NICHE_PRESETS, findPreset, trendingId } from './niche-presets'
 import { SUPPORTED_LANGUAGES } from './languages'
 import { Dropdown } from '@/components/Dropdown'
+import { GenreInput } from '@/components/GenreInput'
 import { avatarGradient, avatarInitials } from '@/components/ChannelAvatar'
 import { CaptionPreview } from '@/components/CaptionPreview'
 import { PlatformPicker } from '@/components/PlatformPicker'
 import { type CaptionPreset, type CaptionStyle, type TargetPlatform, type AudioMood, resolveCaptionStyle, CaptionStyleSchema, resolvePlatformPreset, PUBLISH_PLATFORMS, PRESET_BEDS, rankPresets, presetsForGenre, stylePresetThumbKey, sampleSceneForGenre } from '@reels/core'
-import { SOURCE_POLICY_CHOICES, mustAskSourcePolicy, type SourcePolicy } from '@reels/core'
-import { type GenreModule, asGenreModule } from '@reels/core/prompts/scenes.v1'
+import { SOURCE_POLICY_CHOICES, GenreCategorySchema, requiresEvidence, mustAskSourcePolicy, type SourcePolicy } from '@reels/core'
+import { asGenreModule } from '@reels/core/prompts/scenes.v1'
+import { ChannelDerivationSchema } from '@reels/core/prompts/channel.v1'
 import { stylesForGenre } from '@reels/core/prompts/story-styles.v1'
 import { genreLabel } from '@/lib/genre-labels'
 import { getTrendingNiches, type TrendingNiche } from '@/lib/trending-niches'
@@ -150,7 +152,8 @@ interface Derived {
   editorialPrinciples?: string
   // Absent when the pitch left it genuinely ambiguous — the wizard then ASKS (mustAskSourcePolicy).
   sourcePolicy?: SourcePolicy
-  genreCategory: GenreModule
+  genreCategory: string
+  series?: Array<{ name: string; genreCategory?: string | undefined; sourcePolicy?: SourcePolicy | undefined; exampleTopics: string[] }>
   presentation?: '' | 'voiceover' | 'hosted'
   narrativeStyle?: string
   narrativeVoice?: string
@@ -274,9 +277,11 @@ export function NewChannelWizard({
   // it must never be required work either — so skipping means accepting a choice they can SEE.
   const [sourcePolicy, setSourcePolicy] = useState<SourcePolicy>(SOURCE_POLICY_CHOICES[0]!.value)
   const [askPolicy, setAskPolicy] = useState(false)
-  // AI-derived genre bucket → picks the writer identity + scene-prompt genre module. '' until derived;
+  // Creator genre label, suggested by derivation when blank. '' until supplied or derived;
   // the create route keyword-classifies the niche as a fallback when this is empty.
-  const [genreCategory, setGenreCategory] = useState<'' | GenreModule>('')
+  const [genreCategory, setGenreCategory] = useState('')
+  const [genreEdited, setGenreEdited] = useState(false)
+  const [derivedSeries, setDerivedSeries] = useState<NonNullable<Derived['series']>>([])
   const [presentation, setPresentation] = useState<'' | 'voiceover' | 'hosted'>('')
   // PROSE dimensions (story-styles / story-voices) — derived as a default, operator-overridable.
   // NOT the visual `style`/`stylePreset` or the TTS voice. '' = pure genre / identity-default voice.
@@ -317,7 +322,7 @@ export function NewChannelWizard({
 
   // Label for the derived prose style, shown next to the genre in step 2. '' = pure genre (nothing to name).
   const narrativeStyleLabel = genreCategory && narrativeStyle
-    ? (stylesForGenre(genreCategory).find((s) => s.id === narrativeStyle)?.label ?? '')
+    ? (stylesForGenre(asGenreModule(genreCategory) ?? 'general').find((s) => s.id === narrativeStyle)?.label ?? '')
     : ''
 
   // ── the channel's example (step 2) — written for them on arrival; theirs to edit or replace ──
@@ -337,6 +342,8 @@ export function NewChannelWizard({
   const [mainSteer, setMainSteer] = useState('') // optional idea that steers the next rewrite
   const [drafting, setDrafting] = useState(false) // an example is being written right now
   const [sampleError, setSampleError] = useState('')
+  const [sampleSources, setSampleSources] = useState('')
+  const sampleNeedsSources = requiresEvidence(sourcePolicy)
   // Step 2 opens with an example already written. Sticky for the session (and saved in the draft) so a
   // creator who clears it — or resumes later — is never charged for a second one they didn't ask for.
   const [autoWroteSample, setAutoWroteSample] = useState(false)
@@ -441,7 +448,9 @@ export function NewChannelWizard({
         if (typeof d.voiceSearchKeyword === 'string') setVoiceSearchKeyword(d.voiceSearchKeyword)
         if (typeof d.editorialPrinciples === 'string') setEditorialPrinciples(d.editorialPrinciples)
         if (d.sourcePolicy && typeof d.sourcePolicy === 'object') setSourcePolicy(d.sourcePolicy as SourcePolicy)
-        { const g = asGenreModule(typeof d.genreCategory === 'string' ? d.genreCategory : null); if (g) setGenreCategory(g) }
+        { const g = GenreCategorySchema.safeParse(d.genreCategory); if (g.success) setGenreCategory(g.data) }
+        setGenreEdited(d.genreEdited === true)
+        { const series = ChannelDerivationSchema.shape.series.safeParse(d.derivedSeries); if (series.success) setDerivedSeries(series.data) }
         if (d.presentation === '' || d.presentation === 'voiceover' || d.presentation === 'hosted') setPresentation(d.presentation)
         if (typeof d.narrativeStyle === 'string') setNarrativeStyle(d.narrativeStyle)
         if (typeof d.narrativeVoice === 'string') setNarrativeVoice(d.narrativeVoice)
@@ -458,6 +467,7 @@ export function NewChannelWizard({
         else if (typeof d.sampleIsAi === 'boolean') setAiSampleEdited(!d.sampleIsAi)
         if (typeof d.ownSample === 'string') setOwnSample(d.ownSample)
         else if (typeof d.sampleScript === 'string' && d.sampleMode === 'own') setOwnSample(d.sampleScript)
+        if (typeof d.sampleSources === 'string') setSampleSources(d.sampleSources.slice(0, 20000))
         if (typeof d.autoWroteSample === 'boolean') setAutoWroteSample(d.autoWroteSample)
         if (Array.isArray(d.extraSampleScripts)) setExtraSampleScripts(d.extraSampleScripts.filter((s: unknown): s is string => typeof s === 'string'))
         if (d.styleProposals && Array.isArray(d.styleProposals.styles)) setStyleProposals(d.styleProposals)
@@ -490,8 +500,8 @@ export function NewChannelWizard({
     return {
       phase, name, committedName, description, seededDescription, niche, languages, targetPlatforms, presetId,
       avatarKey, costCents, tone, style, region, era, locations, objects, vocab,
-      voiceMode, selectedVoices, recommended, voiceSearchKeyword, editorialPrinciples, sourcePolicy, genreCategory, presentation, narrativeStyle, narrativeVoice, styleInfluence, tagline, derivedSig,
-      targetSeconds, captionStyle, sampleMode, aiSample, aiSampleTitle, aiSampleEdited, ownSample, autoWroteSample, extraSampleScripts,
+      voiceMode, selectedVoices, recommended, voiceSearchKeyword, editorialPrinciples, sourcePolicy, genreCategory, genreEdited, derivedSeries, presentation, narrativeStyle, narrativeVoice, styleInfluence, tagline, derivedSig,
+      targetSeconds, captionStyle, sampleMode, sampleSources, aiSample, aiSampleTitle, aiSampleEdited, ownSample, autoWroteSample, extraSampleScripts,
       audioMood, musicChoice, selectedPresetIds, presetPickedManually, uploadedMusic,
       styleProposals, selectedStyleIdx, uploadedStyleIdx, stylePreviews: previewKeys,
     }
@@ -506,7 +516,7 @@ export function NewChannelWizard({
     } catch {
       /* storage full / unavailable — non-fatal */
     }
-  }, [hydrated, phase, name, committedName, description, seededDescription, niche, languages, targetPlatforms, presetId, avatarKey, costCents, tone, targetSeconds, style, region, era, locations, objects, vocab, voiceMode, selectedVoices, recommended, voiceSearchKeyword, editorialPrinciples, sourcePolicy, genreCategory, presentation, narrativeStyle, narrativeVoice, styleInfluence, tagline, derivedSig, captionStyle, sampleMode, aiSample, aiSampleTitle, aiSampleEdited, ownSample, autoWroteSample, extraSampleScripts, audioMood, musicChoice, selectedPresetIds, presetPickedManually, uploadedMusic, styleProposals, selectedStyleIdx, uploadedStyleIdx, stylePreviews, draftChannelId])
+  }, [hydrated, phase, name, committedName, description, seededDescription, niche, languages, targetPlatforms, presetId, avatarKey, costCents, tone, targetSeconds, style, region, era, locations, objects, vocab, voiceMode, selectedVoices, recommended, voiceSearchKeyword, editorialPrinciples, sourcePolicy, genreCategory, genreEdited, derivedSeries, presentation, narrativeStyle, narrativeVoice, styleInfluence, tagline, derivedSig, captionStyle, sampleMode, sampleSources, aiSample, aiSampleTitle, aiSampleEdited, ownSample, autoWroteSample, extraSampleScripts, audioMood, musicChoice, selectedPresetIds, presetPickedManually, uploadedMusic, styleProposals, selectedStyleIdx, uploadedStyleIdx, stylePreviews, draftChannelId])
 
   // ── Unsaved-progress guard ──────────────────────────────────────────────────
   // The draft autosaves, but leaving mid-flow still deserves a heads-up so the operator
@@ -789,7 +799,7 @@ export function NewChannelWizard({
   // via "Customize look" in Settings. (Upload-your-own below still works and is operator-initiated.)
   function fetchStyleOptions() {
     styleReqRef.current++
-    const genre = genreCategory || 'general'
+    const genre = asGenreModule(genreCategory) ?? 'general'
     const presets = presetsForGenre(genre)
     const proposals: StyleProposals = {
       // The scene the thumbnails were rendered on — shown under the gallery so the creator knows what
@@ -962,7 +972,8 @@ export function NewChannelWizard({
   }
 
   // Does the example need writing before step 2 is worth showing?
-  function exampleNeedsWriting(): boolean {
+  function exampleNeedsWriting(policy = sourcePolicy): boolean {
+    if (requiresEvidence(policy)) return false // source-based previews are optional and explicitly requested
     if (sampleMode === 'own') return false            // they're writing it themselves
     if (sampleScript.trim() !== '') return sampleIsAi  // ours is stale now; THEIRS is never touched
     return !autoWroteSample                            // none yet, and we haven't already written one
@@ -971,8 +982,8 @@ export function NewChannelWizard({
   // The single step-1 → step-2 advance. Falls through instantly when there's nothing to write (a script
   // they wrote, one they cleared on purpose, or "I'll write my own"); otherwise holds on step 1 while the
   // example is written. Back-navigation from step 3 does NOT come through here — going back never waits.
-  function goToScript() {
-    if (!exampleNeedsWriting()) { setPhase('script'); return }
+  function goToScript(policy = sourcePolicy) {
+    if (!exampleNeedsWriting(policy)) { setPhase('script'); return }
     setPreparingExample(true)
   }
 
@@ -1248,11 +1259,13 @@ export function NewChannelWizard({
       // mustAskSourcePolicy is CODE, not prompt compliance: a live derivation once omitted the policy
       // (correctly — the pitch was genuinely ambiguous) and emitted no question either, which would have
       // left the channel silently on the restrictive default with the creator never asked.
-      if (d.sourcePolicy) { setSourcePolicy(d.sourcePolicy); setAskPolicy(false) }
-      else { setSourcePolicy(SOURCE_POLICY_CHOICES[0]!.value); setAskPolicy(mustAskSourcePolicy(d)) }
-      setGenreCategory(d.genreCategory ?? '')
+      const derivedPolicy = d.sourcePolicy ?? SOURCE_POLICY_CHOICES[0]!.value
+      setSourcePolicy(derivedPolicy)
+      setAskPolicy(d.sourcePolicy ? false : mustAskSourcePolicy(d))
+      if (!genreEdited) setGenreCategory(d.genreCategory ?? '')
+      setDerivedSeries(d.series ?? [])
       setPresentation(d.presentation === 'voiceover' || d.presentation === 'hosted' ? d.presentation : '')
-      setNarrativeStyle(d.narrativeStyle ?? '')
+      setNarrativeStyle(genreEdited && genreCategory !== d.genreCategory ? '' : d.narrativeStyle ?? '')
       setNarrativeVoice(d.narrativeVoice ?? '')
       setTagline(d.tagline ?? '')
       setAudioMood(d.audioMood ?? null)
@@ -1284,7 +1297,7 @@ export function NewChannelWizard({
         // The creator is down at the footer when these arrive — bring the card to them.
         setTimeout(() => clarifyCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80)
       } else {
-        goToScript()
+        goToScript(derivedPolicy)
       }
     } catch (e) {
       // Aborted (unmount / re-fire) is intentional — not an error to show, and any newer call owns the UI now.
@@ -1320,8 +1333,11 @@ export function NewChannelWizard({
           targetSeconds,
           targetPlatforms,
           worldBible: worldBiblePayload(),
+          sourcePolicy,
+          ...(sampleSources.trim() ? { sourceMaterial: sampleSources.trim() } : {}),
+          editorialPrinciples,
           voiceStyle: selectedVoices[0]?.description,
-          ...(genreCategory ? { genreCategory } : {}),
+          ...(genreCategory.trim() ? { genreCategory: genreCategory.trim() } : {}),
           ...(narrativeStyle ? { narrativeStyle } : {}),
           ...(narrativeVoice ? { narrativeVoice } : {}),
           styleInfluence,
@@ -1426,7 +1442,8 @@ export function NewChannelWizard({
           voiceSearchKeyword,
           editorialPrinciples, // '' when the idea stated no rule of its own — the gate keeps its genre default
           sourcePolicy, // what this channel may treat as REAL; frozen onto every reel it makes
-          ...(genreCategory ? { genreCategory } : {}), // omit when not derived → create route keyword-classifies
+          ...(genreCategory.trim() ? { genreCategory: genreCategory.trim() } : {}), // omit when not derived → create route keyword-classifies
+          series: derivedSeries,
           ...(presentation ? { presentation } : {}), // omit when no lean → create route defaults to ''
           ...(narrativeStyle ? { narrativeStyle } : {}),
           ...(narrativeVoice ? { narrativeVoice } : {}),
@@ -1830,6 +1847,17 @@ export function NewChannelWizard({
               </p>
             )}
 
+            <Field label="Kind of story" hint="Choose a familiar genre or describe your own blend. Leave empty to use your pitch.">
+              <GenreInput
+                value={genreCategory}
+                onChange={(value) => {
+                  setGenreCategory(value)
+                  setGenreEdited(value.trim().length > 0)
+                  setNarrativeStyle('')
+                }}
+              />
+            </Field>
+
             <Field label="Language" hint="Narrated in this language. Need another? Make a separate channel.">
               <Dropdown
                 className="w-full sm:w-64"
@@ -1899,8 +1927,7 @@ export function NewChannelWizard({
             <div className="card p-5">
               <SectionLabel>Your channel&apos;s voice</SectionLabel>
               <p className="mt-1 text-xs text-faint">
-                We wrote you an example. Edit it, rewrite it, or paste your own — whatever you leave here is what
-                every reel learns from.
+                An example helps define your channel&apos;s voice. Write one, edit a draft, or paste your own.
               </p>
 
               {/* Two clear paths: keep ours, or write your own. Each keeps its OWN text, so switching
@@ -1926,6 +1953,19 @@ export function NewChannelWizard({
 
               {sampleMode === 'forme' ? (
                 <div className="mt-4">
+                  {sampleNeedsSources && (
+                    <label className="mb-4 flex flex-col gap-2 text-xs font-medium text-muted">
+                      Source material for this example
+                      <textarea
+                        className="input h-32 resize-y leading-relaxed"
+                        value={sampleSources}
+                        onChange={(event) => setSampleSources(event.target.value)}
+                        maxLength={20000}
+                        placeholder="Paste the articles, records or notes this example should follow."
+                      />
+                      <span className="font-normal text-faint">Optional — skip the example to continue. A draft still needs your review.</span>
+                    </label>
+                  )}
                   {/* While a write is in flight the OLD example is never shown: it belongs to the
                       description that was just replaced, and a stale story reads as a wrong one. It
                       stays in state, so a failed write falls back to it instead of an empty box. */}
@@ -1945,7 +1985,9 @@ export function NewChannelWizard({
                         {!sampleScript.trim()
                           ? 'Write an example to hear how your channel sounds — or switch to “I’ll write my own”.'
                           : sampleIsAi
-                            ? 'How your channel could sound. Make it yours — rewrite even a few lines — and it starts teaching your channel’s voice.'
+                            ? sampleNeedsSources
+                              ? 'A draft based on your sources. Review its claims before using it.'
+                              : 'How your channel could sound. Make it yours — rewrite even a few lines — and it starts teaching your channel’s voice.'
                             : 'Your example — edit it freely. Rewrite rebuilds this same story in your channel’s voice.'}
                       </p>
                       {sampleScript.trim() && (
@@ -1978,7 +2020,7 @@ export function NewChannelWizard({
                         <button
                           type="button"
                           onClick={() => handleSampleDraft(mainSteer, sampleIsAi ? {} : { reviseDraft: sampleScript })}
-                          disabled={drafting}
+                          disabled={drafting || (sampleNeedsSources && !sampleSources.trim())}
                           className="btn-secondary flex-shrink-0"
                         >
                           {drafting ? 'Writing…' : sampleScript.trim() ? 'Rewrite' : 'Write it'}

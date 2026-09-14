@@ -10,6 +10,8 @@
 // end" treats the whole text as editable. A model handed two labelled blocks respects the boundary —
 // and even when it doesn't, it cannot damage the prefix, because the prefix is never in its output.
 import { z } from 'zod'
+import type { SourcePolicy } from '../types/source-policy.js'
+import { type StoryCreativeContext, STORY_CONTEXT_VERSION, renderStoryCreativeContext, renderStorySourceGuards } from './story-context.js'
 
 // v1.1 — the informational/lifestyle register (2026-08-06, probe finding). v1.0 wrote a usable comedy
 // button but could not close an explainer: its one informational attempt replaced a moral with a
@@ -22,7 +24,7 @@ import { z } from 'zod'
 // in interior first person. The verifier rejected all three — correctly, and that is the architecture
 // working: a prompt regression was caught by software rather than shipping. v1.2 keeps the pin-it-to-a-
 // thing intent and forbids the POV switch it was inducing.
-export const STORY_ENDING_SURGEON_V1_VERSION = 'story-ending-surgeon.v1.2'
+export const STORY_ENDING_SURGEON_V1_VERSION = `story-ending-surgeon.v1.3+${STORY_CONTEXT_VERSION}`
 
 export const EndingSurgeonSchema = z.object({
   // String or array of lines — normalized by `asModelText()` at the call site. See the note in
@@ -34,6 +36,8 @@ export const EndingSurgeonSchema = z.object({
 export type EndingSurgeonOutput = z.infer<typeof EndingSurgeonSchema>
 
 export interface EndingSurgeonVars {
+  creativeContext?: StoryCreativeContext | undefined
+  sourcePolicy?: SourcePolicy | undefined
   genreCategory: string
   language: string
   audienceDescriptor: string
@@ -61,22 +65,20 @@ export function buildStoryEndingSurgeonPrompt(v: EndingSurgeonVars): { system: s
     : ''
   const peak = v.peakMoment ? `\nTHE STORY'S PEAK (already happened — do not repeat or re-stage it): ${v.peakMoment}` : ''
 
-  const system = `You are a line editor for ${v.language} short-video narration, working for ${v.audienceDescriptor}. Genre: ${v.genreCategory}.
+  const system = `${v.creativeContext ? `${renderStoryCreativeContext(v.creativeContext)}\n\n` : ''}${renderStorySourceGuards(v.sourcePolicy ?? v.creativeContext?.sourcePolicy)}\n\nYou are a line editor for ${v.language} short-video narration, working for ${v.audienceDescriptor}. Genre: ${v.genreCategory}.
 
 You are replacing the CLOSING LINES of a story that is otherwise finished. The story does not stop — it has to LAND.
 
-WHAT YOU RETURN: only the new closing lines. Never the whole narration, never the immutable text, never commentary. One to three short lines, written to be read aloud, one beat per line.
+WHAT YOU RETURN: only the new closing lines. Never the whole narration, never the immutable text, never commentary. Fit the replaced region and the selected form's read-aloud rhythm; do not impose one beat per line.
 
 WHAT THE OLD CLOSE GOT WRONG: ${v.problem}${craft}${promise}${arrival}${peak}
 
 RULES — all of them are hard:
 - ADD NO NEW EVENTS. No new scene, no time jump, no new thing happening. The story's events are finished; you are placing the last thing the viewer carries.
 - ADD NO NEW PEOPLE, NAMES, OR PLACES. Every person, object, and place you mention must already exist in the immutable text above.
-- PLACE A CONCRETE THING, DON'T NAME A MEANING. End on something seen, held, done, or left — not on what it all meant. If your line could be printed on a poster, delete it and put the object back.
-- DO NOT EXPLAIN THE STORY BACK. The viewer already watched it. No "and that's when I realized", no "which just goes to show", no summary of what happened.
-- NEVER END ON WHAT THE NARRATOR NOW KNOWS OR NOW DOES. This is the single most common dead close, and it survives every other rule because it sounds earned: "Simula nun, binabasa ko muna…", "At ngayon alam ko na…", "Ang totoo pala…", "Kasi minsan, ang sistema ay…". A new habit or a new understanding is a CONCLUSION, and the story already earned its conclusion — stating it takes the place of the last thing the viewer could have carried.
-- THE LAST LINE MUST CONTAIN SOMETHING THE VIEWER CAN SEE, TOUCH, OR DO. A physical thing, a place, a specific action, a number they can check — not an abstraction ("the system", "the right move", "trust", "choice"). If your final line's key words are all abstract nouns, you have written a moral. Replace it with the object.
-- IF THE STORY EXPLAINED SOMETHING, land on the ordinary thing the idea now attaches to — the elevator panel with no 5 on it, the shelf at the back of the store, the line on the receipt. The idea should ambush people later in their own lives, and it does that by being pinned to a thing, not by a closing thesis.
+- FIX THE NAMED FAILURE IN THIS STORY'S OWN FORM. An image, action, question, reflection, explanation or earned direct takeaway may land it. Do not replace a functioning close merely to make it physical or more dramatic.
+- ADD NO UNSUPPORTED CONCLUSION. Preserve the established meaning and facts. Avoid repeating a point the story has already delivered unless that repetition earns its purpose in the chosen form.
+- A new image or habit is not required. Use the material already present to make the intended payoff clear; if the requested repair would need a new event or fact, keep the original close.
 - DO NOT START ADDRESSING THE VIEWER. If the narration never says "ikaw"/"mo"/"you", your replacement must not either — no "subukan mo", no "nasa elevator ka rin minsan", no instruction aimed out of the frame. Switching to second person is a NARRATOR CHANGE, and it will be rejected. Stay inside the voice that has been speaking: the same "I" (or the same third person), noticing one last thing.
 - KEEP THE VOICE EXACTLY: same language and code-switching, same tense, same person (if it is "I", stay "I"), same plainness. You are the same narrator, still speaking.
 - CONTINUE from the immutable text — your first line must follow its last line naturally.

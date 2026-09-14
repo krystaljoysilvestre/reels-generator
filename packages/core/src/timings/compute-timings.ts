@@ -93,7 +93,7 @@ const OUTRO_TAIL_MS: Record<string, number> = {
 
 /** How long the closing image holds after the final spoken word, per genre. */
 export function outroTailMs(genreCategory?: string): number {
-  const raw = (genreCategory ? OUTRO_TAIL_MS[genreCategory] : undefined) ?? OUTRO_TAIL_DEFAULT_MS
+  const raw = (genreCategory && Object.hasOwn(OUTRO_TAIL_MS, genreCategory) ? OUTRO_TAIL_MS[genreCategory] : undefined) ?? OUTRO_TAIL_DEFAULT_MS
   return Math.min(raw, OUTRO_TAIL_MAX_MS)
 }
 

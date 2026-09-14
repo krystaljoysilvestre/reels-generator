@@ -12,6 +12,8 @@
 // INDICES ARE 1-BASED here, matching the numbered list the model is shown. The caller converts to the
 // primitive's 0-based indices — see the conversion in apps/worker/src/pipeline/steps/generate-story.ts.
 import { z } from 'zod'
+import type { SourcePolicy } from '../types/source-policy.js'
+import { type StoryCreativeContext, STORY_CONTEXT_VERSION, renderStoryCreativeContext, renderStorySourceGuards } from './story-context.js'
 
 // v1.1 — CALIBRATION (2026-08-06, probe-ending-repair control run). v1.0 fired on 2 of 4 hand-authored
 // reference closes. The independent endings-audit judge graded all 4 as NOT weak (both disputed closes
@@ -43,7 +45,7 @@ import { z } from 'zod'
 // could not reach by construction, however well it reasoned — one of its two remaining misses was exactly
 // that. Terminal exposition now disqualifies on its own, keeping the named-earlier-sentence evidence bar
 // so this widens what counts as a failure without lowering the standard of proof for one.
-export const STORY_ENDING_CRITIC_V1_VERSION = 'story-ending-critic.v1.4'
+export const STORY_ENDING_CRITIC_V1_VERSION = `story-ending-critic.v1.5+${STORY_CONTEXT_VERSION}`
 
 export const EndingCriticSchema = z.object({
   landed: z.boolean().describe('true if the ending earns its place; false if it is decoration'),
@@ -61,6 +63,8 @@ export const EndingCriticSchema = z.object({
 export type EndingCriticVerdict = z.infer<typeof EndingCriticSchema>
 
 export interface EndingCriticVars {
+  creativeContext?: StoryCreativeContext | undefined
+  sourcePolicy?: SourcePolicy | undefined
   genreCategory: string
   language: string
   /** WriterIdentity.closingCraft for this genre — how THIS genre is supposed to land. */
@@ -81,36 +85,31 @@ export function buildStoryEndingCriticPrompt(v: EndingCriticVars): { system: str
     ? `\n\nTHE PROMISE THE OPENING MADE: ${v.hookPromise}\nA close that never cashes this promise has not landed, however well written.`
     : ''
 
-  const system = `You judge ONE thing about a ${v.language} short-video narration: does it END, or does it just STOP?
+  const system = `${v.creativeContext ? `${renderStoryCreativeContext(v.creativeContext)}\n\n` : ''}${renderStorySourceGuards(v.sourcePolicy ?? v.creativeContext?.sourcePolicy)}\n\nYou judge ONE thing about a ${v.language} short-video narration: does it END, or does it just STOP?
 
 You are not grading the story. You are not rewriting anything. You LOCATE.
 
-THE DELETION TEST — the only test that matters here. Imagine deleting the closing lines. What does the viewer lose? Judge substance, NOT whether the lines feel conclusive. Grade the loss in three bands, and fail ONLY the bottom one:
+THE DELETION TEST — interpret its result through the creator's form. An intentional refrain, a children's named takeaway or a useful recap can earn its place through its effect, without adding a new fact. Imagine deleting the closing lines. What does the viewer lose? Judge substance, NOT whether the lines feel conclusive. Grade the loss in three bands, and fail ONLY the bottom one:
 
-- NOTHING (landed=false) — cutting the close removes no fact, no image, no consequence, and no idea the story had not already delivered. It repeats, summarizes, or re-labels something already said. THIS IS THE ONLY FAILING BAND.
-- SOMETHING (landed=true) — the close adds a real beat: a reflection the story had not yet put into words, an action handed to the viewer, a genuine question, a small turn of the knife. It may be quiet, plain, or abstract. It still landed — UNLESS it is terminal exposition, which disqualifies a close on its own (see below).
-- ESSENTIAL (landed=true) — the close delivers what the story is for: the consequence of the turn, the last concrete image, the answer to the opening's question.
+- NOTHING (landed=false) — cutting the close loses no useful fact, image, consequence, idea OR intended effect. Its repetition or explanation contributes nothing to this form and weakens or needlessly delays the payoff. This is the only failing band.
+- SOMETHING (landed=true) — the close adds a useful beat or effect: reflection, an action handed to the viewer, a genuine question, a purposeful refrain, recognition, reassurance or settling. It may be quiet, plain, abstract or deliberately repeated. It landed.
+- ESSENTIAL (landed=true) — the close delivers the story's central promise, through consequence, an image, an answer or the effect this form needs.
 
-TERMINAL EXPOSITION DISQUALIFIES ON ITS OWN — it is not merely the bottom band's flavour. The close explains the story back to the viewer: naming its own meaning or feeling ("that's all it takes to remind us…", "shows us that…", "we're all just…"), or glossing an image with what it means. If the close does this AND you can name the earlier sentence that already delivered that meaning, answer landed=false EVEN IF the close also adds a small beat alongside the gloss. A close that pays for its exposition with a scrap of new information is still explaining the story back.
+REDUNDANT EXPOSITION IS A CANDIDATE FAILURE, NOT AN AUTOMATIC ONE. A close may repeat an idea or explain an image and still earn its place for this audience. Fail only when the proposed closing region adds no useful purpose in this form and its redundancy weakens the payoff. A new detail is not automatically useful, just as an old idea is not automatically useless.
 
-THE TEST THAT DECIDES IT: ALREADY SAID, OR ONLY SHOWN? Nearly every dead close is a reflective line, and nearly every good quiet close is too — so form cannot separate them. This can:
+THE TWO-PART TEST FOR REPETITION:
+1. Find an earlier sentence that already delivers the same meaning, and quote it.
+2. Explain what the closing repetition fails to contribute and how it weakens this story's intended ending. Check rhythm, recognition, reassurance, oral tradition, recap and the creator's explicit closing rules before deciding.
+A duplicate without that second finding is not a failure. If the events only SHOWED the meaning and the close names it for the first time, assess that new reflection on its purpose; directness alone is not a defect.
 
-- The story ALREADY SAID IT → the close is decoration (landed=false). The idea was stated in plain words earlier; the close re-labels, abstracts, or moralizes it. **To fail a close this way you must NAME the earlier sentence that already says it.** If you cannot point to one, you do not have a failure.
-- The story ONLY SHOWED IT → the close LANDED (landed=true). The events carried something the narration never put into words, and the close finally names it. That is new information, even though nothing new happens.
+Examples of the distinction:
+- A redundant moral that restates the delivered idea and drains the final image can fail when removing it loses nothing useful.
+- A children's named takeaway, a refrain returning at the close, or a recap that makes an explanation carryable can land even when the idea was already said.
+- A new aphorism does not earn a pass just by being new; it must contribute to the intended experience.
 
-Run it explicitly: pick the closing line's central claim, then scan back for a sentence that states that same claim. Found one → decoration. Found only scenes, actions and images that IMPLY it → it landed.
+JUDGE THE CLOSE AS A WHOLE. A weaker sentence inside a close that otherwise carries a useful beat or effect is not grounds to replace that working close. You locate a region with a concrete failure, not an opportunity to impose your preferred ending.
 
-WATCH FOR THE ANNOUNCED LESSON — the most common dead close in explainer and lifestyle registers. A narrator declaring what they now know ("At ngayon alam ko na…", "Simula nun, alam ko na…", "Ang totoo pala…", "ikaw ang bug", "ang tamang galaw ay…") is almost always re-labelling a conclusion the story already stated outright. Apply the test above rather than accepting it because it sounds earned.
-
-FORM IS NOT THE TEST — SUBSTANCE IS. An aphorism, a moral, or a reflective line is NOT automatically a failure. Ask only whether it adds something:
-- FAILS: "which just goes to show, we're not standing on solid ground" after the story already established the ground is unstable — a re-label of the delivered idea.
-- FAILS: glossing your own picture — "…like it was saying, I see what this cost you" — telling the viewer how to read the image they just received.
-- LANDS: "Iba pala 'yung katahimikan kapag hindi ka na kailangan." — an aphorism in FORM, but it names something the story showed and never said: what the silence actually is. That is a new beat.
-- LANDS: "Kaya kahit konti, sobrahan mo lagi sa minimum." — a plain instruction, not an image, but it hands the viewer something to do that the story had not yet asked of them.
-
-JUDGE THE CLOSE AS A WHOLE, NOT ITS WEAKEST SENTENCE. If ANY part of the closing lines carries a real beat, the ending LANDED — even if another part is flabbier, gloss-y, or would be better cut. You are not here to tighten a close that is working; you are here to catch a close that is decoration ALL THE WAY THROUGH. "The last sentence should go" is not a failure — it is a note, and this pass cannot act on notes.
-
-THE THRESHOLD IS DELIBERATELY ASYMMETRIC — BUT ASYMMETRIC IS NOT PASSIVE. A missed dead ending costs nothing: the story ships as it is today. A wrongly-flagged good ending destroys a close that was working. So the tie-breaker on a genuine fence is landed=true, and the evidence bar is the named earlier sentence above. What asymmetry does NOT mean: waving through a close you can already point at the duplicate for. If you have named the sentence, you are not on the fence — fail it. When you set problem, quote that sentence in it, so the note is checkable.${craft}${promise}
+THE THRESHOLD IS DELIBERATELY ASYMMETRIC. A wrongly-flagged good ending can destroy a close that works. On a genuine fence, answer landed=true. For a repetition failure, the problem must quote the earlier sentence AND explain why this repetition adds no useful effect and weakens the payoff. If either finding is missing, leave the close intact.${craft}${promise}
 
 THEN DELIMIT THE REGION TO REPLACE.
 The narration is numbered 1..${v.sentenceCount}. Return the 1-BASED indices of the sentences a line editor should replace.

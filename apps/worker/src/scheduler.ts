@@ -94,13 +94,13 @@ export async function runAutoProduceTick(): Promise<void> {
 
     // The channel's Editorial Program, if it has one (specs/channel-series.md). null = no series, or
     // every series out of topics → the Planner invents, exactly as it did before series existed.
-    const pick = await pickNextSeriesTopic(channel.id, channel)
+    let pick = await pickNextSeriesTopic(channel.id, channel)
     // Resolve the genre ONCE, here, and freeze it on the row. Never re-derived downstream.
-    const genreCategory = pick ? resolveGenreForNewReel({ genreCategory: pick.genreCategory }, channel) : null
+    const genreCategory = resolveGenreForNewReel(pick, channel)
     // FREEZE the resolved source policy on every reel, series or not — the same discipline as the genre.
     // A reel made under "fictional only" must never be re-judged, re-rendered or re-sourced later under
     // "real places allowed", and the channel's policy is editable at any time.
-    const sourcePolicy = resolveChannelPolicy(null, null, channel)
+    const sourcePolicy = resolveChannelPolicy(null, pick, channel)
 
     // ── THE INVARIANT: no factual script is ever written without evidence ─────────────────────────
     // On an evidence-required channel, acquire source material BEFORE any reel exists. Not after, and
@@ -113,14 +113,14 @@ export async function runAutoProduceTick(): Promise<void> {
     //   no evidence    → NO REEL. The topic is skipped (we tried; the sources aren't there) and this
     //                    tick produces nothing. A missing post is strictly better than a fabricated one.
     let acquiredDossier: string | null = null
-    if (requiresEvidence(sourcePolicy)) {
+    if (requiresEvidence(sourcePolicy) || channel.storyMode === 'ebn') {
       if (!pick) {
         // Evidence-required, but nothing names the subject — there is nothing to research, and letting
         // the Planner invent one is exactly the failure this guard exists for.
         console.warn(`${tag} evidence required but no queued topic — nothing to research, skipping this tick`)
         continue
       }
-      const evidence = await acquireEvidence(channel, pick.subject)
+      const evidence = await acquireEvidence(channel, pick.subject, sourcePolicy)
       if (!evidence) {
         await skipSeriesTopic(pick.topicId, 'no usable sources found')
         console.warn(`${tag} "${pick.subject}" could not be sourced — no reel created (evidence required)`)
@@ -136,10 +136,11 @@ export async function runAutoProduceTick(): Promise<void> {
         status: 'drafting',
         language,
         sourcePolicy,
+        genreCategory,
         // The acquired sources ARE the substrate the studio writes from, and their presence is what
         // makes the fact gate (`factCheck && dossier`) able to run at all on this reel.
         ...(acquiredDossier ? { dossier: acquiredDossier } : {}),
-        ...(pick ? { seedIdea: pick.subject, seriesId: pick.seriesId, genreCategory } : {}),
+        ...(pick ? { seedIdea: pick.subject, seriesId: pick.seriesId } : {}),
       })
       .returning()
 
@@ -149,7 +150,8 @@ export async function runAutoProduceTick(): Promise<void> {
     if (pick) {
       const claimed = await claimSeriesTopic(pick.topicId, reel!.id)
       if (!claimed) {
-        if (requiresEvidence(sourcePolicy)) {
+        const fallbackPolicy = resolveChannelPolicy(null, null, channel)
+        if (requiresEvidence(sourcePolicy) || requiresEvidence(fallbackPolicy) || channel.storyMode === 'ebn') {
           // Falling back to planner-invented is NOT available here — that is precisely a factual script
           // with no evidence. The dossier we already paid for belongs to a subject another tick took, so
           // this reel has no honest subject: fail it closed rather than let it write something.
@@ -159,8 +161,9 @@ export async function runAutoProduceTick(): Promise<void> {
           console.warn(`${tag} topic "${pick.subject}" claimed concurrently on an evidence-required channel — reel ${reel!.id.slice(0, 8)} failed closed`)
           continue
         }
-        await db.update(reels).set({ seedIdea: null, seriesId: null, genreCategory: null }).where(eq(reels.id, reel!.id))
+        await db.update(reels).set({ seedIdea: null, seriesId: null, genreCategory: resolveGenreForNewReel(null, channel), sourcePolicy: fallbackPolicy, dossier: null, updatedAt: new Date() }).where(eq(reels.id, reel!.id))
         console.warn(`${tag} topic "${pick.subject}" was claimed concurrently — reel ${reel!.id.slice(0, 8)} falls back to planner-invented`)
+        pick = null
       }
     }
 

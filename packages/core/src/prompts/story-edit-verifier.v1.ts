@@ -14,8 +14,10 @@
 // the peak, this prompt is reused unchanged — see the ONE-PRIMITIVE-FOREVER note in
 // packages/core/src/editing/bounded-edit.ts.
 import { z } from 'zod'
+import type { SourcePolicy } from '../types/source-policy.js'
+import { type StoryCreativeContext, STORY_CONTEXT_VERSION, renderStoryCreativeContext, renderStorySourceGuards } from './story-context.js'
 
-export const STORY_EDIT_VERIFIER_V1_VERSION = 'story-edit-verifier.v1.0'
+export const STORY_EDIT_VERIFIER_V1_VERSION = `story-edit-verifier.v1.1+${STORY_CONTEXT_VERSION}`
 
 export const EditVerifierSchema = z.object({
   ok: z.boolean().describe('true only if the replacement introduces nothing new and preserves the voice'),
@@ -26,6 +28,8 @@ export const EditVerifierSchema = z.object({
 export type EditVerifierVerdict = z.infer<typeof EditVerifierSchema>
 
 export interface EditVerifierVars {
+  creativeContext?: StoryCreativeContext | undefined
+  sourcePolicy?: SourcePolicy | undefined
   language: string
   /** The unchanged part of the artifact — the authority on what already exists. */
   immutableContext: string
@@ -36,7 +40,7 @@ export interface EditVerifierVars {
 }
 
 export function buildStoryEditVerifierPrompt(v: EditVerifierVars): { system: string; userMessage: string } {
-  const system = `You verify a BOUNDED EDIT to a ${v.language} narration. You do not improve it, rewrite it, or suggest alternatives. You decide ONE thing: is this replacement safe?
+  const system = `${v.creativeContext ? `${renderStoryCreativeContext(v.creativeContext)}\n\n` : ''}${renderStorySourceGuards(v.sourcePolicy ?? v.creativeContext?.sourcePolicy)}\n\nYou verify a BOUNDED EDIT to a ${v.language} narration. You do not improve it, rewrite it, or suggest alternatives. You decide ONE thing: is this replacement safe?
 
 You are given the UNCHANGED text (the authority on what already exists in this story), the REMOVED text, and the PROPOSED replacement.
 

@@ -91,7 +91,7 @@ void (async () => {
     const ch = bump(byChannel, r.channelName ?? '(unknown)')
     const ge = bump(byGenre, r.genre ?? '(unknown)')
 
-    if (out.plannerStatus === 'failed_fell_back_to_v1_draft') {
+    if (out.plannerStatus === 'failed_fell_back_to_v1_draft' || out.plannerStatus === 'failed_direct_writer') {
       overall.plannerFallbacks++
       ch.plannerFallbacks++
       ge.plannerFallbacks++

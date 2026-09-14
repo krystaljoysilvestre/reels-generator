@@ -105,7 +105,7 @@ export function moodToVoiceSettings(mood: string[], tone: ToneConfig, genre?: st
     genre && register
       ? REGISTER_ENVELOPE_OVERRIDES.find((o) => o.genre === genre && o.match.test(register))?.env
       : undefined
-  const env = regOverride ?? (genre ? GENRE_ENVELOPE[genre] : undefined)
+  const env = regOverride ?? (genre && Object.hasOwn(GENRE_ENVELOPE, genre) ? GENRE_ENVELOPE[genre] : undefined)
   if (env) {
     stability = clamp(stability, env.stability[0], env.stability[1])
     style = clamp(style, env.style[0], env.style[1])

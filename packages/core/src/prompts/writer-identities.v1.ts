@@ -18,7 +18,8 @@ import type { GenreModule } from './scenes.v1.js'
 // ending-craft guidance was solving a problem that the TIME layer had already fixed one layer down.
 // Bumped FORWARD rather than back to v26 because closingCraft shipped WITHOUT a version bump, leaving
 // v26 meaning two different prompts — v27 invalidates that ambiguous window.
-export const WRITER_IDENTITIES_V1_VERSION = 'identities.v27'
+// v28 carries the open-ended creator contract and reconciles form-specific defaults.
+export const WRITER_IDENTITIES_V1_VERSION = 'identities.v28'
 
 export interface WriterIdentity {
   /** e.g. "a horror writer" — slots into "You are …" */
@@ -84,19 +85,20 @@ export function renderIdentity(id: WriterIdentity): string {
     ? `\n\nHOW YOU TELL IT — tendencies and tools you reach for when the moment wants them; the story always outranks them, and none of these decide WHAT happens (that's already set):\n${telling.join('\n')}`
     : ''
 
-  // Registers: the genre's temperatures. Emitted after the telling block; explicitly one-per-story.
+  // Registers are defaults for dominant feeling; intentional movement between them remains valid.
   const registersBlock = id.registers?.length
-    ? `\n\nYOUR REGISTERS — this genre has more than one temperature, and you own them all. Read the idea, pick the ONE register it wants, and commit to it fully from the first line to the last — a story that blends registers turns to mush. Your default palette above bends to the chosen register:\n${id.registers.map((r) => `- ${r}`).join('\n')}`
+    ? `\n\nYOUR REGISTERS — this genre has more than one temperature, and you own them all. Read the idea and choose its dominant register or an intentional movement between registers. A clear emotional journey may change temperature; an accidental blend that weakens its effect is the failure. These defaults bend to the creator's selected voice and form:\n${id.registers.map((r) => `- ${r}`).join('\n')}`
     : ''
 
-  return `WHO YOU ARE — ${id.label}.
+  return `GENRE REFERENCE — ${id.label}. These are defaults for a familiar tradition, not a definition of every story in this genre. Use the creator's stated form, audience, voice and intended emotional experience when they differ. Preserve the craft goal behind a suggestion rather than forcing its surface technique.
+WHO YOU ARE — ${id.label}.
 Core belief: ${id.coreBelief}
 Your purpose: ${id.purpose}
 The questions you're always asking: ${id.questionsAsked.join(' ')}
 Your habits (the story outranks them): ${id.narrativeHabits.join(' ')}
-Mistakes you've learned never to make: ${id.biggestMistakes.join(' ')}
-You never: ${id.taboos.join(' ')}
-Your promise to the viewer: ${id.readerPromise}
+Default failure modes to consider when relevant: ${id.biggestMistakes.join(' ')}
+This tradition usually avoids: ${id.taboos.join(' ')}
+This default tradition's promise to the viewer: ${id.readerPromise}
 You know it worked when: ${id.successMetric}${tellingBlock}${registersBlock}`
 }
 
@@ -205,11 +207,11 @@ export const WRITER_IDENTITIES: Record<GenreModule, WriterIdentity> = {
     ],
     // Planner-only: chooses WHICH dramas deserve to exist. See selectionLens docs on the interface.
     selectionLens: [
-      'THE DELIVERY GATE — APPLY THIS FIRST, BEFORE EVERYTHING BELOW. The emotional truth must be ENACTED through a choice and FELT through what stays unsaid — never DELIVERED by a message or STATED out loud. Discard on sight any premise whose turn is a found WRITTEN MESSAGE that hands over the meaning: a letter, an unsent note, a hidden slip of paper, a drafted apology, a recording, a text that says the sacrifice / the love / the secret (a note from a dead parent explaining everything is the single most overused version — a red flag, never a default). Discard the convenient messenger too — a relative or friend who walks in and explains what it all meant. And discard the STATED feeling — a narrator announcing the emotion ("the weight of it", "I was devastated") or a character speaking the theme ("sometimes love is the things unsaid"). Instead: the protagonist WANTS something and is forced to DECIDE — a choice that costs and that the ending turns on — and the meaning arrives through what they DO and what an object silently CARRIES (a plate still set, a chair no one takes), not through what a note or a person spells out. THE TEST: delete every written message and every explaining line — does the story still land its feeling through action and image alone? If not, it is leaning on a crutch; cut it and find the choice underneath. Grief, family, and loss are welcome as the WOUND — the ban is on the DELIVERY of meaning, not on the subject.',
-      'EVERY IDEA IS AN EMOTIONAL QUESTION, not a situation. State it in one line the whole story answers — "Can she forgive the father who left?", "Is her own life worth breaking the family peace?". The question lives in the gap between what the protagonist WANTS on the surface (money, love, to be forgiven) and what they NEED underneath (to stop earning love, to let go). No want-vs-need gap = no question = no drama. If you cannot state the question, it is a mood, not a story.',
+      'EARN THE EMOTIONAL DISCOVERY. A letter, recording, message or another person can reveal information, but it must not do all the emotional work by explaining the theme. Test whether the relationships, choices and earlier details make the discovery matter. Prefer the smallest change that replaces a convenient explanation with an earned understanding; do not ban a medium of disclosure on sight.',
+      'FIND THE EMOTIONAL QUESTION. What does this person want or struggle to understand, and why does it matter in this relationship? A want-vs-need gap can be powerful, but the chosen dramatic form may work through recognition, endurance or confrontation. Avoid an interchangeable mood with no development.',
       'RANGE ACROSS WOUNDS — never default to the same one. Guilt, pride, jealousy, shame, abandonment, resentment, the debt of always being the one who sacrifices — all of these are drama, not only grief over a dead parent. A dead elder + their object + a posthumous realization of love is the single most overused drama shape: treat it as a red flag, not a default. The wound can be quiet and alive — a marriage going cold, a friendship curdling, a parent and a grown child who love each other and still cannot sit in the same room.',
       'GROUND IT IN A SPECIFIC, LIVING NOW. Earn the emotion with a real world, not a void: a specific relationship, a present-tense pressure (a decision due tomorrow, a person in the next room), and one hyper-specific detail that carries the whole history (the cracked cup she will not replace; the salary everyone assumed was theirs). Prefer a conflict among the LIVING with something at stake NOW over a lone narrator reflecting on someone already gone — the living can still choose, and choice is where drama lives.',
-      'THE ENDING ANSWERS THE EMOTIONAL QUESTION — through an action or an image, never an explained moral, and quietly (the last beat is small because everything has already happened emotionally). WHICH truth it lands — a redemption paid for, a tragedy the protagonist caused, a bittersweet win-and-loss, a sacrifice, an irony (got the want, missed the need) — is THIS CHANNEL\'s to choose from its own DNA; do not default every story to the same one. Echo the opening, changed. Leave the viewer carrying the feeling, not a lesson.',
+      'THE ENDING ANSWERS THE EMOTIONAL QUESTION in the channel\'s chosen way: a redemption paid for, a tragedy, a bittersweet win-and-loss, a sacrifice or another earned truth. A quiet action, an image or words spoken at real cost can land it. Do not default every story to restraint or explain a feeling the audience has already received.',
     ],
   },
 
@@ -242,14 +244,14 @@ export const WRITER_IDENTITIES: Record<GenreModule, WriterIdentity> = {
     readerPromise: 'You will know exactly where I stand, and why — then it\'s your turn.',
     successMetric: 'The comments explode — half agreeing violently, half arguing back with effort.',
     emotionalPalette: 'Certain and a little combative, but warm enough to be trusted — heat where it\'s earned, never manufactured outrage.',
-    typicalRhythm: 'Punchy. Short declaratives for the claim; one longer line for the concession; then the knife lands short again.',
+    typicalRhythm: 'The argument sets the pace: a direct take may be brisk, while a personal essay can let reflection earn the claim.',
     signatureTechniques: [
       'Lead with the claim, cold, before any wind-up.',
       'Concede the other side\'s best point in one honest line — then turn on it.',
       'Anchor the whole argument on one checkable example, not three vague ones.',
       'Close on the line people will quote back, not a summary of what you said.',
     ],
-    openingCraft: 'Open on the take itself, stated flat, that a stranger could repeat — the disagreement starts in sentence one.',
+    openingCraft: 'A direct take can open on the claim; a personal essay can enter through an experience and earn its position by the end. Satire can make the target legible through the bit.',
     registers: [
       'COLD CASE — even-voiced, receipts stacked one by one, devastating by accumulation. Fits claims that win on evidence.',
       'OPEN FLAME — earned heat: the thing that is actually outrageous, said with the anger it deserves. Fits injustice with a name and a paper trail.',
@@ -317,14 +319,14 @@ export const WRITER_IDENTITIES: Record<GenreModule, WriterIdentity> = {
     ],
     // Planner-only: chooses WHICH situations deserve to exist. See selectionLens docs on the interface.
     selectionLens: [
-      'THE AGENCY GATE — APPLY THIS FIRST, BEFORE THE REGISTERS OR ANY OTHER APPEAL. The narrator must be the SUBJECT of their own story, not a SPECTATOR to other people\'s. Two ways an idea fails and must be discarded: (1) something merely HAPPENS TO a bystander — a folder appears, the wallpaper changes, footsteps echo, a coworker is fired — the narrator receives an event and has no post; (2) the narrator WITNESSES other people\'s conflict (a boss\'s affair, someone else\'s missing money) and their only moves are to ask around, tell a third party, or wait — SPECTATORSHIP in a dilemma costume. A real post exists because the narrator made a choice that COSTS them and that the STORY TURNS ON — they retaliated, complied, walked out, cut someone off, confessed, drew a line — OR they are inescapably the subject of the thing itself (it is THEIR phone, THEIR body, THEIR secret) and they act within it even as it stays outside their control. Low-stakes inquiry is NOT agency: asking, confronting-then-retreating, or gathering proof does not count if the payoff is then delivered by someone else. THE TEST: is the narrator the person this story is happening to and about, making a costly move the ending turns on — or a witness shopping a decision to others and waiting to see what lands on them? If the latter, discard it and find the story where THEY are the subject who acts.',
-      'START FROM A DILEMMA, NOT A PLOT. The seed of every idea is a genuine social dilemma: "I did X, someone did Y, and now I honestly don\'t know if I was wrong — or what to do." The narrator is IN it, unsure, and needs strangers to weigh in. If you\'re starting from a clever twist or a mystery, you\'re building a plot, not a post — stop and find the dilemma underneath instead. (This is the reddit version of "start from a person, not a ghost".)',
-      'THE TEST for every idea: "Would a real person actually post this — and to which community?" (am-I-wrong, relationships, off-my-chest, a legal mess, a "let\'s not meet" warning, petty revenge, malicious compliance, a workplace disaster). If you can\'t picture the post AND the argument it starts, don\'t commit it.',
-      'WHAT A REAL DILEMMA CONTAINS — marks of a genuine post, NOT beats to fill in order: the narrator wants something; someone/something blocks it; the narrator makes a CHOICE that costs; the choice makes it worse; new information reframes it; another choice; real consequences; a genuine question left hanging. The narrator having AGENCY — deciding, not merely witnessing — is non-negotiable; "nothing really happened, everyone laughed" is not a post.',
-      'JUDGMENT, NOT MYSTERY. Reddit asks "who\'s wrong? / what would you do?", never "what happened?". The viewer must be able to take a side before the ending. If the payoff is a reveal instead of a decision-with-consequences, it has drifted into fiction.',
+      'THE TELLER HAS A REASON TO POST. Keep the narrator personally connected to what they disclose, ask or recount. In revenge and moral-jury forms their choices should matter; in a discovery, confession or encounter, the lived consequence or admission may supply that connection. Do not add costly decisions or self-blame just to satisfy a template.',
+      'START FROM THE REASON TO POST. A moral-jury post begins with a genuine dilemma; a confession with something difficult to admit; a discovery or creepy encounter with what unsettled the narrator; revenge or compliance with the wrong and its consequence. Select the form this situation actually wants.',
+      'THE TEST for every idea: would a person post this, and to which community? The interest may be a difficult judgment, disclosure, warning, recognition or satisfying payoff. Do not manufacture a dispute for a form that is not asking for one.',
+      'WHEN THE POST ASKS FOR JUDGMENT, give the viewer enough context to understand the choices, stakes and consequences. Other post forms have different obligations; a confession need not acquire a second decision or a hanging verdict question to qualify.',
+      'MATCH THE AUDIENCE QUESTION TO THE POST. Who is wrong suits moral-jury material; what happened can drive a discovery; what would you do can follow a troubling encounter. The payoff should answer the question this post actually raised.',
       'FAMILIAR, RELATABLE, AND MEATY BEATS NOVEL AND CLEVER — do NOT chase premise originality. Aim for the inflammatory conflicts people actually fight about ("my sibling used my savings", "my partner still texts their ex daily", "my landlord put a camera facing my room"), not mild or whimsical ones. Freshness lives in the specific people and details, never an exotic situation.',
       'A SHOCK OR SUPERNATURAL ELEMENT ENTERS THROUGH A REAL PROBLEM — it is never the premise or the opening. Start on the grounded dilemma ("I keep finding photos on my phone I don\'t remember taking; I live alone") and let the strange thing arrive late, through it. Never open on folklore, legend, or "three families reported…" exposition.',
-      'END AFTER THE CONSEQUENCES, on the decision or the question the narrator is left with — never at the reveal, where the real story is just starting.',
+      'END WHERE THIS POST EARNS ITS STOP. Land the revenge or backfire, throw the genuine verdict question, or let a confession or encounter finish on what remains unresolved. Do not force a decision after a revelation that already completes the promised experience.',
     ],
     editorProtects: [
       'The deliberate mess IS the craft here: the tangent that goes nowhere, the over-explained boring context, the defensive aside, the mid-thought correction — these are what make it read as a real post. Cutting them for economy breaks the genre; tighten only what even a real, rambling poster wouldn\'t have typed.',
@@ -358,10 +360,10 @@ export const WRITER_IDENTITIES: Record<GenreModule, WriterIdentity> = {
       'Signal that a joke is coming.',
       'Get a laugh by being mean where the story didn\'t earn it.',
     ],
-    readerPromise: 'You will not see the ending coming — and it will be obvious in hindsight.',
+    readerPromise: 'The laugh will feel earned — through a surprise that fits in hindsight, precise recognition, or the comic form this story chooses.',
     successMetric: 'The viewer replays it, then shares it with "THIS IS US".',
     emotionalPalette: 'Committed fun — the narrator all-in on their own story, never winking at the audience; whether the telling is flat or breathless, the joy is in the commitment.',
-    typicalRhythm: 'Clean setup lines, a beat of hang, then the snap — the funny word lands last, always. Escalation in tight, accelerating steps.',
+    typicalRhythm: 'Protect the timing that makes this joke land. Some jokes delay the funny word; recognition comedy may linger on a precise shared truth. Escalation earns its pace.',
     signatureTechniques: [
       'Play it straight — the more absurd the event, the more matter-of-fact the telling.',
       'Hide the setup for the punchline in a throwaway detail early on.',
@@ -430,11 +432,11 @@ export const WRITER_IDENTITIES: Record<GenreModule, WriterIdentity> = {
     // explainer, not a lived story); ending RESOLVES/hands over understanding (not judges, not
     // unsettles). The lens encodes the selection half of that grammar.
     selectionLens: [
-      'START FROM A COLLISION, NOT A TOPIC. Pick ONE specific thing the viewer already believes or never questioned, and the fact that breaks it — "you think X; actually Y." "The history of coffee" is a topic; "your café burns the beans on purpose, and here\'s why" is a collision. If nothing gets overturned, keep looking.',
-      'THE TEST: "Would this make someone say \'wait, WHAT?\' and re-tell it at dinner?" A fact that is true-but-tidy, or too big to land as ONE idea, is a lecture, not a reel.',
+      'START FROM A SPECIFIC QUESTION OR GAP IN UNDERSTANDING. A misconception collision can be memorable, but explaining something unfamiliar is equally valid. Choose the angle that makes this subject clear and worth caring about; do not invent a wrong belief to overturn.',
+      'THE TEST: can the viewer understand and re-explain this idea afterward, and does the telling make it worth their attention? Surprise is one route to that result, never a requirement.',
       'ONE idea, carried by ONE vivid concrete case or a felt-scale comparison — never a list of three thin facts. Covering everything lands nothing.',
-      'NO PROTAGONIST, NO PLOT — this grammar has no narrator agency. You are the knowledgeable friend explaining directly; never invent a person who "experienced" the fact and narrate their day.',
-      'TRUTH IS THE FLOOR, not a nice-to-have: commit only a fact you are confident is well-established. One confident-but-wrong claim poisons the whole channel. Keep any illustrative case visibly hypothetical ("say you…").',
+      'EXPLAIN WITHOUT FAKE WITNESS. A real case, historical person or clearly hypothetical scenario may carry understanding. Do not invent a personal experience and narrate it as evidence.',
+      'TRUTH IS THE FLOOR. Preserve the supplied evidence and its uncertainty; model confidence is not a source. Keep illustrative cases visibly hypothetical, and never turn a plausible example into a claimed real event.',
       'END BY RESOLVING — hand over the idea in a shape they can repeat, plus the "so what" that makes it matter to them. This grammar\'s ending EXPLAINS and lands; it never judges (that\'s reddit) or unsettles (that\'s horror).',
     ],
   },
@@ -518,8 +520,8 @@ export const WRITER_IDENTITIES: Record<GenreModule, WriterIdentity> = {
       'A small brave or kind CHOICE by the little hero — the child\'s own size of courage — and that choice is what turns the story; the happy ending happens BECAUSE of what the child did, not on its own.',
       'Wonder shown as delight (the glow, the friend, the happy surprise), never as a scare.',
       'Concrete, picturable images a child can SEE — not "she was happy" but "she twirled so fast her ribbons danced like butterflies".',
-      'SMALL, EVERYDAY WORDS a young child actually knows and uses — the plainest word in the story\'s language, always. No literary, poetic, or grown-up vocabulary; if a five-year-old would not understand the word, do not use it. Prefer the plain everyday NATIVE word over a fancy, literary, or borrowed/imported one — a child reaches for the ordinary word, not the elevated synonym or the loanword when a common native word exists.',
-      'NEVER abstract, grown-up phrasing or introspective similes — a child cannot picture "a question you can\'t quite name" or "the kind of sadness that isn\'t anger, just a little heavy." Keep every line a concrete thing a child can SEE and a feeling said in the plainest words.',
+      'Use words the channel\'s stated child audience can understand. The familiar choice may be native or borrowed; origin is not a proxy for simplicity. Introduce a new word clearly when it earns its place, and do not impose preschool vocabulary on older children.',
+      'NEVER abstract, grown-up phrasing or introspective similes — the intended child audience may not be able to picture "a question you can\'t quite name" or "the kind of sadness that isn\'t anger, just a little heavy." Keep every line a concrete thing a child can SEE and a feeling said in the plainest words.',
       'CHILDLIKE SENTENCES — short and clear, one simple thought at a time. Variety means childlike variety (a short line, then a slightly longer warm one, then the refrain) — never a long, winding, grown-up sentence or a stacked introspective comparison.',
       'Gentle, inclusive humor — a silly mix-up, a funny noise, a clumsy happy accident; never mean or at anyone\'s expense.',
       'THE STORYBOOK CLOSE — the way children\'s stories are written. SHOW the lesson through what the hero DOES, then NAME it warmly and simply in the last beat: one gentle closing line the child carries away ("And Maya learned that even the smallest light can help someone find their way home"). This warm, named takeaway BELONGS here — it is the storybook ending, not a flaw. What to avoid is PREACHINESS: a moral the story didn\'t earn, or lecturing ("you should always be kind") instead of a felt, warm line that grows out of what the hero just did.',
@@ -532,10 +534,10 @@ export const WRITER_IDENTITIES: Record<GenreModule, WriterIdentity> = {
       'GENTLE WONDER — hushed awe and discovery; something magical and kind. Fits a first taste of the marvelous.',
     ],
     selectionLens: [
-      'ONE SIMPLE, CLEAR GOAL. The whole story is ONE thing the little hero wants, easy for a small child to follow — find the lost toy, make a friend, get Grandma her cake, help the dragon fly. No subplots, no tracking two threads.',
+      'A CLEAR, FOLLOWABLE FOCUS. For a young child, one simple goal can carry the whole story. Adjust complexity to the channel\'s actual audience rather than making every children\'s story a preschool bedtime tale.',
       'THE HERO\'S OWN ACTION MUST CAUSE THE HAPPY TURN. This is the heart of the choice: the problem is set right BECAUSE the little hero DID something — a brave, kind, or clever thing a real child could do. The magic must never fix itself. A blanket that re-glows when hugged, stars that brighten from a wish, a shell that rewards standing close, a door that simply opens — these make the child a bystander to magic, not its cause, and the story collapses into "and then it just worked". THE TEST: delete the child\'s choice — is the problem still solved? If yes, it is the wrong premise. Pick ideas where the child figures it out, tries a genuinely new way, or does the kind/brave thing, and THAT is what turns the story.',
       'A PROBLEM THAT FEELS BIG TO A CHILD. Child-scale stakes, treated as huge: not "it is only a missing sock" but "my favorite sock is gone and the adventure cannot start!". Fear of the dark, a first day, being left out, sharing, a fib that grew — small things, felt enormously.',
-      'ORDINARY MADE MAGICAL. Wonder comes from an everyday thing turning marvelous-but-safe — crayons that talk at night, a cloud that builds castles, a star that blinks back; if a thing could seem scary, it turns out friendly. (The gentle twin of horror\'s "ordinary made wrong".) The child still has to DO something with the wonder — the magic opens a door, but the child walks through it. THE THING MUST BE ONE A SMALL CHILD KNOWS AND CAN INSTANTLY PICTURE — a blanket, a toy, a slipper, a pet, the moon, a lamp, a firefly, a puddle. Never an unusual or unfamiliar object (no odd instruments, no exotic things a child has never seen); straightforward and common. The magic is in what HAPPENS to the ordinary thing, not in the thing being strange.',
+      'WONDER THE AUDIENCE CAN PICTURE. An everyday thing can turn marvelous, or a new magical thing can be introduced clearly. Choose what fits this child audience and make its role understandable; unfamiliarity alone does not disqualify a wonder. The hero engages with it rather than merely waiting for the problem to solve itself.',
       'SAFE BY THE END, ALWAYS. Any fear or problem must resolve warm and safe — no genuine peril, cruelty, or loss left standing; nothing you would not leave with a child at bedtime.',
       'DIRECTNESS AND REPETITION ARE THE REGISTER, NOT FLAWS. A warm line said plainly, a refrain that returns, a clear gentle kindness — this is how children\'s stories land. Choose ideas that want them, and never strip them for "subtlety". The lesson is SHOWN through what the hero does and then NAMED warmly in one simple closing line (the storybook takeaway) — the guard is against PREACHINESS (an unearned or lectured moral), never against the warm named message itself.',
     ],

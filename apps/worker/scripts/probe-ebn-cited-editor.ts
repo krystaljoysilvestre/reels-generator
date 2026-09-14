@@ -9,6 +9,8 @@ import '../src/env.js'
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { z } from 'zod'
+import type { EbnFact } from '@reels/core/prompts/story-ebn-extractor.v1'
+import type { EbnClaimWithFacts } from '@reels/core/prompts/story-ebn-writer.v1'
 
 const HARD_SPEND_CENTS = 200
 // Conservative per-call reserves include one schema-repair attempt at the configured output ceiling.
@@ -302,11 +304,11 @@ void (async () => {
     frozen: z.infer<typeof SourceRowSchema>
     bible: z.infer<typeof EvidenceBibleSchema>
     bibleHash: string
-    facts: Array<{ id: string; stance: string; weight: string; attributed_to?: string; value: string }>
+    facts: Array<Pick<EbnFact, 'id' | 'stance' | 'weight' | 'attributed_to' | 'value'>>
     criticalIds: string[]
     sourceCriticalIds: string[]
     claims: Claims
-    claimsWithFacts: Array<{ id: string; order: number; purpose: string; facts: Array<{ id: string; stance: string; attributed_to?: string; value: string }> }>
+    claimsWithFacts: EbnClaimWithFacts[]
     sourceSentences: SourceSentence[]
     brief: string
   }>()
@@ -436,6 +438,7 @@ void (async () => {
 
   const spokenWriterSystem = (context: (typeof contextByKey extends Map<string, infer V> ? V : never)) => {
     const base = buildEbnWriterPrompt({
+      language: context.row.language,
       claims: context.claimsWithFacts,
       permissions: TRUE_CRIME_PERMISSIONS,
       editorialBrief: context.brief,
@@ -578,7 +581,7 @@ claim owns a sentences array:
         provider: 'anthropic',
         maxTokens: 2000,
       }))
-      candidate.fidelity = result.data
+      candidate.fidelity = EbnFidelitySchema.parse(result.data)
       persist()
     }
     if (!candidate.ending) {

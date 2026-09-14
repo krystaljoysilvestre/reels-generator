@@ -39,7 +39,7 @@ NOTE ON OPEN QUESTIONS: It is not established in the public record whether any o
   const ex = buildEbnExtractorPrompt({ dossier: DOSSIER, subject: 'an embezzlement conviction' })
   const exRes = await llmCall({ templateVersion: STORY_EBN_EXTRACTOR_V1_VERSION, schema: EvidenceBibleSchema, system: ex.system, messages: [{ role: 'user', content: ex.userMessage }], ...anthropic, maxTokens: 2500 })
   totalCost += exRes.costCents
-  const facts = exRes.data.facts
+  const facts = EvidenceBibleSchema.parse(exRes.data).facts
   const bibleForModel = facts.map((f) => ({ id: f.id, stance: f.stance, weight: f.weight, ...(f.attributed_to ? { attributed_to: f.attributed_to } : {}), value: f.value }))
   const criticalIds = facts.filter((f) => f.weight === 'Critical').map((f) => f.id)
   const factById = new Map(facts.map((f) => [f.id, f]))
@@ -59,7 +59,8 @@ NOTE ON OPEN QUESTIONS: It is not established in the public record whether any o
   totalCost += auditRes.costCents
 
   // ── Stage 1: Planner → Narrative Claims ──────────────────────────────────────
-  const pl = buildEbnPlannerPrompt({ facts: bibleForModel, criticalIds, targetNote: 'a ~150-word recap' })
+  const language = process.env.PROBE_LANG || 'english'
+  const pl = buildEbnPlannerPrompt({ language, facts: bibleForModel, criticalIds, targetNote: 'a ~150-word recap' })
   const claimsRes = await llmCall({ templateVersion: STORY_EBN_PLANNER_V1_VERSION, schema: EbnClaimsSchema, system: pl.system, messages: [{ role: 'user', content: pl.userMessage }], ...anthropic, maxTokens: 1500 })
   totalCost += claimsRes.costCents
   const claims = claimsRes.data.claims
@@ -69,7 +70,7 @@ NOTE ON OPEN QUESTIONS: It is not established in the public record whether any o
     id: c.id, order: c.order, purpose: c.purpose,
     facts: c.evidence.map((id) => factById.get(id)).filter(Boolean).map((f) => ({ id: f!.id, stance: f!.stance, attributed_to: f!.attributed_to, value: f!.value })),
   }))
-  const wr = buildEbnWriterPrompt({ claims: claimsWithFacts, permissions: TRUE_CRIME_PERMISSIONS })
+  const wr = buildEbnWriterPrompt({ language, claims: claimsWithFacts, permissions: TRUE_CRIME_PERMISSIONS })
   const writerRes = await llmCall({ templateVersion: STORY_EBN_WRITER_V1_VERSION, schema: EbnWriterSchema, system: wr.system, messages: [{ role: 'user', content: wr.userMessage }], ...anthropic, maxTokens: 2000 })
   totalCost += writerRes.costCents
   const flatSentences = writerRes.data.narrative.flatMap((g) => g.sentences.map((s) => ({ text: s.text, claimId: g.claimId, factIds: s.factIds })))

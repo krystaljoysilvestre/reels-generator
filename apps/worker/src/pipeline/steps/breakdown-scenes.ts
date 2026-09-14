@@ -238,9 +238,10 @@ export async function breakdownScenes(reelId: string): Promise<void> {
           era: worldBible.era,
           regionDescriptor: worldBible.region,
           nicheDescription: channel.nicheDescription ?? '',
-          // Media/register genre: EBN → informational (a documentary register), not the empty `general`
-          // bucket. Identical to the old resolution for standard channels. (Hoisted: resolveMediaGenre.)
-          genreCategory: mediaGenre,
+          // Preserve the declaration in prompt context; the builder resolves the media register,
+          // including EBN → informational and explicit custom genres → neutral defaults.
+          genreCategory: effectiveGenre(reel, channel),
+          storyMode: channel.storyMode,
           aspect: platformPreset.aspect,
           narration: chapter.text,
           minScenes,

@@ -318,6 +318,7 @@ void (async () => {
 
     const write = async (requestedWords: number, previous?: z.infer<typeof EbnWriterSchema>) => {
       const base = buildEbnWriterPrompt({
+        language: row.language,
         claims: claimsWithFacts,
         permissions: TRUE_CRIME_PERMISSIONS,
         editorialBrief: brief,
@@ -381,7 +382,7 @@ SPOKEN SHORT-FORM CRAFT:
         provider: 'anthropic',
         maxTokens: 2000,
       }))
-      working.fidelity = fidelity.data
+      working.fidelity = EbnFidelitySchema.parse(fidelity.data)
       persist()
     }
     if (!working.ending) {

@@ -5,7 +5,7 @@
 import { z } from 'zod'
 import type { EbnFact } from './story-ebn-extractor.v1.js'
 
-export const STORY_EBN_PLANNER_V1_VERSION = 'story-ebn-planner.v1.3'
+export const STORY_EBN_PLANNER_V1_VERSION = 'story-ebn-planner.v1.4'
 
 export const EbnClaimsSchema = z.object({
   claims: z.array(
@@ -20,6 +20,7 @@ export const EbnClaimsSchema = z.object({
 export type EbnClaims = z.infer<typeof EbnClaimsSchema>
 
 export interface EbnPlannerVars {
+  language: string
   facts: Pick<EbnFact, 'id' | 'stance' | 'weight' | 'value' | 'attributed_to'>[]
   criticalIds: string[]
   targetNote?: string // e.g. "a ~150-word recap"
@@ -30,7 +31,7 @@ export interface EbnPlannerVars {
 }
 
 export function buildEbnPlannerPrompt(v: EbnPlannerVars): { system: string; userMessage: string } {
-  const system = `You are the PLANNER for an Evidence-Based Narrative. You are given an EVIDENCE BIBLE: a frozen table of atomic facts, each with an id, a truth stance (FACT/LIKELY/CLAIM/DISPUTED/UNKNOWN) and a weight (Critical/High/Medium/Background).
+  const system = `You are the PLANNER for an Evidence-Based Narrative. Plan a story to be narrated in ${v.language}; the source material may use a different language. You are given an EVIDENCE BIBLE: a frozen table of atomic facts, each with an id, a truth stance (FACT/LIKELY/CLAIM/DISPUTED/UNKNOWN) and a weight (Critical/High/Medium/Background).
 Your ONLY job is to choose the most compelling ORDERING of these facts into NARRATIVE CLAIMS. Rules:
 - Reference facts ONLY by their existing id. Invent NOTHING — add no fact, name, number, motive, or quote.
 - Every CRITICAL fact must be covered by at least one claim.

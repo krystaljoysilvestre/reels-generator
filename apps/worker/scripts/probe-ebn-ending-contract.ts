@@ -231,6 +231,7 @@ void (async () => {
 
     for (let run = 1; run <= RUNS; run++) {
       const basePlanner = buildEbnPlannerPrompt({
+        language: row.language,
         facts,
         criticalIds,
         targetNote: `a ~${targetWords}-word historical events story that fulfills the editorial brief`,
@@ -263,7 +264,7 @@ The contract is editorial metadata, NEVER evidence. It may only reference claim 
         maxTokens: 2400,
       }))
       const claims = planned.data.claims.sort((a, b) => a.order - b.order)
-      const contract = planned.data.endingContract
+      const contract = EndingContractSchema.parse(planned.data.endingContract)
       const claimIds = new Set(claims.map((claim) => claim.id))
       const referencedIds = [
         ...contract.resolutionClaimIds,
@@ -286,6 +287,7 @@ The contract is editorial metadata, NEVER evidence. It may only reference claim 
       }))
       const write = async (requestedWords: number, previous?: z.infer<typeof EbnWriterSchema>) => {
         const baseWriter = buildEbnWriterPrompt({
+          language: row.language,
           claims: claimsWithFacts,
           permissions: TRUE_CRIME_PERMISSIONS,
           editorialBrief: brief,
@@ -359,7 +361,7 @@ Write as natural SPOKEN ${row.language}: something a real narrator would say alo
         contractValid,
         claims,
         citationMap,
-        fidelity: fidelity.data,
+        fidelity: EbnFidelitySchema.parse(fidelity.data),
         ending: ending.data,
       })
       console.log(`[${row.title}] ${run}/${RUNS}: ${words(narration)}w · contract=${contractValid} · double=${ending.data.doubleEnding} · report=${ending.data.reportLikeClose} · fidelity=${fidelity.data.issues.length}`)
