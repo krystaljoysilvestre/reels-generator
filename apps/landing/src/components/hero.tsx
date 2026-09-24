@@ -2,8 +2,10 @@ import Image from 'next/image'
 import { CropMarks } from './crop-marks'
 import { HeroReel } from './hero-reel'
 import { ArrowRightIcon, PlayIcon } from './icons'
+import { landingAccess } from '@/lib/access'
 
 export function Hero() {
+  const { open, signupUrl } = landingAccess()
   return (
     <section className="relative z-[2] mx-auto max-w-[1220px] px-6 pb-[60px] pt-[70px] sm:px-8">
       {/* crop-marked frame around the hero */}
@@ -32,10 +34,10 @@ export function Hero() {
           </p>
           <div className="mt-[34px] flex flex-wrap items-center gap-3.5">
             <a
-              href="#access"
+              href={open ? signupUrl : '#access'}
               className="kx-btn inline-flex items-center gap-[9px] rounded-[13px] bg-brand-3 px-[26px] py-[15px] text-base font-700 shadow-[0_14px_34px_-10px_rgba(255,45,155,0.55)]"
             >
-              Request an invite <ArrowRightIcon size={17} strokeWidth={2.2} />
+              {open ? 'Start free' : 'Request an invite'} <ArrowRightIcon size={17} strokeWidth={2.2} />
             </a>
             <a
               href="#feature"

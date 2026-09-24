@@ -21,6 +21,29 @@ import { pickNextSeriesTopic, claimSeriesTopic, skipSeriesTopic, acquireEvidence
 
 export const AUTO_PRODUCE_JOB = 'auto_produce_tick'
 
+// Scheduled work has no live session. Status must be read from the account itself before paid topic
+// preparation or evidence acquisition. Admins bypass limits, never account suspension; only genuinely
+// ownerless historical channels keep their previous exemption.
+async function ownerMayProduce(userId: string | null, tag: string): Promise<boolean> {
+  if (!userId) return true
+  const usage = await getUserUsage(userId)
+  if (!usage || usage.status !== 'active') {
+    console.warn(`${tag} skipped — owner account is not active.`)
+    return false
+  }
+  if (usage.role !== 'admin') {
+    const res = checkUserLimits(usage, {
+      monthlyBudgetCents: usage.monthlyBudgetCents ?? DEFAULT_USER_LIMITS.monthlyBudgetCents,
+      dailyReelQuota: usage.dailyReelQuota ?? DEFAULT_USER_LIMITS.dailyReelQuota,
+    })
+    if (!res.ok) {
+      console.warn(`${tag} skipped — owner limit: ${res.reason}`)
+      return false
+    }
+  }
+  return true
+}
+
 // Register the repeatable tick (idempotent — BullMQ dedupes by name+pattern; re-adding on boot is safe).
 export async function registerAutoProduceSchedule(): Promise<void> {
   const q = makeQueue(QUEUE.SCHEDULER)
@@ -61,21 +84,9 @@ export async function runAutoProduceTick(): Promise<void> {
       continue
     }
 
-    // Per-user budget/quota (multi-tenant safety): skip if the channel owner is over their caps, so
-    // auto-produce can never drain a tester's wallet. Admins are unlimited.
+    // No scheduled paid preparation for a pending/suspended/missing owner or exhausted allowance.
+    if (!(await ownerMayProduce(channel.userId, tag))) continue
     if (channel.userId) {
-      const usage = await getUserUsage(channel.userId)
-      if (usage && usage.role !== 'admin') {
-        const res = checkUserLimits(usage, {
-          monthlyBudgetCents: usage.monthlyBudgetCents ?? DEFAULT_USER_LIMITS.monthlyBudgetCents,
-          dailyReelQuota: usage.dailyReelQuota ?? DEFAULT_USER_LIMITS.dailyReelQuota,
-        })
-        if (!res.ok) {
-          console.warn(`${tag} skipped — owner limit: ${res.reason}`)
-          continue
-        }
-      }
-
       // Per-user in-flight cap across ALL the owner's channels (the backlog guard above is per-channel):
       // don't let auto-produce push a user past the same concurrency ceiling the manual create path enforces.
       const [userInflight] = await db
@@ -120,6 +131,9 @@ export async function runAutoProduceTick(): Promise<void> {
         console.warn(`${tag} evidence required but no queued topic — nothing to research, skipping this tick`)
         continue
       }
+      // Topic preparation can itself take time and spend money. Re-read before the next paid action
+      // so suspension or a newly reached cap during that preparation stops evidence acquisition.
+      if (!(await ownerMayProduce(channel.userId, tag))) continue
       const evidence = await acquireEvidence(channel, pick.subject, sourcePolicy)
       if (!evidence) {
         await skipSeriesTopic(pick.topicId, 'no usable sources found')

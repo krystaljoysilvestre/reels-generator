@@ -1,5 +1,5 @@
 import { cookies } from 'next/headers'
-import { and, eq, isNull } from 'drizzle-orm'
+import { and, eq, gt, isNull, or } from 'drizzle-orm'
 import { getDb, invites, users } from '@reels/db'
 
 const INVITE_COOKIE = 'invite_token'
@@ -8,7 +8,7 @@ export type InviteRow = typeof invites.$inferSelect
 
 export async function setInviteCookie(token: string): Promise<void> {
   const jar = await cookies()
-  jar.set(INVITE_COOKIE, token, { httpOnly: true, sameSite: 'lax', path: '/', maxAge: 60 * 60 * 24 })
+  jar.set(INVITE_COOKIE, token, { httpOnly: true, secure: process.env['NODE_ENV'] === 'production', sameSite: 'lax', path: '/', maxAge: 60 * 60 * 24 })
 }
 
 export async function readInviteToken(): Promise<string | null> {
@@ -69,10 +69,14 @@ export async function consumeInviteForUser(userId: string): Promise<void> {
   // burn the invite while leaving the user stuck pending. Either both land or neither does (invite stays
   // claimable, user recoverable).
   const claimed = await db.transaction(async (tx) => {
+    // Lock the account before claiming the invitation. Existing pending creators can join too;
+    // invitation possession must never override a suspension or change an active account's role.
+    const [user] = await tx.select({ status: users.status }).from(users).where(eq(users.id, userId)).for('update')
+    if (!user || user.status !== 'pending') return false
     const [row] = await tx
       .update(invites)
       .set({ usedByUserId: userId, usedAt: new Date() })
-      .where(and(eq(invites.id, invite.id), isNull(invites.usedAt)))
+      .where(and(eq(invites.id, invite.id), isNull(invites.usedAt), isNull(invites.usedByUserId), or(isNull(invites.expiresAt), gt(invites.expiresAt, new Date()))))
       .returning({ id: invites.id })
     if (!row) return false
     await tx.update(users).set({ role: invite.role, status: 'active' }).where(eq(users.id, userId))
@@ -80,4 +84,5 @@ export async function consumeInviteForUser(userId: string): Promise<void> {
   })
   await clearInviteCookie()
   if (!claimed) return
+  console.log(`[audit] invite_accepted actor=${userId} target=${userId} invite=${invite.id}`)
 }

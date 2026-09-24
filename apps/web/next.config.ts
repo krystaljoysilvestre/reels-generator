@@ -8,6 +8,8 @@ const rootEnv = resolve(process.cwd(), '../../.env.local')
 if (existsSync(rootEnv)) config({ path: rootEnv })
 
 const nextConfig: NextConfig = {
+  // Keep acceptance builds separate from an already-running local production server.
+  distDir: process.env['NEXT_DIST_DIR'] || '.next',
   transpilePackages: ['@reels/core', '@reels/db', '@reels/providers'],
   webpack: (config) => {
     // Workspace packages use NodeNext '.js' import specifiers that resolve to '.ts' sources.

@@ -3,11 +3,12 @@ import Google from 'next-auth/providers/google'
 import Credentials from 'next-auth/providers/credentials'
 import { DrizzleAdapter } from '@auth/drizzle-adapter'
 import { getDb, users, accounts, sessions, verificationTokens } from '@reels/db'
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import bcrypt from 'bcryptjs'
 import { checkRateLimit } from '@reels/providers'
 import { consumeInviteForUser } from '@/lib/invite'
 import { ACCOUNT_UNAVAILABLE, getUserProfile, invalidateUserProfile } from '@/lib/user-profile'
+import { isOpenSignup } from '@/lib/signup-policy'
 
 const db = getDb()
 
@@ -25,15 +26,15 @@ export const authConfig: NextAuthConfig = {
   trustHost: true,
   pages: { signIn: '/signin' },
   providers: [
-    // Google verifies emails, so linking a Google login to an existing same-email account (e.g. the
-    // seeded admin, or someone who first signed up with a password) is safe here.
-    Google({ allowDangerousEmailAccountLinking: true }),
+    // Never silently link a password account: an unverified registrant may have claimed this email.
+    Google,
     Credentials({
       credentials: { email: {}, password: {} },
       authorize: async (creds) => {
-        const email = (creds?.email as string | undefined)?.toLowerCase().trim()
-        const password = creds?.password as string | undefined
-        if (!email || !password) return null
+        const email = typeof creds?.email === 'string' ? creds.email.toLowerCase().trim() : ''
+        const password = typeof creds?.password === 'string' ? creds.password : ''
+        // Keep existing passwords usable; new/reset passwords apply the stricter bcrypt byte limit.
+        if (!email || email.length > 254 || !password || password.length > 200) return null
         // Brute-force guard: cap attempts per email per 15-min window BEFORE the expensive bcrypt compare.
         // Over-limit returns null (a generic auth failure), so it neither confirms the email nor burns CPU.
         const rl = await checkRateLimit(`signin:email:${email}`, 8, 15 * 60 * 1000)
@@ -44,15 +45,25 @@ export const authConfig: NextAuthConfig = {
         if (!ok) return null
         // Access gating (pending/suspended) happens in requireAuth via the fresh DB read in the
         // session callback — authorize only proves the credentials are correct.
-        return { id: row.id, email: row.email, name: row.name, role: row.role, status: row.status }
+        return { id: row.id, email: row.email, name: row.name, role: row.role, status: row.status, authVersion: row.authVersion }
       },
     }),
   ],
   callbacks: {
+    signIn: async ({ account, profile }) => {
+      if (account?.provider === 'google' && profile?.email_verified !== true) return false
+      return true
+    },
     // Keep the JWT lean: identity only. role/status are read fresh from the DB in `session` so that
     // an admin approving/suspending/re-roling a user takes effect on their next request.
     jwt: async ({ token, user }) => {
-      if (user?.id) token.uid = user.id
+      if (user?.id) {
+        token.uid = user.id
+        // OAuth adapter users include app fields. Read the row when an adapter only returns its
+        // standard shape; never reset a recovered account's version to zero on Google sign-in.
+        const version = user.authVersion ?? (await db.select({ version: users.authVersion }).from(users).where(eq(users.id, user.id)))[0]?.version
+        token.authVersion = version ?? 0
+      }
       return token
     },
     session: async ({ session, token }) => {
@@ -72,22 +83,28 @@ export const authConfig: NextAuthConfig = {
         return session
       }
       if (profile === 'missing') {
+        session.user.id = ''
         session.user.role = 'tester'
         session.user.status = 'pending'
+        return session
+      }
+      if ((token.authVersion ?? 0) !== profile.authVersion) {
+        session.user.id = ''
+        session.user.role = 'tester'
+        session.user.status = 'revoked'
         return session
       }
       session.user.role = profile.role
       session.user.status = profile.status
       // Display name + avatar are read the same way, so the profile backfill below (or a changed
       // Google photo) shows up on the next request instead of the next login.
-      if (profile.name) session.user.name = profile.name
+      session.user.name = profile.name
       if (profile.image) session.user.image = profile.image
       return session
     },
   },
   events: {
-    // A brand-new OAuth (Google) user is created here by the adapter with defaults (tester/pending).
-    // If they arrived through a valid invite link, upgrade them to the invite's role + active.
+    // The provider's verified-email claim is checked above before account creation.
     createUser: async ({ user }) => {
       if (!user?.id) return
       await consumeInviteForUser(user.id)
@@ -95,19 +112,23 @@ export const authConfig: NextAuthConfig = {
     },
     signIn: async ({ user, account, profile }) => {
       if (!user?.id) return
-      const patch: { lastSeenAt: Date; name?: string; image?: string } = { lastSeenAt: new Date() }
-      // Linking an OAuth account to an existing row (allowDangerousEmailAccountLinking, above) does
-      // NOT refresh that row's profile fields — a seeded admin keeps its placeholder name and has no
-      // avatar. Nothing in the app lets a user set either field, so the verified provider profile is
-      // our only source: sync it on every OAuth sign-in.
+      await consumeInviteForUser(user.id)
+      const patch: { lastSeenAt: Date; image?: string; emailVerified?: Date } = { lastSeenAt: new Date() }
+      // Preserve the creator's chosen display name; provider photos can still refresh.
       if (account?.type === 'oauth' || account?.type === 'oidc') {
         const p = profile as { name?: unknown; picture?: unknown; image?: unknown } | undefined
-        const name = typeof p?.name === 'string' ? p.name.trim() : ''
         const image = typeof p?.picture === 'string' ? p.picture : typeof p?.image === 'string' ? p.image : ''
-        if (name) patch.name = name
         if (image) patch.image = image
+        if (account.provider === 'google' && profile?.email_verified === true) patch.emailVerified = new Date()
       }
       await db.update(users).set(patch).where(eq(users.id, user.id))
+      if (isOpenSignup()) {
+        const [current] = await db.select({ emailVerified: users.emailVerified }).from(users).where(eq(users.id, user.id))
+        if (current?.emailVerified) {
+          const activated = await db.update(users).set({ status: 'active' }).where(and(eq(users.id, user.id), eq(users.status, 'pending'))).returning({ id: users.id })
+          if (activated.length) console.log(`[audit] early_access_activated actor=${user.id} target=${user.id}`)
+        }
+      }
       invalidateUserProfile(user.id) // name/image may have just changed; show them this request
     },
   },

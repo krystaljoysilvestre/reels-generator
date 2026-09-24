@@ -6,16 +6,22 @@ import { z } from 'zod'
 import { checkRateLimit } from '@reels/providers'
 import { consumeInviteForUser } from '@/lib/invite'
 import { clientIp } from '@/lib/request'
+import { isOpenSignup } from '@/lib/signup-policy'
+import { isAccountEmailConfigured, sendAccountEmail } from '@/lib/account-email'
+import { accountPasswordSchema, issueAccountToken } from '@/lib/account-tokens'
 
 // Email/password sign-up. Creates a pending user (or active, if a valid invite cookie is present),
 // then the client signs them in via the credentials provider.
 const Schema = z.object({
   name: z.string().trim().min(1).max(80).optional(),
-  email: z.string().email(),
-  password: z.string().min(8, 'Password must be at least 8 characters').max(200),
+  email: z.string().trim().email().max(254),
+  password: accountPasswordSchema,
 })
 
 export async function POST(req: NextRequest) {
+  if (isOpenSignup() && !isAccountEmailConfigured()) {
+    return NextResponse.json({ error: 'Email signup is unavailable right now. Please use Google to join.' }, { status: 503 })
+  }
   // Brute-force / mass-signup guard: cap sign-up attempts per IP per hour. Fail-open if Redis is down.
   const rl = await checkRateLimit(`register:ip:${clientIp(req)}`, 10, 60 * 60 * 1000)
   if (!rl.ok) {
@@ -54,6 +60,20 @@ export async function POST(req: NextRequest) {
     throw err
   }
 
-  if (created?.id) await consumeInviteForUser(created.id)
-  return NextResponse.json({ ok: true })
+  if (!created) return NextResponse.json({ error: 'Could not create your account. Please try again.' }, { status: 503 })
+  await consumeInviteForUser(created.id)
+  let verificationSent = false
+  if (isAccountEmailConfigured()) {
+    try {
+      const token = await issueAccountToken(created.id, 'verify')
+      await sendAccountEmail(email, 'verify', token)
+      verificationSent = true
+    } catch {
+      // The account exists. Let the creator sign in and resend from the waiting screen rather
+      // than retrying registration into a duplicate-account error. Never log the email/token.
+      console.error(`[register] verification delivery failed user=${created.id}`)
+    }
+  }
+  console.log(`[audit] account_created actor=${created.id} target=${created.id}`)
+  return NextResponse.json({ ok: true, verificationSent })
 }

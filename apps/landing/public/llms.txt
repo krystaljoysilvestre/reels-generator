@@ -16,13 +16,17 @@ Kendrix is built for independent creators making story-driven video — horror, 
 history and documentary, education, and other narrative genres — who publish consistently and want
 to stay in creative control. It's designed around one person doing the whole job, not a team.
 
-As of August 2026, Kendrix is in development and not publicly available. Access is invite-only;
-request one from the homepage.
+Kendrix is in free early access while the storytelling workflow is being improved. No payment
+card is required; production limits apply. The signup page shows current availability: creators
+can join directly when signup is open, or request access while invitations are being managed.
 
 ## Pages
 
 - [Homepage](https://kendrix.io/): overview, process, genres, FAQ, and how to request access.
+- [Signup](https://app.kendrix.io/signup): current early-access availability and account creation.
+- [Sign in](https://app.kendrix.io/signin): return to your studio.
+- [Guide](https://app.kendrix.io/help): channel setup through story, storyboard, production and export.
 - [About](https://kendrix.io/about): what Kendrix is, who it's for, and its current stage.
 - [Contact](https://kendrix.io/contact): reach the studio directly.
 - [Privacy](https://kendrix.io/privacy): what Kendrix collects and why.
-- [Terms](https://kendrix.io/terms): terms for using Kendrix during its invite-only beta.
+- [Terms](https://kendrix.io/terms): terms for using Kendrix during early access.

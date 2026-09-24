@@ -1,4 +1,5 @@
 import { FaqStructuredData } from './structured-data'
+import { landingAccess } from '@/lib/access'
 
 /**
  * Second takes. Every answer opens by naming the subject in its first sentence, deliberately —
@@ -18,7 +19,7 @@ import { FaqStructuredData } from './structured-data'
 const QA: Array<{ q: string; a: string }> = [
   {
     q: 'What is Kendrix?',
-    a: 'Kendrix is a storytelling operating system for independent video creators — an opinionated workflow that turns one idea into a finished, narrated video. AI does the production work; the creator directs the story and approves what ships.',
+    a: 'Kendrix is a storytelling operating system for independent video creators — an opinionated workflow that turns one idea into a finished, narrated video. AI does the production work; the creator directs the story and chooses how closely to review it.',
   },
   {
     q: 'Who is Kendrix for?',
@@ -30,15 +31,15 @@ const QA: Array<{ q: string; a: string }> = [
   },
   {
     q: 'Does Kendrix use AI?',
-    a: 'Yes — AI models handle the production work: writing, imagery, narration and sound. It’s an implementation detail, not the product itself. The creative decisions and the final approval before anything publishes stay with the creator.',
+    a: 'Yes — AI models handle the production work: writing, imagery, narration and sound. It’s an implementation detail, not the product itself. You choose the creative direction and review level. Automatic YouTube publishing only runs when you enable it for a connected channel.',
   },
   {
     q: 'How is Kendrix different from an AI video generator?',
-    a: 'Most AI video tools optimize for generating output quickly. Kendrix optimizes for the story: a quality gate on the writing, a story bible that keeps characters and world consistent across scenes, and a human approval step before anything publishes. The video is the output of that workflow, not the product’s identity.',
+    a: 'Most AI video tools optimize for generating output quickly. Kendrix optimizes for the story: a quality gate on the writing, a story bible that keeps characters and world consistent across scenes, and review points you can choose for your channel. The video is the output of that workflow, not the product’s identity.',
   },
   {
     q: 'Do I need video editing experience to use Kendrix?',
-    a: 'No. Kendrix handles the production crafts — writing, storyboarding, narration, sound and assembly — so there’s no timeline to scrub. What it asks of you is judgment: review the story, steer any scene you want changed, and approve the cut before it publishes.',
+    a: 'No. Kendrix handles the production crafts — writing, storyboarding, narration, sound and assembly — so there’s no timeline to scrub. You can review the story, steer any scene you want changed, and check the finished cut. Your channel’s review settings decide where the workflow pauses for you.',
   },
   {
     q: 'Can I edit what Kendrix makes?',
@@ -74,14 +75,20 @@ const QA: Array<{ q: string; a: string }> = [
   },
   {
     q: 'Will YouTube demonetize videos made with Kendrix?',
-    a: 'YouTube’s inauthentic content policy demonetizes mass-produced or repetitive videos with only superficial differences between them — and it explicitly permits AI-assisted content that carries real human judgment. Kendrix is built for the second kind: every story is graded before you see it, and nothing publishes without your approval. We run our own channels on Kendrix under exactly the same rules.',
+    a: 'YouTube’s inauthentic content policy demonetizes mass-produced or repetitive videos with only superficial differences between them — and it explicitly permits AI-assisted content that carries real human judgment. Kendrix is built for the second kind: every story is graded before you see it, and you choose your channel’s review level. Automatic YouTube publishing requires a connected channel and your explicit choice to enable it. We run our own channels on Kendrix under exactly the same rules.',
   },
 ]
 
 export function Faq() {
+  const { open } = landingAccess()
+  const questions = QA.map((item) => item.q === 'Is Kendrix available yet?' && open
+    ? { ...item, a: 'Kendrix is open for free early access. Choose Start free to create an account, set up your channel and make your first reel. No payment card is required; production limits apply while we improve the studio.' }
+    : item.q === 'What does Kendrix cost?'
+      ? { ...item, a: 'Kendrix is free during early access, with production limits and no payment card required. Amounts shown while making a reel track production usage, not charges to you. Pricing after early access has not been set.' }
+      : item)
   return (
     <section id="faq" className="relative z-[2] mx-auto max-w-[1220px] px-6 pb-10 pt-[60px] sm:px-8">
-      <FaqStructuredData items={QA} />
+      <FaqStructuredData items={questions} />
       <div className="mb-10 text-center">
         <div className="eyebrow">Second takes · common questions about Kendrix</div>
         <h2 className="mt-3 text-[34px] font-800 tracking-[-0.03em] sm:text-[44px]">
@@ -89,7 +96,7 @@ export function Faq() {
         </h2>
       </div>
       <div className="mx-auto grid max-w-[960px] gap-4 md:grid-cols-2">
-        {QA.map(({ q, a }, i) => (
+        {questions.map(({ q, a }, i) => (
           <div key={q} className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
             <div className="flex items-baseline gap-[11px]">
               <span className="mono flex-shrink-0 text-[13px] text-brand-purple">Q{i + 1}</span>

@@ -14,9 +14,26 @@ sequenced this way — lives in `dna/company/roadmap.md` (company DNA starts at
 
 ---
 
-## Now — exit Phase 0 through the product, not the terminal (2026-09-01, updated 2026-09-04)
+## Now — complete the free early-access journey (2026-09-24)
 
-Everything below this section is backlog. This is the only active item.
+**Founder direction:** finish the journey for future subscribers so signup can open, then return to story,
+visual and audio polish. The founder selected **free early access first**, without checkout or a paid plan.
+This is the active implementation priority. The historical Phase 0 evidence below remains relevant to the
+required deployed production lap; this change does not assert that its missing proof has passed.
+
+- Implemented locally: verified self-service signup behind `SIGNUP_MODE=open`, safe Google sign-in,
+  verification/password recovery and session revocation, existing-account invite acceptance, account/profile
+  and usage, first-reel guide, draft ownership enforcement, capped-but-downloadable exports, and suspended-owner
+  spending protection. The marketing site's open mode links to the studio signup instead of the waitlist.
+- Existing default remains approval-based access. No production setting or deployment changed.
+- Acceptance and remaining configuration: `specs/early-access-journey.md` and `specs/early-access-launch.md`.
+- Before opening: deploy the reviewed build and migration, configure/verify account email and Google,
+  align both signup switches, define the free-access spend ceilings and support procedure, then complete
+  one fresh non-admin journey through export on the deployed app.
+
+## Previous acceptance sprint — exit Phase 0 through the product (2026-09-01, updated 2026-09-04)
+
+Historical acceptance evidence and remaining production proof follow; the active priority is above.
 
 **Founder decision 2026-09-01:** Crossroads reel #5 is frozen. Run a **ten-working-day Phase 0 exit sprint**.
 Four retained publishes are enough to establish repeated creative production provisionally; the unresolved blocker

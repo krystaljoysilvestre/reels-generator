@@ -18,7 +18,7 @@ import { edgeAuth } from '@/auth.edge'
 // lands without putting a JWT decode on every page render.
 
 // Login, self-signup, and the detail-free supervisor probe must stay reachable without a session.
-const PUBLIC_API = [/^\/api\/auth(\/|$)/, /^\/api\/register(\/|$)/, /^\/api\/health$/]
+const PUBLIC_API = [/^\/api\/auth(\/|$)/, /^\/api\/register\/?$/, /^\/api\/health$/, /^\/api\/account\/(forgot-password|reset-password|verify-email)\/?$/]
 
 // auth.js session cookie: "authjs.session-token" (http/dev) or "__Secure-authjs.session-token" (https).
 const SESSION_COOKIE_NAMES = ['authjs.session-token', '__Secure-authjs.session-token']

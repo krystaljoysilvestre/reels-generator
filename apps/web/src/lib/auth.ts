@@ -44,6 +44,7 @@ export async function requireUser(): Promise<SessionUser> {
   const u = await getCurrentUser()
   if (!u) redirect('/signin')
   assertAccountReadable(u.status)
+  if (u.status !== 'active') redirect('/pending')
   return u
 }
 

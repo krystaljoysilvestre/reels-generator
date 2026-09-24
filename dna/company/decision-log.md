@@ -1312,6 +1312,36 @@ ARCHITECTURE.md
 ---
 
 
+### 2026-09-24-001
+
+**Status:** Proposed — implementation ready for founder review; production opening remains gated.
+
+**Title:** Complete the creator journey with free early access before further generation polish.
+
+**Founder direction recorded:** Prioritize the whole journey for potential subscribers so signup can open;
+the founder explicitly selected free early access first. No paid plan, price or phase advancement is inferred.
+
+**Implementation:** Prepare verified signup, account recovery, account/usage and help, correct draft ownership
+and export-at-limit failures, preserve suspension across paid background work, and align marketing entry points
+with the studio's explicit signup mode. Keep approval mode as the default until deployment acceptance.
+
+**Evidence:** Product/technical review found stuck pending accounts, no recovery, unsafe same-email OAuth
+linking, foreign draft access and finished downloads blocked by spend limits. These failures directly prevent
+a creator from entering, returning to, or completing the existing workflow.
+
+**Alternatives:** Billing now was deferred by the founder's free-access choice. Continuing generation polish
+first would leave these journey failures unresolved. Existing generation work remains preserved.
+
+**Expected impact:** Improve activation and first-export completion; revenue stays unchanged. Added account
+security and transactional-email operations have an explicit maintenance cost.
+
+**Review trigger:** A fresh non-admin completes signup through export on the deployed acceptance build;
+then review opening configuration and observed creator return/completion before monetization.
+
+**Related:** `ROADMAP.md`, `specs/early-access-journey.md`, `specs/early-access-launch.md`.
+
+---
+
 ## Relationship to the Decision Framework
 
 The Decision Framework explains how decisions are made.

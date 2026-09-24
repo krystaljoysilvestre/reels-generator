@@ -1,4 +1,5 @@
 import { eq, and, sql } from 'drizzle-orm'
+import { UnrecoverableError } from 'bullmq'
 import { getDb, getGlobalSpendTodayCents, getReelOwnerUsage } from '@reels/db'
 import { pipelineSteps, reels, channels } from '@reels/db'
 import { spendFromError } from '@reels/providers'
@@ -79,6 +80,13 @@ export async function runStep<T>(
   // long-form or all-animated reel gets proportionate headroom (a flat $8 stranded an 85s animated reel
   // one scene short — 2026-07-24). Still a bounded runaway-spend backstop (budgetCapForSeconds caps it).
   if (ctx.spendsProviderMoney !== false) {
+    // Queue jobs can outlive the session that created them. Read the owner's current account status
+    // before any paid callback, even for admins; role bypasses quota, never suspension. Null owner
+    // remains the documented historical-channel exemption, not a missing referenced account.
+    const owner = await getReelOwnerUsage(ctx.reelId)
+    if (owner && owner.status !== 'active') {
+      throw new UnrecoverableError('Production is paused because the channel owner’s account is not active.')
+    }
     let cap = ctx.budgetCap
     if (cap == null) {
       const channel = await db.query.channels.findFirst({ where: eq(channels.id, reel.channelId), columns: { targetSeconds: true } })
@@ -90,7 +98,6 @@ export async function runStep<T>(
     // pass at $0, then accrue in parallel past the cap. Re-check the owner's month-to-date spend before
     // each paid step; terminal once reached, so the owner's remaining in-flight reels stop too. Admins are
     // exempt; owner-less legacy reels (null owner) return null and skip the check.
-    const owner = await getReelOwnerUsage(ctx.reelId)
     if (owner && owner.role !== 'admin') {
       assertUserBudget(owner.spendCentsThisMonth, owner.monthlyBudgetCents ?? DEFAULT_USER_LIMITS.monthlyBudgetCents)
     }

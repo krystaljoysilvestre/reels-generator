@@ -1,12 +1,14 @@
 'use client'
 import { signIn } from 'next-auth/react'
+import { useState } from 'react'
+import Link from 'next/link'
 import { KendrixMark, Wordmark } from '@/components/Wordmark'
 
 /** The four capability marks on the auth brand panel — one per gradient hue. */
 const FEATURES: Array<{ hue: string; label: [string, string]; path: React.ReactNode }> = [
   {
     hue: '#2FA4FF',
-    label: ['AI story', 'generation'],
+    label: ['Story', 'development'],
     path: <path d="M15 4V2M15 16v-2M8 9h2M20 9h2M17.8 11.8 19 13M15 9h.01M17.8 6.2 19 5M3 21l9-9M12.2 6.2 11 5" />,
   },
   {
@@ -34,7 +36,7 @@ const FEATURES: Array<{ hue: string; label: [string, string]; path: React.ReactN
   },
   {
     hue: '#FF9A3D',
-    label: ['Publish', 'everywhere'],
+    label: ['Ready', 'to export'],
     path: <path d="M22 2 11 13M22 2l-7 20-4-9-9-4z" />,
   },
 ]
@@ -54,7 +56,7 @@ export function AuthShell({
       <div className="relative hidden min-w-0 flex-col justify-between overflow-hidden bg-night-800 px-14 py-14 lg:flex lg:flex-[1.15]">
         <div className="brand-glow pointer-events-none absolute inset-0" />
 
-        <Wordmark size={38} textClass="text-[22px]" onDark className="relative" />
+        <Link href="/" className="relative"><Wordmark size={38} textClass="text-[22px]" onDark /></Link>
 
         <div className="relative my-5 max-w-[560px]">
           <KendrixMark
@@ -68,13 +70,13 @@ export function AuthShell({
           </h1>
           <p className="mt-5 max-w-[460px] text-[17px] leading-relaxed text-night-body">
             Kendrix turns a single idea into publish-ready vertical video — story, storyboard,
-            visuals, voice and sound — then ships it everywhere.
+            visuals, voice and sound. Review it, then download it to share.
           </p>
           <p className="mt-6 text-[13px] font-700 uppercase tracking-[0.18em]">
             <span className="text-brand-blue">Imagine.</span>{' '}
             <span className="text-brand-purple">Create.</span>{' '}
             <span className="text-brand-pink">Publish.</span>{' '}
-            <span className="text-brand-orange">Scale.</span>
+            <span className="text-brand-orange">Share.</span>
           </p>
         </div>
 
@@ -103,13 +105,18 @@ export function AuthShell({
       <div className="flex w-full items-center justify-center border-l border-white/[0.06] bg-night-700 px-6 py-10 lg:w-auto lg:min-w-[440px] lg:flex-[0.85]">
         <div className="w-full max-w-[360px]">
           {/* The brand panel is hidden on small screens, so carry the lockup here. */}
-          <Wordmark size={30} textClass="text-lg" onDark className="mb-8 lg:hidden" />
+          <Link href="/" className="mb-8 block lg:hidden"><Wordmark size={30} textClass="text-lg" onDark /></Link>
 
           <div className="mb-7">
             <h2 className="text-[26px] font-700 -tracking-[0.02em]">{title}</h2>
             <p className="mt-2 text-sm text-night-muted">{subtitle}</p>
           </div>
           {children}
+          <nav aria-label="Support and policies" className="mt-8 flex justify-center gap-5 text-xs text-night-muted">
+            <a href="https://kendrix.io/contact" className="hover:text-white">Contact</a>
+            <a href="https://kendrix.io/privacy" className="hover:text-white">Privacy</a>
+            <a href="https://kendrix.io/terms" className="hover:text-white">Terms</a>
+          </nav>
         </div>
       </div>
     </div>
@@ -117,10 +124,19 @@ export function AuthShell({
 }
 
 export function GoogleButton({ label }: { label: string }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(false)
   return (
+    <>
     <button
       type="button"
-      onClick={() => signIn('google', { callbackUrl: '/dashboard' })}
+      disabled={busy}
+      onClick={async () => {
+        setBusy(true)
+        setError(false)
+        try { await signIn('google', { callbackUrl: '/dashboard' }) }
+        catch { setError(true); setBusy(false) }
+      }}
       className="flex w-full items-center justify-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-3.5 py-3 text-sm font-600 text-night-ink transition-colors hover:border-white/20 hover:bg-white/[0.07]"
     >
       <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden>
@@ -129,8 +145,10 @@ export function GoogleButton({ label }: { label: string }) {
         <path fill="#FBBC05" d="M5.84 14.1a6.6 6.6 0 0 1 0-4.2V7.06H2.18a11 11 0 0 0 0 9.88l3.66-2.84Z" />
         <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1A11 11 0 0 0 2.18 7.06l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38Z" />
       </svg>
-      {label}
+      {busy ? 'Connecting…' : label}
     </button>
+    {error && <p role="alert" className="mt-2 text-xs text-night-danger">Could not connect to Google. Please try again.</p>}
+    </>
   )
 }
 

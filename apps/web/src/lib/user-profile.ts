@@ -1,35 +1,17 @@
 import { eq } from 'drizzle-orm'
 import { getDb, users } from '@reels/db'
 
-// The account fields authentication needs on every request: what this user may do (role), whether
-// they may do anything at all (status), and how they are shown (name/image).
-//
-// Why this sits behind a cache rather than a plain query in the session callback:
-//
-// role/status are deliberately NOT carried in the JWT — an admin approving, suspending or re-roling
-// someone has to take effect on their next request, not their next login. That correctly put a users
-// read on every request, but it also put the database on the critical path of authentication, and
-// @auth/core treats a session callback that throws as "there is no session" (it logs a JWTSessionError
-// and returns an empty body). So a database that was merely out of connections did not report itself
-// as a database problem: it silently logged the creator out mid-flow.
-//
-// Two changes fix that without giving up freshness:
-//   1. A short TTL takes the read off the per-request path. Admin writes invalidate this directly
-//      (see api/admin/users/[id]), so approve/suspend stays immediate for the action that matters;
-//      the TTL only bounds changes made outside the app, e.g. straight against the database.
-//   2. A read that FAILS falls back to the last known profile, so a blip cannot end a valid session.
-//      With nothing cached to fall back on we return ACCOUNT_UNAVAILABLE, which the gates turn into
-//      a 503 — an honest "we cannot reach your account" instead of a 401 that blames the creator's
-//      credentials and sends them to a sign-in page that fixes nothing.
-//
-// The cache is per process. A second web instance can lag an admin write by up to the TTL, which is
-// the same staleness window the TTL already allows, so nothing new rests on it.
+// Session authorization is read from the account, with a 30-second per-process cache.
+// Account mutations invalidate locally; other instances converge within that window.
+// After the TTL, a failed read fails closed as ACCOUNT_UNAVAILABLE. Reusing expired
+// authorization indefinitely could revive suspended accounts or recovered sessions.
 
 export type UserProfile = {
   role: string
   status: string
   name: string | null
   image: string | null
+  authVersion: number
 }
 
 // A session that is cryptographically valid but whose account we could not read. Distinct from every
@@ -71,7 +53,7 @@ export async function getUserProfile(userId: string): Promise<UserProfile | 'mis
 
   try {
     const row = await getDb()
-      .select({ role: users.role, status: users.status, name: users.name, image: users.image })
+      .select({ role: users.role, status: users.status, name: users.name, image: users.image, authVersion: users.authVersion })
       .from(users)
       .where(eq(users.id, userId))
       .then((r) => r[0])
@@ -84,19 +66,13 @@ export async function getUserProfile(userId: string): Promise<UserProfile | 'mis
       status: row.status,
       name: row.name ?? null,
       image: row.image ?? null,
+      authVersion: row.authVersion,
     }
     if (cache.size >= MAX_ENTRIES) prune(now)
     cache.set(userId, { readAt: now, profile })
     return profile
   } catch (e) {
-    // Expired-but-present beats ending a valid session over one failed read — but log it, or the
-    // cache silently masks a failing database for as long as people keep making requests, which is
-    // the same invisibility this module exists to remove.
-    if (cached) {
-      console.warn('[auth] users lookup failed; serving a stale cached profile', e)
-      return cached.profile
-    }
-    console.error('[auth] users lookup failed and no cached profile to fall back on', e)
+    console.error('[auth] account lookup failed; authorization unavailable', e)
     return ACCOUNT_UNAVAILABLE
   }
 }

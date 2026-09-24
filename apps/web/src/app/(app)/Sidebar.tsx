@@ -22,6 +22,26 @@ const items: Item[] = [
       </svg>
     ),
   },
+  {
+    href: '/account',
+    label: 'Account',
+    match: '/account',
+    icon: (active) => (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={STROKE(active)} strokeWidth={active ? 1.9 : 1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <circle cx="12" cy="8" r="4" /><path d="M4 21v-2a8 8 0 0 1 16 0v2" />
+      </svg>
+    ),
+  },
+  {
+    href: '/help',
+    label: 'Help & guide',
+    match: '/help',
+    icon: (active) => (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={STROKE(active)} strokeWidth={active ? 1.9 : 1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <circle cx="12" cy="12" r="9" /><path d="M9.5 9a2.5 2.5 0 1 1 4.5 1.5c-1 1-2 1-2 3M12 17h.01" />
+      </svg>
+    ),
+  },
 ]
 
 const ADMIN_ITEM: Item = {
@@ -147,11 +167,13 @@ export function Sidebar({
 
       {/* Operator footer */}
       <div className="mt-2 flex items-center gap-2.5 border-t border-border-soft px-1.5 pb-0.5 pt-3">
-        <Avatar label={userLabel} image={userImage} size={30} textClass="text-[12px]" />
-        <div className="min-w-0 flex-1 leading-tight">
-          <p className="truncate text-[13px] font-600 text-ink">{userLabel}</p>
-          <p className="truncate text-[11px] text-faint">{isAdmin ? 'Admin' : 'Creator'}</p>
-        </div>
+        <Link href="/account" onClick={() => onNavigate?.()} aria-label="Open your account" className="flex min-w-0 flex-1 items-center gap-2.5 rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent">
+          <Avatar label={userLabel} image={userImage} size={30} textClass="text-[12px]" />
+          <div className="min-w-0 flex-1 leading-tight">
+            <p className="truncate text-[13px] font-600 text-ink">{userLabel}</p>
+            <p className="truncate text-[11px] text-faint">{isAdmin ? 'Admin' : 'Free early access'}</p>
+          </div>
+        </Link>
         <button
           type="button"
           onClick={() => signOut({ callbackUrl: '/signin' })}
