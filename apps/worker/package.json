@@ -7,6 +7,7 @@
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
     "smoke": "tsx src/smoke-test.ts",
+    "pilot:publishing": "tsx src/publishing/post-for-me-pilot-cli.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "typecheck:story-probes": "tsc -p tsconfig.story-probes.json",

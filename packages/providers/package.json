@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./post-for-me": "./src/post-for-me/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
