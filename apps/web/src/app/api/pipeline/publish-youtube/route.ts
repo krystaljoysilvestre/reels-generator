@@ -2,17 +2,21 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { eq, and } from 'drizzle-orm'
 import { getDb, reels, channels, assets, publications, sceneImageOrigins, resolveYouTubeAuth, markConnectionError, visualTruthBlockers } from '@reels/db'
-import { transition, PostMetaSchema, formatPostCaption, formatImageCredits, StoryBibleSchema, resolveSidecarSrt } from '@reels/core'
+import { transition, canTransition, PostMetaSchema, formatPostCaption, formatImageCredits, StoryBibleSchema, resolveSidecarSrt } from '@reels/core'
 import { downloadBuffer, uploadToYouTube, toElevenLabsLang } from '@reels/providers'
 import { requireReelOwner } from '@/lib/api-access'
+import { z } from 'zod'
+
+const RequestSchema = z.object({ reelId: z.string().uuid() })
 
 // Post an approved reel straight to YouTube using the CHANNEL's own connection (the manual zip flow is
 // untouched when the channel isn't connected). Uploads the render with the reel's post package as title/description,
 // records the yt publications row, and marks the reel published. The worker's auto-publish path
 // (auto-gate) mirrors this — keep the two in sync.
 export async function POST(req: NextRequest) {
-  const { reelId } = (await req.json().catch(() => ({}))) as { reelId?: string }
-  if (!reelId) return NextResponse.json({ error: 'reelId is required' }, { status: 400 })
+  const parsed = RequestSchema.safeParse(await req.json().catch(() => null))
+  if (!parsed.success) return NextResponse.json({ error: 'Choose a valid reel.' }, { status: 400 })
+  const { reelId } = parsed.data
 
   const gate = await requireReelOwner(reelId)
   if (gate instanceof NextResponse) return gate
@@ -24,9 +28,13 @@ export async function POST(req: NextRequest) {
   if (truthBlockers.length > 0) {
     return NextResponse.json({ error: 'Fix the flagged visual-truth scenes before publishing.', blockers: truthBlockers }, { status: 409 })
   }
-  const auth = await resolveYouTubeAuth(reel.channelId)
-  if (!auth) {
-    return NextResponse.json({ error: 'Connect this channel to YouTube first.' }, { status: 409 })
+  // A completed upload is a read-only result, even after a YouTube-only reel became published or
+  // its connection was removed. Keep ownership, truth and approval gates ahead of this retry path.
+  const existingYt = await db.query.publications.findFirst({
+    where: and(eq(publications.reelId, reelId), eq(publications.platform, 'yt')),
+  })
+  if (existingYt?.platformPostId && (reel.status === 'published' || canTransition(reel.status, 'published'))) {
+    return NextResponse.json({ ok: true, videoUrl: `https://youtu.be/${existingYt.platformPostId}`, already: true })
   }
 
   // Publishing is allowed only from approved/scheduled (same rule as mark-published).
@@ -36,12 +44,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Cannot publish a reel in '${reel.status}'` }, { status: 409 })
   }
 
-  // Already on YouTube? Don't double-upload (a retry after a slow response would duplicate the video).
-  const existingYt = await db.query.publications.findFirst({
-    where: and(eq(publications.reelId, reelId), eq(publications.platform, 'yt')),
-  })
-  if (existingYt?.platformPostId) {
-    return NextResponse.json({ ok: true, videoUrl: `https://youtu.be/${existingYt.platformPostId}`, already: true })
+  const auth = await resolveYouTubeAuth(reel.channelId)
+  if (!auth) {
+    return NextResponse.json({ error: 'Connect this channel to YouTube first.' }, { status: 409 })
   }
 
   const renderAsset = await db.query.assets.findFirst({

@@ -538,19 +538,23 @@ export function StoryboardEditor({
   async function handlePublish() {
     setLoading('publish')
     setError(null)
-    const res = await fetch('/api/pipeline/mark-published', {
-      method: 'POST',
-      body: JSON.stringify({ reelId: reel.id }),
-      headers: { 'Content-Type': 'application/json' },
-    })
-    if (!res.ok) {
+    try {
+      const res = await fetch('/api/pipeline/mark-published', {
+        method: 'POST',
+        body: JSON.stringify({ reelId: reel.id }),
+        headers: { 'Content-Type': 'application/json' },
+      })
+      if (!res.ok) {
+        setError(await failMessage(res, 'Could not mark this reel published.'))
+        return
+      }
+      toast('Published.', 'success')
+      router.refresh()
+    } catch {
+      setError('Could not confirm publication. Check your connection and try again.')
+    } finally {
       setLoading(null)
-      setError(await failMessage(res, 'Could not mark this reel published.'))
-      return
     }
-    setLoading(null)
-    toast('Published.', 'success')
-    router.refresh()
   }
 
   // Recover a hard-failed reel: re-run the failed step (prior steps are cached) and resume the chain.

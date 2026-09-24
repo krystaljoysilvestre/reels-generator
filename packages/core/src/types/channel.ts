@@ -630,6 +630,14 @@ export type PostingRules = z.infer<typeof PostingRulesSchema>
 export const UNSHIPPED_REEL_STATUSES = [
   'drafting', 'story_review', 'storyboard', 'rendering', 'render_qa', 'spot_check', 'approved',
 ] as const
+
+// A creator's production slots count unfinished work across their channels. Approval releases a slot
+// even when the creator downloads the result without posting it. Keep this separate from the automatic
+// channel backlog above, which deliberately includes approved reels waiting to be shipped.
+export const IN_PROGRESS_REEL_STATUSES = [
+  'drafting', 'story_review', 'bible_review', 'storyboard', 'rendering', 'render_qa', 'spot_check',
+] as const
+
 export function autoProduceBacklogCap(reelsPerDay: number): number {
   return reelsPerDay * 3
 }

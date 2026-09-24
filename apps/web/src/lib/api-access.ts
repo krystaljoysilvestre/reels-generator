@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { and, count, eq, inArray } from 'drizzle-orm'
 import { getDb, assets, channels, compilations, reels, stories, getUserUsage, getGlobalSpendTodayCents } from '@reels/db'
-import { assertGlobalDailyBudget, GlobalBudgetExceededError, GLOBAL_DAILY_SPEND_CAP_CENTS, DEFAULT_USER_LIMITS, checkUserLimits, MAX_INFLIGHT_REELS_PER_USER, UNSHIPPED_REEL_STATUSES } from '@reels/core'
+import { assertGlobalDailyBudget, GlobalBudgetExceededError, GLOBAL_DAILY_SPEND_CAP_CENTS, DEFAULT_USER_LIMITS, checkUserLimits, MAX_INFLIGHT_REELS_PER_USER, IN_PROGRESS_REEL_STATUSES } from '@reels/core'
 import { getCurrentUser, type SessionUser } from '@/lib/auth'
 import { ACCOUNT_UNAVAILABLE } from '@/lib/user-profile'
 import { isUuid, storageScopeFromKey } from '@/lib/storage-key'
@@ -186,9 +186,9 @@ export async function requireReelCreationBudget(user: SessionUser): Promise<Deni
     .select({ n: count() })
     .from(reels)
     .innerJoin(channels, eq(reels.channelId, channels.id))
-    .where(and(eq(channels.userId, user.id), inArray(reels.status, [...UNSHIPPED_REEL_STATUSES])))
+    .where(and(eq(channels.userId, user.id), inArray(reels.status, [...IN_PROGRESS_REEL_STATUSES])))
   if ((inflight?.n ?? 0) >= MAX_INFLIGHT_REELS_PER_USER) {
-    return deny(429, `Too many reels in progress (max ${MAX_INFLIGHT_REELS_PER_USER}). Finish or clear some first.`)
+    return deny(429, `You can have up to ${MAX_INFLIGHT_REELS_PER_USER} reels in progress. Finish and approve one before starting another.`)
   }
   return null
 }

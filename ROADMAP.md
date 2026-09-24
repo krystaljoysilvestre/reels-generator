@@ -21,14 +21,19 @@ visual and audio polish. The founder selected **free early access first**, witho
 This is the active implementation priority. The historical Phase 0 evidence below remains relevant to the
 required deployed production lap; this change does not assert that its missing proof has passed.
 
-- Implemented locally: verified self-service signup behind `SIGNUP_MODE=open`, safe Google sign-in,
+- Merged to `main`: verified self-service signup behind `SIGNUP_MODE=open`, safe Google sign-in,
   verification/password recovery and session revocation, existing-account invite acceptance, account/profile
   and usage, first-reel guide, draft ownership enforcement, capped-but-downloadable exports, and suspended-owner
   spending protection. The marketing site's open mode links to the studio signup instead of the waitlist.
-- Existing default remains approval-based access. No production setting or deployment changed.
+- Existing default remains approval-based access. The reviewed release is merged, but Railway billing
+  blocked deployment. Free-access limits were staged without restarting services; the founder deferred
+  deployment until billing is resolved. See `specs/early-access-rollout-2026-09-24.md`.
+- Local follow-through now releases creator production slots after approval, makes publication confirmation
+  safe to retry, and gives accurate recovery guidance when account email is unavailable. Evidence and
+  remaining boundaries: `specs/creator-journey-followthrough.md`.
 - Acceptance and remaining configuration: `specs/early-access-journey.md` and `specs/early-access-launch.md`.
 - Before opening: deploy the reviewed build and migration, configure/verify account email and Google,
-  align both signup switches, define the free-access spend ceilings and support procedure, then complete
+  align both signup switches, apply the staged free-access spend ceilings and verify the support procedure, then complete
   one fresh non-admin journey through export on the deployed app.
 
 ## Previous acceptance sprint — exit Phase 0 through the product (2026-09-01, updated 2026-09-04)

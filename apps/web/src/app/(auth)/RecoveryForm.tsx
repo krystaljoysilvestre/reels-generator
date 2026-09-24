@@ -15,7 +15,7 @@ export function RecoveryForm({ kind, enabled = true }: { kind: 'forgot' | 'reset
   const [done, setDone] = useState(false)
   const [error, setError] = useState('')
   const title = kind === 'forgot' ? 'Forgot your password?' : kind === 'reset' ? 'Set a new password' : 'Confirm your email'
-  const subtitle = kind === 'forgot' ? 'We’ll send you a link to start again.' : kind === 'reset' ? 'Choose a password you haven’t used here before.' : 'One last step before your next story.'
+  const subtitle = kind === 'forgot' ? enabled ? 'Request a link to reset your password.' : 'Get help returning to your account.' : kind === 'reset' ? 'Choose a password you haven’t used here before.' : 'One last step before your next story.'
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     if (kind === 'reset' && password !== confirm) { setError('The passwords don’t match.'); return }
@@ -33,8 +33,9 @@ export function RecoveryForm({ kind, enabled = true }: { kind: 'forgot' | 'reset
   }
   const validLink = kind === 'forgot' || Boolean(token)
   return <AuthShell title={title} subtitle={subtitle}>
-    {!enabled ? <p className="text-sm text-night-body">Email recovery is temporarily unavailable. You can still sign in with your usual method.</p> : done ? <div role="status" className="space-y-4 text-sm leading-relaxed text-night-body">
-      <p>{kind === 'forgot' ? 'If this email has a password account, a reset link is on its way. Check your spam folder too. If you joined with Google, continue with Google on the sign-in page.' : 'Your email is confirmed. Continue to your account to check your access.'}</p>
+    {!enabled ? <div className="space-y-4 text-sm leading-relaxed text-night-body"><p>Email recovery is temporarily unavailable. Contact us for help with your account, or return here to try again later.</p><a href="https://kendrix.io/contact" className="inline-block text-accent hover:underline">Get account help</a></div> : done ? <div role="status" className="space-y-4 text-sm leading-relaxed text-night-body">
+      <p>{kind === 'forgot' ? 'If this email has a password account, check your inbox and spam folder for a reset link. If you joined with Google, use Google on the sign-in page when available.' : 'Your email is confirmed. Continue to your account to check your access.'}</p>
+      {kind === 'forgot' && <p>No email? <a href="https://kendrix.io/contact" className="text-accent hover:underline">Get account help</a>.</p>}
       {kind === 'verify' && <Link href="/dashboard" className="btn-primary w-full">Continue to Kendrix</Link>}
     </div> : !validLink ? <p role="alert" className="text-sm text-night-danger">This link is incomplete. Request a new one from {kind === 'reset' ? <Link href="/forgot-password" className="underline">password recovery</Link> : <Link href="/pending" className="underline">your account</Link>}.</p> : <form onSubmit={submit} className="space-y-4">
       {kind === 'forgot' && <AuthField id="email" label="Email"><input id="email" className="input-dark" type="email" autoComplete="email" required maxLength={254} value={email} onChange={e => setEmail(e.target.value)} /></AuthField>}
