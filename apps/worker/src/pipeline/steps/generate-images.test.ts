@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { SourcePolicySchema } from '@reels/core'
-import { applyDepictionRouting, buildStateAdaptationPrompt, requiresVisualTruthQa, sourceQueryCandidates } from './generate-images.js'
+import { applyDepictionRouting, assertSceneImageTruthReady, buildStateAdaptationPrompt, contextualIdentityQueries, imageTruthNeedsRetry, requiresVisualTruthQa, sourceQueryCandidates, verifiedSourceAttempts, verifiedSourceQueryCandidates } from './generate-images.js'
 
 describe('requiresVisualTruthQa', () => {
   it('enrolls evidence-required reels independently of creative genre', () => {
@@ -16,6 +16,28 @@ describe('requiresVisualTruthQa', () => {
 
     expect(requiresVisualTruthQa(fictional, 'informational')).toBe(true)
     expect(requiresVisualTruthQa(fictional, 'horror')).toBe(false)
+  })
+})
+
+describe('imageTruthNeedsRetry', () => {
+  it('reopens only images explicitly enrolled in truth QA that did not pass', () => {
+    expect(imageTruthNeedsRetry({ truthQaRequired: true, truthQaPass: false })).toBe(true)
+    expect(imageTruthNeedsRetry({ truthQaRequired: true })).toBe(true)
+    expect(imageTruthNeedsRetry({ truthQaRequired: true, truthQaPass: true })).toBe(false)
+    expect(imageTruthNeedsRetry({ qaPass: false })).toBe(false)
+    expect(imageTruthNeedsRetry(null)).toBe(false)
+  })
+})
+
+describe('assertSceneImageTruthReady', () => {
+  it('throws inside the per-scene step for a blocking truth failure', () => {
+    expect(() => assertSceneImageTruthReady(3, true, false, ['wrong exact identity']))
+      .toThrow('[visual-truth-image-qa] scene 3: wrong exact identity')
+  })
+
+  it('does not block ordinary craft QA or a passing factual frame', () => {
+    expect(() => assertSceneImageTruthReady(3, false, false, ['craft-only miss'])).not.toThrow()
+    expect(() => assertSceneImageTruthReady(3, true, true, [])).not.toThrow()
   })
 })
 
@@ -43,15 +65,30 @@ describe('sourceQueryCandidates', () => {
     ])
   })
 
+  it('combines complementary landmark and subsite identities before broadening', () => {
+    expect(sourceQueryCandidates({
+      id: 'norad-command-center',
+      description: 'the command center inside Cheyenne Mountain Complex',
+    }, { query: 'Cheyenne Mountain Complex', subjectClass: 'place' })).toEqual([
+      'Cheyenne Mountain Complex',
+      'incategory:"Cheyenne Mountain Complex"',
+      'Cheyenne Mountain Complex Norad Command Center',
+      'Norad Command Center',
+      'Norad Command Center the command center inside Cheyenne Mountain Complex',
+    ])
+  })
+
   it('does not broaden human identity searches', () => {
     expect(sourceQueryCandidates({ id: 'marcel-duchamp', description: 'artist' }, {
       query: 'Marcel Duchamp photograph', subjectClass: 'human',
     })).toEqual(['Marcel Duchamp photograph'])
   })
 
-  it('locks source geometry and required state details during adaptation', () => {
+  it('locks unchanged source geometry and required state details during adaptation', () => {
     const prompt = buildStateAdaptationPrompt('documentary reference plate', "turned on its back, marked 'R. Mutt 1917'")
-    expect(prompt).toContain('Preserve the source subject\'s exact physical geometry')
+    expect(prompt).toContain('Preserve the source subject\'s identity-defining geometry')
+    expect(prompt).toContain('Produce a close, isolated identity reference')
+    expect(prompt).toContain('attach it to the preserved source subject')
     expect(prompt).toContain("marked 'R. Mutt 1917'")
     expect(prompt).toContain('TARGET STATE IS AUTHORITATIVE')
     expect(prompt).toContain('must not carry over')
@@ -63,9 +100,99 @@ describe('sourceQueryCandidates', () => {
     expect(prompt).toContain('an upright, unmarked porcelain urinal')
     expect(prompt).not.toContain('Do not omit')
   })
+
+  it('does not force an explicitly destructive target to remain intact', () => {
+    const prompt = buildStateAdaptationPrompt(
+      'documentary reference plate',
+      'broken apart in mid-air with separated fuselage sections and detached components',
+    )
+    expect(prompt).toContain('damage, destruction, deformation')
+    expect(prompt).toContain('do not keep the subject intact merely to preserve identity')
+    expect(prompt).toContain('recognizable subject/model-specific features')
+  })
+})
+
+describe('verifiedSourceQueryCandidates', () => {
+  it('checks each exact query\'s top Commons file before unrelated article leads consume the budget', () => {
+    expect(verifiedSourceAttempts(['full state', 'identity Goldsboro'], false).slice(0, 4)).toEqual([
+      { sourceQuery: 'full state', preferCommonsSearch: true, commonsCandidateIndex: 0 },
+      { sourceQuery: 'full state', preferCommonsSearch: false, commonsCandidateIndex: 0 },
+      { sourceQuery: 'identity Goldsboro', preferCommonsSearch: true, commonsCandidateIndex: 0 },
+      { sourceQuery: 'identity Goldsboro', preferCommonsSearch: false, commonsCandidateIndex: 0 },
+    ])
+  })
+
+  it('inspects deeper ranks of the strongest contextual query before broadening', () => {
+    expect(verifiedSourceAttempts(['identity Goldsboro', 'full state'], false, 3).slice(0, 3)).toEqual([
+      { sourceQuery: 'identity Goldsboro', preferCommonsSearch: true, commonsCandidateIndex: 0 },
+      { sourceQuery: 'identity Goldsboro', preferCommonsSearch: true, commonsCandidateIndex: 1 },
+      { sourceQuery: 'identity Goldsboro', preferCommonsSearch: true, commonsCandidateIndex: 2 },
+    ])
+  })
+
+  it('backs off free-form location prose without language-specific stop words', () => {
+    expect(contextualIdentityQueries('Mark 39 nuclear bomb', 'in the sky above Goldsboro').slice(0, 3)).toEqual([
+      'Mark 39 nuclear bomb Goldsboro',
+      'Mark 39 nuclear bomb in',
+      'Mark 39 nuclear bomb in the sky above Goldsboro',
+    ])
+  })
+
+  it('tries the exact state and parent identity before analyzer shorthand fallbacks', () => {
+    const entity = { id: 'thermonuclear-weapon', description: 'a compact cylindrical weapon' }
+    const routing = { query: 'Mark 39 nuclear bomb', subjectClass: 'object' as const }
+    const candidates = verifiedSourceQueryCandidates(
+      entity,
+      routing,
+      'Mark 39 nuclear bomb parachute deployed',
+    )
+    const contextualCandidates = verifiedSourceQueryCandidates(
+      entity,
+      routing,
+      'Mark 39 nuclear bomb parachute deployed',
+      'Goldsboro, North Carolina',
+    )
+    expect(contextualCandidates.slice(0, 4)).toEqual([
+      'Mark 39 nuclear bomb Goldsboro, North Carolina',
+      'Mk 39 nuclear bomb Goldsboro, North Carolina',
+      'Mark 39 nuclear bomb Carolina',
+      'Mk 39 nuclear bomb Carolina',
+    ])
+    expect(contextualCandidates).toContain('Mark 39 nuclear bomb parachute deployed')
+    expect(contextualCandidates).toContain('Mk 39 nuclear bomb parachute deployed')
+    expect(contextualCandidates).toContain('Mark 39 nuclear bomb')
+    expect(contextualCandidates).toContain('Mk 39 nuclear bomb')
+    expect(candidates).toContain('Thermonuclear Weapon')
+  })
 })
 
 describe('applyDepictionRouting', () => {
+  it('clears appearance plates when the source-verification contract changes', () => {
+    const entity = {
+      id: 'thermonuclear-weapon',
+      kind: 'object' as const,
+      description: 'two Mark 39 nuclear bombs',
+      depiction: {
+        subjectClass: 'object' as const,
+        depictionMode: 'reference_plate' as const,
+        eligibilityReason: 'real_subject' as const,
+        query: 'Mark 39 nuclear bomb',
+        classifierVersion: 'entity-source.v1.16',
+      },
+      appearances: [{
+        id: 'parachute-deployed',
+        description: 'descending under a parachute',
+        referenceImageKey: 'reels/reel/refs/old.webp',
+        referenceOrigin: { type: 'sourced' as const, sourceAssetKey: 'reels/reel/refs/old.webp' },
+      }],
+    }
+
+    applyDepictionRouting(entity, { ...entity.depiction, classifierVersion: 'entity-source.v1.20' })
+
+    expect(entity.appearances[0]!.referenceImageKey).toBeUndefined()
+    expect(entity.appearances[0]!.referenceOrigin).toBeUndefined()
+  })
+
   it('clears a stale sourced plate when an old exact-identity verdict becomes generated context', () => {
     const entity = {
       id: 'apollo-12',
@@ -93,7 +220,7 @@ describe('applyDepictionRouting', () => {
       depictionMode: 'generated',
       eligibilityReason: 'generic_subject',
       query: '',
-      classifierVersion: 'entity-source.v1.6',
+      classifierVersion: 'entity-source.v1.7',
     })
 
     expect(entity.depiction.depictionMode).toBe('generated')

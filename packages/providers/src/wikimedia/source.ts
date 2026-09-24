@@ -32,6 +32,7 @@ export interface SourcedImage {
   sourceUrl: string // the FILE page (for attribution)
   articleUrl: string // the Wikipedia article page; '' when resolved via free-text Commons search
   title: string // the resolved subject title
+  sourceDescription: string // Commons file description; untrusted text, but useful provenance evidence
   wikibaseItem: string // Wikidata id (e.g. 'Q34597') — the identity anchor; '' when not article-resolved
 }
 
@@ -47,6 +48,11 @@ export interface SourceOptions {
    * an article lead showing issue 1 when the story requires a page from issue 2.
    */
   preferCommonsSearch?: boolean
+  /**
+   * Zero-based rank within the licence-clean Commons results after deterministic title re-ranking.
+   * Callers use this only after vision rejects an earlier non-human candidate; humans never enter this path.
+   */
+  commonsCandidateIndex?: number
 }
 
 const UA = 'reels-generator/1.0 (documentary subject-image sourcing; contact via app operator)'
@@ -127,7 +133,7 @@ function isLocalNonFreeUpload(url: string): boolean {
 }
 
 // Fetch a Commons file's licence + a clean 1600px URL by its "File:…" title. null if not licence-clean.
-async function commonsFileByTitle(fileTitle: string): Promise<{ imgUrl: string; mime: SourcedImage['mime']; license: string; licenseUrl: string; author: string; sourceUrl: string } | null> {
+async function commonsFileByTitle(fileTitle: string): Promise<{ imgUrl: string; mime: SourcedImage['mime']; license: string; licenseUrl: string; author: string; sourceUrl: string; sourceDescription: string } | null> {
   const api = new URL('https://commons.wikimedia.org/w/api.php')
   api.search = new URLSearchParams({
     action: 'query', format: 'json', formatversion: '2',
@@ -144,7 +150,10 @@ async function commonsFileByTitle(fileTitle: string): Promise<{ imgUrl: string; 
   const imgUrl = str(ii['thumburl']) || str(ii['url'])
   if (!imgUrl) return null
   const sourceUrl = str(ii['descriptionurl']) || `https://commons.wikimedia.org/wiki/${encodeURIComponent(fileTitle)}`
-  return { imgUrl, mime, license, licenseUrl: extMeta(ii, 'LicenseUrl'), author: stripHtml(extMeta(ii, 'Artist')), sourceUrl }
+  return {
+    imgUrl, mime, license, licenseUrl: extMeta(ii, 'LicenseUrl'), author: stripHtml(extMeta(ii, 'Artist')),
+    sourceUrl, sourceDescription: stripHtml(extMeta(ii, 'ImageDescription')),
+  }
 }
 
 // ── Wikidata death date (P570) ───────────────────────────────────────────────────────────────────────────
@@ -305,7 +314,7 @@ async function resolveViaWikipediaArticle(query: string): Promise<SourcedImage |
   const wikibaseItem = await wikibaseItemForTitle(title)
   return {
     buffer, mime: file.mime, license: file.license, licenseUrl: file.licenseUrl, author: file.author,
-    sourceUrl: file.sourceUrl || articleUrl, articleUrl, title, wikibaseItem,
+    sourceUrl: file.sourceUrl || articleUrl, articleUrl, title, sourceDescription: file.sourceDescription, wikibaseItem,
   }
 }
 
@@ -313,7 +322,7 @@ async function resolveViaWikipediaArticle(query: string): Promise<SourcedImage |
 // Wikipedia article. Weaker on same-name collisions, so it runs only after article resolution finds nothing;
 // the caller's confidence-verify is the remaining guard. Carries NO identity anchor (no wikibaseItem, no
 // articleUrl) — which is exactly why `requireArticleIdentity` skips it for humans.
-async function resolveViaCommonsSearch(query: string): Promise<SourcedImage | null> {
+async function resolveViaCommonsSearch(query: string, candidateIndex = 0): Promise<SourcedImage | null> {
   const api = new URL('https://commons.wikimedia.org/w/api.php')
   api.search = new URLSearchParams({
     action: 'query', format: 'json', formatversion: '2',
@@ -329,6 +338,7 @@ async function resolveViaCommonsSearch(query: string): Promise<SourcedImage | nu
     return byIdentity || Number(a['index'] ?? 999) - Number(b['index'] ?? 999)
   })
 
+  let eligibleIndex = 0
   for (const p of pages) {
     const ii = asObj(asArr(p['imageinfo'])[0])
     if (Object.keys(ii).length === 0) continue
@@ -338,13 +348,14 @@ async function resolveViaCommonsSearch(query: string): Promise<SourcedImage | nu
     if (!mimeOk(mime)) continue
     const url = str(ii['thumburl']) || str(ii['url'])
     if (!url) continue
+    if (eligibleIndex++ < Math.max(0, candidateIndex)) continue
     const buffer = await download(url)
     if (!buffer) continue
     const title = str(p['title'])
     const sourceUrl = str(ii['descriptionurl']) || (title ? `https://commons.wikimedia.org/wiki/${encodeURIComponent(title)}` : '')
     return {
       buffer, mime, license, licenseUrl: extMeta(ii, 'LicenseUrl'), author: stripHtml(extMeta(ii, 'Artist')),
-      sourceUrl, articleUrl: '', title, wikibaseItem: '',
+      sourceUrl, articleUrl: '', title, sourceDescription: stripHtml(extMeta(ii, 'ImageDescription')), wikibaseItem: '',
     }
   }
   return null
@@ -387,7 +398,7 @@ export async function sourceEntityImage(query: string, opts: SourceOptions = {})
   if (opts.preferCommonsSearch) {
     // A human may never enter the unanchored free-text path, regardless of option combinations.
     if (opts.requireArticleIdentity) return null
-    return resolveViaCommonsSearch(q)
+    return resolveViaCommonsSearch(q, opts.commonsCandidateIndex)
   }
   const viaArticle = await resolveViaWikipediaArticle(q)
   if (viaArticle === 'ambiguous') {
@@ -412,5 +423,5 @@ export async function sourceEntityImage(query: string, opts: SourceOptions = {})
     console.warn(`[wikimedia] "${q}": ${why}; not sourcing (free-text search is disabled for this subject)`)
     return null
   }
-  return resolveViaCommonsSearch(q)
+  return resolveViaCommonsSearch(q, opts.commonsCandidateIndex)
 }

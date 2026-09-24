@@ -15,6 +15,19 @@ export interface EntityExpansion {
   appearanceByEntity?: Record<string, string>
 }
 
+// A sourced identity's route owns the exact audience-facing name even when an older Story Bible described
+// it with analyzer shorthand ("thermonuclear weapon" while bound narration says "Mark 39"). Reference
+// pixels alone are not enough: an edit model can follow the generic prose and sand the exact object back
+// into its category. Put the resolved identity and a positive continuity instruction in every plate/scene
+// prompt that consumes the reference. Generic and fictional entities remain byte-for-byte unchanged.
+export function entityRenderDescription(entity: BibleEntity): string {
+  const exactIdentity = entity.depiction?.depictionMode === 'reference_plate'
+    ? entity.depiction.query.trim()
+    : ''
+  if (!exactIdentity) return entity.description
+  return `exact real-world identity: ${exactIdentity}; preserve its identity-defining visible form and features from the conditioning reference. ${entity.description}`
+}
+
 // The channel's cast nationality/ethnicity. Image models otherwise free-fill a generic (usually Western)
 // look, which reads wrong for a localized channel (a Filipino-language reel rendering red-haired leads).
 // Keyed off the channel's PRIMARY language; falls back to region keywords; empty when neither is confident —
@@ -95,7 +108,7 @@ export function assembleImagePrompt(
     primaryEntity,
     supportingEntities,
     ...(appearanceByEntity ? { appearanceByEntity } : {}),
-  }).map((e) => e.description)
+  }).map(entityRenderDescription)
 
   // Style first (convention: style DNA frames how the scene reads), then the cast ethnicity directive (so it
   // frames every person), then the frozen entity specs in role order (primary leads → satisfies VISUAL
@@ -164,6 +177,6 @@ export function assembleReferencePrompt(entity: BibleEntity, stylePreset: string
   // Lock the cast nationality into the CHARACTER plate itself — every scene conditions on this plate, so if
   // the plate isn't the right ethnicity nothing downstream will be. Only characters (locations/objects have no people).
   const castClause = entity.kind === 'character' && cast?.trim() ? `the person is ${cast.trim()}` : ''
-  const parts = [stylePreset, castClause, entity.description, REFERENCE_FRAMING[entity.kind], PLATE_NO_TEXT, light ?? '']
+  const parts = [stylePreset, castClause, entityRenderDescription(entity), REFERENCE_FRAMING[entity.kind], PLATE_NO_TEXT, light ?? '']
   return parts.map((p) => p.trim().replace(/[.,\s]+$/, '')).filter(Boolean).join('. ')
 }

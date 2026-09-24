@@ -24,7 +24,7 @@ Phase 0 — Foundation
 
 Last Updated:
 
-2026-09-04
+2026-09-09
 
 ---
 
@@ -50,13 +50,15 @@ Build a reliable storytelling workflow that consistently produces publishable, h
 
 Current Bottleneck
 
-**Product-only workflow completion is now the bottleneck.** Crossroads has four retained, publicly verified
+**A clean product-only replay is now the bottleneck.** Crossroads has four retained, publicly verified
 YouTube reels: `6gcyx9bK2mE` (2026-08-24), `DTi3ZhEuPpk` (2026-08-26), `xIeZIn46B_o` (2026-08-29), and
 `WCRkYws2Kho` (2026-09-01). That is enough to establish repeated founder-approved production provisionally.
 It is not enough to establish product reliability: Reel #4 required operator scripts, queue inspection and manual
 salvage after paid motion timeouts and a lost render lock. The active question is whether one fresh short-form reel
-can complete through the deployed product with visible failure, safe retry, tenant isolation and intact cost
-accounting—without the builder becoming an invisible pipeline stage.
+can complete through the deployed product without the builder becoming an invisible pipeline stage. The hosted
+failure/retry and cost-idempotency portions are now proven: the acceptance artifact failed at the configured
+render boundary, recovered from one product Retry, and held spend at $7.86. Engineering intervention earlier in
+that reel means the strict clean-run criterion remains open.
 
 The four live reels keep collecting audience data passively. At the 2026-09-01 04:54 UTC poll they read
 **90 / 0 / 0**, **187 / 8 / 0**, **217 / 4 / 0**, and the new reel's **0 / 0 / 0 baseline** respectively.
@@ -76,20 +78,21 @@ one click, durable-work preserving and cost-idempotent; tenant and spend boundar
 acceptance build must pass lint, typecheck, tests and build. Direct social publishing, billing, teams, long-form and
 public-launch polish are outside this gate.
 
-**Gate status on 2026-09-04 — day 4 of 10 working days; the window closes 2026-09-14.** Criterion 5 is met: an
+**Gate status on 2026-09-10 — day 8 of 10 working days; the window closes 2026-09-14.** Criterion 5 is met: an
 explicit shared-key allowlist, per-resource ownership and real-Postgres suites prove owner access, foreign denial,
 foreign resource IDs returning 404, suspended and pending sessions blocked, and reel/user/global spend gates halting
 before a paid step starts. Criterion 6 is green on the **consolidated build** (`721a987`), verified 2026-09-04 in CI's environment: clean
 typecheck, lint with 0 errors and 6 pre-existing warnings, **696 passing and 1 skipped** of 697 tests across 80
-files with all three integration suites present, and a clean production build. Criteria 3 and 4 now have automated proof rather than
-mechanism alone: a default-off `FORCE_STEP_FAILURE` boundary induces the 2026-09-01 lost-lock failure as
-configuration instead of an intervention, and a real-Postgres suite shows the failure recorded, the
-storyboard/retry predicate seeing it, a completed paid step re-entering as a cache hit with no provider call, and
-the reel's ledger unmoved across failure and recovery. What remains for both is the live hosted lap
-(`specs/phase0-forced-recovery-lap.md`), which the runbook recommends running inside the acceptance reel rather
-than paying for a second one. That lap was blocked until 2026-09-04 because Railway has no auto-deploy and its
-worker was still on `fa156da`, without the forced-failure code; both services now run `d0a0c59` and report it, so
-the lap is unblocked. Criteria 1 and 2, the fresh product-only reel, have not started.
+files with all three integration suites present, and a clean production build. Criteria 3 and 4 now have both
+automated and live hosted proof: `FORCE_STEP_FAILURE` stopped reel `b2ce55d3` after its durable visual committed;
+the product showed the finishing failure, one Retry reused the cached track, and the ledger stayed at 786¢ through
+final QA. Criteria 1 and 2 remain strict-open: the artifact completed sign-in through export, but engineering
+fixes and deploys occurred during its visual path. One clean replay is the remaining Phase 0 proof.
+
+The later visual-repair path through `7e0a6b1` was also rechecked locally on 2026-09-11: lint 0 errors / 9
+existing warnings, full typecheck, **711 passing tests / 12 environment-gated skips**, and the full production
+build. The real-Postgres integration counts above remain the CI evidence rather than being inferred from those
+local skips.
 
 **The gate's test command is now also the convenient one (fixed 2026-09-04).** Root `pnpm test` recursed into
 `test` scripts, and `apps/web` and `@reels/providers` define only `test:unit`, so the local shorthand exited 0
@@ -113,11 +116,12 @@ reliability repairs on the acceptance path, not new creative architecture.
 stack in Singapore rather than the founder's Mac: an external probe on 2026-09-03 returned `/api/health` **200**
 with Railway edge headers. The accepted topology — one public web service, one private all-role worker, private
 Postgres and Redis, existing R2 assets, a $30 usage alert and a $50 monthly compute cap — is recorded in
-`specs/phase0-deployment.md`. **Health is the only one of that spec's five canary checks confirmed in writing.**
-Operator sign-in, migrated row/spend parity, one queue job surviving a worker restart, and R2 read/write are
-unrecorded, so the Cloudflare Tunnel route to the Mac remains the rollback path until they are. Scheduled
-production stays disabled until the forced-recovery lap and one fresh product-only acceptance reel clear the
-Phase 0 gate.
+`specs/phase0-deployment.md`. **Health and migrated-data parity are now confirmed in writing.** The 2026-09-09
+read-only production check preserved all five publication identities and fields, all four channels, the one user,
+and the exact 163-row / 225¢ spend ledger; its one extra reel is the known hosted render. The 2026-09-10 lap then
+completed operator Google sign-in and exercised authenticated R2 reads/writes through generated media, durable
+render recovery, playback and export. The Cloudflare Tunnel route remains rollback until the clean product-only
+replay clears the Phase 0 gate. Scheduled production stays disabled until that decision.
 
 **Reel #4 publication read (2026-09-01).** *The 31 Million Bottle Decision* (`91ebdcf9`) is founder-approved and publicly verified on YouTube as `WCRkYws2Kho`. The 84.288-second candidate passed render QA after a zero-cost repair reused a stable passage from its already-paid music source so the music-focused `resolve` ending survived the final narration. Its exact accounted reel spend is **$9.32 against an $11.20 cap**: this includes a conservative **$5.60 estimate** for eight submitted 10-second motion calls that timed out before provider usage returned. One verified clip survived; the other two motion beats degraded to their approved stills. A long final upload also lost its BullMQ lock after the graded visual had committed; the operator recovered that durable visual, remuxed the existing audio, range-verified the final 86,476,595-byte object, and ran QA rather than paying or rendering again. **Founder first playback liked the reel and supplied one forward-looking note: future endings need more room after the final word.** Explicit `resolve` tails now hold 2.6s instead of 1.8s; buttons, ring-outs and deliberate silence retain their own bounded shapes. After the seven-day testing-mode grant expired, the founder renewed the Crossroads connection and authorized publication. The guarded upload cost $0, the public API confirmed liveness, and the metrics poll recorded the 0 / 0 / 0 baseline. YouTube rejected the custom Shorts thumbnail on account eligibility and kept an automatic frame. TikTok and Facebook remain manual, so the reel stays `approved` while its YouTube publication is `published`.
 
@@ -147,18 +151,16 @@ Priority 1
 
 **Run the ten-working-day Phase 0 exit sprint.** Stabilize the current build, prove tenant/cost boundaries and
 creator-visible recovery, then complete one fresh short-form acceptance reel entirely through the deployed product.
-Day 4 of 10; the window closes 2026-09-14. The evidence is now consolidated: `main` and
-`codex/verified-visual-identity` both point at `721a987`, which carries PR #23's suites, the Railway deployment,
-the 09-02 reliability repairs and the forced-recovery lap, with all four CI steps green against real Postgres
-(696 passing / 1 skipped, all three integration suites present).
-The build is unpushed, so the deployed stack is still pre-merge. What remains is the hosted lap and the reel.
+Day 8 of 10; the window closes 2026-09-14. Tenant/cost boundaries and the live forced-recovery lap are proven.
+Reel `b2ce55d3` is approved and exported at $7.86 but does not count as builder-free because its visual path drove
+the fixes now ending at worker commit `7e0a6b1`. What remains is one clean replay on the stabilized build, followed
+by the founder's explicit Phase 0 decision.
 
 Priority 2
 
-**Make failure recoverable without the builder.** Force a provider or queue/render failure, verify the creator sees
-the failed phase, and prove Retry resumes from durable outputs without repeating paid work or double-counting cost.
-The 2026-09-02 failure-recorder repair is the code this lap has to trust; it is now exercised by an automated
-forced-failure suite, and the live hosted lap is the remaining step (`specs/phase0-forced-recovery-lap.md`).
+**Complete 2026-09-10: failure is recoverable without artifact salvage.** The hosted forced render failure was
+visible in-product, one Retry reused the durable visual, and spend remained exactly $7.86. See
+`specs/phase0-forced-recovery-lap.md` for the timing and procedural note.
 
 Priority 3
 
@@ -183,7 +185,7 @@ experiment after the Phase 0 decision.
 | Uploads Proven             |       5 |   ↑   |          — | One OAuth proving run taken down; four retained Crossroads publishes live |
 | Publishing Consistency     | Repeated, n=4 |   ↑   |     Weekly | Four retained publishes prove repetition; sustained weekly cadence is still open |
 | Customer Zero Satisfaction | Founder-approved four times |   ↑   |  Improving | All four approved artifacts are live on YouTube; audience value remains unresolved |
-| Workflow Completion        | Crossroads active · 4 live |   ↑   | Increasing | Full factual/visual-truth → render → review → YouTube path repeated. TikTok/Facebook remain manual |
+| Workflow Completion        | Crossroads active · 4 live · 1 approved acceptance artifact |   ↑   | Increasing | The acceptance artifact completed render, review, approval and export with live recovery; it remains unpublished and a clean builder-free replay remains open |
 | Audience Evidence          | **#1: 90 / 0 / 0 · #2: 187 / 8 / 0 · #3: 217 / 4 / 0 · #4: 0 / 0 / 0 baseline** |   ↑   | Meaningful 24h/7d reading | 2026-09-01 04:54 UTC poll. Four public videos remain too small a sample for a creative intervention |
 
 ---
@@ -209,7 +211,7 @@ experiment after the Phase 0 decision.
 | Generation Success Rate       | Not yet measured |   →   |       >95% | Two long-form `generate_story` runs were reaped for exceeding the stuck threshold (08-12, 08-17) on a fixture channel — the only reliability signal in the window |
 | Average Story Generation Time | Not yet measured |   →   |     Stable |       |
 | Average AI Cost per Story     | Crossroads retained reels: $5.21–10.63 |   ↓   | Decreasing — never at taste's expense | The lowest retained reel is **$5.21**; Reel #4 is **$9.32**, including a conservative $5.60 timeout estimate, so failed paid calls remain visible rather than reading as free. Other channels are excluded from the active proof metric |
-| Production Reliability        | Four approved artifacts live |   →   |  Improving | Reel #4 completed only through bounded operator recovery: two motion scenes degraded to stills, and a durable visual was salvaged after a render-upload queue-lock failure. In-product Retry now has a resume boundary for stranded reels (2026-09-02), but the forced lap that would prove it is unrun. Unattended operation and multi-destination publishing remain unproven |
+| Production Reliability        | Live forced recovery passed |   ↑   |  Improving | Reel `b2ce55d3` surfaced the configured post-visual render failure, recovered with one Retry, reused the durable visual, and stayed at $7.86. A clean builder-free production replay and multi-destination publishing remain unproven |
 
 ---
 
@@ -234,7 +236,7 @@ Each experiment tests a named assumption in company/assumptions.md.
 
 | Experiment | Hypothesis | Expected Metric Impact | Status |
 | ---------- | ---------- | ---------------------- | ------ |
-| **Phase 0 product-only acceptance** | The deployed product can complete and recover one standard short-form reel without its builder becoming a hidden stage | Workflow completion and production reliability ↑ | **ACTIVE — day 4 of 10 (2026-09-04).** One consolidated build (`721a987`) now carries the tenancy, spend and forced-recovery suites, the Railway deployment and the reliability repairs, all four CI steps green with every integration suite present (5+5+3). The live recovery lap and the fresh product-only reel have not run |
+| **Phase 0 product-only acceptance** | The deployed product can complete and recover one standard short-form reel without its builder becoming a hidden stage | Workflow completion and production reliability ↑ | **IN PROGRESS — day 8 of 10 (2026-09-10).** The same hosted reel completed, passed the injected render failure, recovered in one click with spend fixed at $7.86, passed QA, was approved and exported. Criteria 3–4 are live-proven; criteria 1–2 still need one clean replay because code/deploy intervention occurred during this artifact |
 | Packaging repair | The named disqualifiers are packaging, not story, and fixing them changes the publish answer | Stories published 0 → ≥1 | **CLOSED AT n=1 (2026-08-24).** Crossroads cleared the durable leave-it-up decision and published. Repeatability is tracked under publishing consistency, not this repair experiment |
 | **The audience is readable** | A published reel's real performance can reach `metrics` and feed few-shot selection without manual logging | Audience evidence 0 → ≥1 | **CONFIRMED (2026-08-26).** One scheduled poll read both public videos through `YOUTUBE_API_KEY`, appended both time-series rows, and refreshed both reel snapshots without manual logging. Reel #1 read 81 views; reel #2 established its immediate zero baseline |
 | Depictive fidelity beyond places | A real subject must be *sourced*, and a real person's face must never be invented | Depictive truth held under real-world subjects | **CLOSED — SHIPPED (2026-08-17).** Graduated to `specs/depictive-fidelity.md`. A third guard was **rejected on measurement**: a lexical "depicts what it doesn't tag" detector scored 1 true positive to 2–3 false, and would have stamped `R.MUTT 1917` on shop-window plumbing |
@@ -246,10 +248,10 @@ Each experiment tests a named assumption in company/assumptions.md.
 
 ## Current Risks
 
-* **The builder is still an invisible pipeline stage.** Four retained Crossroads publishes prove creative production,
-  but Reel #4 completed only after scripts, queue inspection and manual durable-artifact recovery. Until the same
-  class of failure is visible and recoverable in-product, another creator cannot reproduce the founder's outcome.
-  The 09-02 failure-recorder repair removes one known cause; the lap that would prove it has not run.
+* **The builder is still an invisible pipeline stage for the clean-run criterion, but not for render recovery.**
+  The 2026-09-10 hosted lap proved that a creator can see the post-visual failure, click Retry once, reuse the
+  durable track and preserve the ledger. The same artifact needed engineering fixes and deploys earlier in its
+  visual path, so it cannot prove an unattended end-to-end production run. One clean replay remains.
 * **Resolved 2026-09-04: the hosted stack runs the acceptance build.** `d0a0c59` carries criterion 5's suites,
   the deployment work, the reliability repairs, the forced-recovery lap and build identity; CI passed on `main`;
   and both Railway services were deployed to it and now report it themselves. The risk this replaces was real and
@@ -263,12 +265,10 @@ Each experiment tests a named assumption in company/assumptions.md.
   the service confirms the commit. Verified hosted on its first run. Same event-versus-state family as the
   `publications` row that counted a deleted upload as a publish — and the fix is the same shape: measure the
   state, not the event.
-* **Two and a half of the five hosted canary checks are still open** (certain / medium). `app.kendrix.io`
-  resolves to Railway while `specs/phase0-deployment.md` says the local tunnel holds until sign-in, data parity,
-  queue-restart survival and R2 access pass. A canary log now exists in that spec rather than the checks living in
-  memory: health passes and anonymous access is correctly refused. Sign-in completing, row/spend parity, queue
-  survival and R2 read/write must run **after** the redeploy, or they certify a build that will not produce the
-  acceptance reel.
+* **The hosted canary is now exercised end to end.** The operator completed Google sign-in in Chrome; the
+  acceptance reel wrote and read sourced plates, generated media, motion, audio, durable render checkpoints and
+  the final R2 object; export downloaded its post package. The failed render row and visual checkpoint survived a
+  worker restart and completed from one Retry. The procedural clean-run gate remains separate.
 * **The first proof channel is deliberately narrower and technically harder.** Crossroads remains the sole Customer
   Zero evidence source and exercises factual grounding, depictive fidelity and verified identity. Its four live reels
   continue collecting audience evidence while new production is paused for the Phase 0 exit sprint.

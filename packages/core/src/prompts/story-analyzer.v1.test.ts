@@ -44,6 +44,20 @@ describe('story analyzer visual entity boundary', () => {
     expect(prompt.userMessage).toContain('stage cannot anchor it')
   })
 
+  it('keeps a later exact model name instead of freezing the earlier generic class', () => {
+    const prompt = buildStoryAnalyzerPrompt({
+      narration: 'Two weapons fell from the aircraft. The second Mark 39 struck the ground.',
+      channelCanon: [],
+      nicheDescription: 'documented history',
+      era: '1961',
+      regionDescriptor: 'United States',
+    })
+
+    expect(prompt.userMessage).toContain('READ THE WHOLE NARRATION BEFORE NAMING')
+    expect(prompt.userMessage).toContain('"Mark 39" becomes "mark-39"')
+    expect(prompt.userMessage).toContain('early generic noun erase the later exact identity')
+  })
+
   it('keeps a named mission as context and extracts only exact physical subjects', () => {
     const prompt = buildStoryAnalyzerPrompt({
       narration: 'Apollo 12 launched on a Saturn V. Pete Conrad later flew Intrepid to the Moon.',
