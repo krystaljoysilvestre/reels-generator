@@ -35,9 +35,10 @@ The Railway workspace billing page confirmed that an unpaid invoice blocks deplo
 The founder deferred deployment until billing is resolved. Local creator-journey fixes continue on
 `codex/creator-journey-followthrough`; select the reviewed, pushed release when resuming rather than
 assuming the detached checkout above includes those later changes. See `creator-journey-followthrough.md`.
+The subsequent publishing handoff also adds migration 0068; include it when selecting that release.
 
 1. Resolve Railway billing with explicit owner authorization. Confirm deployment eligibility.
-2. Recheck that the release checkout is clean and pushed, and that no production render is active. Deploy web first for migration 0067, then worker; verify both report the selected release commit.
+2. Recheck that the release checkout is clean and pushed, and that no production render is active. Deploy web first for pending migrations (0067, plus 0068 if the handoff is included), then worker; verify both report the selected release commit.
 3. Resolve the pending Google-first versus Resend email setup choice. Verify the actual Google callback and, if enabled, real account-email delivery and recovery with an owner-controlled account.
 4. Complete the fresh non-admin signup-to-export acceptance journey described in `early-access-launch.md`. The existing admin session and mocked tests are not substitutes for this evidence.
 5. Once acceptance passes, align `SIGNUP_MODE=open` on studio and marketing, rebuild/redeploy both and verify the public entry points. The landing project is reachable through the existing authenticated browser; Vercel CLI has no credential in this environment.

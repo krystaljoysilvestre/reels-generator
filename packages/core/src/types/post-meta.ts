@@ -46,6 +46,19 @@ export function formatPostCaption(meta: PostMeta): string {
   return parts.join('\n\n')
 }
 
+// One paste-ready package for clipboard and downloads. Existing story text is a deterministic
+// fallback for older reels; exporting finished work must never start another generation.
+export function formatPublishingCaption(
+  meta: PostMeta | null,
+  fallback: { title?: string | null; logline?: string | null },
+  imageCredits: string,
+): string {
+  return [meta?.title ?? fallback.title, meta ? formatPostCaption(meta) : fallback.logline, imageCredits]
+    .map((part) => part?.trim() ?? '')
+    .filter(Boolean)
+    .join('\n\n')
+}
+
 // ── Manually-logged performance (reels.metrics) ───────────────────────────────
 // Phase 1: the operator pastes platform numbers after posting. Feeds stories.performanceScore
 // (channel-relative, see record-metrics), which weights few-shot reference selection.

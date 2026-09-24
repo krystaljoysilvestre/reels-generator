@@ -9,8 +9,7 @@
 // Runs every 15 minutes — the lag only affects how quickly the UI stops saying "scheduled".
 
 import { and, eq, isNotNull, lte } from 'drizzle-orm'
-import { getDb, reels, publications } from '@reels/db'
-import { canTransition, type ReelStatus } from '@reels/core'
+import { getDb, publications, recordPublication } from '@reels/db'
 import { makeQueue, QUEUE } from '@reels/queue'
 
 export const PUBLISH_PROMOTE_JOB = 'publish_promote'
@@ -35,21 +34,10 @@ export async function runPublishPromote(): Promise<void> {
 
   let promoted = 0
   for (const pub of due) {
-    // Guard on status so a concurrent tick can't double-promote (and so publishedAt is written once).
-    const [updated] = await db
-      .update(publications)
-      .set({ status: 'published', publishedAt: pub.scheduledAt })
-      .where(and(eq(publications.id, pub.id), eq(publications.status, 'scheduled')))
-      .returning({ id: publications.id })
-    if (!updated) continue
-    promoted++
-
-    // The reel follows only if it's still sitting at 'scheduled' — never regress one the operator
-    // already moved on (rejected/failed), and the state machine is the authority on what's legal.
-    const reel = await db.query.reels.findFirst({ where: eq(reels.id, pub.reelId), columns: { status: true } })
-    if (reel?.status === 'scheduled' && canTransition(reel.status as ReelStatus, 'published')) {
-      await db.update(reels).set({ status: 'published', updatedAt: new Date() }).where(eq(reels.id, pub.reelId))
-    }
+    const result = await recordPublication({
+      reelId: pub.reelId, platform: pub.platform, kind: 'promote', publicationId: pub.id, now,
+    })
+    if (result) promoted++
   }
 
   if (promoted) console.log(`[publish-promote] ${promoted} scheduled post(s) are now live`)

@@ -7,7 +7,7 @@
 
 import { and, eq, count, gte, inArray } from 'drizzle-orm'
 import { getDb, channels, reels, stories, seriesTopics } from '@reels/db'
-import { PostingRulesSchema, UNSHIPPED_REEL_STATUSES, autoProduceBacklogCap } from '@reels/core'
+import { PostingRulesSchema, UNSHIPPED_REEL_STATUSES, autoProduceBacklogCap, publicationPlatformsForTargets } from '@reels/core'
 import { makeQueue, QUEUE } from '@reels/queue'
 
 export const DAILY_DIGEST_JOB = 'daily_digest'
@@ -41,17 +41,21 @@ export async function runDailyDigest(): Promise<void> {
 
   const digests: ChannelDigest[] = []
   for (const channel of activeChannels) {
-    const countWhere = async (where: Parameters<typeof and>[0]) =>
-      (await db.select({ n: count() }).from(reels).where(and(eq(reels.channelId, channel.id), where)))[0]?.n ?? 0
-
-    const ready = await countWhere(eq(reels.status, 'approved'))
-    // Already uploaded and waiting on a posting slot — why the shelf can look empty on a scheduled channel.
-    const scheduled = await countWhere(eq(reels.status, 'scheduled'))
-    const failed = await countWhere(eq(reels.status, 'failed'))
     const rows = await db.query.reels.findMany({
       where: eq(reels.channelId, channel.id),
       columns: { status: true, alertNote: true },
+      with: { publications: { columns: { platform: true, status: true } } },
     })
+    const selected = publicationPlatformsForTargets(channel.targetPlatforms)
+    const needsPosting = (row: typeof rows[number]) => selected.some((platform) => {
+      const post = row.publications.find((publication) => publication.platform === platform)
+      return !post || (post.status !== 'published' && post.status !== 'scheduled')
+    })
+    // A scheduled YouTube upload may coexist with a destination the creator still needs to post.
+    // Keep that reel actionable both before and after YouTube's slot; only wholly queued reels wait.
+    const ready = rows.filter((row) => row.status === 'approved' || (row.status === 'scheduled' && needsPosting(row))).length
+    const scheduled = rows.filter((row) => row.status === 'scheduled' && !needsPosting(row)).length
+    const failed = rows.filter((row) => row.status === 'failed').length
     const needsAttention = rows.filter((r) => r.alertNote).length
     // Topics retired for want of evidence in the last day. On an evidence-required channel this is the
     // difference between "nothing to report" and "we tried and the sources weren't there" — without it,

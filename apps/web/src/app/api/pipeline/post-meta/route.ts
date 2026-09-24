@@ -2,10 +2,11 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { eq } from 'drizzle-orm'
-import { getDb, reels } from '@reels/db'
-import { PostMetaSchema, thumbnailOverlay } from '@reels/core'
+import { getDb, reels, channels } from '@reels/db'
+import { PostMetaSchema, resolveSidecarSrt, thumbnailOverlay } from '@reels/core'
 import { enqueueStep } from '@reels/queue'
 import { requireReelOwner } from '@/lib/api-access'
+import { publishingCopy } from '@/lib/publishing-copy'
 
 // The reel's post package (title/hook/caption/hashtags). Written by the generate_post_meta step;
 // this route lets the operator read + edit it before exporting. GET → { postMeta } (null when the
@@ -20,12 +21,17 @@ export async function GET(req: NextRequest) {
 
   const reel = await getDb().query.reels.findFirst({
     where: eq(reels.id, reelId),
-    columns: { postMeta: true },
+    with: { story: true },
   })
   if (!reel) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const parsed = PostMetaSchema.safeParse(reel.postMeta)
-  return NextResponse.json({ postMeta: parsed.success ? parsed.data : null })
+  const channel = await getDb().query.channels.findFirst({
+    where: eq(channels.id, reel.channelId), columns: { captionStyle: true },
+  })
+  return NextResponse.json({
+    ...await publishingCopy(reel),
+    hasSubtitles: Boolean(resolveSidecarSrt(reel.timings, channel?.captionStyle)),
+  }, { headers: { 'Cache-Control': 'private, no-store' } })
 }
 
 const PatchSchema = z.object({

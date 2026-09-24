@@ -1,78 +1,57 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
-import { getDb, reels, channels, publications, visualTruthBlockers } from '@reels/db'
-import { eq, sql } from 'drizzle-orm'
-import { transition } from '@reels/core'
+import { recordPublication, publicationResponse, PublicationStateError, visualTruthBlockers } from '@reels/db'
 import { requireReelOwner } from '@/lib/api-access'
+import { checkRateLimit } from '@reels/providers'
 import { z } from 'zod'
 
-const RequestSchema = z.object({ reelId: z.string().uuid() })
+const POST_HOSTS = {
+  tiktok: ['tiktok.com'],
+  fb: ['facebook.com', 'fb.watch'],
+  ig: ['instagram.com'],
+  yt: ['youtube.com', 'youtu.be'],
+} as const
+const RequestSchema = z.object({
+  reelId: z.string().uuid(),
+  platform: z.enum(['tiktok', 'fb', 'ig', 'yt']),
+  postUrl: z.string().trim().min(1).max(2048).optional(),
+}).superRefine(({ platform, postUrl }, ctx) => {
+  if (postUrl === undefined) return
+  try {
+    const url = new URL(postUrl)
+    if (url.protocol !== 'https:' || url.username || url.password || url.port
+      || !POST_HOSTS[platform].some((host) => url.hostname === host || url.hostname.endsWith(`.${host}`))) {
+      throw new Error('Unsupported post link')
+    }
+  } catch {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['postUrl'], message: 'Use an HTTPS post link from the selected platform.' })
+  }
+})
 
-// Operator has posted the exported package to the platform(s) → 'published' (terminal).
-// Phase 1 posting is manual (export-post-package zip), so this is the operator confirming the upload.
+// The creator confirms ONE destination after posting through the platform's own interface.
+// A stored link is never fetched and does not independently verify public availability.
 export async function POST(req: NextRequest) {
   const parsed = RequestSchema.safeParse(await req.json().catch(() => null))
-  if (!parsed.success) return NextResponse.json({ error: 'Choose a valid reel.' }, { status: 400 })
-  const { reelId } = parsed.data
-
+  if (!parsed.success) return NextResponse.json({ error: 'Choose a destination and a valid post link, if included.' }, { status: 400 })
+  const { reelId, platform, postUrl } = parsed.data
   const gate = await requireReelOwner(reelId)
   if (gate instanceof NextResponse) return gate
-
-  const db = getDb()
+  if (!(await checkRateLimit(`publication:confirm:${gate.id}`, 60, 60_000)).ok) {
+    return NextResponse.json({ error: 'Please wait a moment before saving another confirmation.' }, { status: 429 })
+  }
 
   try {
-    // The shared truth helper uses its own pooled connection; finish it before taking the row lock
-    // so simultaneous confirmations cannot exhaust the pool while waiting on the same reel.
+    // Finish the helper's independent pool query before locking the reel (avoid pool starvation).
     const truthBlockers = await visualTruthBlockers(reelId)
     if (truthBlockers.length > 0) {
       return NextResponse.json({ error: 'Fix the flagged visual-truth scenes before publishing.', blockers: truthBlockers }, { status: 409 })
     }
-    const response = await db.transaction(async (tx) => {
-      // Serialize confirmations for this reel. A retry sees the committed result, and a destination
-      // failure rolls the status change back with it instead of leaving an unrepeatable half-write.
-      const [reel] = await tx.select().from(reels).where(eq(reels.id, reelId)).for('update')
-      if (!reel) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-      // Already-published reels may reconcile missing destination records from an earlier partial
-      // write. Every new publication still requires the approved/scheduled state-machine transition.
-      if (reel.status !== 'published') {
-        try {
-          transition(reel.status, 'published')
-        } catch {
-          return NextResponse.json({ error: `Cannot publish a reel in '${reel.status}'` }, { status: 409 })
-        }
-      }
-
-      const now = new Date()
-      if (reel.status !== 'published') {
-        await tx.update(reels).set({ status: 'published', updatedAt: now }).where(eq(reels.id, reelId))
-      }
-      const channel = await tx.query.channels.findFirst({
-        where: eq(channels.id, reel.channelId),
-        columns: { targetPlatforms: true },
-      })
-      const platforms = [...new Set((channel?.targetPlatforms ?? ['tiktok']).map((target) =>
-        target === 'youtube_shorts' || target === 'youtube_long'
-          ? 'yt' as const
-          : target === 'facebook_reels'
-            ? 'fb' as const
-            : 'tiktok' as const,
-      ))]
-      if (platforms.length) {
-        await tx.insert(publications).values(
-          platforms.map((platform) => ({ reelId, platform, status: 'published', publishedAt: now })),
-        ).onConflictDoUpdate({
-          target: [publications.reelId, publications.platform],
-          // Confirm an existing pending destination too, but never replace its external post ID,
-          // disclosure or original timestamps. Repeated confirmations keep the original record.
-          set: { status: 'published', publishedAt: sql`coalesce(${publications.publishedAt}, excluded.published_at)` },
-        })
-      }
-
-      return NextResponse.json({ ok: true })
-    })
-    if (response.ok) console.log(`[publishing] creator ${gate.id} confirmed reel ${reelId}`)
-    return response
+    const result = await recordPublication({ reelId, platform, kind: 'manual', postUrl })
+    if (!result) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    console.log(`[publishing] creator ${gate.id} confirmed reel ${reelId} on ${platform}`)
+    return NextResponse.json({ ok: true, reelStatus: result.reelStatus, publication: publicationResponse(result.publication) })
   } catch (err) {
+    if (err instanceof PublicationStateError) return NextResponse.json({ error: err.message }, { status: err.status })
     console.error(`[publishing] confirmation failed for reel ${reelId} by creator ${gate.id}:`, err)
     return NextResponse.json({ error: 'Could not save your confirmation. Try again.' }, { status: 500 })
   }

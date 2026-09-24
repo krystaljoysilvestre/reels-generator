@@ -14,13 +14,14 @@ import { primeReelAlert } from '@/lib/reel-alert'
 import { phaseForStep } from '@/lib/pipeline-phases'
 import { stepLabel } from '@/lib/pipeline-steps'
 import { useToast } from '@/components/Toast'
-import { PostCaptionButton, LogPerformanceButton, PostToYouTubeButton } from './PublishTools'
+import { LogPerformanceButton } from './PublishTools'
 import { CoverPicker, type CoverFrame, type CoverSelection } from './CoverPicker'
 import { SceneMedia, MotionDurationChip } from './SceneMedia'
 import { SceneStage } from './SceneStage'
 import { Timeline } from './Timeline'
 import { RenderLedger } from './RenderLedger'
 import { ReelReady } from './ReelReady'
+import type { PublishDestination, SavedPublication } from './publishing-handoff'
 import { sceneSeconds, sceneStarts, totalSeconds, fmtClock } from './scene-timing'
 
 type Scene = InferSelectModel<typeof scenes>
@@ -34,7 +35,7 @@ type Voice = ChannelVoice
 type PickerVoice = ChannelVoice & { reason?: string | undefined }
 
 interface StoryboardEditorProps {
-  reel: { id: string; channelId: string; status: string; voiceId: string | null; costCents: number; operatorMinutes: number; language: string; metricsViews: number | null; publishDestinations: Array<{ target: string; connected: boolean; accountName: string | null }>; scheduledAt?: string | null }
+  reel: { id: string; channelId: string; status: string; voiceId: string | null; costCents: number; operatorMinutes: number; language: string; metricsViews: number | null; publishDestinations: PublishDestination[]; historicalPublications: SavedPublication[]; hasSubtitles: boolean; scheduledAt?: string | null }
   story: Story | null
   scenes: Scene[]
   voicePool: Voice[]
@@ -532,29 +533,6 @@ export function StoryboardEditor({
     setLoading(null)
     toast('Reel approved.', 'success')
     router.refresh()
-  }
-
-  // Operator has uploaded the exported package → mark it published (terminal).
-  async function handlePublish() {
-    setLoading('publish')
-    setError(null)
-    try {
-      const res = await fetch('/api/pipeline/mark-published', {
-        method: 'POST',
-        body: JSON.stringify({ reelId: reel.id }),
-        headers: { 'Content-Type': 'application/json' },
-      })
-      if (!res.ok) {
-        setError(await failMessage(res, 'Could not mark this reel published.'))
-        return
-      }
-      toast('Published.', 'success')
-      router.refresh()
-    } catch {
-      setError('Could not confirm publication. Check your connection and try again.')
-    } finally {
-      setLoading(null)
-    }
   }
 
   // Recover a hard-failed reel: re-run the failed step (prior steps are cached) and resume the chain.
@@ -1279,12 +1257,13 @@ export function StoryboardEditor({
           metricsViews={reel.metricsViews}
           postMeta={postMeta}
           destinations={reel.publishDestinations}
+          historicalPublications={reel.historicalPublications}
+          hasSubtitles={reel.hasSubtitles}
           loading={loading}
           error={error}
           onBack={() => setEditingAfterRender(true)}
           onRerender={handleRender}
           onApprove={handleApprove}
-          onPublish={handlePublish}
           coverPicker={packaging ? (
             <CoverPicker
               reelId={reel.id}
@@ -1296,11 +1275,6 @@ export function StoryboardEditor({
           ) : null}
           publishTools={
             <>
-              {/* The rest of the package — thumbnail words, hook, hashtags — behind its own dialog. */}
-              <PostCaptionButton reelId={reel.id} triggerClass="btn-dark" />
-              {reel.status === 'approved' && reel.publishDestinations.some((d) => (d.target === 'youtube_shorts' || d.target === 'youtube_long') && d.connected) && (
-                <PostToYouTubeButton reelId={reel.id} triggerClass="btn-dark" />
-              )}
               {reel.status === 'published' && (
                 <LogPerformanceButton reelId={reel.id} initialViews={reel.metricsViews} triggerClass="btn-dark" />
               )}

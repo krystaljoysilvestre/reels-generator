@@ -28,13 +28,17 @@ const steps = [
     tip: 'Choose Approve reel when you are happy with the result. Always watch the final cut before posting it.',
   },
   {
-    title: 'Download and share',
-    copy: 'Choose Download to get a ZIP with your video, caption, posting note and a thumbnail when available. Unzip it, then upload the video to your chosen platform. Post caption lets you review and copy the accompanying text.',
-    tip: 'After you post it yourself, use Mark as published to update its status in Kendrix. This button records your post; it does not upload the video.',
+    title: 'Download and post',
+    copy: 'Choose Download video, then Edit & copy caption to prepare the text with any image credits. Save caption changes to include them in future downloads and connected uploads. Download the cover and subtitles when available. Open TikTok, Instagram, Facebook or YouTube from the posting section and upload there. Post package bundles the files in a ZIP; supported browsers also offer file sharing.',
+    tip: 'After posting, choose I’ve posted this for that destination and optionally save its post link. Each destination keeps its own progress. YouTube also offers an optional connected upload; check its visibility in YouTube Studio.',
   },
 ]
 
 const troubleshooting = [
+  {
+    title: 'My video is ready, but I have not posted everywhere',
+    copy: 'Reopen the reel to see each destination’s saved progress. Downloading, sharing or opening a platform does not mark it posted. Confirm only the destinations you have finished. For other platforms, use the same downloaded video and copied caption.',
+  },
   {
     title: 'A story or production step failed',
     copy: 'Open the same reel from your channel. Use Try again on the story screen or Retry on the storyboard. A retry resumes from the failed step and keeps completed work. If the message says a limit was reached, check Account before retrying.',

@@ -51,6 +51,14 @@ const FacebookIcon = (
   </svg>
 )
 
+const InstagramIcon = (
+  <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#C13584" strokeWidth="2" aria-hidden>
+    <rect x="3" y="3" width="18" height="18" rx="5" />
+    <circle cx="12" cy="12" r="4" />
+    <circle cx="17.5" cy="6.5" r="1" fill="#C13584" stroke="none" />
+  </svg>
+)
+
 interface Plat {
   value: TargetPlatform
   label: string
@@ -64,6 +72,7 @@ const PLATFORMS: Plat[] = [
   { value: 'tiktok', label: 'TikTok', sub: '9:16 · ≤ 3 min', icon: TikTokIcon },
   { value: 'youtube_shorts', label: 'YouTube Shorts', sub: '9:16 · ≤ 3 min', icon: YouTubeIcon },
   { value: 'facebook_reels', label: 'Facebook Reels', sub: '9:16 · ≤ 90s', icon: FacebookIcon },
+  { value: 'instagram_reels', label: 'Instagram Reels', sub: '9:16 · ≤ 90s', icon: InstagramIcon },
   { value: 'youtube_long', label: 'YouTube long-form', sub: '16:9 · ≤ 20 min', icon: YouTubeLongIcon },
 ]
 
@@ -129,14 +138,12 @@ export function PlatformPicker({
           )
         })}
       </div>
-      {/* What the SET costs, and who set the ceiling — so a creator can see that adding Shorts is what
-          capped them at 60s, rather than wondering why their length moved. */}
       <p className="mt-2.5 text-xs leading-relaxed text-muted">
-        Publishing to <span className="font-medium text-accent">{count === 1 ? '1 platform' : `${count} platforms`}</span> — tap a card to toggle.
-        {' '}Every reel is cut to{' '}
+        Selected <span className="font-medium text-accent">{count === 1 ? '1 platform' : `${count} platforms`}</span> — tap a card to toggle.
+        {' '}Kendrix creates reels up to{' '}
         <span className="font-medium text-ink">{preset.maxSeconds >= 120 ? `${Math.round(preset.maxSeconds / 60)} min` : `${preset.maxSeconds}s`}</span>{' '}
         · {preset.aspect === '16:9' ? '16:9 widescreen' : '9:16 vertical'}, with captions clear of the tallest bottom UI.
-        {count > 1 && ' The shortest platform sets the length.'}
+        {count > 1 && ' The lowest output limit applies to every copy.'}
       </p>
       <p className="mt-1 text-[11px] text-faint">
         Long-form is a different shape, so it can&apos;t share a channel with vertical reels — give it its own.

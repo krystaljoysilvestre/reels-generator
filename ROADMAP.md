@@ -31,6 +31,17 @@ required deployed production lap; this change does not assert that its missing p
 - Local follow-through now releases creator production slots after approval, makes publication confirmation
   safe to retry, and gives accurate recovery guidance when account email is unavailable. Evidence and
   remaining boundaries: `specs/creator-journey-followthrough.md`.
+- The verified local slice completes the posting handoff: Instagram, separate destination records and post
+  links, direct downloads, captions with image credits and optional browser file sharing. No new social API
+  review is needed for creators posting through the platforms themselves. See `specs/publishing-handoff.md`.
+- Ayrshare remains deferred. The founder later approved a bounded Post for Me own-account pilot, then
+  prioritized a creator walkthrough before further integration. No subscription or real provider posting has
+  been verified. Free early access keeps the manual handoff and optional YouTube integration; broader automatic
+  publishing and scheduling remain outside launch scope. See `specs/post-for-me-pilot.md`.
+- The local creator walkthrough found conflicting caption editors at the final posting step. One editor now
+  preserves the current draft, copies it accurately and keeps saved previews/exports consistent. Draft-resume,
+  failed-save recovery and desktop/phone checks are recorded in `specs/creator-walkthrough-2026-09-24.md`.
+  Review of one existing approved reel supports a publishing-copy refinement, not a production rewrite.
 - Acceptance and remaining configuration: `specs/early-access-journey.md` and `specs/early-access-launch.md`.
 - Before opening: deploy the reviewed build and migration, configure/verify account email and Google,
   align both signup switches, apply the staged free-access spend ceilings and verify the support procedure, then complete

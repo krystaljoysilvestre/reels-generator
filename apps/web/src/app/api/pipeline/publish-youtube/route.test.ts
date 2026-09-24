@@ -5,7 +5,7 @@ import type * as Database from '@reels/db'
 const mocks = vi.hoisted(() => ({
   reel: vi.fn(), publication: vi.fn(), asset: vi.fn(), channel: vi.fn(), owner: vi.fn(), truth: vi.fn(),
   auth: vi.fn(), connectionError: vi.fn(), download: vi.fn(), upload: vi.fn(), origins: vi.fn(),
-  insert: vi.fn(), values: vi.fn(), conflict: vi.fn(), update: vi.fn(), set: vi.fn(), where: vi.fn(),
+  record: vi.fn(),
 }))
 vi.mock('@reels/db', async () => ({
   ...await vi.importActual<typeof Database>('@reels/db'),
@@ -14,8 +14,8 @@ vi.mock('@reels/db', async () => ({
       reels: { findFirst: mocks.reel }, publications: { findFirst: mocks.publication },
       assets: { findFirst: mocks.asset }, channels: { findFirst: mocks.channel },
     },
-    insert: mocks.insert, update: mocks.update,
   }),
+  recordPublication: mocks.record,
   visualTruthBlockers: mocks.truth, resolveYouTubeAuth: mocks.auth,
   markConnectionError: mocks.connectionError, sceneImageOrigins: mocks.origins,
 }))
@@ -42,12 +42,7 @@ describe('YouTube publication retries', () => {
     mocks.asset.mockResolvedValueOnce({ storageKey: `reels/${reelId}/render.mp4` }).mockResolvedValue(null)
     mocks.download.mockResolvedValue(Buffer.from('test video'))
     mocks.upload.mockResolvedValue({ videoId: 'new-video', url: 'https://youtu.be/new-video' })
-    mocks.insert.mockReturnValue({ values: mocks.values })
-    mocks.values.mockReturnValue({ onConflictDoUpdate: mocks.conflict })
-    mocks.conflict.mockResolvedValue(undefined)
-    mocks.update.mockReturnValue({ set: mocks.set })
-    mocks.set.mockReturnValue({ where: mocks.where })
-    mocks.where.mockResolvedValue(undefined)
+    mocks.record.mockResolvedValue({ reelStatus: 'published', publication: { platform: 'yt', platformPostId: 'new-video', postUrl: 'https://youtu.be/new-video', status: 'published', publishedAt: new Date() } })
   })
 
   it.each(['approved', 'published'])('returns the saved upload for a %s reel even after disconnecting YouTube', async (status) => {
@@ -61,8 +56,29 @@ describe('YouTube publication retries', () => {
     expect(mocks.asset).not.toHaveBeenCalled()
     expect(mocks.download).not.toHaveBeenCalled()
     expect(mocks.upload).not.toHaveBeenCalled()
-    expect(mocks.insert).not.toHaveBeenCalled()
-    expect(mocks.update).not.toHaveBeenCalled()
+    expect(mocks.record).not.toHaveBeenCalled()
+  })
+
+  it('does not upload again after a manual confirmation with no external video ID', async () => {
+    mocks.publication.mockResolvedValue({ platform: 'yt', status: 'published', platformPostId: null, postUrl: null, publishedAt: new Date() })
+    const response = await POST(request())
+    expect(await response.json()).toMatchObject({ ok: true, already: true, videoUrl: null, publication: { status: 'published' } })
+    expect(mocks.auth).not.toHaveBeenCalled()
+    expect(mocks.upload).not.toHaveBeenCalled()
+  })
+
+  it('does not upload to an unselected destination', async () => {
+    mocks.channel.mockResolvedValue({ targetPlatforms: ['instagram_reels'] })
+    expect((await POST(request())).status).toBe(400)
+    expect(mocks.upload).not.toHaveBeenCalled()
+  })
+
+  it('explains a successful upload whose database confirmation failed', async () => {
+    mocks.record.mockRejectedValue(new Error('test database failure'))
+    const response = await POST(request())
+    expect(response.status).toBe(500)
+    expect(await response.json()).toMatchObject({ videoUrl: 'https://youtu.be/new-video', error: expect.stringContaining('Check YouTube') })
+    expect(mocks.upload).toHaveBeenCalledOnce()
   })
 
   it('does not bypass the transition gate when a published reel has no recorded upload', async () => {
@@ -95,21 +111,19 @@ describe('YouTube publication retries', () => {
     { targets: ['youtube_shorts', 'tiktok'], published: false },
   ])('preserves completion behavior for $targets', async ({ targets, published }) => {
     mocks.channel.mockResolvedValue({ targetPlatforms: targets, languages: ['english'] })
+    mocks.record.mockResolvedValue({ reelStatus: published ? 'published' : 'approved', publication: { platform: 'yt', platformPostId: 'new-video', status: 'published', publishedAt: new Date() } })
     const response = await POST(request())
     expect(response.status).toBe(200)
     expect(await response.json()).toMatchObject({ allDestinationsPublished: published })
     expect(mocks.upload).toHaveBeenCalledOnce()
-    expect(mocks.values).toHaveBeenCalledWith(expect.objectContaining({ platformPostId: 'new-video', status: 'published' }))
-    expect(mocks.update).toHaveBeenCalledTimes(published ? 1 : 0)
-    if (published) expect(mocks.set).toHaveBeenCalledWith(expect.objectContaining({ status: 'published' }))
+    expect(mocks.record).toHaveBeenCalledWith(expect.objectContaining({ reelId, platform: 'yt', kind: 'provider', platformPostId: 'new-video' }))
   })
 
   it('leaves publication state untouched when an upload fails', async () => {
     mocks.upload.mockRejectedValue(new Error('test upload failure'))
     expect((await POST(request())).status).toBe(502)
     expect(mocks.connectionError).toHaveBeenCalledOnce()
-    expect(mocks.insert).not.toHaveBeenCalled()
-    expect(mocks.update).not.toHaveBeenCalled()
+    expect(mocks.record).not.toHaveBeenCalled()
   })
 
   it.each([null, {}, { reelId: 2 }, { reelId: 'not-a-uuid' }])('rejects malformed request %j', async (body) => {

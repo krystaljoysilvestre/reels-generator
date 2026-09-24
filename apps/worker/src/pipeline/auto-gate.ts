@@ -1,8 +1,8 @@
 import { eq, and, gt, isNotNull } from 'drizzle-orm'
-import { getDb, reels, channels, stories, assets, publications, pipelineSteps, sceneImageOrigins, resolveYouTubeAuth, markConnectionError, assertVisualTruthReady } from '@reels/db'
+import { getDb, reels, channels, stories, assets, publications, pipelineSteps, sceneImageOrigins, resolveYouTubeAuth, markConnectionError, assertVisualTruthReady, recordPublication } from '@reels/db'
 import { enqueueStep } from '@reels/queue'
 import { listVoices, downloadBuffer, uploadToYouTube, toElevenLabsLang, type YouTubeAuth } from '@reels/providers'
-import { PostingRulesSchema, PostMetaSchema, formatPostCaption, formatImageCredits, StoryBibleSchema, matchNarratorVoice, nextPublishSlot, resolvePublishSlots, resolvePublishDays, resolveSidecarSrt, type PostingRules, type ChannelVoice, type NarratorVoice } from '@reels/core'
+import { PostingRulesSchema, publicationPlatformsForTargets, canTransition, PostMetaSchema, formatPostCaption, formatImageCredits, StoryBibleSchema, matchNarratorVoice, nextPublishSlot, resolvePublishSlots, resolvePublishDays, resolveSidecarSrt, type PostingRules, type ChannelVoice, type NarratorVoice } from '@reels/core'
 import { setReelStatus } from './harness.js'
 
 // The three steps where the pipeline normally STOPS for human review (resolveNextStep returns null):
@@ -174,17 +174,21 @@ async function nextFreeChannelSlot(channelId: string, rules: PostingRules): Prom
 // Upload one approved reel to YouTube and record it (worker twin of /api/pipeline/publish-youtube).
 // With a slot, YouTube holds the video private and publishes it itself at that instant — so the
 // schedule doesn't depend on this worker being alive later.
-async function autoPublishYouTube(reelId: string, slot: Date | null, auth: YouTubeAuth): Promise<void> {
+export async function autoPublishYouTube(reelId: string, slot: Date | null, auth: YouTubeAuth): Promise<void> {
   const db = getDb()
   await assertVisualTruthReady(reelId)
   const reel = await db.query.reels.findFirst({ where: eq(reels.id, reelId) })
   if (!reel) throw new Error('reel disappeared')
 
+  const ytChannel = await db.query.channels.findFirst({ where: eq(channels.id, reel.channelId) })
+  if (!publicationPlatformsForTargets(ytChannel?.targetPlatforms ?? []).includes('yt')) return
+  if (reel.status !== 'published' && !canTransition(reel.status, 'published')) return
+
   // Idempotency: a BullMQ retry of render_qa must not upload twice.
   const existingYt = await db.query.publications.findFirst({
     where: and(eq(publications.reelId, reelId), eq(publications.platform, 'yt')),
   })
-  if (existingYt?.platformPostId) return
+  if (existingYt?.platformPostId || existingYt?.status === 'published' || reel.status === 'published') return
 
   const renderAsset = await db.query.assets.findFirst({
     where: and(eq(assets.reelId, reelId), eq(assets.kind, 'render')),
@@ -209,7 +213,6 @@ async function autoPublishYouTube(reelId: string, slot: Date | null, auth: YouTu
   })
   const thumbnailJpeg = thumbAsset ? await downloadBuffer(thumbAsset.storageKey).catch(() => undefined) : undefined
   // Channels that don't burn captions ship a native CC track instead, from the same timings.
-  const ytChannel = await db.query.channels.findFirst({ where: eq(channels.id, reel.channelId) })
   const captionsSrt = resolveSidecarSrt(reel.timings, ytChannel?.captionStyle)
   const captionsLanguage = toElevenLabsLang(ytChannel?.languages?.[0] ?? 'english')
   let result
@@ -231,27 +234,11 @@ async function autoPublishYouTube(reelId: string, slot: Date | null, auth: YouTu
     throw err
   }
 
-  // Idempotent on the unique (reelId, platform) index: if a concurrent run already recorded this
-  // publication, don't create a second row (the early-return above handles the sequential-retry case;
-  // this closes the check-then-insert race between two concurrent runs).
-  //
-  // A scheduled publication carries scheduledAt and NO publishedAt — publishedAt means "this is
-  // actually live", which is what the metrics poll keys off. publish-promote fills it in at the slot.
-  await db
-    .insert(publications)
-    .values({
-      reelId,
-      platform: 'yt',
-      platformPostId: result.videoId,
-      status: slot ? 'scheduled' : 'published',
-      ...(slot ? { scheduledAt: slot } : { publishedAt: new Date() }),
-      disclosureApplied: true, // containsSyntheticMedia is set on the upload itself
-    })
-    .onConflictDoNothing({ target: [publications.reelId, publications.platform] })
-  await db
-    .update(reels)
-    .set({ status: slot ? 'scheduled' : 'published', updatedAt: new Date() })
-    .where(eq(reels.id, reelId))
+  // The shared transaction preserves prior confirmations and completes only the selected set.
+  await recordPublication({
+    reelId, platform: 'yt', kind: 'provider', platformPostId: result.videoId,
+    postUrl: result.url, ...(slot ? { scheduledAt: slot } : {}), disclosureApplied: true,
+  })
 }
 
 // Auto-mode voice: single-voice channels use their pool; per_story (empty pool) picks the top match

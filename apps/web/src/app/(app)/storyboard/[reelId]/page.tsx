@@ -2,7 +2,7 @@ import { getDb, reels, assets, channels, pipelineSteps, publications, platformCo
 import { and, desc, eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { assertReelAccess } from '@/lib/access'
-import { type ChannelVoice, type VoiceSettings, moodToVoiceSettings, ToneConfigSchema, AudioPacksSchema, OperatorSfxSchema, PostMetaSchema, ReelCoverSchema, CaptionStyleSchema, TimingsSchema, channelPlatformPreset, PRESET_BEDS } from '@reels/core'
+import { type ChannelVoice, type VoiceSettings, moodToVoiceSettings, ToneConfigSchema, AudioPacksSchema, OperatorSfxSchema, PostMetaSchema, ReelCoverSchema, CaptionStyleSchema, TimingsSchema, channelPlatformPreset, PRESET_BEDS, publicationPlatformForTarget, publicationPlatformsForTargets, resolveSidecarSrt } from '@reels/core'
 import { channelMood, MOOD_TINT } from '@/lib/pipeline-phases'
 import { StoryboardEditor } from './StoryboardEditor'
 import { reelMetadata } from '@/lib/page-metadata'
@@ -41,10 +41,23 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
   })
 
   const reelAssets = await db.query.assets.findMany({ where: eq(assets.reelId, reelId) })
+  const publicationRows = await db.query.publications.findMany({ where: eq(publications.reelId, reelId) })
+  const savedPublications = publicationRows.map((publication) => ({
+    platform: publication.platform, status: publication.status, postUrl: publication.postUrl,
+    platformPostId: publication.platformPostId, publishedAt: publication.publishedAt?.toISOString() ?? null,
+    scheduledAt: publication.scheduledAt?.toISOString() ?? null,
+  }))
   const connections = channel ? await db.query.platformConnections.findMany({
     where: eq(platformConnections.channelId, channel.id),
     columns: { platform: true, providerAccountName: true, status: true },
   }) : []
+
+  const selectedPlatforms = publicationPlatformsForTargets(channel?.targetPlatforms ?? [])
+  const publishDestinations = selectedPlatforms.map((platform) => {
+    const target = channel!.targetPlatforms.find((value) => publicationPlatformForTarget(value) === platform)!
+    const connection = connections.find((connection) => connection.platform === platform && connection.status === 'active')
+    return { target, platform, connected: Boolean(connection), accountName: connection?.providerAccountName ?? null, publication: savedPublications.find((publication) => publication.platform === platform) ?? null }
+  })
 
   // Map scene idx → image URL (R2 public URL or storage key)
   const sceneImages: Record<number, string> = {}
@@ -139,10 +152,10 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
     : null
 
   const parsedMeta = PostMetaSchema.safeParse(reel.postMeta)
-  const packaging = parsedMeta.success
+  const packaging = parsedMeta.success || coverAsset
     ? {
-        title: parsedMeta.data.title,
-        thumbnailText: parsedMeta.data.thumbnailText,
+        title: parsedMeta.success ? parsedMeta.data.title : reel.story?.title ?? 'Untitled reel',
+        thumbnailText: parsedMeta.success ? parsedMeta.data.thumbnailText : '',
         // The cover upserts in place on the SAME key, so the asset id never changes and can't bust the
         // cache. createdAt is bumped on every rebuild, which is what makes an edited cover actually appear.
         coverUrl: coverAsset
@@ -181,14 +194,7 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
   // Channel-mood accent (dark=red / warm=amber / neutral=midnight) for the storyboard's ambient touches.
   const moodTint = MOOD_TINT[channelMood(tone)]
 
-  // A scheduled reel is already uploaded and waiting on its slot — the footer shows when it goes live.
-  let scheduledAt: string | null = null
-  if (reel.status === 'scheduled') {
-    const pub = await db.query.publications.findFirst({
-      where: and(eq(publications.reelId, reelId), eq(publications.status, 'scheduled')),
-    })
-    scheduledAt = pub?.scheduledAt?.toISOString() ?? null
-  }
+  const scheduledAt = savedPublications.find((publication) => publication.status === 'scheduled')?.scheduledAt ?? null
 
   // Did the automated render checks pass? The finished-reel screen says so out loud, so it reads the real
   // render_qa row rather than asserting it. null = the step hasn't run for this reel (older reels, or a
@@ -233,11 +239,9 @@ export default async function StoryboardPage({ params }: { params: Promise<{ ree
         language: reel.language,
         metricsViews: (reel.metrics as { views?: number } | null)?.views ?? null,
         channelId: reel.channelId,
-        publishDestinations: (channel?.targetPlatforms ?? []).map((target) => {
-          const platform = target === 'youtube_shorts' || target === 'youtube_long' ? 'yt' : target === 'facebook_reels' ? 'fb' : 'tiktok'
-          const connection = connections.find((c) => c.platform === platform && c.status === 'active')
-          return { target, connected: Boolean(connection), accountName: connection?.providerAccountName ?? null }
-        }),
+        publishDestinations,
+        historicalPublications: savedPublications.filter((publication) => !selectedPlatforms.includes(publication.platform)),
+        hasSubtitles: Boolean(resolveSidecarSrt(reel.timings, channel?.captionStyle)),
         scheduledAt,
       }}
       story={reel.story ?? null}

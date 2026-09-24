@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest, NextResponse } from 'next/server'
 import type * as Database from '@reels/db'
+import { CAPTION_PRESETS } from '@reels/core'
 
 const mocks = vi.hoisted(() => ({
   reel: vi.fn(),
@@ -16,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   download: vi.fn(),
   llm: vi.fn(),
   failedSpend: vi.fn(),
+  limit: vi.fn(),
 }))
 
 vi.mock('@reels/db', async () => ({
@@ -31,7 +33,7 @@ vi.mock('@reels/db', async () => ({
   }),
   sceneImageOrigins: mocks.imageOrigins,
 }))
-vi.mock('@reels/providers', () => ({ downloadBuffer: mocks.download, llmCall: mocks.llm }))
+vi.mock('@reels/providers', () => ({ downloadBuffer: mocks.download, llmCall: mocks.llm, checkRateLimit: mocks.limit }))
 vi.mock('@/lib/api-access', () => ({ requireReelOwner: mocks.owner, requireSpendBudget: mocks.budget }))
 vi.mock('@/lib/failed-spend', () => ({ recordFailedSpend: mocks.failedSpend }))
 
@@ -82,6 +84,7 @@ describe('finished reel downloads', () => {
   beforeEach(() => {
     vi.resetAllMocks()
     mocks.owner.mockResolvedValue(creator)
+    mocks.limit.mockResolvedValue({ ok: true })
     mocks.budget.mockResolvedValue(null)
     mocks.reel.mockResolvedValue(reel)
     mocks.channel.mockResolvedValue({ name: 'Lighthouse stories', nicheDescription: 'Stories by the sea', genreCategory: 'general', postingRules: {} })
@@ -120,7 +123,7 @@ describe('finished reel downloads', () => {
     const caption = files.get('caption.txt')?.toString() ?? ''
 
     expect(files.get('reel.mp4')?.toString()).toBe('finished-video')
-    expect(caption).toContain('TITLE: The original story')
+    expect(caption).toContain('The original story')
     expect(caption).toContain('A keeper saves the lighthouse.')
     expect(caption).toContain('Example Photographer')
     expect(caption).toContain('CC BY-SA 4.0')
@@ -128,35 +131,35 @@ describe('finished reel downloads', () => {
     expect(caption).toContain('Archival photograph')
     expect(caption).toContain('Public domain')
     expect(files.get('AI-DISCLOSURE.txt')?.toString()).toContain('This content was created with AI assistance.')
-    expect(mocks.budget).toHaveBeenCalledWith(creator)
+    expect(mocks.budget).not.toHaveBeenCalled()
     expect(mocks.llm).not.toHaveBeenCalled()
     expect(mocks.update).not.toHaveBeenCalled()
   })
 
-  it('fills in legacy metadata only with spend headroom and records its cost', async () => {
+  it('uses the saved story when metadata is missing without starting paid work', async () => {
     mocks.reel.mockResolvedValue({ ...reel, postMeta: null })
     mocks.llm.mockResolvedValue({ data: savedMeta, costCents: 2 })
 
     const files = await downloadFiles(await GET(request()))
 
-    expect(files.get('caption.txt')?.toString()).toContain('The creator’s own caption.')
-    expect(mocks.budget).toHaveBeenCalledOnce()
-    expect(mocks.llm).toHaveBeenCalledOnce()
-    expect(mocks.budget.mock.invocationCallOrder[0]).toBeLessThan(mocks.llm.mock.invocationCallOrder[0]!)
-    expect(mocks.set).toHaveBeenCalledWith(expect.objectContaining({ postMeta: expect.objectContaining({ title: 'Kept title' }), costCents: expect.anything() }))
-    expect(mocks.update).toHaveBeenCalledOnce()
+    expect(files.get('caption.txt')?.toString()).toContain('A keeper saves the lighthouse.')
+    expect(mocks.budget).not.toHaveBeenCalled()
+    expect(mocks.llm).not.toHaveBeenCalled()
+    expect(mocks.update).not.toHaveBeenCalled()
   })
 
-  it('still downloads and records failed paid work if optional metadata generation fails', async () => {
-    mocks.reel.mockResolvedValue({ ...reel, postMeta: null })
-    const failure = new Error('Provider did not complete')
-    mocks.llm.mockRejectedValue(failure)
+  it('includes a usable subtitle sidecar when captions are not burned into the video', async () => {
+    mocks.reel.mockResolvedValue({ ...reel, timings: {
+      durationMs: 5000, scenes: [], sfxEvents: [], music: null, silenceDrop: null, warnings: [],
+      subtitles: [{ sceneIdx: 0, startMs: 0, endMs: 2000, text: 'A keeper saves the lighthouse.', words: [] }],
+    } })
+    mocks.channel.mockResolvedValue({ name: 'Lighthouse stories', postingRules: {}, captionStyle: { ...CAPTION_PRESETS.candid, enabled: false } })
 
     const files = await downloadFiles(await GET(request()))
 
-    expect(files.get('reel.mp4')?.toString()).toBe('finished-video')
-    expect(files.get('caption.txt')?.toString()).toContain('TITLE: The original story')
-    expect(mocks.failedSpend).toHaveBeenCalledWith(failure, { kind: 'reel', reelId: 'reel-1' })
+    expect(files.get('subtitles.srt')?.toString()).toContain('00:00:00,000 --> 00:00:02,000')
+    expect(files.get('subtitles.srt')?.toString()).toContain('A keeper saves the lighthouse.')
+    expect(mocks.llm).not.toHaveBeenCalled()
   })
 
   it('keeps the ownership gate ahead of every download and optional paid call', async () => {
@@ -167,5 +170,19 @@ describe('finished reel downloads', () => {
     expect(mocks.download).not.toHaveBeenCalled()
     expect(mocks.budget).not.toHaveBeenCalled()
     expect(mocks.llm).not.toHaveBeenCalled()
+  })
+
+  it('retains archival image credits even when an older reel has no story bible', async () => {
+    mocks.reel.mockResolvedValue({ ...reel, storyBible: null })
+    const files = await downloadFiles(await GET(request()))
+    expect(files.get('caption.txt')?.toString()).toContain('Archival photograph')
+    expect(files.get('caption.txt')?.toString()).toContain('Archive')
+    expect(files.has('subtitles.srt')).toBe(false)
+  })
+
+  it('limits repeated package downloads before loading storage', async () => {
+    mocks.limit.mockResolvedValue({ ok: false })
+    expect((await GET(request())).status).toBe(429)
+    expect(mocks.download).not.toHaveBeenCalled()
   })
 })
