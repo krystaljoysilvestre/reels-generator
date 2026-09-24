@@ -14,11 +14,13 @@ declare module 'next-auth' {
   interface User {
     role?: string
     status?: string
+    authVersion?: number
   }
 }
 
 declare module 'next-auth/jwt' {
   interface JWT {
     uid?: string
+    authVersion?: number
   }
 }

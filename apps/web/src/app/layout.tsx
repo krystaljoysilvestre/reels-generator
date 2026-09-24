@@ -1,6 +1,5 @@
 import type { Metadata } from 'next'
 import { Mulish, Nunito, Space_Mono } from 'next/font/google'
-import Script from 'next/script'
 import './globals.css'
 
 /** Display — page/story titles, headings, the wordmark. */
@@ -40,17 +39,8 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${nunito.variable} ${mulish.variable} ${spaceMono.variable}`}>
-      <head>
-        <Script src="https://www.googletagmanager.com/gtag/js?id=G-9QZT2HK4LC" strategy="afterInteractive" />
-        <Script id="google-analytics" strategy="afterInteractive">
-          {`
-            window.dataLayer = window.dataLayer || [];
-            function gtag(){dataLayer.push(arguments);}
-            gtag('js', new Date());
-            gtag('config', 'G-9QZT2HK4LC');
-          `}
-        </Script>
-      </head>
+      {/* Marketing analytics live on the landing site. This app handles private stories and
+          bearer recovery links; persistent third-party history listeners must not see them. */}
       <body>{children}</body>
     </html>
   )

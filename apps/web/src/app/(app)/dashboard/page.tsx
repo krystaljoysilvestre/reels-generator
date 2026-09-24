@@ -61,10 +61,10 @@ async function loadQuickStarts(db: ReturnType<typeof getDb>): Promise<QuickStart
 }
 
 const HOW_IT_WORKS = [
-  { n: 1, title: 'Set up a channel', copy: 'Niche, voice, sound and look — once.', tone: 'bg-pair-blue-purple' },
-  { n: 2, title: 'Generate a reel', copy: 'A story is written, storyboarded and voiced.', tone: 'bg-pair-blue-violet' },
-  { n: 3, title: 'Review & approve', copy: 'You stay in the loop, or let it auto-run.', tone: 'bg-pair-purple-pink' },
-  { n: 4, title: 'Publish everywhere', copy: 'TikTok, Shorts and Reels on a schedule.', tone: 'bg-pair-pink-orange' },
+  { n: 1, title: 'Set up a channel', copy: 'Choose its voice, sound and look once.', tone: 'bg-pair-blue-purple' },
+  { n: 2, title: 'Start your first reel', copy: 'Keep the script from setup, or bring a new idea.', tone: 'bg-pair-blue-violet' },
+  { n: 3, title: 'Review your story', copy: 'Shape the script and scenes, then watch the finished cut.', tone: 'bg-pair-purple-pink' },
+  { n: 4, title: 'Download & post', copy: 'Download your video, cover and caption. Post wherever you share stories.', tone: 'bg-pair-pink-orange' },
 ] as const
 
 export const dynamic = 'force-dynamic'
@@ -74,6 +74,7 @@ export const metadata = { title: 'Channels' }
 
 export default async function DashboardPage() {
   const user = await requireUser()
+  const isAdmin = user.role === 'admin'
   const db = getDb()
 
   // Testers see only their own channels; admins see the whole portfolio.
@@ -131,8 +132,8 @@ export default async function DashboardPage() {
     : [
         activeRows.length > 0 ? `${activeRows.length} channel${activeRows.length === 1 ? '' : 's'}` : null,
         draftRows.length > 0 ? `${draftRows.length} draft${draftRows.length === 1 ? '' : 's'}` : null,
-        portfolioMonthCents > 0 ? `$${(portfolioMonthCents / 100).toFixed(2)} this month` : null,
-        portfolioAllTimeCents > 0 ? `$${(portfolioAllTimeCents / 100).toFixed(2)} all-time` : null,
+        isAdmin && portfolioMonthCents > 0 ? `$${(portfolioMonthCents / 100).toFixed(2)} this month` : null,
+        isAdmin && portfolioAllTimeCents > 0 ? `$${(portfolioAllTimeCents / 100).toFixed(2)} all-time` : null,
       ]
         .filter(Boolean)
         .join(' · ')
@@ -152,6 +153,12 @@ export default async function DashboardPage() {
       </header>
 
       <div className="space-y-10 p-8">
+        {!isAdmin && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-accent-ring bg-accent-soft px-4 py-3 text-sm">
+            <p className="text-ink"><span className="font-600">Free early access.</span> No card needed. Your allowance covers production while we improve Kendrix.</p>
+            <Link href="/account" className="whitespace-nowrap font-600 text-accent hover:underline">View your allowance</Link>
+          </div>
+        )}
         {isEmpty ? (
           <div className="mx-auto w-full max-w-[900px]">
             {/* Hero — the dark plum stage with the floating K. Same motif as the auth panes. */}
@@ -167,9 +174,9 @@ export default async function DashboardPage() {
               <div className="relative max-w-[460px]">
                 <p className="mono-label gradient-text !text-[11px] tracking-[0.2em]">Let&apos;s make your first channel</p>
                 <h2 className="mt-3 font-display text-[33px] font-900 leading-[1.06] -tracking-[0.025em]">
-                  Your studio is
+                  Your first story
                   <br />
-                  ready to run.
+                  starts here.
                 </h2>
                 <p className="mt-4 max-w-[400px] text-[15px] leading-relaxed text-night-body">
                   A channel is one publishing brand — its niche, voice, look and rules. Set one up once and
@@ -177,19 +184,15 @@ export default async function DashboardPage() {
                 </p>
                 <div className="mt-7 flex flex-wrap items-center gap-3">
                   <CreateChannelButton label="Create your first channel" className="btn-lg btn-glow" />
-                  {/* NOT WIRED YET — matches the mock exactly (13px/18px, white 6% fill, 18% border) and
-                      is intentionally inert: clicking does nothing until there's a tour to play. The
-                      dashboard is a server component, so wiring this up means moving it into a small
-                      client component, the way CreateChannelButton next door already is. */}
-                  <button
-                    type="button"
+                  <Link
+                    href="/help"
                     className="btn gap-2 rounded-md border border-white/[0.18] bg-white/[0.06] px-[18px] py-[13px] text-sm font-600 text-white hover:-translate-y-px hover:bg-white/10"
                   >
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                      <path d="M8 5v14l11-7z" />
+                      <path d="M9 18h6M10 21h4M9 14a6 6 0 1 1 6 0v1H9z" />
                     </svg>
-                    Watch 60-sec tour
-                  </button>
+                    Read the quick guide
+                  </Link>
                 </div>
               </div>
             </div>
@@ -197,7 +200,7 @@ export default async function DashboardPage() {
             {/* Quick-start on-ramps — the real presets are picked on step 1 of the wizard. */}
             <section className="mt-9">
               <div className="mb-3.5 flex items-baseline justify-between gap-3">
-                <h2 className="mono-label">Start from a proven niche</h2>
+                <h2 className="mono-label">Find a starting point</h2>
                 <span className="text-xs text-faint">or describe your own in setup</span>
               </div>
               <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
@@ -314,7 +317,7 @@ export default async function DashboardPage() {
                         {(stats[ch.id]?.ready ?? 0) > 0 && (
                           <span className="badge bg-accent-soft text-accent">{stats[ch.id]!.ready} to post</span>
                         )}
-                        {(stats[ch.id]?.monthSpendCents ?? 0) > 0 && (
+                        {isAdmin && (stats[ch.id]?.monthSpendCents ?? 0) > 0 && (
                           <span className="ml-auto mono-value text-muted" title="What this month's reels cost to make">
                             ${((stats[ch.id]?.monthSpendCents ?? 0) / 100).toFixed(2)}
                           </span>

@@ -12,21 +12,23 @@ export default function PrivacyPage() {
     <LegalShell
       active="Privacy"
       title="Privacy Policy"
-      stamp="LAST UPDATED · AUG 2026 · INVITE-ONLY BETA"
+      stamp="LAST UPDATED · SEP 2026 · EARLY ACCESS"
     >
       <LegalIntro>
-        Kendrix is an invite-only vertical-video studio. This policy explains what we collect while
+        Kendrix is a storytelling studio in early access. This policy explains what we collect while
         you use it, why, and the controls you have. Plain language first; the detail follows.
       </LegalIntro>
 
       <LegalH>What we collect</LegalH>
       <LegalLi>Account basics — your name, email, and how you signed in (password or Google).</LegalLi>
+      <LegalLi>Account security — a password hash for password accounts, email verification records, and recovery links stored as hashes.</LegalLi>
+      <LegalLi>Messages you send us — contact-form details, access requests, and any channel description you choose to include.</LegalLi>
       <LegalLi>
         What you create — channel briefs, scripts, storyboards, generated reels, and the settings
         behind them.
       </LegalLi>
       <LegalLi>
-        Usage &amp; billing signals — render counts and per-render spend, so budgets and the studio
+        Production usage — reel counts and production spend, so budgets and the studio
         cap can work.
       </LegalLi>
       <LegalLi>
@@ -39,6 +41,7 @@ export default function PrivacyPage() {
         To run the studio — produce your reels, save drafts, and show costs before you spend.
       </LegalLi>
       <LegalLi>To keep your account secure and enforce the beta&rsquo;s usage limits.</LegalLi>
+      <LegalLi>To send requested account verification and password recovery emails, and respond to your messages.</LegalLi>
       <LegalLi>
         To improve the product in aggregate. We do <strong className="text-night-lit">not</strong>{' '}
         sell your data or train public models on your private content.
@@ -50,18 +53,24 @@ export default function PrivacyPage() {
         content only to perform that work, under contract. When you publish to TikTok, YouTube or
         Instagram, their own terms and privacy policies apply to what you post there.
       </LegalP>
+      <LegalP>
+        We use an email delivery provider to send account verification and recovery messages.
+        It processes your email address and the message content to deliver them. Our marketing
+        website uses Google Analytics to measure visits; account pages in the studio do not load it.
+      </LegalP>
 
       <LegalH>Your content is yours</LegalH>
       <LegalP>
-        You own the reels Kendrix produces for you. You can export them, and you can delete a
-        channel or your account at any time — deletion removes your drafts and generated media from
-        active systems, with backups aging out on a rolling schedule.
+        You own the reels Kendrix produces for you and can download finished reels from the studio.
+        You can delete a channel from its settings. Account deletion and account-data requests
+        are handled through our <Link href="/contact">contact page</Link>; they are not self-service
+        actions in the studio. Stored media cleanup is handled separately from removing a channel.
       </LegalP>
 
       <LegalH>Your controls</LegalH>
-      <LegalLi>Access or export the data tied to your account.</LegalLi>
-      <LegalLi>Correct your account details in settings.</LegalLi>
-      <LegalLi>Delete a channel, or your whole account, whenever you like.</LegalLi>
+      <LegalLi>Download finished reels in the studio. Contact us to request other data tied to your account.</LegalLi>
+      <LegalLi>Update your display name from Account in the studio.</LegalLi>
+      <LegalLi>Delete a channel in its settings, or contact us to request account deletion.</LegalLi>
 
       <LegalH>Contact</LegalH>
       <LegalP>

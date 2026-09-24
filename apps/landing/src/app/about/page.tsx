@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { LegalH, LegalIntro, LegalLi, LegalP, LegalShell } from '@/components/legal-shell'
 import { ENTITY_DESCRIPTION, META_DESCRIPTION } from '@/lib/site'
+import { landingAccess } from '@/lib/access'
 
 export const metadata: Metadata = {
   title: 'About — Kendrix',
@@ -14,12 +15,13 @@ export const metadata: Metadata = {
  * paraphrased, so this page can't drift from the product's own stated definition of itself.
  */
 export default function AboutPage() {
+  const { open, signupUrl } = landingAccess()
   return (
     <LegalShell
       active="About"
       eyebrow="About Kendrix"
       title="What is Kendrix?"
-      stamp="STORYTELLING OPERATING SYSTEM · PRE-LAUNCH · AUG 2026"
+      stamp="STORYTELLING OPERATING SYSTEM · EARLY ACCESS"
     >
       <LegalIntro>{ENTITY_DESCRIPTION}</LegalIntro>
 
@@ -51,12 +53,12 @@ export default function AboutPage() {
 
       <LegalH>Where Kendrix is today</LegalH>
       <LegalP>
-        Kendrix is in development and not yet publicly available. Its own channels are the first
-        customer: the workflow has to work for those before it’s opened to anyone else. Access is
-        invite-only while that’s proven out.
+        {open
+          ? 'Kendrix is open for free early access while we keep improving the storytelling workflow. Create an account, set up your channel and make your first reel. Production limits apply, and no payment card is required.'
+          : 'Kendrix is in development, with its own channels as the first customer. Early access is free, and we are welcoming creators by invitation while we improve the workflow.'}
       </LegalP>
       <LegalP>
-        Request access from the <Link href="/#access">homepage</Link>, or see the{' '}
+        {open ? <a href={signupUrl}>Create your account</a> : <>Request access from the <Link href="/#access">homepage</Link></>}, or see the{' '}
         <Link href="/#faq">FAQ</Link> for more on pricing, ownership and how Kendrix handles
         YouTube’s content policies.
       </LegalP>

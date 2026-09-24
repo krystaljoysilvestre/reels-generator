@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
-import { inArray } from 'drizzle-orm'
-import { channels, getDb, pipelineSteps, reels, users } from '@reels/db'
+import { eq, inArray } from 'drizzle-orm'
+import { channels, getDb, getReelOwnerUsage, getUserUsage, pipelineSteps, reels, users } from '@reels/db'
 import type {
   BudgetExceededError as BudgetExceededErrorClass,
   GlobalBudgetExceededError as GlobalBudgetExceededErrorClass,
@@ -22,6 +22,11 @@ const GLOBAL_CAP_CHANNEL_ID = randomUUID()
 const REEL_CAP_REEL_ID = randomUUID()
 const USER_CAP_REEL_ID = randomUUID()
 const GLOBAL_CAP_REEL_ID = randomUUID()
+const BLOCKED_OWNERS = [
+  { role: 'tester', status: 'suspended' },
+  { role: 'tester', status: 'pending' },
+  { role: 'admin', status: 'suspended' },
+].map((account) => ({ ...account, userId: randomUUID(), channelId: randomUUID(), reelId: randomUUID() }))
 
 let runStep: typeof RunStepFunction
 let core: {
@@ -52,23 +57,26 @@ describe.skipIf(!TEST_DATABASE_URL)('database-backed spend boundaries', () => {
       { id: REEL_CAP_USER_ID, email: `${REEL_CAP_USER_ID}@example.test`, status: 'active', monthlyBudgetCents: 10_000 },
       { id: USER_CAP_USER_ID, email: `${USER_CAP_USER_ID}@example.test`, status: 'active', monthlyBudgetCents: 100 },
       { id: GLOBAL_CAP_USER_ID, email: `${GLOBAL_CAP_USER_ID}@example.test`, status: 'active', monthlyBudgetCents: 10_000 },
+      ...BLOCKED_OWNERS.map(({ userId, role }) => ({ id: userId, email: `${userId}@example.test`, role, status: 'active', monthlyBudgetCents: 10_000 })),
     ])
     await db.insert(channels).values([
       { id: REEL_CAP_CHANNEL_ID, userId: REEL_CAP_USER_ID, name: 'Reel cap', nicheDescription: 'Test' },
       { id: USER_CAP_CHANNEL_ID, userId: USER_CAP_USER_ID, name: 'User cap', nicheDescription: 'Test' },
       { id: GLOBAL_CAP_CHANNEL_ID, userId: GLOBAL_CAP_USER_ID, name: 'Global cap', nicheDescription: 'Test' },
+      ...BLOCKED_OWNERS.map(({ userId, channelId }) => ({ id: channelId, userId, name: 'Account status', nicheDescription: 'Test' })),
     ])
     await db.insert(reels).values([
       { id: REEL_CAP_REEL_ID, channelId: REEL_CAP_CHANNEL_ID, costCents: 800 },
       { id: USER_CAP_REEL_ID, channelId: USER_CAP_CHANNEL_ID, costCents: 100 },
       { id: GLOBAL_CAP_REEL_ID, channelId: GLOBAL_CAP_CHANNEL_ID, costCents: 1 },
+      ...BLOCKED_OWNERS.map(({ reelId, channelId }) => ({ id: reelId, channelId, costCents: 0 })),
     ])
   })
 
   afterAll(async () => {
     const db = getDb()
-    await db.delete(channels).where(inArray(channels.id, [REEL_CAP_CHANNEL_ID, USER_CAP_CHANNEL_ID, GLOBAL_CAP_CHANNEL_ID]))
-    await db.delete(users).where(inArray(users.id, [REEL_CAP_USER_ID, USER_CAP_USER_ID, GLOBAL_CAP_USER_ID]))
+    await db.delete(channels).where(inArray(channels.id, [REEL_CAP_CHANNEL_ID, USER_CAP_CHANNEL_ID, GLOBAL_CAP_CHANNEL_ID, ...BLOCKED_OWNERS.map((owner) => owner.channelId)]))
+    await db.delete(users).where(inArray(users.id, [REEL_CAP_USER_ID, USER_CAP_USER_ID, GLOBAL_CAP_USER_ID, ...BLOCKED_OWNERS.map((owner) => owner.userId)]))
     if (PREVIOUS_GLOBAL_CAP === undefined) delete process.env['GLOBAL_DAILY_SPEND_CAP_CENTS']
     else process.env['GLOBAL_DAILY_SPEND_CAP_CENTS'] = PREVIOUS_GLOBAL_CAP
   })
@@ -98,6 +106,22 @@ describe.skipIf(!TEST_DATABASE_URL)('database-backed spend boundaries', () => {
       core.GlobalBudgetExceededError,
     )
     expect(provider).not.toHaveBeenCalled()
+  })
+
+  it.each(BLOCKED_OWNERS)('reads a fresh $status status for a $role owner and rejects queued paid work', async ({ userId, reelId, status }) => {
+    await expect(getUserUsage(userId)).resolves.toMatchObject({ status: 'active' })
+    await expect(getReelOwnerUsage(reelId)).resolves.toMatchObject({ status: 'active' })
+    await getDb().update(users).set({ status }).where(eq(users.id, userId))
+    await expect(getUserUsage(userId)).resolves.toMatchObject({ status })
+    await expect(getReelOwnerUsage(reelId)).resolves.toMatchObject({ status })
+    const provider = paidStep()
+
+    await expect(runStep(context(reelId, 'account-no-longer-active', 1_000), provider))
+      .rejects.toMatchObject({ name: 'UnrecoverableError' })
+
+    expect(provider).not.toHaveBeenCalled()
+    const steps = await getDb().select().from(pipelineSteps).where(eq(pipelineSteps.reelId, reelId))
+    expect(steps).toEqual([])
   })
 
   it('does not create pipeline work for any rejected spend attempt', async () => {

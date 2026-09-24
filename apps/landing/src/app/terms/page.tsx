@@ -4,7 +4,7 @@ import { LegalH, LegalIntro, LegalLi, LegalP, LegalShell } from '@/components/le
 
 export const metadata: Metadata = {
   title: 'Terms of Service — Kendrix',
-  description: 'The terms for using Kendrix during its invite-only beta.',
+  description: 'The terms for using Kendrix during early access.',
 }
 
 export default function TermsPage() {
@@ -12,23 +12,23 @@ export default function TermsPage() {
     <LegalShell
       active="Terms"
       title="Terms of Service"
-      stamp="LAST UPDATED · AUG 2026 · INVITE-ONLY BETA"
+      stamp="LAST UPDATED · SEP 2026 · EARLY ACCESS"
     >
       <LegalIntro>
-        By using Kendrix during its invite-only beta, you agree to these terms. They&rsquo;re meant
+        By using Kendrix during early access, you agree to these terms. They&rsquo;re meant
         to be readable — the short version is: create freely, own your work, don&rsquo;t abuse the
         tools.
       </LegalIntro>
 
       <LegalH>The beta</LegalH>
       <LegalP>
-        Kendrix is early software offered to invited operators. Features may change, break, or move
+        Kendrix is early software. The signup page shows whether access is open or by invitation. Features may change, break, or move
         behind a plan later. It&rsquo;s free while the beta lasts; we&rsquo;ll give notice before
         that changes.
       </LegalP>
 
       <LegalH>Your account</LegalH>
-      <LegalLi>Access is invite-only and personal — keep your credentials to yourself.</LegalLi>
+      <LegalLi>Your account is personal — keep your credentials to yourself.</LegalLi>
       <LegalLi>
         You&rsquo;re responsible for activity under your account and the content you generate and
         publish.
@@ -52,8 +52,8 @@ export default function TermsPage() {
 
       <LegalH>Costs &amp; billing</LegalH>
       <LegalP>
-        Every render shows its estimated spend before you commit, with per-channel budgets and a
-        studio-wide cap. During the beta these track usage without charge; paid plans, if
+        Production usage is tracked against per-reel and account budgets, with a daily reel limit
+        and a studio-wide cap when configured. During the beta these track usage without charge; paid plans, if
         introduced, will be announced with clear pricing first.
       </LegalP>
 

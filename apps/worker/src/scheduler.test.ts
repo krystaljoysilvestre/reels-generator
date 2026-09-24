@@ -5,10 +5,12 @@ import { SourcePolicySchema } from '@reels/core'
 const mocks = vi.hoisted(() => ({
   channels: vi.fn(), select: vi.fn(), insert: vi.fn(), update: vi.fn(), values: vi.fn(), set: vi.fn(),
   enqueueStep: vi.fn(), pick: vi.fn(), claim: vi.fn(), skip: vi.fn(), acquire: vi.fn(),
+  ownerUsage: vi.fn(),
 }))
 vi.mock('@reels/db', async (original) => ({
   ...await original<typeof DbModule>(),
   getDb: () => ({ query: { channels: { findMany: mocks.channels } }, select: mocks.select, insert: mocks.insert, update: mocks.update }),
+  getUserUsage: mocks.ownerUsage,
 }))
 vi.mock('@reels/queue', () => ({ enqueueStep: mocks.enqueueStep, makeQueue: vi.fn(), QUEUE: { SCHEDULER: 'scheduler' } }))
 vi.mock('./series-queue.js', () => ({
@@ -30,7 +32,8 @@ describe('scheduled reels preserve the selected story contract', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.channels.mockResolvedValue([channel])
-    mocks.select.mockReturnValue({ from: () => ({ where: async () => [{ value: 0 }] }) })
+    const selection = { where: async () => [{ value: 0 }], innerJoin: () => selection }
+    mocks.select.mockReturnValue({ from: () => selection })
     mocks.values.mockReturnValue({ returning: async () => [{ id: 'reel' }] })
     mocks.insert.mockReturnValue({ values: mocks.values })
     mocks.set.mockReturnValue({ where: async () => [] })
@@ -38,6 +41,7 @@ describe('scheduled reels preserve the selected story contract', () => {
     mocks.pick.mockResolvedValue(null)
     mocks.claim.mockResolvedValue(true)
     mocks.acquire.mockResolvedValue({ dossier: 'Verified sources', sources: [] })
+    mocks.ownerUsage.mockResolvedValue({ role: 'tester', status: 'active', monthlyBudgetCents: null, dailyReelQuota: null, spendCentsThisMonth: 0, reelsToday: 0 })
   })
 
   it('sources a strict series inside a fiction channel with the series permissions', async () => {
@@ -99,6 +103,60 @@ describe('scheduled reels preserve the selected story contract', () => {
   it('does not create a source-free EBN reel even when its explicit policy is permissive', async () => {
     mocks.channels.mockResolvedValue([{ ...channel, storyMode: 'ebn' }])
     await runAutoProduceTick()
+    expect(mocks.insert).not.toHaveBeenCalled()
+    expect(mocks.enqueueStep).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    { role: 'tester', status: 'suspended' },
+    { role: 'tester', status: 'pending' },
+    { role: 'admin', status: 'suspended' },
+    { role: 'admin', status: 'pending' },
+  ])('blocks $status $role accounts before paid topic preparation', async ({ role, status }) => {
+    mocks.channels.mockResolvedValue([{ ...channel, userId: 'owner' }])
+    mocks.ownerUsage.mockResolvedValue({ role, status, monthlyBudgetCents: null, dailyReelQuota: null, spendCentsThisMonth: 0, reelsToday: 0 })
+
+    await runAutoProduceTick()
+
+    expect(mocks.pick).not.toHaveBeenCalled()
+    expect(mocks.acquire).not.toHaveBeenCalled()
+    expect(mocks.insert).not.toHaveBeenCalled()
+    expect(mocks.enqueueStep).not.toHaveBeenCalled()
+  })
+
+  it('does not treat a missing owner account as an ownerless historical channel', async () => {
+    mocks.channels.mockResolvedValue([{ ...channel, userId: 'missing-owner' }])
+    mocks.ownerUsage.mockResolvedValue(null)
+
+    await runAutoProduceTick()
+
+    expect(mocks.pick).not.toHaveBeenCalled()
+    expect(mocks.acquire).not.toHaveBeenCalled()
+    expect(mocks.insert).not.toHaveBeenCalled()
+    expect(mocks.enqueueStep).not.toHaveBeenCalled()
+  })
+
+  it('allows an active owner to create a reel', async () => {
+    mocks.channels.mockResolvedValue([{ ...channel, userId: 'owner' }])
+
+    await runAutoProduceTick()
+
+    expect(mocks.ownerUsage).toHaveBeenCalledWith('owner')
+    expect(mocks.enqueueStep).toHaveBeenCalledOnce()
+  })
+
+  it('re-checks account status after topic preparation before spending on evidence', async () => {
+    mocks.channels.mockResolvedValue([{ ...channel, userId: 'owner' }])
+    mocks.pick.mockResolvedValue(pick)
+    mocks.ownerUsage
+      .mockResolvedValueOnce({ role: 'tester', status: 'active', monthlyBudgetCents: null, dailyReelQuota: null, spendCentsThisMonth: 0, reelsToday: 0 })
+      .mockResolvedValueOnce({ role: 'tester', status: 'suspended', monthlyBudgetCents: null, dailyReelQuota: null, spendCentsThisMonth: 0, reelsToday: 0 })
+
+    await runAutoProduceTick()
+
+    expect(mocks.pick).toHaveBeenCalledOnce()
+    expect(mocks.ownerUsage).toHaveBeenCalledTimes(2)
+    expect(mocks.acquire).not.toHaveBeenCalled()
     expect(mocks.insert).not.toHaveBeenCalled()
     expect(mocks.enqueueStep).not.toHaveBeenCalled()
   })

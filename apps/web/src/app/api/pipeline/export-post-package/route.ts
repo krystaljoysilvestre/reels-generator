@@ -9,6 +9,7 @@ import { PostMetaSchema, PostingRulesSchema, formatPostCaption, formatImageCredi
 import { buildPostMetaPrompt, PostMetaLlmSchema, POST_META_V1_VERSION } from '@reels/core/prompts/post-meta.v1'
 import { requireReelOwner, requireSpendBudget } from '@/lib/api-access'
 import { recordFailedSpend } from '@/lib/failed-spend'
+import type { SessionUser } from '@/lib/auth'
 
 // Minimal ZIP builder without native deps (zip is just stored entries)
 function buildZip(files: Array<{ name: string; data: Buffer }>): Buffer {
@@ -86,15 +87,20 @@ function crc32Table(): Uint32Array {
 }
 
 // The reel's post metadata: prefer what the generate_post_meta step wrote (operator-editable); for
-// reels that predate the step, generate once here and persist — never ship placeholder hashtags.
+// reels that predate the step, generate once here and persist if the creator has room in their
+// allowance. Downloading finished work never depends on the ability to pay for optional metadata.
 async function resolvePostMeta(
   reel: { id: string; postMeta: unknown; language: string },
   story: { title: string; logline: string | null; body: string } | null,
   channel: { name: string; nicheDescription: string | null; genreCategory: string; postingRules: unknown } | null,
+  user: SessionUser,
 ): Promise<PostMeta | null> {
   const existing = PostMetaSchema.safeParse(reel.postMeta)
   if (existing.success) return existing.data
   if (!story || !channel) return null
+  // Only a new provider call needs spend headroom. A declined call falls back to the story's own
+  // title/logline below; it must not turn an already-finished video into an inaccessible artifact.
+  if (await requireSpendBudget(user)) return null
 
   const postingRules = PostingRulesSchema.parse(channel.postingRules ?? {})
   const { system, userMessage } = buildPostMetaPrompt({
@@ -140,9 +146,6 @@ export async function GET(req: NextRequest) {
 
   const gate = await requireReelOwner(reelId)
   if (gate instanceof NextResponse) return gate
-  // Paid call (vision / LLM) — respect the caller's spend cap before spending.
-  const budgetGate = await requireSpendBudget(gate)
-  if (budgetGate) return budgetGate
 
   const db = getDb()
   const reel = await db.query.reels.findFirst({
@@ -195,14 +198,14 @@ export async function GET(req: NextRequest) {
 
   // Build the caption from the reel's post package (title/hook/caption/hashtags).
   const story = reel.story
-  const meta = await resolvePostMeta(reel, story, channel ?? null)
+  const meta = await resolvePostMeta(reel, story, channel ?? null, gate)
   // Image-attribution credits for every real SOURCED image (Wikimedia etc.) — reference plates AND archival
   // photographs presented as scenes — appended so licence terms are met.
   const bibleParse = reel.storyBible ? StoryBibleSchema.safeParse(reel.storyBible) : null
   const imageCredits = bibleParse?.success ? formatImageCredits(bibleParse.data, await sceneImageOrigins(reelId)) : ''
   const captionBody = meta
     ? [`TITLE: ${meta.title}`, '', formatPostCaption(meta)].join('\n')
-    : (story?.logline ?? story?.title ?? '')
+    : [story?.title ? `TITLE: ${story.title}` : '', story?.logline ?? ''].filter(Boolean).join('\n\n')
   const caption = imageCredits ? `${captionBody}\n\n${imageCredits}` : captionBody
 
   // The channel's posting slot, as a line an operator can act on. On a scheduled channel that's the

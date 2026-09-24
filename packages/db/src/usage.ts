@@ -59,6 +59,7 @@ export async function claimSetupSpendForChannel(userId: string, channelId: strin
 // Usage is summed/counted across all channels the user owns (reels inherit ownership via channelId).
 export type UserUsage = {
   role: string
+  status: string
   monthlyBudgetCents: number | null
   dailyReelQuota: number | null
   spendCentsThisMonth: number
@@ -68,7 +69,7 @@ export type UserUsage = {
 export async function getUserUsage(userId: string): Promise<UserUsage | null> {
   const db = getDb()
   const u = await db
-    .select({ role: users.role, monthlyBudgetCents: users.monthlyBudgetCents, dailyReelQuota: users.dailyReelQuota })
+    .select({ role: users.role, status: users.status, monthlyBudgetCents: users.monthlyBudgetCents, dailyReelQuota: users.dailyReelQuota })
     .from(users)
     .where(eq(users.id, userId))
     .then((r) => r[0])
@@ -113,6 +114,7 @@ export async function getUserUsage(userId: string): Promise<UserUsage | null> {
 
   return {
     role: u.role,
+    status: u.status,
     monthlyBudgetCents: u.monthlyBudgetCents,
     dailyReelQuota: u.dailyReelQuota,
     spendCentsThisMonth:
@@ -124,18 +126,18 @@ export async function getUserUsage(userId: string): Promise<UserUsage | null> {
   }
 }
 
-// The reel owner's role + monthly cap + month-to-date spend — feeds the harness's mid-pipeline per-user
-// budget re-check (assertUserBudget). Returns null when the reel has no owner (legacy owner-less channel),
-// so the harness simply skips the per-user check for those.
+// Fresh account status + monthly usage for the harness's checks before paid work. Only a channel with
+// no assigned owner (legacy) returns null. A referenced but missing user is returned with null status,
+// so callers deny it rather than mistake a missing account for an ownerless historical channel.
 export async function getReelOwnerUsage(
   reelId: string,
-): Promise<{ userId: string; role: string; monthlyBudgetCents: number | null; spendCentsThisMonth: number } | null> {
+): Promise<{ userId: string; role: string | null; status: string | null; monthlyBudgetCents: number | null; spendCentsThisMonth: number } | null> {
   const db = getDb()
   const owner = await db
-    .select({ userId: channels.userId, role: users.role, monthlyBudgetCents: users.monthlyBudgetCents })
+    .select({ userId: channels.userId, role: users.role, status: users.status, monthlyBudgetCents: users.monthlyBudgetCents })
     .from(reels)
     .innerJoin(channels, eq(reels.channelId, channels.id))
-    .innerJoin(users, eq(channels.userId, users.id))
+    .leftJoin(users, eq(channels.userId, users.id))
     .where(eq(reels.id, reelId))
     .then((r) => r[0])
   if (!owner?.userId) return null
@@ -168,6 +170,7 @@ export async function getReelOwnerUsage(
   return {
     userId: owner.userId,
     role: owner.role,
+    status: owner.status,
     monthlyBudgetCents: owner.monthlyBudgetCents,
     spendCentsThisMonth:
       Number(spend?.cents ?? 0) +
