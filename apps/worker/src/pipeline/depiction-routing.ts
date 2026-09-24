@@ -12,7 +12,10 @@ import {
   ENTITY_SOURCE_V1_VERSION,
 } from '../prompts-bridge.js'
 
-const DEPICTION_MODEL = 'claude-haiku-4-5-20251001'
+// This classifier owns whether a generic analyzer label is upgraded to the exact named identity established
+// by bound narration. A regression here discards the verified plate and makes every downstream pixel check
+// impossible to satisfy, so use the factual-reasoning model rather than the cheaper vision-QA model.
+const DEPICTION_MODEL = 'claude-sonnet-4-6'
 
 const entityName = (id: string) =>
   id.split('-').map((word) => (word ? word[0]!.toUpperCase() + word.slice(1) : word)).join(' ')
@@ -26,6 +29,7 @@ export async function routeDepiction(
   entity: { id: string; kind: 'character' | 'location' | 'object'; description: string },
   policy: SourcePolicy,
   region: string | undefined,
+  narrationEvidence?: string,
 ): Promise<{ routing: DepictionRouting; costCents: number }> {
   const generated = (
     eligibilityReason: DepictionRouting['eligibilityReason'],
@@ -42,7 +46,7 @@ export async function routeDepiction(
     if (!allowsRealWorldEntityPlates(policy)) return { routing: generated('not_permitted'), costCents }
 
     const name = entityName(entity.id)
-    const prompt = buildEntitySourceDecidePrompt(entity.kind, name, entity.description, region)
+    const prompt = buildEntitySourceDecidePrompt(entity.kind, name, entity.description, region, narrationEvidence)
     const decide = await llmCall({
       templateVersion: ENTITY_SOURCE_V1_VERSION,
       schema: EntitySourceDecisionSchema,

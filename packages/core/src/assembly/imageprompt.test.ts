@@ -104,6 +104,30 @@ describe('assembleImagePrompt — bible expansion', () => {
     expect(out).toContain('a young girl with long black hair and a red ribbon')
     expect(out).not.toContain('an elderly woman')
   })
+
+  it('splices the resolved exact identity ahead of analyzer shorthand', () => {
+    const factual = StoryBibleSchema.parse({
+      entities: [{
+        id: 'thermonuclear-weapon',
+        kind: 'object',
+        description: 'a compact cylindrical weapon beneath a deployed parachute',
+        depiction: {
+          subjectClass: 'object',
+          depictionMode: 'reference_plate',
+          eligibilityReason: 'real_subject',
+          query: 'Mark 39 nuclear bomb',
+        },
+      }],
+    })
+    const out = assembleImagePrompt('descending through pale sky', STYLE, {
+      bible: factual,
+      primaryEntity: 'thermonuclear-weapon',
+      supportingEntities: [],
+    })
+    expect(out).toContain('exact real-world identity: Mark 39 nuclear bomb')
+    expect(out).toContain('preserve its identity-defining visible form and features from the conditioning reference')
+    expect(out).toContain('a compact cylindrical weapon beneath a deployed parachute')
+  })
 })
 
 describe('castNationality', () => {

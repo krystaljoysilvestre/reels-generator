@@ -208,6 +208,131 @@ The director still chooses the most truthful shot for the beat. These rules do n
 into a scene it cannot support, and they do not prescribe a visual style. They prevent the system from
 anchoring a scene to the wrong kind of subject or the wrong historical instance.
 
+### Destructive states preserve identity without preserving intactness (2026-09-09)
+
+The Phase 0 live lap exposed a contradiction in derived-state verification. A sourced intact B-52 was the
+correct identity anchor, while the story-time state required the aircraft broken apart in mid-air. The
+adaptation satisfied the target state, but the verifier rejected it because separated components no longer
+formed one intact structure. Retry could never succeed: intactness and breakup were being required at once.
+
+For an explicitly destructive, dismantled, collapsed, fragmented, or otherwise form-changing target, identity
+means the same sourced subject or exact model remains recognizable in the surviving form. Features the target
+explicitly changes are not continuity requirements. Unchanged distinctive geometry, model-specific components,
+markings that should survive, and physically plausible relationships between the surviving parts remain
+identity evidence. A different subject/model, generic debris, or a candidate with no recognizable identity
+anchor still fails. For a non-destructive state, the existing strict geometry and component-continuity bar is
+unchanged.
+
+The adaptation prompt and verifier must state this exception symmetrically: the renderer cannot be told to
+preserve intact component arrangement while QA is told to accept a breakup. The plate-step input hash also
+includes the prompt contract version. A deployed contract repair must therefore invalidate a cached failed
+derived plate and let product Retry recover the same reel without direct data edits or duplicate billing.
+
+### Exact identity may arrive after the generic noun, and rejected pixels are retryable (2026-09-10)
+
+The same Phase 0 reel cleared the B-52 blocker and exposed the next boundary. Its narration first called two
+objects “thermonuclear weapons” and named the second one as a Mark 39 later. The analyzer froze the early
+generic noun as `thermonuclear-weapon`; routing correctly treated that shorthand as generic, minted an invented
+plate, and image QA then correctly rejected scenes 3 and 5 for looking like generic payload/industrial parts
+rather than the named Mark 39. Exact identity had been present in the narration all along but was lost between
+extraction and sourcing.
+
+The identity rule reads the whole narration: when a later model/designation/title clearly identifies the same
+physical subject introduced generically earlier, the one Story Bible entity preserves that exact identity.
+Depiction routing also receives only the narration spans bound to that entity as recovery evidence, so an old
+or imperfect Bible can be reclassified without borrowing an unrelated nearby proper name. Once routing resolves
+an exact query, source and state verification use that exact identity rather than weakening the check back to
+the analyzer's generic id.
+
+For a time-bound identity state, sourcing tries the exact state before generating a derivative. A verified,
+rights-eligible photograph of the documented state is a stronger conditioning anchor than a museum image
+adapted into that state, and avoids paying a generator to reconstruct evidence that already exists. Only when
+exact-state sourcing fails does the existing source-identity → state-adaptation path run. The exact-state source
+remains conditioning media unless the director explicitly chose source presentation; it carries the same
+provenance and never masquerades as a generated frame. Source verification therefore requires the exact
+identity and intrinsic durable state (edition, markings, damage, restoration), but does not reject a
+conditioning photograph merely because its camera, background, placement, transient action, or temporary
+external apparatus differs from the eventual staged shot. The final generated frame and image QA own those
+visible scene requirements.
+
+Commons search rank is only a retrieval hint, not an identity verdict. Sourcing may advance through a small,
+bounded set of licence-clean non-human candidates after vision rejects the top result, and it retries the
+compact exact identity query as well as the fuller state query. Every distinct candidate still passes the
+same paid vision verifier; human identity remains excluded from this unanchored Commons path.
+
+Historical state retrieval includes both the full state description and a compact identity-plus-location
+query, along with common designation aliases, without weakening verification. For example, a `Mark 39` state
+query may also search `Mk 39`, and a state documented at Goldsboro carries that location into retrieval even
+when Commons cannot match the longer prose description. Because scene locations are free-form and may say
+`in the sky above Goldsboro`, retrieval mechanically backs off from both phrase boundaries instead of using
+language-specific stop words; the identity term remains attached to every query. Each phrasing's article lead
+is paired with its top Commons file before retrieval moves on. For non-human subjects, the Commons file runs
+first, and a compact boundary query precedes long location prose that may time out or match nothing. Deeper
+ranks of that strongest contextual query get a small head start before remaining ranks are interleaved across
+those
+exact query variants before any one query advances deeper, so one noisy phrasing cannot exhaust the bounded
+vision-verification budget. These terms improve discovery only: the selected pixels must still pass the same
+exact identity-and-state check.
+
+### A landmark identity and its interior name may be complementary (2026-09-13)
+
+The clean NORAD replay exposed a retrieval split rather than an evidence gap. The Story Bible named the
+`norad-command-center`, while depiction routing correctly resolved its containing real place as `Cheyenne
+Mountain Complex`. Sourcing searched each phrase separately: the landmark query returned exterior entrances,
+and the room name returned a modern/casual operations-center image. The strict verifier rejected both and the
+coverage gate stopped before image spend. Yet the two identities composed into one query immediately surfaced
+multiple public-domain photographs of the Cheyenne Mountain Air/Space Defense Operations Centers.
+
+For non-human subjects, when the routing identity and the Story Bible name have mostly complementary lexical
+content, sourcing tries their combined query before broadening to the entity name or description. When the
+name already substantially overlaps the routing query, no redundant combined variant is added. This is a
+retrieval hint only: every resulting candidate still consumes the same bounded candidate budget and must pass
+the unchanged exact identity/state verifier. Human sourcing remains article-anchored and never enters this
+free-text composition path.
+
+The first product Retry on the repaired query found the public-domain file *Space Defense Operations
+Computation Center, NORAD*, but the pixel-only verifier rejected it by appealing to an unsupported “known
+configuration” and demanding a particular large-scale war-room layout. This is the mirror failure: retrieval
+had evidence that the verifier never received. For a non-human Commons candidate, the licence-clean file
+title, description, author, and licence may therefore accompany the pixels as untrusted descriptive evidence.
+The verifier ignores instructions inside that text and may use an explicit identity claim only when the image
+is visually compatible; metadata can never excuse a visible contradiction. It is equally forbidden to invent
+a contradiction from outside model memory when the source record identifies the subject and the pixels do not.
+
+Named places also try their exact Commons category near the front of the bounded search. A place article's
+lead image is usually its exterior, while the category is the identity-scoped archive that holds interiors and
+subsites. Category scope improves discovery without changing eligibility, candidate limits, or the vision gate.
+
+A source-verification contract version change invalidates previously persisted sourced plates before retry.
+Keeping a plate accepted under the older contract would make the new verifier impossible to exercise and
+would regenerate every scene from the same known-bad pixels.
+
+Truth QA for a generated factual frame receives the same verified sourced identity reference used by the
+renderer. It compares visible identity geometry against those pixels and is forbidden to supply missing
+requirements from model memory. A canopy color, external mechanism, marking, or deployment detail can block
+only when the brief/state says it or a supplied reference visibly establishes it; unsupported historical
+"knowledge" is not evidence.
+
+The exact narration-supported identity is load-bearing twice: routing uses the factual-reasoning model, and
+the resolved query is spliced into every reference and scene prompt ahead of older analyzer shorthand. The
+conditioning pixels and the words therefore agree on the same subject; neither can pull an edit back toward
+a generic category. Image QA judges hidden conditions only through visible contradiction and must not invent
+exterior evidence that the verified state never said would be visible.
+
+The failure also exposed a retry trap. Truth-QA persisted the rejected asset (so the operator could inspect it),
+but `generate_images` then ran the shared last-mile gate before regeneration and treated the saved failure as
+terminal. Every product Retry failed for free against the same pixels. A linked `truthQaRequired:true` asset
+whose `truthQaPass` is not true now means **this scene is pending again**. Only rejected/missing scenes reopen;
+passing scenes remain cached. A truth-rejected scene's per-scene ledger row remains failed even though its
+inspectable asset is persisted, so Retry reruns that paid unit instead of returning the rejected asset from
+the idempotency cache. The image-step hash includes the QA contract version, so a verifier repair can
+replace rejected pixels, while render and publishing continue to fail closed until every linked asset passes.
+
+Pixel QA must also distinguish contradiction from invisibility. It may reject the wrong object, wrong visible
+state, or missing feature the brief explicitly requires on screen. It must not demand that an internal,
+microscopic, hidden, or otherwise non-visible mechanism be exposed merely because narration explains it; an
+honest shot may show the observable result while the voiceover carries its unseen cause.
+
 #### Present the source when the source is the claim
 
 A verified source has two different legitimate uses, and the scene plan must choose between them:

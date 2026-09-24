@@ -1,7 +1,7 @@
-import { eq, and } from 'drizzle-orm'
+import { eq, and, inArray } from 'drizzle-orm'
 import { getDb, reels, scenes, assets, channels, stories, assertVisualTruthReady } from '@reels/db'
 import { generateImage, generateImageFal, imageEngineForGenre, FLUX_IMAGE_ENGINE, buildInputHash, ContentFilterError, llmCall, downloadBuffer, uploadBuffer, sourceEntityImage, spendFromError, sniffImageMediaType, SCENE_IMAGE_MODEL, SCENE_IMAGE_QUALITY, type ImageEngine } from '@reels/providers'
-import { archivalShotTarget, presentedSourceTarget, identityWithheldEntities, MODES_WITHOUT_PLATES, normalizeCanon, WorldBibleSchema, EntityPlateStoreSchema, entityDescriptionHash, assembleImagePrompt, assembleNegativePrompt, assembleReferencePrompt, castNationality, historicalEraDirective, reelLightingDirective, sceneEntities, slug, channelPlatformPreset, StoryBibleSchema, AppearanceBindingsSchema, appearanceIdForEntity, entityAtAppearance, resolveEntities, EBN_RENDERING_PROFILE, effectiveGenre, resolveChannelPolicy, requiresEvidence, canUseArchivalHumanShot, splitSceneDepiction, conditionableReferenceKeys, missingRequiredIdentityReferences, personNameVariants, mentionsAny, scrubNames, SAFE_REPRESENTATIVE_STAGING, visualTruthContractErrors, depictionRoutingIsCurrent, type BibleEntity, type CharacterAppearance, type DepictionRouting, type MediaOrigin, type DepictionBasis, type SourcePolicy } from '@reels/core'
+import { archivalShotTarget, presentedSourceTarget, identityWithheldEntities, MODES_WITHOUT_PLATES, normalizeCanon, WorldBibleSchema, EntityPlateStoreSchema, entityDescriptionHash, entityRenderDescription, assembleImagePrompt, assembleNegativePrompt, assembleReferencePrompt, castNationality, historicalEraDirective, reelLightingDirective, sceneEntities, slug, channelPlatformPreset, StoryBibleSchema, AppearanceBindingsSchema, appearanceIdForEntity, entityAtAppearance, resolveEntities, EBN_RENDERING_PROFILE, effectiveGenre, resolveChannelPolicy, requiresEvidence, canUseArchivalHumanShot, splitSceneDepiction, conditionableReferenceKeys, missingRequiredIdentityReferences, personNameVariants, mentionsAny, scrubNames, SAFE_REPRESENTATIVE_STAGING, visualTruthContractErrors, depictionRoutingIsCurrent, type BibleEntity, type CharacterAppearance, type DepictionRouting, type MediaOrigin, type DepictionBasis, type SourcePolicy } from '@reels/core'
 import { z } from 'zod'
 import { buildRephrasePrompt, REPHRASE_V1_VERSION, buildImageQAPrompt, IMAGE_QA_V1_VERSION, ImageQASchema, isBlockingImageTruthFailure, buildFilterSafePrompt, FILTER_SAFE_V1_VERSION, FilterSafeSchema, buildEntityVerifyPrompt, buildIdentityStateVerifyPrompt, buildRepresentativeStagingPrompt, EntityVerifySchema, IdentityStateVerifySchema, RepresentativeStagingSchema, PLATE_COLOURISE_PROMPT, ENTITY_SOURCE_V1_VERSION } from '../../prompts-bridge.js'
 import { runStep } from '../harness.js'
@@ -37,11 +37,15 @@ const MAX_QA_REROLLS = 1
 
 export function applyDepictionRouting(entity: BibleEntity, routing: DepictionRouting): void {
   const previousMode = entity.depiction?.depictionMode
+  const previousClassifierVersion = entity.depiction?.classifierVersion
   entity.depiction = routing
   // A classifier correction from exact real identity to generated context must not leave the old source
   // plate attached: conditionableReferenceKeys would otherwise keep using pixels that the new verdict
   // explicitly says do not represent this entity.
-  if (previousMode === 'reference_plate' && routing.depictionMode !== 'reference_plate') {
+  if (previousMode === 'reference_plate' && (
+    routing.depictionMode !== 'reference_plate'
+    || previousClassifierVersion !== routing.classifierVersion
+  )) {
     delete entity.referenceImageKey
     delete entity.referenceOrigin
     for (const appearance of entity.appearances ?? []) {
@@ -49,6 +53,18 @@ export function applyDepictionRouting(entity: BibleEntity, routing: DepictionRou
       delete appearance.referenceOrigin
     }
   }
+}
+
+/** A persisted truth-QA failure is a regeneration request, not a permanent cache hit. */
+export function imageTruthNeedsRetry(meta: unknown): boolean {
+  const value = (meta ?? {}) as Record<string, unknown>
+  return value['truthQaRequired'] === true && value['truthQaPass'] !== true
+}
+
+/** Keep a rejected scene's runStep row failed so the idempotency cache cannot replay rejected pixels. */
+export function assertSceneImageTruthReady(sceneIdx: number, required: boolean, truthPass: boolean, issues: string[]): void {
+  if (!isBlockingImageTruthFailure(required, { truthPass })) return
+  throw new Error(`[visual-truth-image-qa] scene ${sceneIdx}: ${issues.join('; ') || 'factual image truth QA failed without a reason'}`)
 }
 
 // Factual truth is a property of the reel's frozen Source Policy, not its creative genre. Keep the legacy
@@ -118,6 +134,17 @@ const HUMAN_VERIFY_MIN_CONFIDENCE = 0.8
 // verification produced two invalid precursor plates in a row; a third attempt is the smallest retry budget
 // that avoids failing the whole board on that observed variance while still stopping deterministically.
 const MAX_STATE_PLATE_ATTEMPTS = 3
+// Commons rank is topical, not a vision verdict. A precise query can still put a related spacecraft or
+// museum display above the exact historical state. Inspect a small bounded set of licence-clean candidates;
+// every distinct image still pays for and must pass the same strict vision check.
+const MAX_COMMONS_CANDIDATES_PER_QUERY = 5
+const MAX_VERIFIED_SOURCE_CANDIDATES = 8
+
+interface VerifiedSourceAttempt {
+  sourceQuery: string
+  preferCommonsSearch: boolean
+  commonsCandidateIndex: number
+}
 
 // The bible entity id IS the subject name in kebab-case ("paoay-church", "jose-rizal"); de-kebab it so the
 // decider judges by the NAME, not only the feature-list description (which often doesn't name the subject).
@@ -135,9 +162,27 @@ export function sourceQueryCandidates(
   // "The Blind Man magazine May 1917 issue Fountain" returned generic periodicals, while the compact
   // "The Blind Man May 1917 Fountain" returned the exact issue-2 page). Keep both; verification decides.
   const compactQuery = routing.query.replace(/\b(?:magazine|issue|publication|document|photograph|photo|image|scan)\b/gi, ' ').replace(/\s+/g, ' ').trim()
+  // A Story Bible name can identify a room/subsite while routing identifies only its containing landmark.
+  // Compose both when their vocabularies are genuinely complementary (live case: "Cheyenne Mountain
+  // Complex" + "NORAD Command Center"). Token-overlap coverage avoids padding an already-specific title
+  // such as "The Blind Man ..." with its near-duplicate entity name, and is language/genre agnostic.
+  const tokens = (value: string) => value
+    .normalize('NFKD')
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean)
+  const nameTokens = tokens(name)
+  const queryTokens = new Set(tokens(routing.query))
+  const overlap = nameTokens.filter((token) => queryTokens.has(token)).length
+  const complementaryIdentityQuery = nameTokens.length > 0 && overlap * 2 < nameTokens.length
+    ? `${routing.query} ${name}`
+    : ''
+  // A named place's Commons category is an identity-scoped archive, and often contains interior/subsite
+  // photographs that the article lead and free-text title ranking hide behind an exterior hero image.
+  const categoryQuery = routing.subjectClass === 'place' ? `incategory:"${routing.query}"` : ''
   const raw = routing.subjectClass === 'human'
     ? [routing.query]
-    : [routing.query, compactQuery, name, `${name} ${entity.description}`]
+    : [routing.query, compactQuery, categoryQuery, complementaryIdentityQuery, name, `${name} ${entity.description}`]
   const seen = new Set<string>()
   return raw.map((value) => value.trim()).filter((value) => {
     const normalized = value.toLowerCase()
@@ -147,8 +192,79 @@ export function sourceQueryCandidates(
   })
 }
 
+// Scene locations are free-form creative text, not normalized place ids (live example: "in the sky above
+// Goldsboro"). Search the full context first, then mechanically back off from both boundaries. This avoids
+// language-specific stop-word lists while still surfacing a proper-name token when MediaWiki's all-terms
+// search cannot match the surrounding prose.
+export function contextualIdentityQueries(identityQuery: string, sourceContext: string): string[] {
+  const tokens = sourceContext.trim().split(/\s+/).filter(Boolean)
+  if (tokens.length === 0) return []
+  const full = tokens.join(' ')
+  const boundaries = tokens.length > 1 ? [tokens.at(-1)!, tokens[0]!] : []
+  // Long scene prose is likely to contain staging words MediaWiki treats as mandatory search terms. Put
+  // both boundary tokens first, then retain the full phrase. Short normalized locations keep full priority.
+  const contexts = tokens.length > 3 ? [...boundaries, full] : [full, ...boundaries]
+  return contexts.map((context) => `${identityQuery} ${context}`.trim())
+}
+
+export function verifiedSourceAttempts(
+  sourceQueries: string[],
+  isHuman: boolean,
+  firstCommonsDepth = 1,
+): VerifiedSourceAttempt[] {
+  if (isHuman) {
+    return sourceQueries.map((sourceQuery) => ({ sourceQuery, preferCommonsSearch: false, commonsCandidateIndex: 0 }))
+  }
+  // Pair each phrasing's article lead with its top Commons result before moving to the next phrasing. This
+  // lets an exact file beat a merely related article lead without allowing one query to consume every deep
+  // rank. After rank 0, rotate across all phrasings one rank at a time.
+  const attempts: VerifiedSourceAttempt[] = []
+  const boundedFirstDepth = Math.max(1, Math.min(firstCommonsDepth, MAX_COMMONS_CANDIDATES_PER_QUERY))
+  const firstQuery = sourceQueries[0]
+  if (firstQuery) {
+    for (let commonsCandidateIndex = 0; commonsCandidateIndex < boundedFirstDepth; commonsCandidateIndex++) {
+      attempts.push({ sourceQuery: firstQuery, preferCommonsSearch: true, commonsCandidateIndex })
+    }
+  }
+  for (const [index, sourceQuery] of sourceQueries.entries()) {
+    if (index > 0) attempts.push({ sourceQuery, preferCommonsSearch: true, commonsCandidateIndex: 0 })
+    attempts.push({ sourceQuery, preferCommonsSearch: false, commonsCandidateIndex: 0 })
+  }
+  for (let commonsCandidateIndex = 1; commonsCandidateIndex < MAX_COMMONS_CANDIDATES_PER_QUERY; commonsCandidateIndex++) {
+    for (const [index, sourceQuery] of sourceQueries.entries()) {
+      if (index === 0 && commonsCandidateIndex < boundedFirstDepth) continue
+      attempts.push({ sourceQuery, preferCommonsSearch: true, commonsCandidateIndex })
+    }
+  }
+  return attempts
+}
+
+/** Exact state first, exact parent identity second, then bounded broader fallbacks. */
+export function verifiedSourceQueryCandidates(
+  entity: { id: string; description: string },
+  routing: Pick<DepictionRouting, 'query' | 'subjectClass'>,
+  query = routing.query,
+  sourceContext = '',
+): string[] {
+  const effectiveRouting = query === routing.query ? routing : { ...routing, query }
+  const exact = [
+    ...contextualIdentityQueries(routing.query, sourceContext),
+    query,
+    ...(query === routing.query ? [] : [routing.query]),
+  ]
+  const exactWithAliases = exact.flatMap((value) => {
+    const alias = value.replace(/\bmark(?=\s*-?\s*\d)/gi, 'Mk')
+    return alias.toLowerCase() === value.toLowerCase() ? [value] : [value, alias]
+  })
+  return [
+    ...exactWithAliases,
+    ...sourceQueryCandidates(entity, effectiveRouting),
+    ...(query === routing.query ? [] : sourceQueryCandidates(entity, routing)),
+  ].filter((value, index, values) => values.findIndex((candidate) => candidate.toLowerCase() === value.toLowerCase()) === index)
+}
+
 export function buildStateAdaptationPrompt(basePrompt: string, stateDescription: string): string {
-  return `${basePrompt}\n\nIDENTITY-STATE LOCK: Preserve the source subject's exact physical geometry, proportions, openings, rim, and fixture details. TARGET STATE IS AUTHORITATIVE: render exactly its specified orientation, surface markings, labels, damage, and restoration. A source-state detail that is absent from or contradicts this target belongs to another moment and must not carry over. The finished reference MUST visibly satisfy this exact state: ${stateDescription}.`
+  return `${basePrompt}\n\nREFERENCE-PLATE TASK: Produce a close, isolated identity reference of the SAME source subject, not a wide cinematic scene. Keep the complete subject large enough for its distinctive silhouette, proportions, panels, openings, fins, hardware, and markings to remain legible. Never replace or simplify it into a generic member of its category. IDENTITY-STATE LOCK: Preserve the source subject's identity-defining geometry, proportions, openings, rim/edge shape, components, and markings wherever the target state does not explicitly change them. TARGET STATE IS AUTHORITATIVE: render exactly its specified orientation, surface markings, labels, damage, destruction, deformation, restoration, and visible temporary apparatus. When the target adds a temporary external apparatus, attach it to the preserved source subject; do not redraw the subject around a generic substitute. A source-state detail that is absent from or contradicts this target belongs to another moment and must not carry over. If the target explicitly requires breakup, fragmentation, collapse, dismantling, crushing, burning, or another form-changing state, do not keep the subject intact merely to preserve identity; apply that change plausibly while retaining recognizable subject/model-specific features in the surviving form. The finished reference MUST visibly satisfy this exact state: ${stateDescription}.`
 }
 
 // Invariant-2 text helpers (personNameVariants / mentionsAny / scrubNames / SAFE_REPRESENTATIVE_STAGING)
@@ -172,6 +288,30 @@ interface SourcedMedia {
   appearsGrayscale: boolean
 }
 
+async function verifyIdentityStateCandidate(
+  source: Pick<SourcedMedia, 'buffer' | 'mime'>,
+  candidate: Buffer,
+  name: string,
+  targetState: string,
+): Promise<{ verdict: z.infer<typeof IdentityStateVerifySchema>; costCents: number }> {
+  const verifyPrompt = buildIdentityStateVerifyPrompt(name, targetState)
+  const verify = await llmCall({
+    templateVersion: ENTITY_SOURCE_V1_VERSION,
+    schema: IdentityStateVerifySchema,
+    provider: 'anthropic',
+    model: DEPICTION_MODEL,
+    system: verifyPrompt.system,
+    messages: [{ role: 'user', content: [
+      { type: 'text', text: 'IMAGE 1 — verified source identity:' },
+      { type: 'image', mediaType: source.mime, base64: source.buffer.toString('base64') },
+      { type: 'text', text: 'IMAGE 2 — target-state candidate:' },
+      { type: 'image', mediaType: sniffImageMediaType(candidate), base64: candidate.toString('base64') },
+      { type: 'text', text: verifyPrompt.userMessage },
+    ] }],
+  })
+  return { verdict: IdentityStateVerifySchema.parse(verify.data), costCents: verify.costCents }
+}
+
 /**
  * Fetch + verify a real photograph for an already-routed subject. Returns null (fail soft) whenever anything
  * is missing, unverified, or below the confidence bar for its class.
@@ -184,6 +324,7 @@ async function fetchVerifiedMedia(
   routing: DepictionRouting,
   usage: 'conditioning_reference' | 'presented_archival',
   query = routing.query,
+  sourceContext = '',
 ): Promise<{ media: SourcedMedia | null; costCents: number }> {
   let costCents = 0
   try {
@@ -192,49 +333,57 @@ async function fetchVerifiedMedia(
     const isHuman = subjectClass === 'human'
 
     // A human's photo must come from the identity-anchored path only; a name-string match has no anchor.
-    const name = entityName(entity.id)
+    // A generic analyzer id can be rescued by exact bound narration evidence. Once routing has resolved an
+    // exact query, verify against that identity rather than weakening the check back to the shorthand id.
+    const name = routing.query || entityName(entity.id)
+    const sourceQueries = verifiedSourceQueryCandidates(entity, routing, query, sourceContext)
     const seenSources = new Set<string>()
-    for (const sourceQuery of sourceQueryCandidates(entity, routing)) {
-      // Article lead first preserves the strongest non-human identity anchor. If vision rejects that exact
-      // file, retry the SAME query against Commons directly before broadening the query: an article about a
-      // publication commonly leads with its cover while the required issue/page exists as a separate file.
-      // Humans deliberately never get this unanchored path.
-      const searchModes = isHuman ? [false] : [false, true]
-      for (const preferCommonsSearch of searchModes) try {
-        const img = await sourceEntityImage(sourceQuery, { requireArticleIdentity: isHuman, preferCommonsSearch })
-        if (!img || seenSources.has(img.sourceUrl)) continue
-        seenSources.add(img.sourceUrl)
-        const vp = buildEntityVerifyPrompt(subjectClass, name, entity.description)
-        const verify = await llmCall({
-          templateVersion: ENTITY_SOURCE_V1_VERSION, schema: EntityVerifySchema,
-          provider: 'anthropic', model: DEPICTION_MODEL,
-          system: vp.system,
-          messages: [{ role: 'user', content: [{ type: 'image', mediaType: img.mime, base64: img.buffer.toString('base64') }, { type: 'text', text: vp.userMessage }] }],
-        })
-        costCents += verify.costCents
-        const minConfidence = isHuman ? HUMAN_VERIFY_MIN_CONFIDENCE : ENTITY_VERIFY_MIN_CONFIDENCE
-        if (!verify.data.matches || verify.data.confidence < minConfidence) {
-          console.warn(`[generate-images] "${entity.id}" candidate "${img.title}" rejected by verify (matches=${verify.data.matches}, confidence=${verify.data.confidence} < ${minConfidence}; ${verify.data.note})`)
-          continue
-        }
-
-        return {
-          media: {
-            buffer: img.buffer,
-            mime: img.mime,
-            appearsGrayscale: verify.data.appearsGrayscale ?? false,
-            origin: {
-              type: 'sourced', provider: 'wikimedia', usage, subjectClass,
-              url: img.sourceUrl, license: img.license, licenseUrl: img.licenseUrl, author: img.author,
-              articleUrl: img.articleUrl,
-              ...(img.wikibaseItem ? { wikibaseItem: img.wikibaseItem } : {}),
-            },
-          },
-          costCents,
-        }
-      } catch (candidateError) {
-        console.warn(`[generate-images] source candidate "${sourceQuery}"${preferCommonsSearch ? ' (Commons search)' : ''} failed for "${entity.id}": ${candidateError instanceof Error ? candidateError.message : String(candidateError)}`)
+    let verifiedCandidates = 0
+    const attempts = verifiedSourceAttempts(sourceQueries, isHuman, sourceContext.trim() ? 3 : 1)
+    for (const { sourceQuery, preferCommonsSearch, commonsCandidateIndex } of attempts) try {
+      const img = await sourceEntityImage(sourceQuery, {
+        requireArticleIdentity: isHuman,
+        preferCommonsSearch,
+        ...(preferCommonsSearch ? { commonsCandidateIndex } : {}),
+      })
+      if (!img || seenSources.has(img.sourceUrl)) continue
+      seenSources.add(img.sourceUrl)
+      if (verifiedCandidates++ >= MAX_VERIFIED_SOURCE_CANDIDATES) return { media: null, costCents }
+      const vp = buildEntityVerifyPrompt(subjectClass, name, entity.description, usage, {
+        title: img.title,
+        description: img.sourceDescription,
+        author: img.author,
+        license: img.license,
+      })
+      const verify = await llmCall({
+        templateVersion: ENTITY_SOURCE_V1_VERSION, schema: EntityVerifySchema,
+        provider: 'anthropic', model: DEPICTION_MODEL,
+        system: vp.system,
+        messages: [{ role: 'user', content: [{ type: 'image', mediaType: img.mime, base64: img.buffer.toString('base64') }, { type: 'text', text: vp.userMessage }] }],
+      })
+      costCents += verify.costCents
+      const minConfidence = isHuman ? HUMAN_VERIFY_MIN_CONFIDENCE : ENTITY_VERIFY_MIN_CONFIDENCE
+      if (!verify.data.matches || verify.data.confidence < minConfidence) {
+        console.warn(`[generate-images] "${entity.id}" candidate "${img.title}" rejected by verify (matches=${verify.data.matches}, confidence=${verify.data.confidence} < ${minConfidence}; ${verify.data.note})`)
+        continue
       }
+
+      return {
+        media: {
+          buffer: img.buffer,
+          mime: img.mime,
+          appearsGrayscale: verify.data.appearsGrayscale ?? false,
+          origin: {
+            type: 'sourced', provider: 'wikimedia', usage, subjectClass,
+            url: img.sourceUrl, license: img.license, licenseUrl: img.licenseUrl, author: img.author,
+            articleUrl: img.articleUrl,
+            ...(img.wikibaseItem ? { wikibaseItem: img.wikibaseItem } : {}),
+          },
+        },
+        costCents,
+      }
+    } catch (candidateError) {
+      console.warn(`[generate-images] source candidate "${sourceQuery}"${preferCommonsSearch ? ` (Commons rank ${commonsCandidateIndex + 1})` : ''} failed for "${entity.id}": ${candidateError instanceof Error ? candidateError.message : String(candidateError)}`)
     }
     return { media: null, costCents }
   } catch (err) {
@@ -265,9 +414,58 @@ async function sourceEntityPlate(
   reelId: string,
   engine: ImageEngine,
   bill: (cents: number) => void,
-  state?: { id: string; prompt: string },
+  state?: { id: string; prompt: string; sourceContext?: string },
 ): Promise<PlateSourceResult> {
   if (routing.subjectClass === 'fictional' || routing.subjectClass === 'generic') return { sourced: false }
+  // Prefer real pixels of the exact historical state when they exist. Deriving every state from a museum
+  // photograph needlessly asks a generator to preserve identity through the very change being documented;
+  // Goldsboro proved that it can repeatedly turn an exact Mark 39 into generic ordnance even while Commons
+  // holds public-domain USAF photographs of both recovered weapon states.
+  if (state) {
+    const stateQuery = [routing.query, renderEntity.description, state.sourceContext]
+      .filter((value): value is string => Boolean(value?.trim()))
+      .join(' ')
+    const { media: exactState, costCents: exactStateCost } = await fetchVerifiedMedia(
+      renderEntity,
+      routing,
+      'conditioning_reference',
+      stateQuery,
+      state.sourceContext,
+    )
+    bill(exactStateCost)
+    if (exactState) {
+      // Identity verification deliberately ignores final-shot action and temporary apparatus. That makes it
+      // the right gate for a base conditioning anchor, but not proof that these pixels already depict the
+      // requested appearance. Run the separate state gate before bypassing adaptation; otherwise a clear
+      // museum photo can be persisted under a "parachute deployed" key and leave the scene render to invent
+      // the entire state in one identity-destroying jump.
+      const stateVerify = await verifyIdentityStateCandidate(
+        exactState,
+        exactState.buffer,
+        routing.query || entityName(identityEntity.id),
+        renderEntity.description,
+      )
+      bill(stateVerify.costCents)
+      const exactStatePass = stateVerify.verdict.identityPreserved
+        && stateVerify.verdict.candidateMatchesTargetExactly
+        && stateVerify.verdict.confidence >= ENTITY_VERIFY_MIN_CONFIDENCE
+      if (!exactStatePass) {
+        console.warn(`[generate-images] exact-state source "${renderEntity.id}:${state.id}" rejected by state verify (identity=${stateVerify.verdict.identityPreserved}, target=${stateVerify.verdict.candidateMatchesTargetExactly}, confidence=${stateVerify.verdict.confidence}; ${stateVerify.verdict.note})`)
+      } else {
+        const stateSourceKey = `reels/${reelId}/refs/${slug(identityEntity.id)}--${slug(state.id)}-source.webp`
+        await uploadBuffer(stateSourceKey, exactState.buffer, exactState.mime)
+        return {
+          sourced: true,
+          key: stateSourceKey,
+          origin: {
+            ...exactState.origin,
+            sourceAssetKey: stateSourceKey,
+            conditioningAssetKey: stateSourceKey,
+          },
+        }
+      }
+    }
+  }
   // Verify the source against the PARENT identity. A state description can intentionally differ from the
   // surviving photograph (unsigned vs signed, intact vs damaged); verifying against that state would reject
   // the correct subject before the state-adaptation step gets a chance to do its job.
@@ -300,24 +498,15 @@ async function sourceEntityPlate(
       }, bill)
       bill(res.costCents)
       const rendered = await downloadBuffer(res.asset.storageKey)
-      const verifyPrompt = buildIdentityStateVerifyPrompt(entityName(identityEntity.id), renderEntity.description)
-      const verify = await llmCall({
-        templateVersion: ENTITY_SOURCE_V1_VERSION,
-        schema: IdentityStateVerifySchema,
-        provider: 'anthropic',
-        model: DEPICTION_MODEL,
-        system: verifyPrompt.system,
-        messages: [{ role: 'user', content: [
-          { type: 'text', text: 'IMAGE 1 — verified source identity:' },
-          { type: 'image', mediaType: media.mime, base64: media.buffer.toString('base64') },
-          { type: 'text', text: 'IMAGE 2 — generated state-adapted candidate:' },
-          { type: 'image', mediaType: sniffImageMediaType(rendered), base64: rendered.toString('base64') },
-          { type: 'text', text: verifyPrompt.userMessage },
-        ] }],
-      })
+      const verify = await verifyIdentityStateCandidate(
+        media,
+        rendered,
+        routing.query || entityName(identityEntity.id),
+        renderEntity.description,
+      )
       bill(verify.costCents)
-      if (!verify.data.identityPreserved || !verify.data.candidateMatchesTargetExactly || verify.data.confidence < ENTITY_VERIFY_MIN_CONFIDENCE) {
-        console.warn(`[generate-images] adapted state "${renderEntity.id}:${state.id}" rejected by verify on attempt ${attempt + 1} (identity=${verify.data.identityPreserved}, target=${verify.data.candidateMatchesTargetExactly}, confidence=${verify.data.confidence}; ${verify.data.note})`)
+      if (!verify.verdict.identityPreserved || !verify.verdict.candidateMatchesTargetExactly || verify.verdict.confidence < ENTITY_VERIFY_MIN_CONFIDENCE) {
+        console.warn(`[generate-images] adapted state "${renderEntity.id}:${state.id}" rejected by verify on attempt ${attempt + 1} (identity=${verify.verdict.identityPreserved}, target=${verify.verdict.candidateMatchesTargetExactly}, confidence=${verify.verdict.confidence}; ${verify.verdict.note})`)
         continue
       }
       return {
@@ -373,6 +562,17 @@ export async function generateImages(reelId: string): Promise<void> {
   ])
   if (!channel) throw new Error(`Channel not found: ${reel.channelId}`)
 
+  const linkedImageIds = reelScenes.flatMap((scene) => scene.imageAssetId ? [scene.imageAssetId] : [])
+  const linkedImageAssets = linkedImageIds.length > 0
+    ? await db.query.assets.findMany({
+        where: inArray(assets.id, linkedImageIds),
+        columns: { id: true, meta: true },
+      })
+    : []
+  const imageMetaById = new Map(linkedImageAssets.map((asset) => [asset.id, asset.meta]))
+  const sceneNeedsImage = (scene: (typeof reelScenes)[number]) =>
+    !scene.imageAssetId || !imageMetaById.has(scene.imageAssetId) || imageTruthNeedsRetry(imageMetaById.get(scene.imageAssetId))
+
   // Story Bible (from analyze_story). null = not analyzed → assembleImagePrompt falls back to the plain
   // style+content form (pre-bible behavior). When present, each scene's entity refs expand to the bible's
   // frozen canonical descriptions, spliced identically across scenes (see specs/story-bible.md).
@@ -396,9 +596,8 @@ export async function generateImages(reelId: string): Promise<void> {
     policy,
     resolveMediaGenre({ storyMode: channel.storyMode, genreCategory: genre, niche: channel.nicheDescription }),
   )
-  // A linked failed verdict is terminal until the scene is deliberately regenerated. This check runs
-  // before reference sourcing or any image spend, so worker retries surface the same blocker for free.
-  await assertVisualTruthReady(reelId)
+  // A linked failed verdict makes only that scene pending again. Render and publishing still fail closed;
+  // generate_images is the recovery path and must be allowed to replace its own rejected output.
   const lighting = storyBible ? reelLightingDirective(genre, storyBible.continuity.timeline) : undefined
 
   // Image model is chosen per genre (currently gpt-image-1 for all — owner preference). Used for both
@@ -445,13 +644,14 @@ export async function generateImages(reelId: string): Promise<void> {
       appearance: CharacterAppearance | null
       renderEntity: BibleEntity
       targetKey: string
+      sourceContext: string
     }
     const targetMap = new Map<string, PlateTarget>()
     for (const s of reelScenes) {
       // A plate is an input to image generation, so mint it only for a scene that actually needs an image
       // now. This matters after a Bible re-analysis: already-rendered scenes keep their pixels and must not
       // trigger a full cast re-plate when only one time-bound appearance is being repaired.
-      if (!s.visualPrompt || s.imageAssetId) continue
+      if (!s.visualPrompt || !sceneNeedsImage(s)) continue
       const appearanceByEntity = AppearanceBindingsSchema.parse(s.appearanceBindings ?? {})
       const { resolved } = resolveEntities(storyBible, {
         primaryEntity: s.primaryEntity,
@@ -463,11 +663,27 @@ export async function generateImages(reelId: string): Promise<void> {
           ? parent.appearances?.find((candidate) => slug(candidate.id) === slug(appearanceId)) ?? null
           : null
         const targetKey = `${slug(parent.id)}::${appearance ? slug(appearance.id) : 'base'}`
-        targetMap.set(targetKey, { parent, appearance, renderEntity: entityAtAppearance(parent, appearance?.id), targetKey })
+        targetMap.set(targetKey, {
+          parent,
+          appearance,
+          renderEntity: entityAtAppearance(parent, appearance?.id),
+          targetKey,
+          sourceContext: s.location?.trim() ?? '',
+        })
       }
     }
     const plateTargets = [...targetMap.values()]
     const referenced = new Set(plateTargets.map((target) => slug(target.parent.id)))
+    const routingEvidence = new Map<string, string[]>()
+    for (const scene of reelScenes) {
+      for (const ref of [scene.primaryEntity, ...(scene.supportingEntities ?? [])]) {
+        if (!ref || !referenced.has(slug(ref))) continue
+        const key = slug(ref)
+        const spans = routingEvidence.get(key) ?? []
+        if (scene.narrationText.trim()) spans.push(scene.narrationText.trim())
+        routingEvidence.set(key, spans)
+      }
+    }
     const refNeg = assembleNegativePrompt({ genreCategory: genre })
     // ── Channel-level plate reuse (W2) ──────────────────────────────────────────────────────────
     // A RECURRING entity is minted once per channel and reused forever; a one-off story character is
@@ -506,7 +722,7 @@ export async function generateImages(reelId: string): Promise<void> {
       const routeHash = buildInputHash('depiction_routing.v1', {
         reelId,
         templateVersion: ENTITY_SOURCE_V1_VERSION,
-        entities: needsRouting.map((e) => `${slug(e.id)}|${e.kind}|${e.description}`).sort().join('\n'),
+        entities: needsRouting.map((e) => `${slug(e.id)}|${e.kind}|${e.description}|${(routingEvidence.get(slug(e.id)) ?? []).join(' ')}`).sort().join('\n'),
         policy: `${policy.realPlaces}|${policy.realPeople}`,
       })
       await runStep(
@@ -515,7 +731,8 @@ export async function generateImages(reelId: string): Promise<void> {
           let routeCost = 0
           await Promise.all(
             needsRouting.map(async (entity) => {
-              const { routing, costCents } = await routeDepiction(entity, policy, region)
+              const evidence = [...new Set(routingEvidence.get(slug(entity.id)) ?? [])].join('\n')
+              const { routing, costCents } = await routeDepiction(entity, policy, region, evidence)
               if (costCents > 0) { routeCost += costCents; cost.add(costCents) }
               applyDepictionRouting(entity, routing)
             }),
@@ -551,8 +768,9 @@ export async function generateImages(reelId: string): Promise<void> {
     // referenceImageKey: the hash is the set of entities still MISSING a plate, so a swallowed plate failure
     // retries on the next run instead of being cached away as done.
     if (toMint.length > 0) {
-      const plateHash = buildInputHash('image_plates.v6', {
+      const plateHash = buildInputHash('image_plates.v7', {
         reelId,
+        templateVersion: ENTITY_SOURCE_V1_VERSION,
         // Depiction mode is IN the hash: a re-route (policy change, a subject reclassified) must re-mint
         // rather than serve a plate produced under the old mode.
         entities: toMint.map((target) => `${target.targetKey}|${target.parent.depiction?.depictionMode ?? 'generated'}|${target.renderEntity.description}`).sort().join('\n'),
@@ -600,6 +818,7 @@ export async function generateImages(reelId: string): Promise<void> {
                       ? {
                           id: target.appearance.id,
                           prompt: assembleReferencePrompt(entity, effectiveStyle, lighting, cast),
+                          sourceContext: target.sourceContext,
                         }
                       : undefined,
                   )
@@ -656,7 +875,7 @@ export async function generateImages(reelId: string): Promise<void> {
     }
   }
 
-  const pending = reelScenes.filter((s) => s.visualPrompt && !s.imageAssetId) // skip already-generated (idempotency)
+  const pending = reelScenes.filter((s) => s.visualPrompt && sceneNeedsImage(s)) // retry only missing/rejected images
 
   const contractErrors = pending.flatMap((scene) => visualTruthContractErrors({
     depictionBasis: scene.depictionBasis as DepictionBasis,
@@ -719,8 +938,6 @@ export async function generateImages(reelId: string): Promise<void> {
   const featuresArchival = (s: (typeof pending)[number]) =>
     [...(s.primaryEntity ? [s.primaryEntity] : []), ...(s.supportingEntities ?? [])].some((r) => archivalSlugs.has(slug(r)))
   const isQATarget = (s: (typeof pending)[number]) => truthQaRequired || Boolean(eraContext) || s.tier === 'video' || (peak !== '' && s.narrationText.includes(peak)) || featuresPerson(s) || featuresArchival(s) || (isVoiceover && carriesClaim(s))
-
-  const blockingTruthFailures: string[] = []
 
   const processScene = async (scene: (typeof pending)[number]) => {
     const appearanceByEntity = AppearanceBindingsSchema.parse(scene.appearanceBindings ?? {})
@@ -869,6 +1086,7 @@ export async function generateImages(reelId: string): Promise<void> {
       referenceImageKeys, // re-render when a scene's references change (gained/lost a plate)
       sourcePresentation: sourcePresentationTarget?.referenceOrigin?.sourceAssetKey ?? '',
       engine: `${sceneEngine.imageModel}|${sceneEngine.editModel}`, // switching engine (incl. scare→Flux) busts the cache
+      imageQaVersion: IMAGE_QA_V1_VERSION, // a truth-QA contract repair must be able to regenerate rejected pixels
       // The archival subjects are inputs even though they never reach the prompt: they decide whether this
       // scene is fulfilled by a real photograph and whether the prose is scrubbed.
       archival: withheld.map((e) => slug(e.id)).sort().join(','),
@@ -1009,6 +1227,14 @@ export async function generateImages(reelId: string): Promise<void> {
         }
 
         const qa = isQATarget(scene)
+        const qaReferences = qa && truthQaRequired
+          ? await Promise.all(sceneEnts
+              .filter((entity) => entity.referenceOrigin?.type === 'sourced' && entity.referenceImageKey && referenceImageKeys.includes(entity.referenceImageKey))
+              .map(async (entity) => ({
+                label: `${entity.id}: ${entityRenderDescription(entity)}`,
+                buffer: await downloadBuffer(entity.referenceImageKey!),
+              })))
+          : []
         let chosen: Awaited<ReturnType<typeof generateImageWithRetry>> | undefined
         let extraNeg = '' // targeted negatives added across re-rolls to push the model off the flagged failure
         let lastIssues: string[] = [] // QA verdict of the kept image ([] = passed / not QA'd)
@@ -1044,13 +1270,13 @@ export async function generateImages(reelId: string): Promise<void> {
 
           const buffer = await downloadBuffer(result.asset.storageKey)
           const expectedAppearance = Object.keys(appearanceByEntity).length > 0
-            ? sceneEnts.map((entity) => `${entity.id}: ${entity.description}`).join('\n')
+            ? sceneEnts.map((entity) => `${entity.id}: ${entityRenderDescription(entity)}`).join('\n')
             : undefined
           const { verdict, costCents } = await imageQA(buffer, qaBrief, expectedAppearance, {
             required: truthQaRequired,
             depictionBasis: scene.depictionBasis as DepictionBasis,
             narrationText: scene.narrationText,
-          })
+          }, qaReferences)
           cost.add(costCents)
           lastIssues = verdict.issues
           lastTruthPass = verdict.truthPass
@@ -1125,9 +1351,11 @@ export async function generateImages(reelId: string): Promise<void> {
           .set({ imageAssetId: asset!.id, imageOrigin: null })
           .where(and(eq(scenes.reelId, reelId), eq(scenes.idx, scene.idx)))
 
-        if (isBlockingImageTruthFailure(truthQaRequired, { truthPass: lastTruthPass })) {
-          blockingTruthFailures.push(`scene ${scene.idx}: ${lastTruthIssues.join('; ') || 'factual image truth QA failed without a reason'}`)
-        }
+        // A rejected asset is deliberately persisted for inspection, but this per-scene paid step must
+        // remain FAILED. Marking it done makes the next product Retry hit runStep's cache and replay the
+        // same rejected pixels forever. runPool still lets sibling scenes finish before surfacing the
+        // failure, while the failed row makes this exact scene genuinely rerunnable at the same hash.
+        assertSceneImageTruthReady(scene.idx, truthQaRequired, lastTruthPass, lastTruthIssues)
 
         return { output: { assetId: asset!.id, archival: false, exactSource: false }, costCents: cost.total }
       },
@@ -1136,16 +1364,29 @@ export async function generateImages(reelId: string): Promise<void> {
 
   // Rolling pool — fast without flooding fal, and one bad scene doesn't abort the others.
   await runPool(pending, IMAGE_CONCURRENCY, processScene, 'scene image')
-  if (blockingTruthFailures.length > 0) {
-    throw new Error(`[visual-truth-image-qa] ${blockingTruthFailures.join(' | ')}`)
-  }
+  await assertVisualTruthReady(reelId)
 }
 
 // Vision QA: does the render match the brief's checkable intent? Takes the image BYTES (the caller
 // downloads once and reuses the buffer for best-attempt tracking). Sniffs the real media type so it works
 // regardless of fal's output format. Cheap (Haiku); only called on QA-target scenes.
-async function imageQA(buf: Buffer, visualPrompt: string, expectedAppearance?: string, truth?: { required: boolean; depictionBasis: DepictionBasis; narrationText: string }): Promise<{ verdict: z.infer<typeof ImageQASchema>; costCents: number }> {
-  const { system, userMessage } = buildImageQAPrompt(visualPrompt, expectedAppearance, truth)
+async function imageQA(
+  buf: Buffer,
+  visualPrompt: string,
+  expectedAppearance?: string,
+  truth?: { required: boolean; depictionBasis: DepictionBasis; narrationText: string },
+  references: Array<{ label: string; buffer: Buffer }> = [],
+): Promise<{ verdict: z.infer<typeof ImageQASchema>; costCents: number }> {
+  const { system, userMessage } = buildImageQAPrompt(
+    visualPrompt,
+    expectedAppearance,
+    truth,
+    references.map((reference) => reference.label),
+  )
+  const referenceContent = references.flatMap((reference, index) => [
+    { type: 'text' as const, text: `REFERENCE ${index + 1} — verified identity anchor:` },
+    { type: 'image' as const, mediaType: sniffImageMediaType(reference.buffer), base64: reference.buffer.toString('base64') },
+  ])
   const r = await llmCall({
     templateVersion: IMAGE_QA_V1_VERSION,
     schema: ImageQASchema,
@@ -1156,7 +1397,9 @@ async function imageQA(buf: Buffer, visualPrompt: string, expectedAppearance?: s
       {
         role: 'user',
         content: [
+          { type: 'text', text: 'GENERATED FRAME TO JUDGE:' },
           { type: 'image', mediaType: sniffImageMediaType(buf), base64: buf.toString('base64') },
+          ...referenceContent,
           { type: 'text', text: userMessage },
         ],
       },

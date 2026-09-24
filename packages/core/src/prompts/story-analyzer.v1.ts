@@ -9,7 +9,7 @@
 import { StoryBibleSchema } from '../types/story-bible.js'
 import type { BibleEntity } from '../types/story-bible.js'
 
-export const STORY_ANALYZER_V1_VERSION = 'story-analyzer.v1.28'
+export const STORY_ANALYZER_V1_VERSION = 'story-analyzer.v1.29'
 
 // The analyzer emits a full StoryBible; the caller validates with this schema.
 export { StoryBibleSchema }
@@ -127,6 +127,11 @@ ENTITIES — the recurring people, places, and objects that ANCHOR the story. Ru
 - REUSE channel-canon ids where an entity matches — but still write its FULL visual description (the canon may only have the name; you supply the look). Only mint a new id for something the canon doesn't cover.
 - id: ENGLISH kebab-case (e.g. "rented-bedroom", "cracked-mirror", "grandmother"). TRANSLATE any Tagalog/other-language name to English for the id — never mint a Tagalog id ("salamin-ng-banyo" → "bathroom-mirror", "cr-sa-eskwela" → "school-restroom", "reloh-sa-telepono" → "phone-clock"). This matters because the scene breakdown often echoes the id as the shot's label, and the image model only understands English — a Tagalog id renders the wrong object or fails. kind: "character" | "location" | "object".
 - NAME A REAL THING BY A NAME THAT IDENTIFIES IT, don't describe it. When an entity IS a specific real-world subject the narration identifies — a titled artwork, a named vessel or vehicle, a named building or site, a named species, a named document, a real person — the id must NAME it rather than describe how it looks: "titanic", NOT "ocean-liner"; "philippine-eagle", NOT "large-forest-raptor"; "rosetta-stone", NOT "inscribed-granite-slab". Put the physical description where it belongs — in "description".
+  READ THE WHOLE NARRATION BEFORE NAMING. A subject may be introduced by its generic class and identified
+  precisely only later. When the later wording makes clear it is the same physical subject, preserve that
+  exact model/designation/title in the ONE entity id and description everywhere — e.g. a weapon later named
+  "Mark 39" becomes "mark-39", never the generic "thermonuclear-weapon". Do not split its generic mention
+  and exact mention into two entities, and do not let an early generic noun erase the later exact identity.
   DISAMBIGUATE WHEN THE NAME IS ALSO AN ORDINARY WORD. The id must pick out THIS subject on its own, the way an encyclopedia article title does — so when a work's title is also a common noun, qualify it with its maker, place, or year: "duchamp-fountain", NOT "fountain" (which reads as a garden water feature); "picasso-guernica" over a bare "guernica" if the town could be meant; "hindenburg-disaster" over "hindenburg" if the person could be meant. A bare common noun is read as the generic thing, which is exactly the wrong answer.
   Why this matters, and it is invisible from where you sit: the engine can source a REAL licensed photograph of an identified subject and render every shot from the real thing, and the id is the ONLY signal it has — "porcelain-urinal" and "fountain" both resolve to any old plumbing fixture and get an invented look, while "duchamp-fountain" resolves to the actual 1917 readymade. The breakdown also echoes the id as the shot label, so a descriptive id quietly re-describes the subject at every beat.
   If the narration does NOT name a specific real instance — an anonymous bedroom, a stray dog, some cracked mirror — keep describing it generically, exactly as before. Inventing a proper name for a generic thing is the opposite error and is worse.
