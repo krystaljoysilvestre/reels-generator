@@ -1,0 +1,70 @@
+name: Deployed builds
+
+# Read-only report of what production is running: which commit web and worker report, and their recent
+# Railway deployments. Run by hand from the Actions tab (works from any device, no local CLI needed).
+#
+# It deploys, restarts and changes nothing. It needs the repository secret RAILWAY_PRODUCTION_TOKEN: a
+# Railway *project* token scoped to the production environment. Railway has no read-only token type, so
+# the secret lives only here and only this manual workflow can read it.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deployed-builds
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_PRODUCTION_TOKEN }}
+      HEALTH_URL: https://app.kendrix.io/api/health
+    steps:
+      - name: Web health (public, no token)
+        run: |
+          echo "Read at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          curl -fsS --max-time 20 "$HEALTH_URL" | tee health.json
+          echo
+
+      - name: Check token is configured
+        run: |
+          if [ -z "$RAILWAY_TOKEN" ]; then
+            echo "::error::RAILWAY_PRODUCTION_TOKEN is not set. Add a Railway project token for production as a repository secret."
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Railway CLI (pinned)
+        run: npm install --global @railway/cli@5.70.0
+
+      - name: Recent deployments
+        run: |
+          for service in web worker; do
+            echo "== $service =="
+            # Only id, status and time: deployment metadata is not printed wholesale.
+            railway deployment list --service "$service" --limit 5 --json \
+              | jq -r '.[] | [.createdAt, .status, .id] | @tsv' || echo "could not list $service deployments"
+          done
+
+      - name: Build line from each service's current deployment log
+        run: |
+          for service in web worker; do
+            echo "== $service =="
+            # Fetch-only (no streaming). Railway retains logs for a limited time, so a long-running
+            # deployment may no longer have its boot line; that is reported, not guessed.
+            lines=$(railway logs --service "$service" --deployment --lines 5000 --filter "build=" 2>&1 \
+              | grep -E 'build=[0-9a-f]{7}|build=unknown' || true)
+            if [ -n "$lines" ]; then
+              echo "$lines" | tail -3
+            else
+              echo "no build line in retained logs for $service's current deployment"
+            fi
+          done

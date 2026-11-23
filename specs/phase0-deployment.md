@@ -89,6 +89,14 @@ boot; `railway logs -s worker` is where the worker's build is read. Resolution o
 `RAILWAY_GIT_COMMIT_SHA` (which Railway injects only for GitHub-triggered deploys), then the `/app/.build-commit`
 stamp, then `unknown`.
 
+**The worker's build is relayed through web health (2026-11-23, #26).** Reading the boot log needs Railway access
+from a machine, and Railway ages logs out, so a long-running worker may have no readable boot line. The worker now
+also writes its build to Redis (`kendrix:worker:build`, refreshed every 5 minutes, expiring after 15), and
+`/api/health` adds `workerBuild` and `workerBuildSource`. Same rule: a short SHA or `unknown`, never inferred.
+`unknown` also means the worker is down or predates this report. For a token-backed read of both services' boot
+lines and recent deployments, run the manual **Deployed builds** GitHub Action (needs the
+`RAILWAY_PRODUCTION_TOKEN` repository secret).
+
 **`scripts/deploy-railway.sh web|worker|all` is now the deploy path.** `railway up` uploads a tarball with no git
 context, so a hand deploy could not otherwise say what it was. The script refuses a dirty tree, refuses a commit
 that is on no remote branch (`ALLOW_UNPUSHED=1` overrides, loudly), writes the `.build-commit` stamp into the
