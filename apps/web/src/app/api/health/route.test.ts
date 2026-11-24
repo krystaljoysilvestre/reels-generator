@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   execute: vi.fn(),
   waitUntilReady: vi.fn(),
   makeQueue: vi.fn(),
+  redisGet: vi.fn(),
 }))
 
 vi.mock('@reels/db', () => ({
@@ -21,7 +22,11 @@ describe('GET /api/health', () => {
     vi.clearAllMocks()
     mocks.execute.mockResolvedValue([])
     mocks.waitUntilReady.mockResolvedValue(undefined)
-    mocks.makeQueue.mockReturnValue({ waitUntilReady: mocks.waitUntilReady })
+    mocks.redisGet.mockResolvedValue(null)
+    mocks.makeQueue.mockReturnValue({
+      waitUntilReady: mocks.waitUntilReady,
+      client: Promise.resolve({ get: mocks.redisGet }),
+    })
     delete (globalThis as typeof globalThis & { __kendrixHealthQueue?: unknown }).__kendrixHealthQueue
   })
 
@@ -32,7 +37,13 @@ describe('GET /api/health', () => {
     expect(result.status).toBe(200)
     // `unknown` is the correct answer in a test process: nothing stamped this build, and the probe
     // must say so rather than infer a commit from the working tree.
-    await expect(result.json()).resolves.toEqual({ ok: true, build: 'unknown', buildSource: 'none' })
+    await expect(result.json()).resolves.toEqual({
+      ok: true,
+      build: 'unknown',
+      buildSource: 'none',
+      workerBuild: 'unknown',
+      workerBuildSource: 'none',
+    })
     expect(mocks.execute).toHaveBeenCalledOnce()
     expect(mocks.waitUntilReady).toHaveBeenCalledOnce()
     expect(result.headers.get('cache-control')).toBe('no-store, max-age=0')
@@ -46,10 +57,16 @@ describe('GET /api/health', () => {
     const result = await GET()
 
     expect(result.status).toBe(503)
-    // Still exactly three keys, and the build is reported on failure too — a broken dependency is when
+    // Still exactly these keys, and both builds are reported on failure too — a broken dependency is when
     // "which build is this?" matters most. The point of this test is unchanged: no dependency detail.
     const body = await result.json()
-    expect(body).toEqual({ ok: false, build: 'unknown', buildSource: 'none' })
+    expect(body).toEqual({
+      ok: false,
+      build: 'unknown',
+      buildSource: 'none',
+      workerBuild: 'unknown',
+      workerBuildSource: 'none',
+    })
     expect(JSON.stringify(body)).not.toContain('postgres')
   })
 
@@ -63,7 +80,53 @@ describe('GET /api/health', () => {
       ok: true,
       build: 'ffd4d56',
       buildSource: 'env',
+      workerBuild: 'unknown',
+      workerBuildSource: 'none',
     })
     vi.unstubAllEnvs()
+  })
+
+  it('relays the build the worker published to Redis', async () => {
+    mocks.redisGet.mockResolvedValue(JSON.stringify({ build: '22dfb12', source: 'stamp' }))
+
+    const { GET } = await import('./route')
+    const body = await (await GET()).json()
+
+    expect(body).toMatchObject({ ok: true, workerBuild: '22dfb12', workerBuildSource: 'stamp' })
+    expect(mocks.redisGet).toHaveBeenCalledWith('kendrix:worker:build')
+  })
+
+  it('never relays arbitrary Redis content through the public probe', async () => {
+    mocks.redisGet.mockResolvedValue(JSON.stringify({ build: 'redis://user:secret@host', source: 'stamp' }))
+
+    const { GET } = await import('./route')
+    const body = await (await GET()).json()
+
+    expect(body).toMatchObject({ workerBuild: 'unknown', workerBuildSource: 'none' })
+    expect(JSON.stringify(body)).not.toContain('secret')
+  })
+
+  it('stays healthy and reports unknown when the worker build cannot be read', async () => {
+    mocks.redisGet.mockRejectedValue(new Error('read failed'))
+
+    const { GET } = await import('./route')
+    const result = await GET()
+
+    expect(result.status).toBe(200)
+    await expect(result.json()).resolves.toMatchObject({ ok: true, workerBuild: 'unknown' })
+  })
+
+  it('does not stall the probe when the worker build read hangs', async () => {
+    vi.useFakeTimers()
+    mocks.redisGet.mockReturnValue(new Promise(() => undefined))
+
+    const { GET } = await import('./route')
+    const pending = GET()
+    await vi.advanceTimersByTimeAsync(1_000)
+    const result = await pending
+    vi.useRealTimers()
+
+    expect(result.status).toBe(200)
+    await expect(result.json()).resolves.toMatchObject({ workerBuild: 'unknown', workerBuildSource: 'none' })
   })
 })

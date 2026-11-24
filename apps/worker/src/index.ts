@@ -1,9 +1,10 @@
 import './env.js'
 import { buildInfo } from '@reels/core/build-info'
+import { writeWorkerBuild, WORKER_BUILD_REFRESH_MS } from '@reels/queue/worker-build'
 import type { Worker } from 'bullmq'
 import { initSentry, captureException } from './monitoring/sentry.js'
 import { startBullBoard } from './monitoring/bull-board.js'
-import { makeWorker, QUEUE } from './queues/index.js'
+import { makeQueue, makeWorker, QUEUE } from './queues/index.js'
 import { dispatchPipelineJob } from './pipeline/dispatcher.js'
 import { markReelFailed } from './pipeline/harness.js'
 import { withJobTimeout, reapStuckReels, PIPELINE_STEP_TIMEOUT_MS, RENDER_STEP_TIMEOUT_MS } from './pipeline/liveness.js'
@@ -124,7 +125,8 @@ if (runs('scheduler')) {
 // Graceful shutdown — close whatever this process started.
 async function shutdown() {
   console.log('Shutting down worker…')
-  await Promise.all(started.map((w) => w.close()))
+  clearInterval(buildHeartbeat)
+  await Promise.all([...started.map((w) => w.close()), buildQueue.close()])
   process.exit(0)
 }
 process.on('SIGTERM', shutdown)
@@ -135,4 +137,20 @@ process.on('SIGINT', shutdown)
 // this is readable: the worker is private and exposes no HTTP surface of its own.
 const build = buildInfo()
 console.log(`[worker] build=${build.short} (source=${build.source})`)
+
+// The boot log alone needs Railway access to read, and Railway ages logs out, so the worker also
+// publishes its build to Redis on a heartbeat and the web service's /api/health reports it as
+// `workerBuild`. The key expires, so a worker that is down reads as `unknown` rather than stale.
+// The key is deliberately never deleted on shutdown: during a deploy the new worker starts before the
+// old one stops, and a delete from the old process would erase the new one's answer.
+const buildQueue = makeQueue(QUEUE.PIPELINE)
+async function publishBuild() {
+  await writeWorkerBuild(await buildQueue.client, build)
+}
+function publishBuildLogged() {
+  void publishBuild().catch((e) => console.error('[worker] could not publish build to Redis:', e))
+}
+publishBuildLogged()
+const buildHeartbeat = setInterval(publishBuildLogged, WORKER_BUILD_REFRESH_MS)
+buildHeartbeat.unref()
 console.log(`[worker] started — role=${ROLE}`)
