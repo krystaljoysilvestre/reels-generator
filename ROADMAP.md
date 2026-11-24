@@ -27,7 +27,8 @@ configuration changes.
   `{"ok":true,"build":"22dfb12","buildSource":"stamp"}` at 2026-11-24 03:56 UTC.
 - Worker ran `22dfb12` at the 2026-11-03 recovery (Railway deployment record and boot stamp,
   `specs/recovery-2026-11-03.md`). It cannot be re-read today, so the worker build is **unknown** as of this handoff.
-- `main` is still `ac7a481`. Production runs commits that are not on `main`; they are in PR #40.
+- `main` is `ca7f14a`: PR #42 (KDX-001) on top of `ac7a481`. Studio web and worker still run commits that are not on
+  `main`; they are in PR #40.
 - Studio signup is `approval` (2026-11-03 configuration inspection). The marketing site at `kendrix.io` runs
   `main` at `ca7f14a` (KDX-001), per Vercel's production deployment, checked 2026-11-24 05:41 UTC.
 
