@@ -22,6 +22,17 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      # Same image as docker-compose.yml. Only the "Redis-backed tests" step points at it; the main
+      # test step runs without REDIS_URL so it keeps covering the no-Redis fallback paths.
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/reels_test
       TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/reels_test
@@ -52,6 +63,13 @@ jobs:
 
       - name: Unit tests
         run: pnpm test:unit
+
+      # Tests that skip themselves without REDIS_URL. Scoped to their own step so the rate limiter
+      # doesn't throttle the mocked model calls in the main run.
+      - name: Redis-backed tests
+        env:
+          REDIS_URL: redis://localhost:6379
+        run: pnpm --filter @reels/providers exec vitest run src/shared/redis-limiter.test.ts
 
       - name: Production build
         run: pnpm build
