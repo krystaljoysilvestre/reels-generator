@@ -27,10 +27,10 @@ configuration changes.
   `{"ok":true,"build":"22dfb12","buildSource":"stamp"}` at 2026-11-24 03:56 UTC.
 - Worker ran `22dfb12` at the 2026-11-03 recovery (Railway deployment record and boot stamp,
   `specs/recovery-2026-11-03.md`). It cannot be re-read today, so the worker build is **unknown** as of this handoff.
-- `main` is `ca7f14a`: PR #42 (KDX-001) on top of `ac7a481`. Studio web and worker still run commits that are not on
-  `main`; they are in PR #40.
-- Studio signup is `approval` (2026-11-03 configuration inspection). The marketing site at `kendrix.io` runs
-  `main` at `ca7f14a` (KDX-001), per Vercel's production deployment, checked 2026-11-24 05:41 UTC.
+- `main` is `67bfbdc`: PR #42 (KDX-001, `ca7f14a`) and PR #43 (bundled landing fonts) on top of `ac7a481`. Studio
+  web and worker still run commits that are not on `main`; they are in PR #40.
+- Studio signup is `approval` (2026-11-03 configuration inspection). The marketing site at `kendrix.io` runs `main` at
+  `67bfbdc`, per Vercel's production deployment, checked 2026-11-24 06:24 UTC.
 
 **Passed local or CI checks only (not live)**
 
@@ -63,9 +63,14 @@ configuration changes.
    while fetching Google Fonts. A founder-approved retry (`dpl_AbZAXLsC8ZB3BG9BQmXJpnpfF94g`) serves `kendrix.io`, and
    Vercel reports commit `ca7f14a`. The live site passed desktop and phone checks at 320–1440px: one-line header, no
    horizontal scroll, correct link targets. Rollback target: the previous production build (`ac7a481`), via `vercel rollback`.
-   Follow-ups, not started: Google Fonts failed in 2 of 5 Vercel builds today, and bundling the fonts locally needs
-   approval. Two pre-existing issues at 320px: the REC strip and the full stop after "finished reel" each wrap onto
-   their own line.
+   **Font follow-up, live since 2026-11-24 06:24 UTC.** Google Fonts failed in 2 of 5 Vercel builds that day.
+   [PR #43](https://github.com/krystaljoysilvestre/reels-generator/pull/43) bundles Nunito, Mulish and Space Mono in
+   `apps/landing/src/app/fonts` (Fontsource 5.3.0, OFL), loaded with `next/font/local`. It merged to `main` as `67bfbdc`
+   with founder approval. The production build succeeded first time with no Google Fonts fetch. The live site loads the
+   bundled fonts, makes no Google Fonts requests, matches the previous text metrics, and passes layout checks at
+   320–1440px. Rollback target: the previous production build (`ca7f14a`), via `vercel rollback`.
+   Still open: the studio (`apps/web`) still fetches Google Fonts at build, which is the founder's call. Two pre-existing
+   issues at 320px: the REC strip and the full stop after "finished reel" each wrap onto their own line.
 2. **KDX-002/003**: open-signup, sample-only Studio preview. Verify real sign-in in isolated staging, block paid
    generation, retries and background jobs for free accounts, and prove signup and verification-email limits hold
    without Redis. Pricing and subscriptions are separate work. Waiting on the patch.
