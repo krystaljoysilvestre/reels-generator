@@ -5,7 +5,9 @@ import { landingAccess } from '@/lib/access'
 export function MetaStrip() {
   const { open } = landingAccess()
   return (
-    <div className="mono relative z-[5] mx-auto flex max-w-[1220px] justify-center px-6 py-3 text-[10.5px] uppercase tracking-[0.14em] text-night-ghost sm:justify-between sm:px-8">
+    // Below 640px only the centred REC cue shows, so the narrower padding and tracking don't misalign anything;
+    // they keep the invite-mode cue on one line at 320px.
+    <div className="mono relative z-[5] mx-auto flex max-w-[1220px] justify-center px-4 py-3 text-[10.5px] uppercase tracking-[0.12em] text-night-ghost sm:justify-between sm:px-8 sm:tracking-[0.14em]">
       <span className="hidden sm:inline">Kendrix Studio</span>
       <span className="kx-blink text-brand-pink">{open ? '● REC — free early access' : '● REC — in production · invites soon'}</span>
       <span className="hidden sm:inline">Reel 001 / 2026</span>

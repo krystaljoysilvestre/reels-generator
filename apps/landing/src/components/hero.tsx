@@ -16,17 +16,21 @@ export function Hero() {
           <div className="mono text-xs uppercase tracking-[0.16em] text-night-eyebrow">
             A storytelling studio · №01
           </div>
-          <h1 className="mt-5 text-[46px] font-800 leading-[0.95] tracking-[-0.04em] sm:text-[60px] lg:text-[72px]">
+          {/* 38px below 360px so "finished reel." fits on one line on the narrowest phones. */}
+          <h1 className="mt-5 text-[38px] font-800 leading-[0.95] tracking-[-0.04em] min-[360px]:text-[46px] sm:text-[60px] lg:text-[72px]">
             Roll a single idea.
             <br />
             Cut a{' '}
-            {/* inline-block with side padding + its own taller line box so the
-                gradient clip trims neither the italic glyph nor its descenders,
-                without loosening the title-card lockup */}
-            <span className="inline-block bg-[linear-gradient(110deg,#2FA4FF,#9B3BFF_44%,#FF2D9B_76%,#FF9A3D)] bg-clip-text px-[0.12em] py-[0.05em] italic leading-[1.15] text-transparent [font-weight:900]">
-              finished&nbsp;reel
+            {/* nowrap keeps the full stop with "finished reel"; the inline-block left a break before it. */}
+            <span className="whitespace-nowrap">
+              {/* inline-block with side padding + its own taller line box so the
+                  gradient clip trims neither the italic glyph nor its descenders,
+                  without loosening the title-card lockup */}
+              <span className="inline-block bg-[linear-gradient(110deg,#2FA4FF,#9B3BFF_44%,#FF2D9B_76%,#FF9A3D)] bg-clip-text px-[0.12em] py-[0.05em] italic leading-[1.15] text-transparent [font-weight:900]">
+                finished&nbsp;reel
+              </span>
+              .
             </span>
-            .
           </h1>
           <p className="mt-[26px] max-w-[470px] text-lg leading-[1.62] text-night-body">
             Kendrix writes, storyboards, shoots, scores and ships publish-ready vertical video — a
