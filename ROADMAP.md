@@ -55,7 +55,12 @@ configuration changes.
 **Priorities and session ownership**
 
 1. **KDX-001**: review the homepage on desktop and phone, make the demo ("The cut") easy to find, and make the primary
-   button match what visitors can actually do. Implementation session; mocks only. No GitHub issue yet.
+   button match what visitors can actually do. Implementation session; no GitHub issue.
+   **In review as [PR #42](https://github.com/krystaljoysilvestre/reels-generator/pull/42)** (`claude/kdx-001-homepage`,
+   one commit on `main`): "Demo" in the nav and phone header, "See the demo" in the hero, and "Request an invite" on the
+   header button, which is hidden below 640px. Lint, typecheck and the landing build pass. A Vercel preview passed desktop
+   and phone checks at 320–1440px. Not deployed: merging #42 deploys `kendrix.io` from `main`, so it needs founder
+   release approval.
 2. **KDX-002/003**: open-signup, sample-only Studio preview. Verify real sign-in in isolated staging, block paid
    generation, retries and background jobs for free accounts, and prove signup and verification-email limits hold
    without Redis. Pricing and subscriptions are separate work. Waiting on the patch.
