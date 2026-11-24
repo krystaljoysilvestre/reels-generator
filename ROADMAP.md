@@ -28,8 +28,8 @@ configuration changes.
 - Worker ran `22dfb12` at the 2026-11-03 recovery (Railway deployment record and boot stamp,
   `specs/recovery-2026-11-03.md`). It cannot be re-read today, so the worker build is **unknown** as of this handoff.
 - `main` is still `ac7a481`. Production runs commits that are not on `main`; they are in PR #40.
-- Studio signup is `approval` (2026-11-03 configuration inspection). The marketing site at `kendrix.io` responds,
-  but its deployed commit is not recorded.
+- Studio signup is `approval` (2026-11-03 configuration inspection). The marketing site at `kendrix.io` runs
+  `main` at `ca7f14a` (KDX-001), per Vercel's production deployment, checked 2026-11-24 05:41 UTC.
 
 **Passed local or CI checks only (not live)**
 
@@ -56,11 +56,15 @@ configuration changes.
 
 1. **KDX-001**: review the homepage on desktop and phone, make the demo ("The cut") easy to find, and make the primary
    button match what visitors can actually do. Implementation session; no GitHub issue.
-   **In review as [PR #42](https://github.com/krystaljoysilvestre/reels-generator/pull/42)** (`claude/kdx-001-homepage`,
-   one commit on `main`): "Demo" in the nav and phone header, "See the demo" in the hero, and "Request an invite" on the
-   header button, which is hidden below 640px. Lint, typecheck and the landing build pass. A Vercel preview passed desktop
-   and phone checks at 320–1440px. Not deployed: merging #42 deploys `kendrix.io` from `main`, so it needs founder
-   release approval.
+   **Live since 2026-11-24 05:41 UTC.** [PR #42](https://github.com/krystaljoysilvestre/reels-generator/pull/42) merged
+   to `main` as `ca7f14a` with founder approval. The changes: "Demo" in the nav and phone header, "See the demo" in the
+   hero, and "Request an invite" on the header button, which is hidden below 640px. The first production build failed
+   while fetching Google Fonts. A founder-approved retry (`dpl_AbZAXLsC8ZB3BG9BQmXJpnpfF94g`) serves `kendrix.io`, and
+   Vercel reports commit `ca7f14a`. The live site passed desktop and phone checks at 320–1440px: one-line header, no
+   horizontal scroll, correct link targets. Rollback target: the previous production build (`ac7a481`), via `vercel rollback`.
+   Follow-ups, not started: Google Fonts failed in 2 of 5 Vercel builds today, and bundling the fonts locally needs
+   approval. Two pre-existing issues at 320px: the REC strip and the full stop after "finished reel" each wrap onto
+   their own line.
 2. **KDX-002/003**: open-signup, sample-only Studio preview. Verify real sign-in in isolated staging, block paid
    generation, retries and background jobs for free accounts, and prove signup and verification-email limits hold
    without Redis. Pricing and subscriptions are separate work. Waiting on the patch.
