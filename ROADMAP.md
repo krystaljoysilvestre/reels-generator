@@ -27,12 +27,11 @@ configuration changes.
   `{"ok":true,"build":"22dfb12","buildSource":"stamp"}` at 2026-11-24 03:56 UTC.
 - Worker ran `22dfb12` at the 2026-11-03 recovery (Railway deployment record and boot stamp,
   `specs/recovery-2026-11-03.md`). It cannot be re-read today, so the worker build is **unknown** as of this handoff.
-- `main` is `be0ca18`: PR #42 (KDX-001, `ca7f14a`), PR #43 (bundled landing fonts, `67bfbdc`) and PR #44 (bundled
-  studio fonts) on top of `ac7a481`; CI passed on `be0ca18`. Studio web and worker still run commits that are not on
-  `main`; they are in PR #40.
+- `main` is `187b870`: PR #42 (KDX-001, `ca7f14a`), PR #43 (bundled landing fonts, `67bfbdc`), PR #44 (bundled
+  studio fonts, `be0ca18`) and PR #45 (320px wrapping fix) on top of `ac7a481`; CI passed on `187b870`. Studio web and
+  worker still run commits that are not on `main`; they are in PR #40.
 - Studio signup is `approval` (2026-11-03 configuration inspection). The marketing site at `kendrix.io` runs `main` at
-  `67bfbdc`, per Vercel's production deployment, checked 2026-11-24 06:24 UTC. `be0ca18` changes only the studio, so
-  Vercel skipped it and the marketing site is unchanged.
+  `187b870` (`dpl_7xindBjsZEL6Zjq9uMg5yM8UM4ob`), per Vercel's production deployment, checked 2026-11-24 10:58 UTC.
 
 **Passed local or CI checks only (not live)**
 
@@ -75,8 +74,13 @@ configuration changes.
    applies the same bundling to `apps/web`. It merged to `main` as `be0ca18` with founder approval after CI passed; the
    local production build made no Google Fonts fetch, and `/signin` matched `main` at 1440 and 390px. Railway deploys by
    hand, so it reaches `app.kendrix.io` with the next approved studio release, which depends on #40 and #26.
-   Still open: two pre-existing issues at 320px: the REC strip and the full stop after "finished reel" each wrap onto
-   their own line.
+   **320px wrapping fix, live since 2026-11-24 10:57 UTC.** At 320px the REC strip wrapped onto two lines and the full
+   stop after "finished reel" dropped to its own line. [PR #45](https://github.com/krystaljoysilvestre/reels-generator/pull/45)
+   narrows the strip's padding and tracking below 640px, keeps the full stop with "finished reel", and sets the
+   headline to 38px (was 46px) below 360px. It merged to `main` as `187b870` with founder approval after CI passed. The
+   live site keeps both on one line at every width from 320 to 1440px, has no horizontal scroll, and is unchanged from
+   360px up. The preview was not checked in a browser (Vercel sign-in); production was. Rollback target: the previous
+   production build (`67bfbdc`), via `vercel rollback`. KDX-001 has no open items.
 2. **KDX-002/003**: open-signup, sample-only Studio preview. Verify real sign-in in isolated staging, block paid
    generation, retries and background jobs for free accounts, and prove signup and verification-email limits hold
    without Redis. Pricing and subscriptions are separate work. Waiting on the patch.
