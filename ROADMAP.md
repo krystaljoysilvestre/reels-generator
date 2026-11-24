@@ -14,7 +14,76 @@ sequenced this way — lives in `dna/company/roadmap.md` (company DNA starts at
 
 ---
 
-## Now — complete the free early-access journey (2026-09-24)
+## Current handoff — 2026-11-24
+
+**Roles:** Tala owns this roadmap and acceptance review; the implementation session owns code; the founder
+approves releases. Both Claude Code sessions read this section from the shared Git ref named in the handoff
+message, not from a local working tree. Nothing below authorizes paid generation, deployment or live
+configuration changes.
+
+**Live (verified in production)**
+
+- Web runs `22dfb12`: `https://app.kendrix.io/api/health` returned
+  `{"ok":true,"build":"22dfb12","buildSource":"stamp"}` at 2026-11-24 03:56 UTC.
+- Worker ran `22dfb12` at the 2026-11-03 recovery (Railway deployment record and boot stamp,
+  `specs/recovery-2026-11-03.md`). It cannot be re-read today, so the worker build is **unknown** as of this handoff.
+- `main` is still `ac7a481`. Production runs commits that are not on `main`; they are in PR #40.
+- Studio signup is `approval` (2026-11-03 configuration inspection). The marketing site at `kendrix.io` responds,
+  but its deployed commit is not recorded.
+
+**Passed local or CI checks only (not live)**
+
+- [PR #40](https://github.com/krystaljoysilvestre/reels-generator/pull/40) (`codex/creator-journey-followthrough`,
+  tip `22dfb12`): CI green, mergeable, unmerged. This is the code already deployed; merging it aligns `main` with production.
+- [PR #41](https://github.com/krystaljoysilvestre/reels-generator/pull/41) (`claude/project-thread-8zned8`,
+  `d5783f7`): CI green, mergeable, unmerged, not deployed. Worker build reporting in `/api/health` plus a read-only
+  "Deployed builds" workflow that needs a `RAILWAY_PRODUCTION_TOKEN` secret. #40 and #41 are release-baseline work,
+  not the signup preview.
+- KDX-002/003 open-signup, sample-only Studio preview: the last candidate reportedly passed local checks and was not
+  deployed. Its patch is not on any branch, PR, stash or worktree in this repository (searched 2026-11-24).
+
+**Blocked**
+
+- [#26](https://github.com/krystaljoysilvestre/reels-generator/issues/26) release baseline: the worker build is unknown,
+  which #26 treats as a blocker. It clears after #41 merges and the worker redeploys, or after a direct Railway read.
+  Both need founder approval.
+- KDX-002/003: blocked until the founder supplies the existing patch. Do not rebuild it.
+- Opening signup: the fresh non-admin journey through export
+  ([#30](https://github.com/krystaljoysilvestre/reels-generator/issues/30)) and live account email (Resend not
+  configured) are still unverified.
+
+**Priorities and session ownership**
+
+1. **KDX-001**: review the homepage on desktop and phone, make the demo ("The cut") easy to find, and make the primary
+   button match what visitors can actually do. Implementation session; mocks only. No GitHub issue yet.
+2. **KDX-002/003**: open-signup, sample-only Studio preview. Verify real sign-in in isolated staging, block paid
+   generation, retries and background jobs for free accounts, and prove signup and verification-email limits hold
+   without Redis. Pricing and subscriptions are separate work. Waiting on the patch.
+3. **#26**: release baseline through #40 and #41. Kept separate from KDX work. Recheck PR state and verify deployed web
+   and worker builds before calling the baseline settled.
+
+Other open issues are not in the current priorities:
+[#27](https://github.com/krystaljoysilvestre/reels-generator/issues/27)–[#29](https://github.com/krystaljoysilvestre/reels-generator/issues/29)
+(production safety) and [#31](https://github.com/krystaljoysilvestre/reels-generator/issues/31)–[#39](https://github.com/krystaljoysilvestre/reels-generator/issues/39)
+(drama mode, publishing copy, News Today PH pilot).
+
+The September plan below is kept as history. Where it conflicts with this handoff or the 2026-11-03 recovery record,
+the newer entry wins.
+
+## Hosting recovery verified — 2026-11-03
+
+Railway billing is active again and all four services are restored. Web and worker now run the reviewed,
+pushed `22dfb12` release; migrations 0067 and 0068 are applied. The public health check, existing-admin
+Google sign-in, four-channel dashboard, authenticated media loading and an existing approved reel's
+post-package download passed. The export's ZIP integrity passed and the reel's spend stayed at $7.86.
+The worker's startup trending refresh recorded 2¢. The $30 hosting alert and $50 cap remain in place.
+
+Signup remains approval-based. A fresh non-admin production-to-export lap and real account-email
+acceptance still remain before opening access; this recovery does not close those gates. See
+`specs/recovery-2026-11-03.md` for deployment, data, queue and verification evidence. The September
+deployment-blocked statements below are historical and superseded by this recovery record.
+
+## September plan (history) — complete the free early-access journey (2026-09-24)
 
 **Founder direction:** finish the journey for future subscribers so signup can open, then return to story,
 visual and audio polish. The founder selected **free early access first**, without checkout or a paid plan.
@@ -43,6 +112,12 @@ required deployed production lap; this change does not assert that its missing p
   failed-save recovery and desktop/phone checks are recorded in `specs/creator-walkthrough-2026-09-24.md`.
   Review of one existing approved reel supports a publishing-copy refinement, not a production rewrite.
 - Acceptance and remaining configuration: `specs/early-access-journey.md` and `specs/early-access-launch.md`.
+- A separate, founder-authorized $10 commercial experiment has spent $0.14 across rejected text planning
+  and a grounded five-image storyboard. Real assets are bound; a silent 30-second preview is available.
+  Narration is blocked by ElevenLabs `payment_issue`; no completed commercial or revision was produced.
+  Captured pricing copy and mixed example stories also block public release. This does not establish
+  commercial support or justify priced allowances. See `research/evals/commercial-pilot.md` and
+  `hypotheses/commercial-asset-grounding.md`.
 - Before opening: deploy the reviewed build and migration, configure/verify account email and Google,
   align both signup switches, apply the staged free-access spend ceilings and verify the support procedure, then complete
   one fresh non-admin journey through export on the deployed app.
