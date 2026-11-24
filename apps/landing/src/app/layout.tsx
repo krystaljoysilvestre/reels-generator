@@ -1,30 +1,41 @@
 import type { Metadata } from 'next'
-import { Mulish, Nunito, Space_Mono } from 'next/font/google'
+import localFont from 'next/font/local'
 import Script from 'next/script'
 import { StructuredData } from '@/components/structured-data'
 import { META_DESCRIPTION, META_TITLE, SITE_NAME, SITE_URL } from '@/lib/site'
 import './globals.css'
 
-/** Display — headings and the wordmark. */
-const nunito = Nunito({
-  subsets: ['latin'],
-  weight: ['500', '600', '700', '800', '900'],
+/*
+ * Fonts are bundled in ./fonts instead of fetched from Google Fonts at build time. The fetch failed
+ * in 2 of 5 Vercel builds on 2026-11-24, failing the production deploy of KDX-001 once. Files are the
+ * Latin subsets from Fontsource 5.3.0 (@fontsource-variable/nunito, @fontsource-variable/mulish,
+ * @fontsource/space-mono), under the SIL Open Font License; the licenses sit beside the files.
+ */
+
+/** Display — headings and the wordmark. Variable font: covers every weight the site uses (500–900). */
+const nunito = localFont({
+  src: './fonts/nunito-latin-wght-normal.woff2',
+  weight: '200 1000',
+  style: 'normal',
   display: 'swap',
   variable: '--font-nunito',
 })
 
-/** Body + all UI — Nunito's un-rounded sibling, so it recedes. */
-const mulish = Mulish({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
+/** Body + all UI — Nunito's un-rounded sibling, so it recedes. Variable font (site uses 400–700). */
+const mulish = localFont({
+  src: './fonts/mulish-latin-wght-normal.woff2',
+  weight: '200 1000',
+  style: 'normal',
   display: 'swap',
   variable: '--font-mulish',
 })
 
 /** Timecodes, slate metadata, micro-labels. */
-const spaceMono = Space_Mono({
-  subsets: ['latin'],
-  weight: ['400', '700'],
+const spaceMono = localFont({
+  src: [
+    { path: './fonts/space-mono-latin-400-normal.woff2', weight: '400', style: 'normal' },
+    { path: './fonts/space-mono-latin-700-normal.woff2', weight: '700', style: 'normal' },
+  ],
   display: 'swap',
   variable: '--font-space-mono',
 })

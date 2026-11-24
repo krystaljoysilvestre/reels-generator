@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Fonts (Nunito / Mulish / Space Mono) are loaded via next/font in layout.tsx,
+/* Fonts (Nunito / Mulish / Space Mono) are bundled in app/fonts and loaded via next/font/local in layout.tsx,
    which defines --font-nunito, --font-mulish and --font-space-mono on <html>. */
 
 @layer base {
