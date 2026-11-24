@@ -2,14 +2,12 @@
 // Downloaded from the dashboard for manual posting (Phase 1).
 import type { NextRequest} from 'next/server';
 import { NextResponse } from 'next/server'
-import { getDb, reels, assets, scenes, channels, sceneImageOrigins } from '@reels/db'
-import { eq, and, asc, sql } from 'drizzle-orm'
-import { downloadBuffer, llmCall } from '@reels/providers'
-import { PostMetaSchema, PostingRulesSchema, formatPostCaption, formatImageCredits, StoryBibleSchema, nextPublishSlot, resolvePublishSlots, resolvePublishDays, type PostMeta } from '@reels/core'
-import { buildPostMetaPrompt, PostMetaLlmSchema, POST_META_V1_VERSION } from '@reels/core/prompts/post-meta.v1'
-import { requireReelOwner, requireSpendBudget } from '@/lib/api-access'
-import { recordFailedSpend } from '@/lib/failed-spend'
-import type { SessionUser } from '@/lib/auth'
+import { getDb, reels, assets, scenes, channels } from '@reels/db'
+import { eq, and, asc } from 'drizzle-orm'
+import { downloadBuffer, checkRateLimit } from '@reels/providers'
+import { PostingRulesSchema, nextPublishSlot, resolvePublishSlots, resolvePublishDays, resolveSidecarSrt } from '@reels/core'
+import { requireReelOwner } from '@/lib/api-access'
+import { publishingCopy } from '@/lib/publishing-copy'
 
 // Minimal ZIP builder without native deps (zip is just stored entries)
 function buildZip(files: Array<{ name: string; data: Buffer }>): Buffer {
@@ -86,66 +84,15 @@ function crc32Table(): Uint32Array {
   return t
 }
 
-// The reel's post metadata: prefer what the generate_post_meta step wrote (operator-editable); for
-// reels that predate the step, generate once here and persist if the creator has room in their
-// allowance. Downloading finished work never depends on the ability to pay for optional metadata.
-async function resolvePostMeta(
-  reel: { id: string; postMeta: unknown; language: string },
-  story: { title: string; logline: string | null; body: string } | null,
-  channel: { name: string; nicheDescription: string | null; genreCategory: string; postingRules: unknown } | null,
-  user: SessionUser,
-): Promise<PostMeta | null> {
-  const existing = PostMetaSchema.safeParse(reel.postMeta)
-  if (existing.success) return existing.data
-  if (!story || !channel) return null
-  // Only a new provider call needs spend headroom. A declined call falls back to the story's own
-  // title/logline below; it must not turn an already-finished video into an inaccessible artifact.
-  if (await requireSpendBudget(user)) return null
-
-  const postingRules = PostingRulesSchema.parse(channel.postingRules ?? {})
-  const { system, userMessage } = buildPostMetaPrompt({
-    channelName: channel.name,
-    nicheDescription: channel.nicheDescription ?? '',
-    language: reel.language,
-    platforms: postingRules.platforms,
-    genreCategory: channel.genreCategory,
-    title: story.title,
-    logline: story.logline ?? '',
-    narration: story.body,
-  })
-  try {
-    const llm = await llmCall({
-      templateVersion: POST_META_V1_VERSION,
-      schema: PostMetaLlmSchema,
-      system,
-      messages: [{ role: 'user', content: userMessage }],
-      temperature: 0.8,
-      maxTokens: 800,
-    })
-    const meta = PostMetaSchema.parse({ ...PostMetaLlmSchema.parse(llm.data), v: 1, language: reel.language })
-    const db = getDb()
-    // Atomic cost increment — an export could race a pipeline step's own cost write.
-    await db.update(reels)
-      .set({
-        postMeta: meta,
-        ...(llm.costCents > 0 ? { costCents: sql`${reels.costCents} + ${llm.costCents}` } : {}),
-        updatedAt: new Date(),
-      })
-      .where(eq(reels.id, reel.id))
-    return meta
-  } catch (err) {
-    // Falling back to the logline-only caption doesn't refund the completion this already paid for.
-    await recordFailedSpend(err, { kind: 'reel', reelId: reel.id })
-    return null // fall back to the logline-only caption below
-  }
-}
-
 export async function GET(req: NextRequest) {
   const reelId = req.nextUrl.searchParams.get('reelId')
   if (!reelId) return NextResponse.json({ error: 'Missing reelId' }, { status: 400 })
 
   const gate = await requireReelOwner(reelId)
   if (gate instanceof NextResponse) return gate
+  if (!(await checkRateLimit(`post-package:download:${gate.id}`, 10, 60_000)).ok) {
+    return NextResponse.json({ error: 'Please wait a moment before downloading again.' }, { status: 429 })
+  }
 
   const db = getDb()
   const reel = await db.query.reels.findFirst({
@@ -196,17 +143,9 @@ export async function GET(req: NextRequest) {
     }
   } catch { /* the thumbnail is a bonus, never a blocker */ }
 
-  // Build the caption from the reel's post package (title/hook/caption/hashtags).
   const story = reel.story
-  const meta = await resolvePostMeta(reel, story, channel ?? null, gate)
-  // Image-attribution credits for every real SOURCED image (Wikimedia etc.) — reference plates AND archival
-  // photographs presented as scenes — appended so licence terms are met.
-  const bibleParse = reel.storyBible ? StoryBibleSchema.safeParse(reel.storyBible) : null
-  const imageCredits = bibleParse?.success ? formatImageCredits(bibleParse.data, await sceneImageOrigins(reelId)) : ''
-  const captionBody = meta
-    ? [`TITLE: ${meta.title}`, '', formatPostCaption(meta)].join('\n')
-    : [story?.title ? `TITLE: ${story.title}` : '', story?.logline ?? ''].filter(Boolean).join('\n\n')
-  const caption = imageCredits ? `${captionBody}\n\n${imageCredits}` : captionBody
+  const { captionText } = await publishingCopy(reel)
+  const subtitles = resolveSidecarSrt(reel.timings, channel?.captionStyle)
 
   // The channel's posting slot, as a line an operator can act on. On a scheduled channel that's the
   // next actual slot (date + time); otherwise it's the single standing posting hour.
@@ -237,7 +176,7 @@ export async function GET(req: NextRequest) {
     '',
     'POSTING CHECKLIST:',
     '[ ] Add AI disclosure label in the platform upload settings',
-    '[ ] Cross-post as separate native uploads (never repost identical files)',
+    '[ ] Upload the downloaded video separately to each selected platform',
     postingSlotLine,
     '[ ] Reply to the first few comments within the hour',
   ].join('\n')
@@ -245,7 +184,8 @@ export async function GET(req: NextRequest) {
   const zip = buildZip([
     { name: 'reel.mp4', data: videoBuf },
     ...(thumb ? [thumb] : []),
-    { name: 'caption.txt', data: Buffer.from(caption, 'utf8') },
+    { name: 'caption.txt', data: Buffer.from(captionText, 'utf8') },
+    ...(subtitles ? [{ name: 'subtitles.srt', data: Buffer.from(subtitles, 'utf8') }] : []),
     { name: 'AI-DISCLOSURE.txt', data: Buffer.from(disclosure, 'utf8') },
   ])
 
@@ -261,6 +201,8 @@ export async function GET(req: NextRequest) {
   return new NextResponse(new Uint8Array(zip), {
     headers: {
       'Content-Type': 'application/zip',
+      'Cache-Control': 'private, no-store',
+      'X-Content-Type-Options': 'nosniff',
       'Content-Disposition': `attachment; filename="${slug}-post-package.zip"`,
     },
   })

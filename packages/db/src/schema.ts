@@ -573,6 +573,7 @@ export const publications = pgTable(
       .references(() => reels.id, { onDelete: 'cascade' }),
     platform: platformEnum('platform').notNull(),
     platformPostId: text('platform_post_id'),
+    postUrl: text('post_url'), // optional creator-supplied or provider-returned public link
     scheduledAt: timestamp('scheduled_at'),
     publishedAt: timestamp('published_at'),
     status: text('status').notNull().default('pending'),

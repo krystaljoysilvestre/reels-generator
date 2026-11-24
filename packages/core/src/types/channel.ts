@@ -55,13 +55,13 @@ export type LutConfig = z.infer<typeof LutConfigSchema>
 // convention. This is the SINGLE source of truth: the channel.v1
 // derivation reads the hints to tailor caption + length; image/video generation and
 // the renderer read aspect/width/height; render QA reads maxSeconds.
-export const TargetPlatformSchema = z.enum(['tiktok', 'youtube_shorts', 'facebook_reels', 'youtube_long', 'all'])
+export const TargetPlatformSchema = z.enum(['tiktok', 'youtube_shorts', 'facebook_reels', 'instagram_reels', 'youtube_long', 'all'])
 export type TargetPlatform = z.infer<typeof TargetPlatformSchema>
 
 // A channel publishes to a SET of platforms (`channels.targetPlatforms`). These are the ones a
 // creator can pick; 'all' is not among them — it is the legacy single-value bucket that predates the
 // set, kept only so old rows and old drafts still resolve (see resolvePlatformPreset).
-export const PUBLISH_PLATFORMS = ['tiktok', 'youtube_shorts', 'facebook_reels', 'youtube_long'] as const
+export const PUBLISH_PLATFORMS = ['tiktok', 'youtube_shorts', 'facebook_reels', 'instagram_reels', 'youtube_long'] as const
 export type PublishPlatform = (typeof PUBLISH_PLATFORMS)[number]
 
 // Long-form is EXCLUSIVE: a 16:9 upload and a 9:16 reel are different shapes, and one render can only
@@ -121,6 +121,15 @@ export const PLATFORM_PRESETS: Record<TargetPlatform, PlatformPreset> = {
     captionHint: 'large, very high-contrast (older/mixed audience, almost always muted)',
     lengthHint: '90s cap; 20–60s ideal',
     hookHint: 'a relatable, story-led hook in the first 3s',
+    safeZoneBottomPct: 20,
+  },
+  // A conservative Kendrix short-form output policy, not Instagram's maximum upload duration.
+  // Use the same vertical frame and caption clearance as the existing cross-posting preset.
+  instagram_reels: {
+    label: 'Instagram Reels', aspect: '9:16', width: 1080, height: 1920, maxSeconds: 90, sweetSpot: [20, 60],
+    captionHint: 'clear, high-contrast captions, kept above the bottom controls and description',
+    lengthHint: 'Kendrix creates up to 90s for this destination; aim for a complete story in 20–60s',
+    hookHint: 'a clear visual or spoken hook in the first 2–3s that fits the story',
     safeZoneBottomPct: 20,
   },
   // Long-form YouTube (regular horizontal uploads, not Shorts). YouTube itself imposes no ceiling
@@ -630,6 +639,14 @@ export type PostingRules = z.infer<typeof PostingRulesSchema>
 export const UNSHIPPED_REEL_STATUSES = [
   'drafting', 'story_review', 'storyboard', 'rendering', 'render_qa', 'spot_check', 'approved',
 ] as const
+
+// A creator's production slots count unfinished work across their channels. Approval releases a slot
+// even when the creator downloads the result without posting it. Keep this separate from the automatic
+// channel backlog above, which deliberately includes approved reels waiting to be shipped.
+export const IN_PROGRESS_REEL_STATUSES = [
+  'drafting', 'story_review', 'bible_review', 'storyboard', 'rendering', 'render_qa', 'spot_check',
+] as const
+
 export function autoProduceBacklogCap(reelsPerDay: number): number {
   return reelsPerDay * 3
 }

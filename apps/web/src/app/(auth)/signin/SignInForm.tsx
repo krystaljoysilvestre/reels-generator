@@ -43,10 +43,10 @@ export function SignInForm({ googleEnabled, emailRecoveryEnabled }: { googleEnab
           That invite link is invalid or already used. You can still sign in below.
         </p>
       )}
-      {linkedError && <p role="alert" className="mb-4 text-sm text-night-danger">This email already has an account. Sign in with your original method{emailRecoveryEnabled ? ' or reset your password' : ''}.</p>}
+      {linkedError && <p role="alert" className="mb-4 text-sm text-night-danger">Google isn’t linked to this account. Sign in with your original method, or open <Link href="/forgot-password" className="underline">password recovery</Link>{emailRecoveryEnabled ? ' to reset your password.' : ' for help.'}</p>}
       {authError && !inviteError && !linkedError && <p role="alert" className="mb-4 text-sm text-night-danger">Sign-in didn’t finish. Please try again.</p>}
       {params.get('reset') === '1' && <p role="status" className="mb-4 text-sm text-night-success">Password updated. Sign in with your new password.</p>}
-      {googleEnabled && <><GoogleButton label="Continue with Google" /><OrDivider /></>}
+      {googleEnabled && <><GoogleButton label="Continue with Google" /><p className="mt-2 text-xs leading-relaxed text-night-muted">Use Google if you joined with Google or already linked it to this account.</p><OrDivider /></>}
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <AuthField id="email" label="Email">
           <input id="email" type="email" maxLength={254} value={email} onChange={(e) => setEmail(e.target.value)} className="input-dark" autoComplete="email" required />
@@ -64,7 +64,7 @@ export function SignInForm({ googleEnabled, emailRecoveryEnabled }: { googleEnab
           )}
         </button>
       </form>
-      {emailRecoveryEnabled && <p className="mt-4 text-right text-xs"><Link href="/forgot-password" className="text-accent hover:underline">Forgot password?</Link></p>}
+      <p className="mt-4 text-right text-xs"><Link href="/forgot-password" className="text-accent hover:underline">Forgot password?</Link></p>
       <p className="mt-7 text-center text-xs text-night-muted">
         No account? <Link href="/signup" className="font-600 text-accent hover:text-accent-hover">Sign up</Link>
       </p>

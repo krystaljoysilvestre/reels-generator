@@ -11,6 +11,8 @@ import {
   type MusicMood,
   type MusicMode,
   resolvePlatformPreset,
+  publicationPlatformForTarget,
+  PUBLICATION_PLATFORM_LABELS,
   MUSIC_MOOD_OPTIONS,
   resolveCaptionStyle,
   SOURCE_POLICY_CHOICES,
@@ -141,6 +143,8 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
   const youtubeConnection = initial.platformConnections.find((c) => c.platform === 'yt' && c.status === 'active')
+  const hasYouTubeTarget = targetPlatforms.some((target) => publicationPlatformForTarget(target) === 'yt')
+  const canAutoPublishYouTube = hasYouTubeTarget && initial.youtubeConfigured && generationMode === 'auto'
 
   async function disconnectYouTube() {
     const res = await fetch('/api/publishing/youtube/disconnect', {
@@ -216,7 +220,7 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
       styleImageKey,
       captionStyle,
       generationMode,
-      autoProduce,
+      autoProduce: { ...autoProduce, autoPublishYouTube: hasYouTubeTarget && autoProduce.autoPublishYouTube },
       publish,
       genreCategory,
       presentation,
@@ -374,8 +378,9 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
           <SectionLabel>Publishing</SectionLabel>
           <div className="space-y-2 border-b border-border pb-4">
             {targetPlatforms.map((platform) => {
-              const isYouTube = platform === 'youtube_shorts' || platform === 'youtube_long'
-              const label = platform === 'tiktok' ? 'TikTok' : isYouTube ? 'YouTube' : 'Facebook Reels'
+              const publicationPlatform = publicationPlatformForTarget(platform)
+              const isYouTube = publicationPlatform === 'yt'
+              const label = publicationPlatform ? PUBLICATION_PLATFORM_LABELS[publicationPlatform] : 'Other destination'
               return (
                 <div key={platform} className="flex items-center justify-between gap-3 rounded-lg border border-border-mid p-3">
                   <div>
@@ -384,8 +389,8 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
                       {isYouTube && youtubeConnection
                         ? `Connected to ${youtubeConnection.accountName}`
                         : isYouTube
-                          ? 'Connect the account this channel should publish to.'
-                          : 'Direct publishing is coming. Your post package is ready for upload now.'}
+                          ? 'Upload your finished video yourself, or connect YouTube for direct posting.'
+                          : 'Download your finished video and post in the platform’s app.'}
                     </p>
                   </div>
                   {isYouTube && youtubeConnection ? (
@@ -402,12 +407,12 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
             })}
           </div>
           <p className="text-xs text-muted">
-            {autoProduce.autoPublishYouTube && initial.youtubeConfigured && generationMode === 'auto'
-              ? 'Finished reels are posted for you — the schedule below decides when.'
-              : 'Nothing posts by itself. Your posting times go on every post package, so you keep the same rhythm by hand.'}
+            {autoProduce.autoPublishYouTube && canAutoPublishYouTube
+              ? 'YouTube follows the schedule below. Post to your other destinations yourself.'
+              : 'Post each finished reel yourself. The times below help you keep a rhythm.'}
           </p>
 
-          {initial.youtubeConfigured && generationMode === 'auto' && (
+          {canAutoPublishYouTube && (
             <label className="flex cursor-pointer items-start gap-3">
               <input
                 type="checkbox"
@@ -422,12 +427,12 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
             </label>
           )}
 
-          <div className={initial.youtubeConfigured && generationMode === 'auto' ? 'border-t border-border pt-3' : ''}>
+          <div className={canAutoPublishYouTube ? 'border-t border-border pt-3' : ''}>
             <p className="text-xs font-medium text-muted">When to post</p>
             <div className="mt-2 flex flex-col gap-2">
               {([
-                { key: 'immediate', label: 'As soon as it’s ready', sub: 'Each reel goes out the moment it’s finished.' },
-                { key: 'slots', label: 'On a posting schedule', sub: 'Reels wait for your next posting time, so the channel keeps a rhythm.' },
+                { key: 'immediate', label: 'As soon as it’s ready', sub: 'Plan to post once your reel is finished.' },
+                { key: 'slots', label: 'On a posting schedule', sub: 'Choose regular posting times for this channel.' },
               ] as const).map((opt) => (
                 <label
                   key={opt.key}
@@ -659,6 +664,9 @@ export function ChannelSettings({ id, initial }: { id: string; initial: Initial 
             value={targetPlatforms}
             onChange={(v) => {
               setTargetPlatforms(v)
+              if (!v.some((target) => publicationPlatformForTarget(target) === 'yt')) {
+                setAutoProduce((current) => ({ ...current, autoPublishYouTube: false }))
+              }
               // Dropping to a shorter platform must pull the length down with it, or the slider would sit
               // above a cap the render can't honor.
               setTargetSeconds((s) => Math.min(s, resolvePlatformPreset(v).maxSeconds))

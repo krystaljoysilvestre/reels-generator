@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { eq, sql } from 'drizzle-orm'
 import { accounts, getDb, getUserUsage, users } from '@reels/db'
+import { MAX_INFLIGHT_REELS_PER_USER } from '@reels/core'
 import { requireAuth } from '@/lib/auth'
 import { accountUsage } from '@/lib/account-usage'
 import { isAccountEmailConfigured } from '@/lib/account-email'
@@ -58,8 +59,10 @@ export default async function AccountPage() {
           <div><dt className="text-xs text-muted">Email</dt><dd className="mt-1 break-words text-sm text-ink">{profile.email ?? 'No email saved'}</dd></div>
           <div><dt className="text-xs text-muted">Sign-in methods</dt><dd className="mt-1 text-sm text-ink">{methods.join(' · ') || 'No sign-in method found'}</dd></div>
         </dl>
-        {profile.hasPassword && isAccountEmailConfigured() && (
-          <Link href="/forgot-password" className="mt-5 inline-block text-sm font-600 text-accent underline underline-offset-2">Reset your password</Link>
+        {profile.hasPassword && (
+          <Link href="/forgot-password" className="mt-5 inline-block text-sm font-600 text-accent underline underline-offset-2">
+            {isAccountEmailConfigured() ? 'Reset your password' : 'Password recovery help'}
+          </Link>
         )}
       </section>
 
@@ -91,6 +94,12 @@ export default async function AccountPage() {
           can use production budget but does not start another reel. Work can also pause when the studio is busy
           or a reel reaches its own production limit.
         </p>
+        {user.role !== 'admin' && (
+          <p className="mt-3 text-sm leading-relaxed text-muted">
+            You can have up to {MAX_INFLIGHT_REELS_PER_USER} reels in progress. Finish and approve a reel to
+            make room for another; you can keep the finished download without posting it.
+          </p>
+        )}
       </section>
 
       <div className="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-border pt-6">

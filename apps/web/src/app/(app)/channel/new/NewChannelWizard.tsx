@@ -64,7 +64,8 @@ const STEP_TAB: Record<Phase, string> = {
 const PLATFORM_LABELS: Record<TargetPlatform, string> = {
   tiktok: 'TikTok',
   youtube_shorts: 'Shorts',
-  facebook_reels: 'Reels',
+  facebook_reels: 'Facebook',
+  instagram_reels: 'Instagram',
   youtube_long: 'Long-form',
   all: 'All',
 }

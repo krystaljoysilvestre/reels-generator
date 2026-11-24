@@ -3,7 +3,7 @@
 import type { NextRequest} from 'next/server';
 import { NextResponse } from 'next/server'
 import { Readable } from 'node:stream'
-import { downloadStream } from '@reels/providers'
+import { checkRateLimit, downloadStream } from '@reels/providers'
 import { presetThumbFallbackKey } from '@reels/core'
 import { requireApiUser, callerMayUseStorageKey } from '@/lib/api-access'
 
@@ -40,6 +40,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
+  const attachment = req.nextUrl.searchParams.get('download') === '1'
+  if (attachment && !(await checkRateLimit(`asset:download:${user.id}`, 60, 60_000)).ok) {
+    return NextResponse.json({ error: 'Please wait a moment before downloading again.' }, { status: 429 })
+  }
+
   const ext = key.split('.').at(-1) ?? ''
   const contentType = MIME[ext] ?? 'application/octet-stream'
 
@@ -72,6 +77,11 @@ export async function GET(req: NextRequest) {
       // Don't let the browser MIME-sniff a stored blob into something executable (e.g. treating an
       // uploaded file as HTML) — serve it strictly as the declared Content-Type.
       'X-Content-Type-Options': 'nosniff',
+    }
+    if (attachment) {
+      const filename = (key.split('/').pop() ?? 'download').replace(/[^a-zA-Z0-9._-]/g, '-').slice(0, 120) || 'download'
+      headers['Content-Disposition'] = `attachment; filename="${filename}"`
+      headers['Cache-Control'] = 'private, no-store'
     }
     if (out.contentLength != null) headers['Content-Length'] = String(out.contentLength)
     if (out.contentRange) headers['Content-Range'] = out.contentRange

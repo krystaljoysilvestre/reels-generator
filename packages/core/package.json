@@ -11,6 +11,7 @@
     "./captions/legibility": "./src/captions/legibility.ts",
     "./editing": "./src/editing/index.ts",
     "./state-machine": "./src/state-machine/index.ts",
+    "./publishing": "./src/publishing.ts",
     "./types": "./src/types/index.ts",
     "./prompts/story.v1": "./src/prompts/story.v1.ts",
     "./prompts/story.v2": "./src/prompts/story.v2.ts",

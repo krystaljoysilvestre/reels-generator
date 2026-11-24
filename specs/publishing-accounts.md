@@ -1,19 +1,23 @@
 # Publishing accounts
 
-Status: YouTube direct publish implemented; TikTok and Facebook Reels remain manual until their app
-review requirements are satisfied.
+Status: guided manual posting supports TikTok, Instagram, Facebook and YouTube. YouTube direct upload
+is optional. The handoff is implemented locally; deployment remains deferred. See `publishing-handoff.md`.
 
 ## Creator path
 
 1. Channel creation records every chosen destination in `channels.targetPlatforms`.
 2. Channel Settings shows those same destinations and the account assigned to each one.
-3. `Connect` starts provider OAuth in context for that channel. The callback verifies the signed-in
+3. Optional YouTube `Connect` starts provider OAuth in context for that channel. The callback verifies the signed-in
    user, channel ownership, signed state, expiry, and an HTTP-only nonce before storing credentials.
-4. At the approved-reel gate, Storyboard repeats the destinations. Connected providers can publish
-   directly; the post package remains the fallback for destinations that are not connected.
-5. A direct publish writes one `publications` row per platform. The reel becomes `published` only when
-   that direct publish covers every selected destination; otherwise it stays `approved` until the
-   remaining destinations are posted and marked complete.
+4. At the approved-reel gate, download the video, cover and available subtitles, copy the caption with
+   image credits, and open each platform to post. File sharing is available where the browser supports it;
+   the ZIP remains a secondary option. These actions do not mark anything posted.
+5. Confirm each destination independently, optionally saving its HTTPS post link. Records survive reloads.
+   Manual confirmation records the creator's report; it does not verify public availability. Other platforms
+   can use the same download and copy path without adding a tracked destination.
+6. The reel becomes `published` only when every selected destination has a published row. A scheduled
+   YouTube upload is incomplete until its scheduled record is promoted. Historical rows for destinations
+   removed from channel settings remain visible. Legacy terminal reels are never moved backwards.
 
 ## Ownership and credentials
 
@@ -33,6 +37,8 @@ Implemented with the server-side authorization-code flow. Requested scopes are `
 `youtube.force-ssl`, and `youtube.readonly`; the last identifies the selected YouTube channel and the
 force-ssl scope supports the existing native caption-track upload. Direct upload uses the channel's
 refresh token rather than the legacy operator-wide environment refresh token.
+The UI says “Uploaded to YouTube” and directs creators to check visibility in Studio. It does not promise
+that an uploaded video is public. A manually confirmed YouTube row prevents a fresh direct upload.
 
 ### TikTok
 
@@ -49,14 +55,21 @@ OAuth must let the creator choose a Page, persist the selected Page identity and
 then use the Reels upload/publish flow. Page selection belongs in the connection callback—not in channel
 creation—so channel creation remains about the story destination, not account plumbing.
 
+### Instagram Reels
+
+Manual posting is supported without a Kendrix social API connection. The channel picker uses a conservative
+90-second Kendrix output cap; this is not a claim about Instagram's current maximum duration. A future
+direct integration requires its own professional-account, permissions and review work.
+
 ## Reliability boundary
 
-Provider calls are idempotent at the database boundary through the unique
-`(reel_id, platform)` publication index. A provider post id is persisted as soon as an upload succeeds.
+Publication records use the unique `(reel_id, platform)` index and a reel lock to serialize updates and
+the aggregate completion decision in one transaction. Manual retries preserve the first timestamp,
+provider identity and an existing URL when none is supplied. A recorded provider result is reused on retry.
 Failures are logged with reel/channel context, stored on the connection for diagnosis, and returned to
 the creator as a short reconnect-and-retry message without leaking provider responses or credentials.
 
-The current single reel status cannot fully express “published to one of three destinations.” The
-`publications` rows are therefore authoritative per destination; `reels.status = published` remains the
-aggregate terminal state. If multi-provider direct publishing proves useful, replace the manual
-`mark-published` action with an aggregate that derives completion from the selected destinations.
+The database transaction does not make external uploads idempotent: simultaneous first uploads and
+provider success followed by a failed database write still need future reservation/reconciliation work.
+Platform rows are authoritative for partial progress; the reel status is the aggregate terminal state.
+Migration 0068 adds nullable `publications.post_url` without rewriting existing publication history.
