@@ -23,18 +23,24 @@ export function Nav() {
       </div>
       <nav className="kx-nav ml-[38px] hidden gap-7 text-sm font-600 text-night-muted lg:flex">
         <a href="#problem">Why</a>
-        <a href="#feature">The cut</a>
+        {/* Plain word on purpose: visitors scan the nav for "demo", not for the section's pun. */}
+        <a href="#feature">Demo</a>
         <a href="#how">Process</a>
         <a href="#roadmap">Roadmap</a>
         <a href="#access">Access</a>
       </nav>
       <div className="flex-1" />
+      {/* The nav links are desktop-only, so phones and tablets get the demo link here. */}
+      <a href="#feature" className="whitespace-nowrap text-sm font-600 text-night-muted hover:text-white lg:hidden">Demo</a>
       <a href={signinUrl} className="whitespace-nowrap text-sm font-600 text-night-muted hover:text-white">Sign in</a>
+      {/* Hidden on phones: a button here wrapped the header onto two lines at 360px and below, and the
+          hero's primary button carries the same action on the first screen. In invitation mode the
+          visitor can only request an invite, so the label says exactly that. */}
       <a
         href={open ? signupUrl : '#access'}
-        className="kx-btn inline-flex items-center gap-2 rounded-[11px] bg-brand-3 px-[18px] py-2.5 text-sm font-700 shadow-[0_10px_26px_-8px_rgba(255,45,155,0.5)]"
+        className="kx-btn hidden items-center gap-2 rounded-[11px] bg-brand-3 px-[18px] py-2.5 text-sm font-700 shadow-[0_10px_26px_-8px_rgba(255,45,155,0.5)] sm:inline-flex"
       >
-        {open ? 'Start free' : 'Get access'}
+        {open ? 'Start free' : 'Request an invite'}
       </a>
     </header>
   )

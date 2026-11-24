@@ -46,7 +46,7 @@ export function Hero() {
               <span className="flex h-[26px] w-[26px] items-center justify-center rounded-full bg-white/10">
                 <PlayIcon />
               </span>
-              See the cut
+              See the demo
             </a>
           </div>
         </div>
