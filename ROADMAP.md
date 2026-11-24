@@ -23,35 +23,38 @@ configuration changes.
 
 **Live (verified in production)**
 
-- Web runs `22dfb12`: `https://app.kendrix.io/api/health` returned
-  `{"ok":true,"build":"22dfb12","buildSource":"stamp"}` at 2026-11-24 03:56 UTC.
-- Worker ran `22dfb12` at the 2026-11-03 recovery (Railway deployment record and boot stamp,
-  `specs/recovery-2026-11-03.md`). It cannot be re-read today, so the worker build is **unknown** as of this handoff.
+- Web and worker run `8c7898e`, deployed 2026-11-24 with founder approval via `scripts/deploy-railway.sh all` from a
+  clean worktree (web `61dc91b9`, worker `73bfe0bd`; no migrations since `22dfb12`; worker idle beforehand).
+  `https://app.kendrix.io/api/health` returned
+  `{"ok":true,"build":"8c7898e","buildSource":"stamp","workerBuild":"8c7898e","workerBuildSource":"stamp"}` at
+  15:32 UTC, and the worker logged `build=8c7898e (source=stamp)`. Studio `/signin` loads the bundled fonts (#44) with
+  no Google Fonts requests. The worker's startup trend refresh spent 2¢, as on every restart. Rollback: Railway lists
+  the previous web deployment as removed, so redeploy `22dfb12` from a clean checkout with the same script.
 - `main` is `8c7898e`: PR #42 (KDX-001, `ca7f14a`), PR #43 (bundled landing fonts, `67bfbdc`), PR #44 (bundled
   studio fonts, `be0ca18`), PR #45 (320px wrapping fix, `187b870`), PR #41 (worker build reporting, `f5f720b`) and
   PR #40 (merge commit `8c7898e`) on top of `ac7a481`; CI passed on `8c7898e`, including the database suites.
-  Production's `22dfb12` is now an ancestor of `main`, so nothing deployed is missing from `main`.
+  `main`, studio web, worker and `kendrix.io` all run `8c7898e`.
 - Studio signup is `approval` (2026-11-03 configuration inspection). The marketing site at `kendrix.io` runs `main` at
   `8c7898e` (`dpl_2WQribj9pmAu4sspgVo7kmdNvAPu`), per Vercel's production deployment, checked 2026-11-24 14:35 UTC.
   Vercel rebuilt it for #41 and #40, which change no landing files; the page is unchanged.
 
 **Passed local or CI checks only (not live)**
 
-- On `main` but not deployed to the studio: [PR #41](https://github.com/krystaljoysilvestre/reels-generator/pull/41)
-  (worker build reporting in `/api/health`, plus a read-only "Deployed builds" workflow that needs a
-  `RAILWAY_PRODUCTION_TOKEN` secret, not yet set) and [PR #44](https://github.com/krystaljoysilvestre/reels-generator/pull/44)
-  (bundled studio fonts). Both merged with founder approval after a local test merge onto current `main` passed;
-  [PR #40](https://github.com/krystaljoysilvestre/reels-generator/pull/40) (production's `22dfb12`) merged after its
-  test merge passed typecheck, lint and unit tests. #40 and #41 are release-baseline work, not the signup preview.
+- The "Deployed builds" workflow from [PR #41](https://github.com/krystaljoysilvestre/reels-generator/pull/41) is on
+  `main` but has never run: it needs a `RAILWAY_PRODUCTION_TOKEN` secret, not yet set. Optional now that
+  `/api/health` reports both builds.
 - KDX-002/003 open-signup, sample-only Studio preview: the last candidate reportedly passed local checks and was not
   deployed. Its patch is not on any branch, PR, stash or worktree in this repository (searched 2026-11-24).
 
 **Blocked**
 
-- [#26](https://github.com/krystaljoysilvestre/reels-generator/issues/26) release baseline: the worker build is unknown,
-  which #26 treats as a blocker. #40 and #41 are merged; it clears after web and worker are redeployed from
-  `8c7898e` (`scripts/deploy-railway.sh`) and `/api/health` reports both builds, or after a direct Railway read. Both
-  need founder approval.
+- [#26](https://github.com/krystaljoysilvestre/reels-generator/issues/26) release baseline stays open by founder
+  decision. Criterion 1 (deployed builds known) is met and ticked. Still open: (2) a written, verified account of
+  deploy triggers and rollback; (3) CI on `8c7898e`
+  ([run](https://github.com/krystaljoysilvestre/reels-generator/actions/runs/45415024633)) ran the Postgres suites but
+  has no Redis service, so the Redis limiter test was skipped, as were two ffmpeg audio test files; (4) no release
+  checklist published. Progress comment:
+  [#26 comment](https://github.com/krystaljoysilvestre/reels-generator/issues/26#issuecomment-7136432959).
 - KDX-002/003: blocked until the founder supplies the existing patch. Do not rebuild it.
 - Opening signup: the fresh non-admin journey through export
   ([#30](https://github.com/krystaljoysilvestre/reels-generator/issues/30)) and live account email (Resend not
@@ -73,10 +76,10 @@ configuration changes.
    with founder approval. The production build succeeded first time with no Google Fonts fetch. The live site loads the
    bundled fonts, makes no Google Fonts requests, matches the previous text metrics, and passes layout checks at
    320–1440px. Rollback target: the previous production build (`ca7f14a`), via `vercel rollback`.
-   **Studio fonts, merged but not deployed.** [PR #44](https://github.com/krystaljoysilvestre/reels-generator/pull/44)
+   **Studio fonts, live since 2026-11-24 15:27 UTC.** [PR #44](https://github.com/krystaljoysilvestre/reels-generator/pull/44)
    applies the same bundling to `apps/web`. It merged to `main` as `be0ca18` with founder approval after CI passed; the
    local production build made no Google Fonts fetch, and `/signin` matched `main` at 1440 and 390px. Railway deploys by
-   hand, so it reaches `app.kendrix.io` with the next approved studio release (from `8c7898e` or later).
+   hand; it went live on `app.kendrix.io` with the `8c7898e` deploy on 2026-11-24.
    **320px wrapping fix, live since 2026-11-24 10:57 UTC.** At 320px the REC strip wrapped onto two lines and the full
    stop after "finished reel" dropped to its own line. [PR #45](https://github.com/krystaljoysilvestre/reels-generator/pull/45)
    narrows the strip's padding and tracking below 640px, keeps the full stop with "finished reel", and sets the
@@ -87,9 +90,9 @@ configuration changes.
 2. **KDX-002/003**: open-signup, sample-only Studio preview. Verify real sign-in in isolated staging, block paid
    generation, retries and background jobs for free accounts, and prove signup and verification-email limits hold
    without Redis. Pricing and subscriptions are separate work. Waiting on the patch.
-3. **#26**: release baseline. #41 and #40 merged 2026-11-24 (`main` `8c7898e`). Kept separate from KDX work. Next:
-   with founder approval, deploy web and worker from `8c7898e` and verify both builds before calling the baseline
-   settled.
+3. **#26**: release baseline. #41 and #40 merged and deployed 2026-11-24; web and worker verified at `8c7898e`.
+   Kept separate from KDX work. Remaining: criteria 2–4 (deploy-trigger and rollback write-up, a CI path that also
+   runs the Redis suites, release checklist).
 
 Other open issues are not in the current priorities:
 [#27](https://github.com/krystaljoysilvestre/reels-generator/issues/27)–[#29](https://github.com/krystaljoysilvestre/reels-generator/issues/29)
