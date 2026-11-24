@@ -30,13 +30,15 @@ configuration changes.
   15:32 UTC, and the worker logged `build=8c7898e (source=stamp)`. Studio `/signin` loads the bundled fonts (#44) with
   no Google Fonts requests. The worker's startup trend refresh spent 2¢, as on every restart. Rollback: Railway lists
   the previous web deployment as removed, so redeploy `22dfb12` from a clean checkout with the same script.
-- `main` is `8c7898e`: PR #42 (KDX-001, `ca7f14a`), PR #43 (bundled landing fonts, `67bfbdc`), PR #44 (bundled
-  studio fonts, `be0ca18`), PR #45 (320px wrapping fix, `187b870`), PR #41 (worker build reporting, `f5f720b`) and
-  PR #40 (merge commit `8c7898e`) on top of `ac7a481`; CI passed on `8c7898e`, including the database suites.
-  `main`, studio web, worker and `kendrix.io` all run `8c7898e`.
+- `main` is `e8fe6eb`: PR #42 (KDX-001, `ca7f14a`), PR #43 (bundled landing fonts, `67bfbdc`), PR #44 (bundled
+  studio fonts, `be0ca18`), PR #45 (320px wrapping fix, `187b870`), PR #41 (worker build reporting, `f5f720b`),
+  PR #40 (merge commit `8c7898e`) and PR #46 (Redis service in CI, `e8fe6eb`) on top of `ac7a481`. CI passed on
+  `e8fe6eb`, including the Postgres and Redis suites. Studio web and worker run `8c7898e`; `e8fe6eb` differs only in
+  `.github/workflows/ci.yml`, so no studio redeploy is needed.
 - Studio signup is `approval` (2026-11-03 configuration inspection). The marketing site at `kendrix.io` runs `main` at
-  `8c7898e` (`dpl_2WQribj9pmAu4sspgVo7kmdNvAPu`), per Vercel's production deployment, checked 2026-11-24 14:35 UTC.
-  Vercel rebuilt it for #41 and #40, which change no landing files; the page is unchanged.
+  `e8fe6eb` (`dpl_3XeRijhrUvcobTXJc7TBsschBEYj`), per Vercel's production deployment, checked 2026-11-24 16:12 UTC.
+  Vercel rebuilds it on every merge to `main`, including #41, #40 and #46, which change no landing files; the page is
+  unchanged.
 
 **Passed local or CI checks only (not live)**
 
@@ -49,12 +51,13 @@ configuration changes.
 **Blocked**
 
 - [#26](https://github.com/krystaljoysilvestre/reels-generator/issues/26) release baseline stays open by founder
-  decision. Criterion 1 (deployed builds known) is met and ticked. Still open: (2) a written, verified account of
-  deploy triggers and rollback; (3) CI on `8c7898e`
-  ([run](https://github.com/krystaljoysilvestre/reels-generator/actions/runs/45415024633)) ran the Postgres suites but
-  has no Redis service, so the Redis limiter test was skipped, as were two ffmpeg audio test files; (4) no release
-  checklist published. Progress comment:
-  [#26 comment](https://github.com/krystaljoysilvestre/reels-generator/issues/26#issuecomment-7136432959).
+  decision. Criteria 1 (deployed builds known) and 3 (CI path with recorded suites) are met and ticked. CI on
+  `e8fe6eb` ([run](https://github.com/krystaljoysilvestre/reels-generator/actions/runs/45433525288)) ran every test
+  file, including 10 Postgres integration files and the Redis limiter test, except the two ffmpeg audio files
+  (5 tests; no ffmpeg in CI). Still open: (2) a written, verified account of deploy triggers and rollback;
+  (4) a release checklist. Progress comments:
+  [deploy](https://github.com/krystaljoysilvestre/reels-generator/issues/26#issuecomment-7136432959),
+  [CI](https://github.com/krystaljoysilvestre/reels-generator/issues/26#issuecomment-7137432297).
 - KDX-002/003: blocked until the founder supplies the existing patch. Do not rebuild it.
 - Opening signup: the fresh non-admin journey through export
   ([#30](https://github.com/krystaljoysilvestre/reels-generator/issues/30)) and live account email (Resend not
@@ -91,8 +94,8 @@ configuration changes.
    generation, retries and background jobs for free accounts, and prove signup and verification-email limits hold
    without Redis. Pricing and subscriptions are separate work. Waiting on the patch.
 3. **#26**: release baseline. #41 and #40 merged and deployed 2026-11-24; web and worker verified at `8c7898e`.
-   Kept separate from KDX work. Remaining: criteria 2–4 (deploy-trigger and rollback write-up, a CI path that also
-   runs the Redis suites, release checklist).
+   PR #46 added the Redis suite to CI (`e8fe6eb`). Kept separate from KDX work. Remaining: criteria 2 and 4
+   (deploy-trigger and rollback write-up, release checklist). Open decision: whether to add ffmpeg to CI.
 
 Other open issues are not in the current priorities:
 [#27](https://github.com/krystaljoysilvestre/reels-generator/issues/27)–[#29](https://github.com/krystaljoysilvestre/reels-generator/issues/29)
