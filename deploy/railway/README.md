@@ -1,6 +1,7 @@
 # Railway operations
 
-The accepted architecture and rollback boundary live in `specs/phase0-deployment.md`.
+The accepted architecture and rollback boundary live in `specs/phase0-deployment.md`. Deploy triggers, rollback and
+the release checklist live in `specs/release-runbook.md`.
 
 ## Services
 
