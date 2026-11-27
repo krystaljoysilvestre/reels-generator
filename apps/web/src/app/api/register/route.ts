@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
   if (isOpenSignup() && !isAccountEmailConfigured()) {
     return NextResponse.json({ error: 'Email signup is unavailable right now. Please use Google to join.' }, { status: 503 })
   }
-  // Brute-force / mass-signup guard: cap sign-up attempts per IP per hour. Fail-open if Redis is down.
+  // Brute-force / mass-signup guard: cap sign-up attempts per IP per hour. Counted per process if Redis is down.
   const rl = await checkRateLimit(`register:ip:${clientIp(req)}`, 10, 60 * 60 * 1000)
   if (!rl.ok) {
     return NextResponse.json(
