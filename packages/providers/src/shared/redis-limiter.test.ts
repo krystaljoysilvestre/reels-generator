@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { acquireRateToken } from './redis-limiter.js'
+import { acquireRateToken, checkRateLimit } from './redis-limiter.js'
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 const hasRedis = !!process.env['REDIS_URL']
@@ -27,4 +27,13 @@ describe.skipIf(!hasRedis)('acquireRateToken (distributed rate cap)', () => {
 
     await third // eventually resolves once the window rolls over
   }, 6000)
+})
+
+describe.skipIf(!hasRedis)('checkRateLimit (shared through Redis)', () => {
+  it('counts in Redis, so the cap holds across callers', async () => {
+    const key = `test:check:${Date.now()}:${Math.random()}`
+    const results = []
+    for (let i = 0; i < 4; i++) results.push((await checkRateLimit(key, 3, 60_000)).ok)
+    expect(results).toEqual([true, true, true, false])
+  })
 })
